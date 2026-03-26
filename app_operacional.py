@@ -17,6 +17,7 @@ import zipfile
 
 import pandas as pd
 import streamlit as st
+from streamlit.column_config import NumberColumn
 from openpyxl.styles import numbers
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -66,6 +67,8 @@ MAX_HTTP_RETRIES = 4
 ONEDRIVE_SYNC_MIN_INTERVAL_SECONDS = 180
 # Pedidos curtos na Cloud: evita ecrã em branco ~vários minutos em sequência (SharePoint pode tardar ou pendurar).
 PRECOMPUTED_HTTP_TIMEOUT = 35
+# Styler HTML por linha rebenta o frontend do Streamlit com ~1000+ linhas → usar column_config acima disto.
+STYLER_MAX_ROWS = 400
 # Alguns links SharePoint só redirecionam para o binário quando o pedido parece um browser.
 _BROWSER_UA_CHROME = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -1278,6 +1281,30 @@ def _style_row(row: pd.Series) -> list[str]:
     return [cor] * len(row)
 
 
+def _ensure_multiselect_state(key: str, options: list[str]) -> None:
+    """Opções do multiselect têm de coincidir com `options`; senão o Streamlit pode ficar com ecrã em branco."""
+    opts = list(options)
+    if key not in st.session_state:
+        st.session_state[key] = opts.copy()
+        return
+    prev = st.session_state[key]
+    if not isinstance(prev, list):
+        st.session_state[key] = opts.copy()
+        return
+    valid = [x for x in prev if x in opts]
+    if len(valid) != len(prev) or (not valid and opts):
+        st.session_state[key] = valid if valid else opts.copy()
+
+
+def _column_config_conciliacao(df: pd.DataFrame) -> dict[str, NumberColumn]:
+    """Formatação nativa Streamlit (evita HTML gigante do pandas Styler com milhares de linhas)."""
+    cfg: dict[str, NumberColumn] = {}
+    for c in ("Valor da nota", "Valor a receber", "Valor pago", "Diferença"):
+        if c in df.columns:
+            cfg[c] = NumberColumn(c, format="R$ %.2f")
+    return cfg
+
+
 def _render_kpi_card(label: str, value: str, icon: str, css_class: str) -> None:
     st.markdown(
         f"""
@@ -1561,12 +1588,15 @@ with st.container(border=True):
     sit = sorted(
         [x for x in tabela_operacional_base["Situação"].dropna().unique().tolist() if str(x).strip()]
     )
+    _ensure_multiselect_state("operacional_filtro_plataforma", plats)
+    _ensure_multiselect_state("operacional_filtro_acao", acoes)
+    _ensure_multiselect_state("operacional_filtro_situacao", sit)
     with r1[0]:
-        sel_plat = st.multiselect("Plataforma", plats, default=plats, key="operacional_filtro_plataforma")
+        sel_plat = st.multiselect("Plataforma", plats, key="operacional_filtro_plataforma")
     with r1[1]:
-        sel_acao = st.multiselect("Ação sugerida", acoes, default=acoes, key="operacional_filtro_acao")
+        sel_acao = st.multiselect("Ação sugerida", acoes, key="operacional_filtro_acao")
     with r1[2]:
-        sel_sit = st.multiselect("Situação", sit, default=sit, key="operacional_filtro_situacao")
+        sel_sit = st.multiselect("Situação", sit, key="operacional_filtro_situacao")
     with r1[3]:
         busca = st.text_input(
             "Busca (venda / pedido / nota)",
@@ -1884,6 +1914,16 @@ if tabela_exibir.empty:
         "**Nenhum registo** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
     )
     st.dataframe(tabela_exibir, width="stretch", height=160)
+elif len(tabela_exibir) > STYLER_MAX_ROWS:
+    st.caption(
+        f"Tabela com **{len(tabela_exibir)}** linhas — vista simples (cores por linha desativadas para não travar o browser)."
+    )
+    st.dataframe(
+        tabela_exibir,
+        width="stretch",
+        height=550,
+        column_config=_column_config_conciliacao(tabela_exibir),
+    )
 else:
     try:
         sty = (
@@ -1894,6 +1934,11 @@ else:
         st.dataframe(sty, width="stretch", height=550)
     except Exception as _sty_exc:
         st.caption(f"Formatação avançada indisponível ({_sty_exc}); a mostrar tabela simples.")
-        st.dataframe(tabela_exibir, width="stretch", height=550)
+        st.dataframe(
+            tabela_exibir,
+            width="stretch",
+            height=550,
+            column_config=_column_config_conciliacao(tabela_exibir),
+        )
 st.write(f"Linhas filtradas: **{len(tabela_exibir)}**")
 

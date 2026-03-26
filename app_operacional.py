@@ -283,7 +283,11 @@ def _download_shared_folder_dataset(public_url: str) -> None:
 
     path_prefix = target_root_name
 
+    use_link_root = target_root_name.strip().lower() in {"", ".", "__link_root__", "link_root"}
+
     def _locate_cliente_1_url() -> str:
+        if use_link_root:
+            return root_url
         if root_name == target_root_name:
             return root_url
         if root_name == "cliente_1":
@@ -308,7 +312,7 @@ def _download_shared_folder_dataset(public_url: str) -> None:
         raise ValueError(
             f"Pasta '{target_root_name}' não encontrada no link compartilhado."
         )
-    if root_name == target_root_name:
+    if use_link_root or root_name == target_root_name:
         path_prefix = ""
 
     def _sync_folder(item_url: str, dest: Path, relative_parts: tuple[str, ...] = ()) -> None:
@@ -346,7 +350,8 @@ def _download_shared_folder_dataset(public_url: str) -> None:
                 child_path.write_bytes(content)
             next_url = str(payload.get("@odata.nextLink", "")).strip()
 
-    dataset_root = mirror_root / target_root_name
+    root_label = target_root_name if target_root_name.strip() else "link_root"
+    dataset_root = mirror_root / root_label
     _sync_folder(cliente_1_url, dataset_root)
 
     candidate_roots = [dataset_root]

@@ -260,8 +260,6 @@ def _download_shared_folder_dataset(public_url: str) -> None:
     mirror_root = base_dir / "_onedrive_shared"
     target_root_name = _onedrive_root_folder_name()
     target_client_name = _onedrive_client_folder_name()
-    if mirror_root.exists():
-        shutil.rmtree(mirror_root)
     mirror_root.mkdir(parents=True, exist_ok=True)
 
     share_token = _encode_share_token(public_url)
@@ -342,6 +340,22 @@ def _download_shared_folder_dataset(public_url: str) -> None:
     if use_link_root or root_name == target_root_name:
         path_prefix = ""
 
+    def _norm_for_filter(value: str) -> str:
+        s = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode().lower().strip()
+        s = s.replace("-", " ").replace("_", " ")
+        return " ".join(s.split())
+
+    required_norm_keys = {
+        "vendas mercado livre",
+        "vendas ml",
+        "liberacoes ml",
+        "notas saida",
+        "nota saida",
+        "contas receber",
+        "contas a receber",
+    }
+    target_client_norm = _norm_for_filter(target_client_name)
+
     def _sync_folder(item_url: str, dest: Path, relative_parts: tuple[str, ...] = ()) -> None:
         dest.mkdir(parents=True, exist_ok=True)
         next_url = _children_url(item_url)
@@ -357,8 +371,21 @@ def _download_shared_folder_dataset(public_url: str) -> None:
                 if not child_name:
                     continue
                 child_rel = relative_parts + (child_name,)
+                child_norm = _norm_for_filter(child_name)
+                first_norm = _norm_for_filter(child_rel[0]) if child_rel else ""
                 child_path = dest / child_name
                 if "folder" in child:
+                    if len(child_rel) == 1 and target_client_norm and child_norm not in {target_client_norm, *required_norm_keys}:
+                        continue
+                    if (
+                        len(child_rel) == 2
+                        and target_client_norm
+                        and first_norm == target_client_norm
+                        and child_norm not in required_norm_keys
+                    ):
+                        continue
+                    if len(child_rel) >= 2 and first_norm not in {target_client_norm, *required_norm_keys}:
+                        continue
                     if root_is_graph:
                         child_url = _graph_item_url_from_child(child)
                     else:
@@ -374,6 +401,13 @@ def _download_shared_folder_dataset(public_url: str) -> None:
                 dl_url = _download_url(child)
                 if not dl_url:
                     continue
+                remote_size = child.get("size")
+                if child_path.exists() and child_path.is_file() and isinstance(remote_size, int):
+                    try:
+                        if child_path.stat().st_size == remote_size:
+                            continue
+                    except Exception:
+                        pass
                 content, _ = _download_file_bytes(dl_url)
                 child_path.parent.mkdir(parents=True, exist_ok=True)
                 child_path.write_bytes(content)

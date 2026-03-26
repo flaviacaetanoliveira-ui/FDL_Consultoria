@@ -67,8 +67,6 @@ MAX_HTTP_RETRIES = 4
 ONEDRIVE_SYNC_MIN_INTERVAL_SECONDS = 180
 # Pedidos curtos na Cloud: evita ecrã em branco ~vários minutos em sequência (SharePoint pode tardar ou pendurar).
 PRECOMPUTED_HTTP_TIMEOUT = 35
-# Styler HTML por linha rebenta o frontend do Streamlit com ~1000+ linhas → usar column_config acima disto.
-STYLER_MAX_ROWS = 400
 # Alguns links SharePoint só redirecionam para o binário quando o pedido parece um browser.
 _BROWSER_UA_CHROME = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -1262,42 +1260,8 @@ def carregar_tabela_final_operacional_cache(
     return tabela, info, ts
 
 
-def _style_acao(v: str) -> str:
-    cores = {
-        "Ok": "background-color: #dcfce7; color: #14532d;",
-        "Baixar no Bling": "background-color: #e0f2fe; color: #0c4a6e;",
-        "Analisar diferença": "background-color: #ffedd5; color: #9a3412;",
-        "Verificar recebimento": "background-color: #f3e8ff; color: #581c87;",
-        "Verificar faturamento": "background-color: #ede9fe; color: #4c1d95;",
-        "Revisar venda zerada": "background-color: #fee2e2; color: #991b1b;",
-    }
-    return cores.get(str(v), "")
-
-
-def _style_row(row: pd.Series) -> list[str]:
-    cor = _style_acao(row.get("Ação sugerida", ""))
-    if not cor:
-        return [""] * len(row)
-    return [cor] * len(row)
-
-
-def _ensure_multiselect_state(key: str, options: list[str]) -> None:
-    """Opções do multiselect têm de coincidir com `options`; senão o Streamlit pode ficar com ecrã em branco."""
-    opts = list(options)
-    if key not in st.session_state:
-        st.session_state[key] = opts.copy()
-        return
-    prev = st.session_state[key]
-    if not isinstance(prev, list):
-        st.session_state[key] = opts.copy()
-        return
-    valid = [x for x in prev if x in opts]
-    if len(valid) != len(prev) or (not valid and opts):
-        st.session_state[key] = valid if valid else opts.copy()
-
-
 def _column_config_conciliacao(df: pd.DataFrame) -> dict[str, NumberColumn]:
-    """Formatação nativa Streamlit (evita HTML gigante do pandas Styler com milhares de linhas)."""
+    """Formatação nativa Streamlit (pandas Styler foi removido — rebentava o browser com muitas linhas)."""
     cfg: dict[str, NumberColumn] = {}
     for c in ("Valor da nota", "Valor a receber", "Valor pago", "Diferença"):
         if c in df.columns:
@@ -1588,21 +1552,15 @@ with st.container(border=True):
     sit = sorted(
         [x for x in tabela_operacional_base["Situação"].dropna().unique().tolist() if str(x).strip()]
     )
-    _ensure_multiselect_state("operacional_filtro_plataforma", plats)
-    _ensure_multiselect_state("operacional_filtro_acao", acoes)
-    _ensure_multiselect_state("operacional_filtro_situacao", sit)
     with r1[0]:
-        sel_plat = st.multiselect("Plataforma", plats, key="operacional_filtro_plataforma")
+        # Sem `key`: evita conflitos default/sessão que em alguns browsers deixam o painel em branco.
+        sel_plat = st.multiselect("Plataforma", plats, default=plats)
     with r1[1]:
-        sel_acao = st.multiselect("Ação sugerida", acoes, key="operacional_filtro_acao")
+        sel_acao = st.multiselect("Ação sugerida", acoes, default=acoes)
     with r1[2]:
-        sel_sit = st.multiselect("Situação", sit, key="operacional_filtro_situacao")
+        sel_sit = st.multiselect("Situação", sit, default=sit)
     with r1[3]:
-        busca = st.text_input(
-            "Busca (venda / pedido / nota)",
-            "",
-            key="operacional_filtro_busca",
-        ).strip().lower()
+        busca = st.text_input("Busca (venda / pedido / nota)", "").strip().lower()
     with r2[0]:
         data_pag_ini = st.date_input(
             "Data de pagamento — início",
@@ -1610,7 +1568,6 @@ with st.container(border=True):
             min_value=_d_min,
             max_value=_d_max,
             format="DD/MM/YYYY",
-            key="operacional_filtro_data_ini",
         )
     with r2[1]:
         data_pag_fim = st.date_input(
@@ -1619,7 +1576,6 @@ with st.container(border=True):
             min_value=_d_min,
             max_value=_d_max,
             format="DD/MM/YYYY",
-            key="operacional_filtro_data_fim",
         )
     st.caption(
         "O intervalo de datas restringe as linhas pela **data de pagamento** do registro (comparado por dia)."
@@ -1883,62 +1839,17 @@ with btn3:
         width="stretch",
     )
 
-fmt = {
-    "Valor da nota": "R$ {:,.2f}",
-    "Valor a receber": "R$ {:,.2f}",
-    "Valor pago": "R$ {:,.2f}",
-    "Diferença": "R$ {:,.2f}",
-    "Data de emissão": lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "",
-    "Data de pagamento": lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "",
-}
-fmt = {k: v for k, v in fmt.items() if k in tabela_exibir.columns}
-# Cabeçalho explícito no HTML do Styler (reforça contraste no tema Streamlit).
-_table_header_css = [
-    {
-        "selector": "thead th",
-        "props": [
-            ("background-color", "#0f172a"),
-            ("color", "#ffffff"),
-            ("font-weight", "800"),
-            ("font-size", "0.84rem"),
-            ("letter-spacing", "0.06em"),
-            ("text-transform", "uppercase"),
-            ("padding", "0.75rem 0.65rem"),
-            ("border-bottom", "3px solid #0ea5e9"),
-            ("vertical-align", "middle"),
-        ],
-    },
-]
 if tabela_exibir.empty:
     st.info(
         "**Nenhum registo** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
     )
     st.dataframe(tabela_exibir, width="stretch", height=160)
-elif len(tabela_exibir) > STYLER_MAX_ROWS:
-    st.caption(
-        f"Tabela com **{len(tabela_exibir)}** linhas — vista simples (cores por linha desativadas para não travar o browser)."
-    )
+else:
     st.dataframe(
         tabela_exibir,
         width="stretch",
         height=550,
         column_config=_column_config_conciliacao(tabela_exibir),
     )
-else:
-    try:
-        sty = (
-            tabela_exibir.style.set_table_styles(_table_header_css)
-            .format(fmt)
-            .apply(_style_row, axis=1)
-        )
-        st.dataframe(sty, width="stretch", height=550)
-    except Exception as _sty_exc:
-        st.caption(f"Formatação avançada indisponível ({_sty_exc}); a mostrar tabela simples.")
-        st.dataframe(
-            tabela_exibir,
-            width="stretch",
-            height=550,
-            column_config=_column_config_conciliacao(tabela_exibir),
-        )
 st.write(f"Linhas filtradas: **{len(tabela_exibir)}**")
 

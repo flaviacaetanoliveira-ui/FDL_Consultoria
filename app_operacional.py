@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 import shutil
 import unicodedata
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import zipfile
@@ -261,6 +261,10 @@ def _download_shared_folder_dataset(public_url: str) -> None:
     def _children_url(item_url: str) -> str:
         return f"{item_url}/children"
 
+    def _encode_rel_path(*parts: str) -> str:
+        clean_parts = [p for p in parts if p]
+        return "/".join(quote(p, safe="") for p in clean_parts)
+
     def _download_url(item: dict[str, object]) -> str:
         for k in ("@microsoft.graph.downloadUrl", "@content.downloadUrl"):
             v = str(item.get(k, "")).strip()
@@ -332,7 +336,7 @@ def _download_shared_folder_dataset(public_url: str) -> None:
                 child_rel = relative_parts + (child_name,)
                 child_path = dest / child_name
                 if "folder" in child:
-                    rel_path = "/".join(((path_prefix,) if path_prefix else ()) + child_rel)
+                    rel_path = _encode_rel_path(*(((path_prefix,) if path_prefix else ()) + child_rel))
                     if root_is_graph:
                         child_url = f"https://graph.microsoft.com/v1.0/shares/u!{share_token}/driveItem:/{rel_path}:"
                     else:

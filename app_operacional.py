@@ -61,6 +61,7 @@ REQUIRED_ONEDRIVE_SOURCE_FOLDERS = {
 }
 RETRYABLE_HTTP_CODES = {429, 500, 502, 503, 504}
 MAX_HTTP_RETRIES = 4
+ONEDRIVE_SYNC_MIN_INTERVAL_SECONDS = 180
 
 
 def _is_admin_mode() -> bool:
@@ -261,6 +262,28 @@ def _download_shared_folder_dataset(public_url: str) -> None:
     target_root_name = _onedrive_root_folder_name()
     target_client_name = _onedrive_client_folder_name()
     mirror_root.mkdir(parents=True, exist_ok=True)
+
+    # Evita sincronização remota completa a cada rerun do Streamlit (ex.: troca de filtro).
+    sync_meta_file = base_dir / ".onedrive_sync_meta.json"
+    sync_context = {
+        "url": public_url,
+        "root": target_root_name,
+        "client": target_client_name,
+    }
+    if sync_meta_file.exists():
+        try:
+            meta = json.loads(sync_meta_file.read_text(encoding="utf-8"))
+            last_ts = float(meta.get("synced_at_epoch", 0))
+            same_context = (
+                str(meta.get("url", "")) == sync_context["url"]
+                and str(meta.get("root", "")) == sync_context["root"]
+                and str(meta.get("client", "")) == sync_context["client"]
+            )
+            has_local_data = all((base_dir / name).exists() for name in REQUIRED_ONEDRIVE_SOURCE_FOLDERS)
+            if same_context and has_local_data and (time.time() - last_ts) < ONEDRIVE_SYNC_MIN_INTERVAL_SECONDS:
+                return
+        except Exception:
+            pass
 
     share_token = _encode_share_token(public_url)
     root_url, root_meta = _fetch_shared_driveitem_metadata(public_url)
@@ -508,6 +531,16 @@ def _download_shared_folder_dataset(public_url: str) -> None:
         raise ValueError(
             "Link de pasta acessado, mas sem arquivos em: " + ", ".join(sorted(missing))
         )
+    sync_meta_file.write_text(
+        json.dumps(
+            {
+                **sync_context,
+                "synced_at_epoch": time.time(),
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
 
 
 @st.cache_data(show_spinner=False, ttl=900)

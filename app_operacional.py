@@ -66,6 +66,11 @@ MAX_HTTP_RETRIES = 4
 ONEDRIVE_SYNC_MIN_INTERVAL_SECONDS = 180
 # Pedidos curtos na Cloud: evita ecrã em branco ~vários minutos em sequência (SharePoint pode tardar ou pendurar).
 PRECOMPUTED_HTTP_TIMEOUT = 35
+# Alguns links SharePoint só redirecionam para o binário quando o pedido parece um browser.
+_BROWSER_UA_CHROME = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
 
 
 def _is_admin_mode() -> bool:
@@ -730,7 +735,7 @@ def _precomputed_url_str() -> str:
 
 
 def _precomputed_download_attempts(public_url: str) -> list[tuple[str, dict[str, str]]]:
-    """Ordem: Graph (com token) → API consumer OneDrive → ?download=1 → download=1 com UA browser."""
+    """Graph (token) → API shares → URL original (browser) → ?download=1 (muitos :x:/ devolvem 404)."""
     u = public_url.strip()
     attempts: list[tuple[str, dict[str, str]]] = []
     if not _is_m365_sharing_url(u):
@@ -748,6 +753,10 @@ def _precomputed_download_attempts(public_url: str) -> list[tuple[str, dict[str,
         )
     attempts.append((f"https://api.onedrive.com/v1.0/shares/u!{tok}/root/content", {}))
 
+    # Antes de ?download=1: em muitos links :x:/ o parâmetro download=1 responde 404 «resource cannot be found».
+    attempts.append((u, {"User-Agent": _BROWSER_UA_CHROME}))
+    attempts.append((u, {}))
+
     parsed = urlparse(u)
     q = dict(parse_qsl(parsed.query, keep_blank_values=True))
     q["download"] = "1"
@@ -755,17 +764,7 @@ def _precomputed_download_attempts(public_url: str) -> list[tuple[str, dict[str,
         (parsed.scheme, parsed.netloc, parsed.path, parsed.params, urlencode(q), parsed.fragment)
     )
     attempts.append((dl_page, {}))
-    attempts.append(
-        (
-            dl_page,
-            {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                ),
-            },
-        )
-    )
+    attempts.append((dl_page, {"User-Agent": _BROWSER_UA_CHROME}))
     return attempts
 
 
@@ -835,11 +834,13 @@ def _load_precomputed_from_remote(url: str, _revisao: int = OPERACIONAL_CACHE_RE
             errs.append(f"{hint} → {exc}")
     raise ValueError(
         "Não foi possível ler a tabela a partir do link. "
-        "Para links SharePoint no estilo :x:/, costuma ser necessário "
-        "`FDL_MS_GRAPH_TOKEN` nos secrets (token de aplicação Microsoft Graph com Files.Read.All), "
-        "ou um link curto 1drv.ms / ficheiro com partilha anónima. "
-        "Detalhes: " + " | ".join(errs[:4])
-        + (" …" if len(errs) > 4 else "")
+        "Em links SharePoint longos (:x:/), o servidor muitas vezes não permite download anónimo "
+        "(HTTP 403/404 ou HTML em vez do ficheiro). "
+        "Use uma destas opções: (1) `FDL_MS_GRAPH_TOKEN` (Bearer Microsoft Graph com acesso ao ficheiro); "
+        "(2) link curto **1drv.ms** para o mesmo ficheiro; (3) alojar o .csv/.xlsx noutro URL público. "
+        "Confirme partilha «qualquer pessoa com a ligação pode ver». "
+        "Detalhes: " + " | ".join(errs[:5])
+        + (" …" if len(errs) > 5 else "")
     )
 
 
@@ -1561,13 +1562,17 @@ with st.container(border=True):
         [x for x in tabela_operacional_base["Situação"].dropna().unique().tolist() if str(x).strip()]
     )
     with r1[0]:
-        sel_plat = st.multiselect("Plataforma", plats, default=plats)
+        sel_plat = st.multiselect("Plataforma", plats, default=plats, key="operacional_filtro_plataforma")
     with r1[1]:
-        sel_acao = st.multiselect("Ação sugerida", acoes, default=acoes)
+        sel_acao = st.multiselect("Ação sugerida", acoes, default=acoes, key="operacional_filtro_acao")
     with r1[2]:
-        sel_sit = st.multiselect("Situação", sit, default=sit)
+        sel_sit = st.multiselect("Situação", sit, default=sit, key="operacional_filtro_situacao")
     with r1[3]:
-        busca = st.text_input("Busca (venda / pedido / nota)", "").strip().lower()
+        busca = st.text_input(
+            "Busca (venda / pedido / nota)",
+            "",
+            key="operacional_filtro_busca",
+        ).strip().lower()
     with r2[0]:
         data_pag_ini = st.date_input(
             "Data de pagamento — início",
@@ -1575,6 +1580,7 @@ with st.container(border=True):
             min_value=_d_min,
             max_value=_d_max,
             format="DD/MM/YYYY",
+            key="operacional_filtro_data_ini",
         )
     with r2[1]:
         data_pag_fim = st.date_input(
@@ -1583,6 +1589,7 @@ with st.container(border=True):
             min_value=_d_min,
             max_value=_d_max,
             format="DD/MM/YYYY",
+            key="operacional_filtro_data_fim",
         )
     st.caption(
         "O intervalo de datas restringe as linhas pela **data de pagamento** do registro (comparado por dia)."
@@ -1616,9 +1623,10 @@ tabela = tabela.loc[m_data].copy()
 
 if "Plataforma" in tabela_operacional_base.columns:
     n_plat = len(plats)
-    if len(sel_plat) == 0:
-        plataforma_label = "Nenhuma"
-    elif n_plat and len(sel_plat) == n_plat:
+    # Multiselect vazio = não filtra por plataforma (mostra todas) — não confundir com «nenhuma linha».
+    if not n_plat:
+        plataforma_label = "—"
+    elif len(sel_plat) == 0 or (n_plat and len(sel_plat) == n_plat):
         plataforma_label = "Todas"
     else:
         plataforma_label = ", ".join(sel_plat[:2]) + ("..." if len(sel_plat) > 2 else "")
@@ -1737,34 +1745,40 @@ if "Data de pagamento" in tabela.columns:
 if "Valor pago" in tabela.columns:
     exibir_cols.append("Valor pago")
 
-tabela_exibir = tabela[exibir_cols].copy()
-tabela_exibir["Valor da nota"] = pd.to_numeric(tabela_exibir["Valor da nota"], errors="coerce")
-tabela_exibir["Valor a receber"] = pd.to_numeric(tabela_exibir["Valor a receber"], errors="coerce")
-tabela_exibir["Valor pago"] = pd.to_numeric(tabela_exibir.get("Valor pago"), errors="coerce")
-tabela_exibir["Diferença"] = pd.to_numeric(tabela_exibir["Diferença"], errors="coerce")
-if col_data_emissao:
-    tabela_exibir["Data de emissão"] = _parse_data_emissao_final(tabela.loc[tabela_exibir.index, col_data_emissao])
+exibir_cols = [c for c in exibir_cols if c in tabela.columns]
+if not exibir_cols:
+    st.warning("Sem colunas para exibir na base filtrada.")
+    tabela_exibir = pd.DataFrame()
 else:
-    tabela_exibir["Data de emissão"] = pd.NaT
-tabela_exibir["Data de pagamento"] = _parse_data_pagamento_final(
-    tabela.loc[tabela_exibir.index, "Data de pagamento"]
-    if "Data de pagamento" in tabela.columns
-    else pd.Series("", index=tabela_exibir.index)
-)
-tabela_exibir["Valor da nota"] = tabela_exibir["Valor da nota"].fillna(0.0)
-tabela_exibir["Valor a receber"] = tabela_exibir["Valor a receber"].fillna(0.0)
-tabela_exibir["Valor pago"] = tabela_exibir["Valor pago"].fillna(0.0)
-tabela_exibir["Diferença"] = tabela_exibir["Diferença"].fillna(0.0)
-tabela_exibir = tabela_exibir.rename(
-    columns={
-        "N° de venda": "Número da venda",
-        "ID do pedido": "Número do pedido",
-        "Ação sugerida operacional": "Ação sugerida",
-    }
-)
-tabela_exibir = tabela_exibir.drop(columns=["Total BRL"], errors="ignore")
-tabela_exibir = tabela_exibir[
-    [
+    tabela_exibir = tabela[exibir_cols].copy()
+    tabela_exibir["Valor da nota"] = pd.to_numeric(tabela_exibir["Valor da nota"], errors="coerce")
+    tabela_exibir["Valor a receber"] = pd.to_numeric(tabela_exibir["Valor a receber"], errors="coerce")
+    tabela_exibir["Valor pago"] = pd.to_numeric(tabela_exibir.get("Valor pago"), errors="coerce")
+    tabela_exibir["Diferença"] = pd.to_numeric(tabela_exibir["Diferença"], errors="coerce")
+    if col_data_emissao:
+        tabela_exibir["Data de emissão"] = _parse_data_emissao_final(
+            tabela.loc[tabela_exibir.index, col_data_emissao]
+        )
+    else:
+        tabela_exibir["Data de emissão"] = pd.NaT
+    tabela_exibir["Data de pagamento"] = _parse_data_pagamento_final(
+        tabela.loc[tabela_exibir.index, "Data de pagamento"]
+        if "Data de pagamento" in tabela.columns
+        else pd.Series("", index=tabela_exibir.index)
+    )
+    tabela_exibir["Valor da nota"] = tabela_exibir["Valor da nota"].fillna(0.0)
+    tabela_exibir["Valor a receber"] = tabela_exibir["Valor a receber"].fillna(0.0)
+    tabela_exibir["Valor pago"] = tabela_exibir["Valor pago"].fillna(0.0)
+    tabela_exibir["Diferença"] = tabela_exibir["Diferença"].fillna(0.0)
+    tabela_exibir = tabela_exibir.rename(
+        columns={
+            "N° de venda": "Número da venda",
+            "ID do pedido": "Número do pedido",
+            "Ação sugerida operacional": "Ação sugerida",
+        }
+    )
+    tabela_exibir = tabela_exibir.drop(columns=["Total BRL"], errors="ignore")
+    _ordem_final = [
         "Número da venda",
         "Número do pedido",
         "Número da nota",
@@ -1777,11 +1791,12 @@ tabela_exibir = tabela_exibir[
         "Situação",
         "Ação sugerida",
     ]
-]
-# Ordenação padrão operacional: pagamentos mais recentes primeiro.
-tabela_exibir = tabela_exibir.sort_values(
-    by="Data de pagamento", ascending=False, na_position="last"
-).reset_index(drop=True)
+    tabela_exibir = tabela_exibir[[c for c in _ordem_final if c in tabela_exibir.columns]]
+    # Ordenação padrão operacional: pagamentos mais recentes primeiro.
+    if not tabela_exibir.empty and "Data de pagamento" in tabela_exibir.columns:
+        tabela_exibir = tabela_exibir.sort_values(
+            by="Data de pagamento", ascending=False, na_position="last"
+        ).reset_index(drop=True)
 
 st.markdown(
     """
@@ -1846,6 +1861,7 @@ fmt = {
     "Data de emissão": lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "",
     "Data de pagamento": lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "",
 }
+fmt = {k: v for k, v in fmt.items() if k in tabela_exibir.columns}
 # Cabeçalho explícito no HTML do Styler (reforça contraste no tema Streamlit).
 _table_header_css = [
     {
@@ -1863,11 +1879,21 @@ _table_header_css = [
         ],
     },
 ]
-sty = (
-    tabela_exibir.style.set_table_styles(_table_header_css)
-    .format(fmt)
-    .apply(_style_row, axis=1)
-)
-st.dataframe(sty, width="stretch", height=550)
+if tabela_exibir.empty:
+    st.info(
+        "**Nenhum registo** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
+    )
+    st.dataframe(tabela_exibir, width="stretch", height=160)
+else:
+    try:
+        sty = (
+            tabela_exibir.style.set_table_styles(_table_header_css)
+            .format(fmt)
+            .apply(_style_row, axis=1)
+        )
+        st.dataframe(sty, width="stretch", height=550)
+    except Exception as _sty_exc:
+        st.caption(f"Formatação avançada indisponível ({_sty_exc}); a mostrar tabela simples.")
+        st.dataframe(tabela_exibir, width="stretch", height=550)
 st.write(f"Linhas filtradas: **{len(tabela_exibir)}**")
 

@@ -383,18 +383,63 @@ def _download_shared_folder_dataset(public_url: str) -> None:
     dataset_root = mirror_root / root_label
     _sync_folder(cliente_1_url, dataset_root)
 
+    def _norm_folder_name(value: str) -> str:
+        s = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode().lower().strip()
+        s = s.replace("-", " ").replace("_", " ")
+        s = " ".join(s.split())
+        return s
+
+    required_aliases: dict[str, tuple[str, ...]] = {
+        "Vendas - Mercado Livre": ("vendas mercado livre", "vendas ml"),
+        "Liberações_ML": ("liberacoes ml", "liberacoes_ml"),
+        "notas_saida": ("notas saida", "nota saida", "notas_saida"),
+        "contas_receber": ("contas receber", "contas a receber", "contas_receber"),
+    }
+    norm_to_required: dict[str, str] = {}
+    for required_name, aliases in required_aliases.items():
+        norm_to_required[_norm_folder_name(required_name)] = required_name
+        for alias in aliases:
+            norm_to_required[_norm_folder_name(alias)] = required_name
+
+    def _resolve_required_subfolders(base_path: Path) -> dict[str, Path]:
+        resolved: dict[str, Path] = {}
+        if not base_path.exists() or not base_path.is_dir():
+            return resolved
+        for child in base_path.iterdir():
+            if not child.is_dir():
+                continue
+            key = norm_to_required.get(_norm_folder_name(child.name))
+            if key and key not in resolved:
+                resolved[key] = child
+        return resolved
+
+    def _all_candidate_roots(root: Path) -> list[Path]:
+        out: list[Path] = []
+        if root.exists() and root.is_dir():
+            out.append(root)
+            for child in root.iterdir():
+                if child.is_dir():
+                    out.append(child)
+                    for grandchild in child.iterdir():
+                        if grandchild.is_dir():
+                            out.append(grandchild)
+        return out
+
     candidate_roots = [dataset_root]
     preferred = dataset_root / target_client_name
     if preferred.exists() and preferred.is_dir():
         candidate_roots.insert(0, preferred)
-    for child in dataset_root.iterdir():
-        if child.is_dir() and child not in candidate_roots:
-            candidate_roots.append(child)
+    for candidate in _all_candidate_roots(dataset_root):
+        if candidate not in candidate_roots:
+            candidate_roots.append(candidate)
 
     selected_root: Path | None = None
+    selected_mapping: dict[str, Path] = {}
     for candidate in candidate_roots:
-        if all((candidate / name).exists() and (candidate / name).is_dir() for name in REQUIRED_ONEDRIVE_SOURCE_FOLDERS):
+        mapping = _resolve_required_subfolders(candidate)
+        if len(mapping) == len(REQUIRED_ONEDRIVE_SOURCE_FOLDERS):
             selected_root = candidate
+            selected_mapping = mapping
             break
 
     if selected_root is None:
@@ -406,7 +451,9 @@ def _download_shared_folder_dataset(public_url: str) -> None:
 
     for required in REQUIRED_ONEDRIVE_SOURCE_FOLDERS:
         dst = base_dir / required
-        src = selected_root / required
+        src = selected_mapping.get(required)
+        if src is None:
+            continue
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(src, dst)

@@ -265,6 +265,16 @@ def _download_shared_folder_dataset(public_url: str) -> None:
         clean_parts = [p for p in parts if p]
         return "/".join(quote(p, safe="") for p in clean_parts)
 
+    def _graph_item_url_from_child(child: dict[str, object]) -> str:
+        item_id = str(child.get("id", "")).strip()
+        parent_ref = child.get("parentReference", {})
+        drive_id = ""
+        if isinstance(parent_ref, dict):
+            drive_id = str(parent_ref.get("driveId", "")).strip()
+        if item_id and drive_id:
+            return f"https://graph.microsoft.com/v1.0/drives/{drive_id}/items/{item_id}"
+        return ""
+
     def _download_url(item: dict[str, object]) -> str:
         for k in ("@microsoft.graph.downloadUrl", "@content.downloadUrl"):
             v = str(item.get(k, "")).strip()
@@ -336,11 +346,13 @@ def _download_shared_folder_dataset(public_url: str) -> None:
                 child_rel = relative_parts + (child_name,)
                 child_path = dest / child_name
                 if "folder" in child:
-                    rel_path = _encode_rel_path(*(((path_prefix,) if path_prefix else ()) + child_rel))
                     if root_is_graph:
-                        child_url = f"https://graph.microsoft.com/v1.0/shares/u!{share_token}/driveItem:/{rel_path}:"
+                        child_url = _graph_item_url_from_child(child)
                     else:
+                        rel_path = _encode_rel_path(*(((path_prefix,) if path_prefix else ()) + child_rel))
                         child_url = f"https://api.onedrive.com/v1.0/shares/u!{share_token}/root:/{rel_path}:"
+                    if not child_url:
+                        continue
                     _sync_folder(child_url, child_path, child_rel)
                     continue
 

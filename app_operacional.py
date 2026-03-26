@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from io import BytesIO
+import base64
+import hashlib
 import os
 from pathlib import Path
 import shutil
 import unicodedata
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.request import Request, urlopen
 import zipfile
 
 import pandas as pd
@@ -33,6 +37,19 @@ _active_org = get_active_organization(_app_ctx)
 
 # Alinhado a PIPELINE_DATA_REVISION (liberações / Valor pago). Subir junto quando mudar o fluxo.
 OPERACIONAL_CACHE_REVISION = PIPELINE_DATA_REVISION
+REQUIRED_ONEDRIVE_CSV_COLUMNS = {
+    "N° de venda",
+    "ID do pedido",
+    "Número da nota",
+    "Plataforma",
+    "Situação",
+    "Ação sugerida",
+    "Valor pago",
+    "Valor da nota",
+    "Valor a receber",
+    "Diferença",
+    "Data de pagamento",
+}
 
 
 def _is_admin_mode() -> bool:
@@ -50,9 +67,9 @@ def _data_source_mode() -> str:
     if env_source:
         return env_source
     try:
-        return str(st.secrets.get("FDL_DATA_SOURCE", "filesystem")).strip().lower()
+        return str(st.secrets.get("FDL_DATA_SOURCE", "onedrive")).strip().lower()
     except Exception:
-        return "filesystem"
+        return "onedrive"
 
 
 def _prepare_uploaded_base(zip_bytes: bytes) -> Path:
@@ -87,6 +104,103 @@ def _prepare_uploaded_base(zip_bytes: bytes) -> Path:
     return base_dir
 
 
+def _onedrive_public_url() -> str:
+    env_url = os.environ.get("FDL_ONEDRIVE_URL", "").strip()
+    if env_url:
+        return env_url
+    try:
+        return str(st.secrets.get("FDL_ONEDRIVE_URL", "")).strip()
+    except Exception:
+        return ""
+
+
+def _build_onedrive_download_url(public_url: str) -> str:
+    parsed = urlparse(public_url)
+    host = parsed.netloc.lower()
+    if "1drv.ms" in host:
+        encoded = base64.urlsafe_b64encode(public_url.encode("utf-8")).decode("utf-8").rstrip("=")
+        return f"https://api.onedrive.com/v1.0/shares/u!{encoded}/root/content"
+
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query["download"] = "1"
+    return urlunparse(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            urlencode(query),
+            parsed.fragment,
+        )
+    )
+
+
+@st.cache_data(show_spinner=False, ttl=900)
+def _download_file_bytes(url: str, _revisao: int = OPERACIONAL_CACHE_REVISION) -> tuple[bytes, str]:
+    del _revisao
+    req = Request(url, headers={"User-Agent": "FDL-Streamlit-App/1.0"})
+    with urlopen(req, timeout=60) as resp:
+        payload = resp.read()
+        filename = ""
+        cd = resp.headers.get("Content-Disposition", "")
+        if "filename=" in cd:
+            filename = cd.split("filename=", 1)[1].strip().strip("\"'")
+        if not filename:
+            filename = Path(urlparse(url).path).name or "download.bin"
+    return payload, filename
+
+
+def _sync_payload_zip_to_base(payload: bytes) -> None:
+    base_dir = Path(BASE_DIR)
+    base_dir.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256(payload).hexdigest()
+    digest_file = base_dir / ".onedrive_payload.sha256"
+    if digest_file.exists() and digest_file.read_text(encoding="utf-8").strip() == digest:
+        return
+    _prepare_uploaded_base(payload)
+    digest_file.write_text(digest, encoding="utf-8")
+
+
+def _validate_onedrive_csv_schema(df: pd.DataFrame) -> None:
+    missing = sorted(REQUIRED_ONEDRIVE_CSV_COLUMNS - set(df.columns))
+    if missing:
+        raise ValueError(
+            "CSV do OneDrive sem colunas obrigatórias: "
+            + ", ".join(missing)
+        )
+
+
+def load_data_from_onedrive() -> tuple[pd.DataFrame, dict[str, object], str]:
+    public_url = _onedrive_public_url()
+    if not public_url:
+        raise ValueError("FDL_ONEDRIVE_URL não configurada.")
+
+    download_url = _build_onedrive_download_url(public_url)
+    payload, filename = _download_file_bytes(download_url)
+    lower_name = filename.lower()
+
+    if lower_name.endswith(".zip") or zipfile.is_zipfile(BytesIO(payload)):
+        _sync_payload_zip_to_base(payload)
+        return carregar_tabela_final_operacional_cache()
+
+    if lower_name.endswith(".csv"):
+        tabela = pd.read_csv(BytesIO(payload), sep=None, engine="python")
+        _validate_onedrive_csv_schema(tabela)
+        if "empresa" not in tabela.columns:
+            tabela = tabela.copy()
+            tabela["empresa"] = DATASET_EMPRESA
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        info = {
+            "base_dir": "onedrive",
+            "linhas": int(len(tabela)),
+            "origem": "onedrive_csv",
+            "arquivo": filename,
+        }
+        return tabela, info, ts
+
+    raise ValueError(f"Formato não suportado no OneDrive: {filename}. Use ZIP ou CSV.")
+
+
 def _render_cloud_data_loader() -> None:
     with st.sidebar.expander("Admin: atualização de dados", expanded=False):
         st.caption("Uso interno. Não disponibilizar para cliente final.")
@@ -101,12 +215,12 @@ def _render_cloud_data_loader() -> None:
 
 def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
     source = _data_source_mode()
-    if source == "filesystem":
-        return carregar_tabela_final_operacional_cache()
+    if source in {"filesystem", "onedrive"}:
+        return load_data_from_onedrive()
     if source == "api":
         raise NotImplementedError(
             "Origem por API ainda não implementada. "
-            "Defina FDL_DATA_SOURCE=filesystem até integrar a API (ex.: Bling)."
+            "Defina FDL_DATA_SOURCE=onedrive até integrar a API (ex.: Bling)."
         )
     if source == "upload_zip":
         return carregar_tabela_final_operacional_cache()

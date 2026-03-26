@@ -8,6 +8,7 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import time
 import unicodedata
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 from urllib.error import HTTPError, URLError
@@ -58,6 +59,8 @@ REQUIRED_ONEDRIVE_SOURCE_FOLDERS = {
     "notas_saida",
     "contas_receber",
 }
+RETRYABLE_HTTP_CODES = {429, 500, 502, 503, 504}
+MAX_HTTP_RETRIES = 4
 
 
 def _is_admin_mode() -> bool:
@@ -189,8 +192,18 @@ def _download_json(url: str, headers: dict[str, str] | None = None) -> dict[str,
         req_headers.update(headers)
     req = Request(url, headers=req_headers)
     try:
-        with urlopen(req, timeout=60) as resp:
-            raw = resp.read()
+        raw = b""
+        for attempt in range(MAX_HTTP_RETRIES + 1):
+            try:
+                with urlopen(req, timeout=60) as resp:
+                    raw = resp.read()
+                break
+            except HTTPError as exc_retry:
+                if exc_retry.code not in RETRYABLE_HTTP_CODES or attempt >= MAX_HTTP_RETRIES:
+                    raise
+                retry_after = str(exc_retry.headers.get("Retry-After", "")).strip()
+                sleep_s = float(retry_after) if retry_after.isdigit() else (1.5**attempt)
+                time.sleep(min(max(sleep_s, 0.5), 8.0))
     except HTTPError as exc:
         body = ""
         try:
@@ -409,15 +422,28 @@ def _download_shared_folder_dataset(public_url: str) -> None:
 def _download_file_bytes(url: str, _revisao: int = OPERACIONAL_CACHE_REVISION) -> tuple[bytes, str]:
     del _revisao
     req = Request(url, headers={"User-Agent": "FDL-Streamlit-App/1.0"})
-    with urlopen(req, timeout=60) as resp:
-        payload = resp.read()
-        filename = ""
-        cd = resp.headers.get("Content-Disposition", "")
-        if "filename=" in cd:
-            filename = cd.split("filename=", 1)[1].strip().strip("\"'")
-        if not filename:
-            filename = Path(urlparse(url).path).name or "download.bin"
-    return payload, filename
+    for attempt in range(MAX_HTTP_RETRIES + 1):
+        try:
+            with urlopen(req, timeout=60) as resp:
+                payload = resp.read()
+                filename = ""
+                cd = resp.headers.get("Content-Disposition", "")
+                if "filename=" in cd:
+                    filename = cd.split("filename=", 1)[1].strip().strip("\"'")
+                if not filename:
+                    filename = Path(urlparse(url).path).name or "download.bin"
+            return payload, filename
+        except HTTPError as exc:
+            if exc.code not in RETRYABLE_HTTP_CODES or attempt >= MAX_HTTP_RETRIES:
+                raise
+            retry_after = str(exc.headers.get("Retry-After", "")).strip()
+            sleep_s = float(retry_after) if retry_after.isdigit() else (1.5**attempt)
+            time.sleep(min(max(sleep_s, 0.5), 8.0))
+        except URLError:
+            if attempt >= MAX_HTTP_RETRIES:
+                raise
+            time.sleep(min(1.5**attempt, 8.0))
+    raise RuntimeError(f"Falha ao baixar arquivo após tentativas: {url}")
 
 
 def _sync_payload_zip_to_base(payload: bytes) -> None:

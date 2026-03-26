@@ -544,6 +544,20 @@ def _download_shared_folder_dataset(public_url: str) -> None:
 
 
 @st.cache_data(show_spinner=False, ttl=900)
+def _sync_shared_folder_cached(
+    public_url: str,
+    root_folder: str,
+    client_folder: str,
+    _revisao: int = OPERACIONAL_CACHE_REVISION,
+) -> str:
+    del _revisao
+    del root_folder
+    del client_folder
+    _download_shared_folder_dataset(public_url)
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+@st.cache_data(show_spinner=False, ttl=900)
 def _download_file_bytes(url: str, _revisao: int = OPERACIONAL_CACHE_REVISION) -> tuple[bytes, str]:
     del _revisao
     req = Request(url, headers={"User-Agent": "FDL-Streamlit-App/1.0"})
@@ -597,7 +611,11 @@ def load_data_from_onedrive() -> tuple[pd.DataFrame, dict[str, object], str]:
         raise ValueError("FDL_ONEDRIVE_URL não configurada.")
 
     if ":f:/" in public_url.lower():
-        _download_shared_folder_dataset(public_url)
+        _sync_shared_folder_cached(
+            public_url=public_url,
+            root_folder=_onedrive_root_folder_name(),
+            client_folder=_onedrive_client_folder_name(),
+        )
         return carregar_tabela_final_operacional_cache()
 
     download_url = _build_onedrive_download_url(public_url)

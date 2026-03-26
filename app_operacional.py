@@ -10,7 +10,7 @@ from pathlib import Path
 import shutil
 import time
 import unicodedata
-from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse, urljoin
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import zipfile
@@ -32,6 +32,8 @@ from operacional_app_context import (
     require_app_user,
 )
 from operacional_data_config import DATASET_EMPRESA
+
+_REPO_APP_ROOT = Path(__file__).resolve().parent
 
 st.set_page_config(page_title="Conciliação de Repasse", layout="wide")
 
@@ -62,6 +64,8 @@ REQUIRED_ONEDRIVE_SOURCE_FOLDERS = {
 RETRYABLE_HTTP_CODES = {429, 500, 502, 503, 504}
 MAX_HTTP_RETRIES = 4
 ONEDRIVE_SYNC_MIN_INTERVAL_SECONDS = 180
+# Pedidos curtos na Cloud: evita ecrã em branco ~vários minutos em sequência (SharePoint pode tardar ou pendurar).
+PRECOMPUTED_HTTP_TIMEOUT = 35
 
 
 def _is_admin_mode() -> bool:
@@ -72,6 +76,30 @@ def _is_admin_mode() -> bool:
         return str(st.secrets.get("FDL_APP_MODE", "")).strip().lower() == "admin"
     except Exception:
         return False
+
+
+def _expose_load_errors() -> bool:
+    """
+    Quando True, falhas em _load_data() mostram st.exception (mensagem + traceback).
+    Para desligar em produção perante cliente final: FDL_SHOW_LOAD_ERRORS=false nos secrets.
+    """
+    env = os.environ.get("FDL_SHOW_LOAD_ERRORS", "").strip().lower()
+    if env in {"0", "false", "no", "off"}:
+        return False
+    if env in {"1", "true", "yes", "on"}:
+        return True
+    try:
+        raw = st.secrets.get("FDL_SHOW_LOAD_ERRORS", None)
+        if isinstance(raw, bool):
+            return raw
+        v = str(raw or "").strip().lower()
+        if v in {"0", "false", "no", "off"}:
+            return False
+        if v in {"1", "true", "yes", "on"}:
+            return True
+    except Exception:
+        pass
+    return True
 
 
 def _data_source_mode() -> str:
@@ -152,11 +180,43 @@ def _onedrive_client_folder_name() -> str:
     return "cliente_1"
 
 
-def _build_onedrive_download_url(public_url: str) -> str:
-    parsed = urlparse(public_url)
-    host = parsed.netloc.lower()
+def _microsoft_share_token_from_url(url: str) -> str:
+    raw_b64 = base64.b64encode(url.strip().encode("utf-8")).decode("ascii")
+    return raw_b64.rstrip("=").replace("+", "-").replace("/", "_")
+
+
+def _is_m365_sharing_url(url: str) -> bool:
+    p = urlparse(url.strip())
+    host = p.netloc.lower()
+    path_l = (p.path or "").lower()
     if "1drv.ms" in host:
-        encoded = base64.urlsafe_b64encode(public_url.encode("utf-8")).decode("utf-8").rstrip("=")
+        return True
+    if "sharepoint.com" in host or "onedrive.live.com" in host:
+        return any(
+            marker in path_l
+            for marker in (":x:/", ":f:/", ":w:/", ":b:/", ":u:/", ":v:/", ":g:/")
+        )
+    return False
+
+
+def _build_onedrive_download_url(public_url: str) -> str:
+    parsed = urlparse(public_url.strip())
+    host = parsed.netloc.lower()
+    path_l = (parsed.path or "").lower()
+
+    def _use_onedrive_shares_api() -> bool:
+        if "1drv.ms" in host:
+            return True
+        if "sharepoint.com" not in host and "onedrive.live.com" not in host:
+            return False
+        # Links partilhados (Excel :x:/, pasta :f:/, etc.) — ?download=1 costuma devolver HTML, não o binário.
+        return any(
+            marker in path_l
+            for marker in (":x:/", ":f:/", ":w:/", ":b:/", ":u:/", ":v:/", ":g:/")
+        )
+
+    if _use_onedrive_shares_api():
+        encoded = _microsoft_share_token_from_url(public_url.strip())
         return f"https://api.onedrive.com/v1.0/shares/u!{encoded}/root/content"
 
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
@@ -557,32 +617,76 @@ def _sync_shared_folder_cached(
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-@st.cache_data(show_spinner=False, ttl=900)
-def _download_file_bytes(url: str, _revisao: int = OPERACIONAL_CACHE_REVISION) -> tuple[bytes, str]:
-    del _revisao
-    req = Request(url, headers={"User-Agent": "FDL-Streamlit-App/1.0"})
-    for attempt in range(MAX_HTTP_RETRIES + 1):
+def _http_get_file_follow_redirects(
+    url: str, *, timeout: int = 60, extra_headers: dict[str, str] | None = None
+) -> tuple[bytes, str, str]:
+    """GET binário seguindo 301–308 (SharePoint / Graph devolve 308 «User migrated»)."""
+    headers: dict[str, str] = {"User-Agent": "FDL-Streamlit-App/1.0"}
+    if extra_headers:
+        headers.update(extra_headers)
+    current = url.strip()
+    for _ in range(24):
+        req = Request(current, headers=headers)
         try:
-            with urlopen(req, timeout=60) as resp:
+            with urlopen(req, timeout=timeout) as resp:
                 payload = resp.read()
+                final_url = resp.geturl()
                 filename = ""
                 cd = resp.headers.get("Content-Disposition", "")
                 if "filename=" in cd:
                     filename = cd.split("filename=", 1)[1].strip().strip("\"'")
                 if not filename:
-                    filename = Path(urlparse(url).path).name or "download.bin"
+                    filename = Path(urlparse(final_url).path).name or "download.bin"
+                return payload, filename, final_url
+        except HTTPError as exc:
+            if exc.code in (301, 302, 303, 307, 308) and exc.headers.get("Location"):
+                current = urljoin(current, exc.headers["Location"])
+                continue
+            raise
+    raise ValueError("Muitos redirecionamentos ao baixar o ficheiro.")
+
+
+@st.cache_data(show_spinner=False, ttl=900)
+def _download_file_bytes(
+    url: str,
+    _revisao: int = OPERACIONAL_CACHE_REVISION,
+    *,
+    extra_headers: dict[str, str] | None = None,
+    timeout: int = 60,
+    http_retries: int | None = None,
+) -> tuple[bytes, str]:
+    del _revisao
+    url_original = url.strip()
+    max_attempts = MAX_HTTP_RETRIES if http_retries is None else http_retries
+    for attempt in range(max_attempts + 1):
+        try:
+            payload, filename, _ = _http_get_file_follow_redirects(
+                url_original, timeout=timeout, extra_headers=extra_headers
+            )
             return payload, filename
         except HTTPError as exc:
-            if exc.code not in RETRYABLE_HTTP_CODES or attempt >= MAX_HTTP_RETRIES:
-                raise
-            retry_after = str(exc.headers.get("Retry-After", "")).strip()
-            sleep_s = float(retry_after) if retry_after.isdigit() else (1.5**attempt)
-            time.sleep(min(max(sleep_s, 0.5), 8.0))
+            if exc.code in RETRYABLE_HTTP_CODES and attempt < max_attempts:
+                retry_after = str(exc.headers.get("Retry-After", "")).strip()
+                sleep_s = float(retry_after) if retry_after.isdigit() else (1.5**attempt)
+                time.sleep(min(max(sleep_s, 0.5), 8.0))
+                continue
+            body = ""
+            try:
+                body = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                body = ""
+            body_snippet = body.strip().replace("\n", " ")
+            if len(body_snippet) > 400:
+                body_snippet = body_snippet[:400] + "..."
+            raise ValueError(
+                f"HTTP {exc.code} ao baixar ficheiro (URL de destino pode exigir login ou partilha anónima). "
+                f"Resposta: {body_snippet or '(sem corpo)'}"
+            ) from exc
         except URLError:
-            if attempt >= MAX_HTTP_RETRIES:
+            if attempt >= max_attempts:
                 raise
             time.sleep(min(1.5**attempt, 8.0))
-    raise RuntimeError(f"Falha ao baixar arquivo após tentativas: {url}")
+    raise RuntimeError(f"Falha ao baixar arquivo após tentativas: {url_original}")
 
 
 def _sync_payload_zip_to_base(payload: bytes) -> None:
@@ -603,6 +707,184 @@ def _validate_onedrive_csv_schema(df: pd.DataFrame) -> None:
             "CSV do OneDrive sem colunas obrigatórias: "
             + ", ".join(missing)
         )
+
+
+def _precomputed_path_str() -> str:
+    raw = os.environ.get("FDL_PRECOMPUTED_PATH", "").strip()
+    if raw:
+        return raw
+    try:
+        return str(st.secrets.get("FDL_PRECOMPUTED_PATH", "")).strip()
+    except Exception:
+        return ""
+
+
+def _precomputed_url_str() -> str:
+    raw = os.environ.get("FDL_PRECOMPUTED_URL", "").strip()
+    if raw:
+        return raw
+    try:
+        return str(st.secrets.get("FDL_PRECOMPUTED_URL", "")).strip()
+    except Exception:
+        return ""
+
+
+def _precomputed_download_attempts(public_url: str) -> list[tuple[str, dict[str, str]]]:
+    """Ordem: Graph (com token) → API consumer OneDrive → ?download=1 → download=1 com UA browser."""
+    u = public_url.strip()
+    attempts: list[tuple[str, dict[str, str]]] = []
+    if not _is_m365_sharing_url(u):
+        attempts.append((_download_url_for_precomputed_table(u), {}))
+        return attempts
+
+    tok = _microsoft_share_token_from_url(u)
+    bearer = _graph_bearer_token()
+    if bearer:
+        attempts.append(
+            (
+                f"https://graph.microsoft.com/v1.0/shares/u!{tok}/driveItem/content",
+                {"Authorization": f"Bearer {bearer}"},
+            )
+        )
+    attempts.append((f"https://api.onedrive.com/v1.0/shares/u!{tok}/root/content", {}))
+
+    parsed = urlparse(u)
+    q = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    q["download"] = "1"
+    dl_page = urlunparse(
+        (parsed.scheme, parsed.netloc, parsed.path, parsed.params, urlencode(q), parsed.fragment)
+    )
+    attempts.append((dl_page, {}))
+    attempts.append(
+        (
+            dl_page,
+            {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                ),
+            },
+        )
+    )
+    return attempts
+
+
+def _download_url_for_precomputed_table(url: str) -> str:
+    host = urlparse(url).netloc.lower()
+    if "1drv.ms" in host or "sharepoint.com" in host or "onedrive.live.com" in host:
+        return _build_onedrive_download_url(url)
+    return url
+
+
+def _dataframe_from_precomputed_bytes(payload: bytes, filename: str) -> pd.DataFrame:
+    head = payload.lstrip()[:800]
+    if head.startswith(b"<") or head.upper().startswith(b"<!DOCTYPE"):
+        raise ValueError(
+            "O servidor devolveu HTML (página de login ou erro), não o ficheiro de dados. "
+            "No OneDrive, use partilha «Qualquer pessoa com a ligação pode ver» e teste o link em janela anónima."
+        )
+    lower = (filename or "").lower()
+    if lower.endswith(".csv"):
+        return pd.read_csv(BytesIO(payload), sep=None, engine="python", encoding="utf-8-sig")
+    if lower.endswith(".xlsx") or lower.endswith(".xls"):
+        return pd.read_excel(BytesIO(payload), engine="openpyxl")
+    # API shares devolve filename «content»; .xlsx é ZIP (OOXML).
+    if zipfile.is_zipfile(BytesIO(payload)):
+        return pd.read_excel(BytesIO(payload), engine="openpyxl")
+    try:
+        return pd.read_csv(BytesIO(payload), sep=None, engine="python", encoding="utf-8-sig")
+    except Exception:
+        pass
+    raise ValueError(f"Formato não suportado: {filename!r}. Use .csv ou .xlsx da conciliação.")
+
+
+def _finalize_precomputed_df(
+    tabela: pd.DataFrame, origem_arquivo: str, base_label: str
+) -> tuple[pd.DataFrame, dict[str, object], str]:
+    _validate_onedrive_csv_schema(tabela)
+    if "empresa" not in tabela.columns:
+        tabela = tabela.copy()
+        tabela["empresa"] = DATASET_EMPRESA
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    info: dict[str, object] = {
+        "base_dir": base_label,
+        "linhas": int(len(tabela)),
+        "origem": "precomputed",
+        "arquivo": origem_arquivo,
+    }
+    return tabela, info, ts
+
+
+@st.cache_data(show_spinner=False, ttl=180)
+def _load_precomputed_from_remote(url: str, _revisao: int = OPERACIONAL_CACHE_REVISION) -> tuple[pd.DataFrame, dict[str, object], str]:
+    """Tabela já pronta via URL (ex.: ficheiro no OneDrive). Cache TTL evita download a cada filtro."""
+    del _revisao
+    errs: list[str] = []
+    for dl_url, hdr in _precomputed_download_attempts(url.strip()):
+        try:
+            payload, filename = _download_file_bytes(
+                dl_url,
+                extra_headers=hdr or None,
+                timeout=PRECOMPUTED_HTTP_TIMEOUT,
+                http_retries=1,
+            )
+            tabela = _dataframe_from_precomputed_bytes(payload, filename)
+            return _finalize_precomputed_df(tabela, filename, "precomputed_url")
+        except Exception as exc:  # noqa: BLE001 — agregamos para mensagem única
+            hint = dl_url if len(dl_url) < 120 else dl_url[:117] + "..."
+            errs.append(f"{hint} → {exc}")
+    raise ValueError(
+        "Não foi possível ler a tabela a partir do link. "
+        "Para links SharePoint no estilo :x:/, costuma ser necessário "
+        "`FDL_MS_GRAPH_TOKEN` nos secrets (token de aplicação Microsoft Graph com Files.Read.All), "
+        "ou um link curto 1drv.ms / ficheiro com partilha anónima. "
+        "Detalhes: " + " | ".join(errs[:4])
+        + (" …" if len(errs) > 4 else "")
+    )
+
+
+@st.cache_data(show_spinner=True)
+def _load_precomputed_from_disk(
+    path_str: str, _mtime_ns: int, _revisao: int = OPERACIONAL_CACHE_REVISION
+) -> tuple[pd.DataFrame, dict[str, object], str]:
+    del _revisao
+    path = Path(path_str)
+    tabela = (
+        pd.read_csv(path, sep=None, engine="python", encoding="utf-8-sig")
+        if path.suffix.lower() == ".csv"
+        else pd.read_excel(path, engine="openpyxl")
+    )
+    return _finalize_precomputed_df(tabela, path.name, str(path.parent))
+
+
+def load_precomputed_conciliacao() -> tuple[pd.DataFrame, dict[str, object], str]:
+    """
+    Lê só o ficheiro já gerado (export Power BI / mirror), sem correr o pipeline.
+    Configure FDL_PRECOMPUTED_PATH OU URL (ou link direto para .csv/.xlsx em FDL_ONEDRIVE_URL, sem pasta :f:/).
+    """
+    path_s = _precomputed_path_str()
+    url_s = _precomputed_url_str()
+    if not url_s:
+        od = _onedrive_public_url()
+        if od and ":f:/" not in od.lower():
+            url_s = od
+    if path_s:
+        path = Path(path_s).expanduser()
+        if not path.is_absolute():
+            path = (_REPO_APP_ROOT / path).resolve()
+        if not path.is_file():
+            raise FileNotFoundError(f"FDL_PRECOMPUTED_PATH não encontrado: {path}")
+        if path.suffix.lower() not in {".csv", ".xlsx", ".xls"}:
+            raise ValueError("FDL_PRECOMPUTED_PATH deve ser .csv, .xlsx ou .xls")
+        mtime_ns = int(path.stat().st_mtime_ns)
+        return _load_precomputed_from_disk(str(path.resolve()), mtime_ns)
+    if url_s:
+        return _load_precomputed_from_remote(url_s.strip())
+    raise ValueError(
+        "Modo precomputed: defina FDL_PRECOMPUTED_PATH (ficheiro no servidor) ou "
+        "FDL_PRECOMPUTED_URL / link direto para .csv ou .xlsx. "
+        "Alternativa: FDL_ONEDRIVE_URL apontando só para o ficheiro (não link de pasta :f:/)."
+    )
 
 
 def load_data_from_onedrive() -> tuple[pd.DataFrame, dict[str, object], str]:
@@ -627,7 +909,7 @@ def load_data_from_onedrive() -> tuple[pd.DataFrame, dict[str, object], str]:
         return carregar_tabela_final_operacional_cache()
 
     if lower_name.endswith(".csv"):
-        tabela = pd.read_csv(BytesIO(payload), sep=None, engine="python")
+        tabela = pd.read_csv(BytesIO(payload), sep=None, engine="python", encoding="utf-8-sig")
         _validate_onedrive_csv_schema(tabela)
         if "empresa" not in tabela.columns:
             tabela = tabela.copy()
@@ -658,6 +940,8 @@ def _render_cloud_data_loader() -> None:
 
 def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
     source = _data_source_mode()
+    if source in {"precomputed", "ready", "table"}:
+        return load_precomputed_conciliacao()
     if source in {"filesystem", "onedrive"}:
         return load_data_from_onedrive()
     if source == "api":
@@ -1070,13 +1354,32 @@ if _admin_mode and _data_source_mode() == "upload_zip":
     _render_cloud_data_loader()
 
 try:
-    tabela_geral, info, ts_proc = _load_data()
+    with st.spinner("A carregar dados (a ir buscar o ficheiro à nuvem, se aplicável)…"):
+        tabela_geral, info, ts_proc = _load_data()
 except Exception as exc:
-    if _admin_mode:
+    err_text = str(exc).strip() or exc.__class__.__name__
+    if _expose_load_errors():
+        st.error("Erro ao carregar os dados. Ajuste Secrets/URL ou use o detalhe abaixo.")
+        st.exception(exc)
+    elif _admin_mode:
         st.warning("Dados indisponíveis no momento.")
         st.caption(f"Detalhe técnico: {exc}")
     else:
         st.warning("Dados indisponíveis no momento. Tente novamente em instantes.")
+        with st.expander("Detalhes para suporte", expanded=False):
+            st.code(err_text, language="text")
+    od_url = _onedrive_public_url()
+    if (
+        _data_source_mode() in {"onedrive", "filesystem"}
+        and od_url
+        and ":f:/" in od_url.lower()
+    ):
+        st.info(
+            "A configuração atual usa **link de pasta** do SharePoint (`:f:/`), que depende de "
+            "acesso à API Microsoft e costuma falhar na Streamlit Cloud. "
+            "Use **FDL_DATA_SOURCE = \"precomputed\"** com `FDL_PRECOMPUTED_URL` (link direto ao "
+            "`.csv` ou `.xlsx`) ou `FDL_PRECOMPUTED_PATH` no servidor."
+        )
     st.stop()
 
 # Cache antigo do Streamlit ou pickle sem a coluna — alinhar ao pipeline atual.

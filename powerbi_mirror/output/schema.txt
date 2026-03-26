@@ -1,0 +1,15 @@
+N° de venda	object
+ID do pedido	object
+Total BRL	float64
+Número da nota	object
+Numero_sem_parcela	object
+Valor da nota	float64
+Plataforma	object
+Situação	object
+Ação sugerida	object
+Valor a receber	float64
+Valor pago	float64
+Diferença	float64
+Data de pagamento	object
+Data de emissão	object
+empresa	object

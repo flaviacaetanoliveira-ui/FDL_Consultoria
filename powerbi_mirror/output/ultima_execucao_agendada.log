@@ -1,0 +1,14 @@
+=== 26/03/2026 18:58:42,95 Inicio ===
+^C=== 26/03/2026 19:05:32,39 Inicio ===
+2026-03-26 19:05:34.126 No runtime found, using MemoryCacheStorageManager
+2026-03-26 19:05:34.129 No runtime found, using MemoryCacheStorageManager
+2026-03-26 19:05:34.132 No runtime found, using MemoryCacheStorageManager
+Não foi possível exportar para Power BI.
+Pastas de entrada ausentes:
+- C:\Users\diieg\OneDrive - FDL Consultoria\V2\data_cliente\Vendas - Mercado Livre
+- C:\Users\diieg\OneDrive - FDL Consultoria\V2\data_cliente\Liberações_ML
+- C:\Users\diieg\OneDrive - FDL Consultoria\V2\data_cliente\notas_saida
+- C:\Users\diieg\OneDrive - FDL Consultoria\V2\data_cliente\contas_receber
+
+Defina FDL_BASE_DIR com o caminho da base do cliente antes de executar.
+=== 26/03/2026 19:05:34,62 Fim codigo 1 ===

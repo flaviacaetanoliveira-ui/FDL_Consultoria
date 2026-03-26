@@ -1361,6 +1361,334 @@ def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
     return pd.to_datetime(s, errors="coerce")
 
 
+@st.fragment
+def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str, info: dict[str, object]) -> None:
+    """Filtros + KPIs + tabela — rerun isolado (evita ecrã branco ao mexer nos multiselect na Cloud)."""
+    with st.container():
+        st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
+        r1 = st.columns((1.15, 1.15, 1.15, 1.55))
+        r2 = st.columns((1.15, 1.15, 2.3))
+        dp_series_full = pd.to_datetime(base["Data de pagamento"], errors="coerce")
+        if dp_series_full.notna().any():
+            _d_min: date = dp_series_full.min().date()
+            _d_max: date = dp_series_full.max().date()
+        else:
+            _d_min = _d_max = datetime.now().date()
+        plats = (
+            sorted([x for x in base["Plataforma"].dropna().unique().tolist() if str(x).strip()])
+            if "Plataforma" in base.columns
+            else []
+        )
+        acoes = sorted(
+            [
+                x
+                for x in base["Ação sugerida operacional"].dropna().unique().tolist()
+                if str(x).strip()
+            ]
+        )
+        sit = sorted(
+            [x for x in base["Situação"].dropna().unique().tolist() if str(x).strip()]
+        )
+        with r1[0]:
+            sel_plat = _multiselect_stable("op_ms_plat", "Plataforma", plats)
+        with r1[1]:
+            sel_acao = _multiselect_stable("op_ms_acao", "Ação sugerida", acoes)
+        with r1[2]:
+            sel_sit = _multiselect_stable("op_ms_sit", "Situação", sit)
+        with r1[3]:
+            busca = st.text_input("Busca (venda / pedido / nota)", "").strip().lower()
+        with r2[0]:
+            data_pag_ini = st.date_input(
+                "Data de pagamento — início",
+                value=_d_min,
+                min_value=_d_min,
+                max_value=_d_max,
+                format="DD/MM/YYYY",
+            )
+        with r2[1]:
+            data_pag_fim = st.date_input(
+                "Data de pagamento — fim",
+                value=_d_max,
+                min_value=_d_min,
+                max_value=_d_max,
+                format="DD/MM/YYYY",
+            )
+        st.caption(
+            "O intervalo de datas restringe as linhas pela **data de pagamento** do registro (comparado por dia)."
+        )
+    
+    if data_pag_fim < data_pag_ini:
+        st.warning("A data final não pode ser anterior à data inicial. Ajuste o período.")
+        data_pag_fim = data_pag_ini
+    
+    tabela = base.copy()
+    if "Plataforma" in tabela.columns and sel_plat:
+        tabela = tabela[tabela["Plataforma"].isin(sel_plat)]
+    if sel_acao:
+        tabela = tabela[tabela["Ação sugerida operacional"].isin(sel_acao)]
+    if sel_sit:
+        tabela = tabela[tabela["Situação"].isin(sel_sit)]
+    if busca:
+        m_busca = (
+            tabela["N° de venda"].fillna("").astype(str).str.lower().str.contains(busca, regex=False)
+            | tabela["ID do pedido"].fillna("").astype(str).str.lower().str.contains(busca, regex=False)
+            | tabela["Número da nota"].fillna("").astype(str).str.lower().str.contains(busca, regex=False)
+        )
+        tabela = tabela[m_busca]
+    
+    _dp_filt = pd.to_datetime(tabela["Data de pagamento"], errors="coerce")
+    _dd = _dp_filt.dt.normalize()
+    _ini_ts = pd.Timestamp(data_pag_ini)
+    _fim_ts = pd.Timestamp(data_pag_fim) + pd.Timedelta(days=1)
+    m_data = _dp_filt.notna() & (_dd >= _ini_ts) & (_dd < _fim_ts)
+    tabela = tabela.loc[m_data].copy()
+    
+    if "Plataforma" in base.columns:
+        n_plat = len(plats)
+        # Multiselect vazio = não filtra por plataforma (mostra todas) — não confundir com «nenhuma linha».
+        if not n_plat:
+            plataforma_label = "—"
+        elif len(sel_plat) == 0 or (n_plat and len(sel_plat) == n_plat):
+            plataforma_label = "Todas"
+        else:
+            plataforma_label = ", ".join(sel_plat[:2]) + ("..." if len(sel_plat) > 2 else "")
+    else:
+        plataforma_label = "Mercado Livre"
+    
+    st.markdown(
+        f"""
+        <p class="page-meta" style="margin-bottom:1.1rem;">
+          <strong>Plataforma (filtro):</strong> {plataforma_label}
+          &nbsp;·&nbsp;
+          <strong>Dados carregados:</strong> {ts_proc}
+          &nbsp;·&nbsp;
+          <strong>Pagamento:</strong> {data_pag_ini.strftime("%d/%m/%Y")} a {data_pag_fim.strftime("%d/%m/%Y")}
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
+    
+    # Tipos numéricos para a base já filtrada (mesmo conjunto usado nos KPIs e na tabela)
+    tabela["Valor da nota"] = pd.to_numeric(tabela["Valor da nota"], errors="coerce").fillna(0.0)
+    tabela["Total BRL"] = pd.to_numeric(tabela.get("Total BRL"), errors="coerce")
+    tabela["Valor a receber"] = pd.to_numeric(tabela.get("Valor a receber"), errors="coerce")
+    tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
+    tabela["Diferença"] = pd.to_numeric(tabela.get("Diferença"), errors="coerce")
+    
+    # KPIs — mesma lógica de sempre, sobre a base **após** os filtros operacionais
+    st.markdown('<div class="section-title">Fluxo financeiro do período</div>', unsafe_allow_html=True)
+    data_pag_dt = pd.to_datetime(tabela.get("Data de pagamento"), errors="coerce")
+    mask_recebido = data_pag_dt.notna() & tabela["Valor pago"].fillna(0).gt(0)
+    mask_baixado = tabela["Ação sugerida operacional"].eq("Ok")
+    mask_recebido_nao_baixado = tabela["Ação sugerida operacional"].eq("Baixar no Bling")
+    mask_divergencia = tabela["Diferença"].abs().gt(0.01)
+    mask_em_aberto = tabela["Valor pago"].fillna(0).le(0)
+    kpi_valor_recebido = float(tabela.loc[mask_recebido, "Valor pago"].sum())
+    kpi_baixado = float(tabela.loc[mask_baixado, "Valor pago"].sum())
+    kpi_recebido_nao_baixado = float(tabela.loc[mask_recebido_nao_baixado, "Valor pago"].sum())
+    kpi_divergencia = float(tabela.loc[mask_divergencia, "Diferença"].abs().sum())
+    kpi_em_aberto = float(tabela.loc[mask_em_aberto, "Valor a receber"].sum())
+    st.markdown(
+        f'<div class="money-hero"><b>Valor recebido no período:</b> R$ {kpi_valor_recebido:,.2f}</div>',
+        unsafe_allow_html=True,
+    )
+    k1, k2, k3, k4, k5 = st.columns(5)
+    with k1:
+        _render_kpi_card(
+            "Valor recebido no período", f"R$ {kpi_valor_recebido:,.2f}", "◆", "kpi-total"
+        )
+    with k2:
+        _render_kpi_card("Baixado no Bling", f"R$ {kpi_baixado:,.2f}", "✓", "kpi-ok")
+    with k3:
+        _render_kpi_card("Recebido e não baixado", f"R$ {kpi_recebido_nao_baixado:,.2f}", "◇", "kpi-acao")
+    with k4:
+        _render_kpi_card("Divergência de valores", f"R$ {kpi_divergencia:,.2f}", "!", "kpi-div")
+    with k5:
+        _render_kpi_card("Em aberto", f"R$ {kpi_em_aberto:,.2f}", "○", "kpi-pend")
+    
+    # Validação de consistência dos KPIs (base filtrada)
+    st.markdown('<div class="section-title">Validação de ações (base filtrada)</div>', unsafe_allow_html=True)
+    acoes_validacao = [
+        "Ok",
+        "Baixar no Bling",
+        "Analisar diferença",
+        "Verificar recebimento",
+        "Verificar faturamento",
+        "Revisar venda zerada",
+    ]
+    contagens_acao = {a: int(tabela["Ação sugerida operacional"].eq(a).sum()) for a in acoes_validacao}
+    st.markdown(
+        f"""
+        <div class="validacao-badges">
+          <span class="badge-acao badge-ok">Ok <b>{contagens_acao["Ok"]}</b></span>
+          <span class="badge-acao badge-bling">Baixar no Bling <b>{contagens_acao["Baixar no Bling"]}</b></span>
+          <span class="badge-acao badge-analisar">Analisar diferença <b>{contagens_acao["Analisar diferença"]}</b></span>
+          <span class="badge-acao badge-verificar">Verificar recebimento <b>{contagens_acao["Verificar recebimento"]}</b></span>
+          <span class="badge-acao badge-faturamento">Verificar faturamento <b>{contagens_acao["Verificar faturamento"]}</b></span>
+          <span class="badge-acao badge-revisar">Revisar venda zerada <b>{contagens_acao["Revisar venda zerada"]}</b></span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    
+    # Bloco C - Contexto filtrado
+    st.markdown('<div class="section-title">Contexto filtrado</div>', unsafe_allow_html=True)
+    data_pag = pd.to_datetime(tabela.get("Data de pagamento"), errors="coerce")
+    periodo_filtro = (
+        f"{data_pag_ini.strftime('%d/%m/%Y')} a {data_pag_fim.strftime('%d/%m/%Y')} (filtro data pagamento)"
+    )
+    if data_pag.notna().any():
+        periodo = f"{periodo_filtro} · registros entre {data_pag.min().date()} e {data_pag.max().date()}"
+    else:
+        periodo = f"{periodo_filtro} · sem registros neste recorte"
+    c1, c2, c3, c4 = st.columns(4)
+    c1.caption(f"Linhas filtradas: **{len(tabela)}**")
+    c2.caption(f"Plataforma: **{plataforma_label}**")
+    c3.caption(f"Período: **{periodo}**")
+    c4.caption(f"Última atualização: **{ts_proc}**")
+    
+    st.caption(f"Linhas carregadas: {info.get('linhas',0)}")
+    
+    # Tabela operacional — Data de emissão: mesma coluna da tabela final, parse ISO (sem dayfirst).
+    col_data_emissao = _resolve_col_data_emissao(list(tabela.columns))
+    exibir_cols = [
+        "N° de venda",
+        "ID do pedido",
+        "Total BRL",
+        "Número da nota",
+        "Valor da nota",
+        "Valor a receber",
+        "Diferença",
+        "Situação",
+        "Ação sugerida operacional",
+    ]
+    if "Data de pagamento" in tabela.columns:
+        exibir_cols.append("Data de pagamento")
+    if "Valor pago" in tabela.columns:
+        exibir_cols.append("Valor pago")
+    
+    exibir_cols = [c for c in exibir_cols if c in tabela.columns]
+    if not exibir_cols:
+        st.warning("Sem colunas para exibir na base filtrada.")
+        tabela_exibir = pd.DataFrame()
+    else:
+        tabela_exibir = tabela[exibir_cols].copy()
+        tabela_exibir["Valor da nota"] = pd.to_numeric(tabela_exibir["Valor da nota"], errors="coerce")
+        tabela_exibir["Valor a receber"] = pd.to_numeric(tabela_exibir["Valor a receber"], errors="coerce")
+        tabela_exibir["Valor pago"] = pd.to_numeric(tabela_exibir.get("Valor pago"), errors="coerce")
+        tabela_exibir["Diferença"] = pd.to_numeric(tabela_exibir["Diferença"], errors="coerce")
+        if col_data_emissao:
+            tabela_exibir["Data de emissão"] = _parse_data_emissao_final(
+                tabela.loc[tabela_exibir.index, col_data_emissao]
+            )
+        else:
+            tabela_exibir["Data de emissão"] = pd.NaT
+        tabela_exibir["Data de pagamento"] = _parse_data_pagamento_final(
+            tabela.loc[tabela_exibir.index, "Data de pagamento"]
+            if "Data de pagamento" in tabela.columns
+            else pd.Series("", index=tabela_exibir.index)
+        )
+        tabela_exibir["Valor da nota"] = tabela_exibir["Valor da nota"].fillna(0.0)
+        tabela_exibir["Valor a receber"] = tabela_exibir["Valor a receber"].fillna(0.0)
+        tabela_exibir["Valor pago"] = tabela_exibir["Valor pago"].fillna(0.0)
+        tabela_exibir["Diferença"] = tabela_exibir["Diferença"].fillna(0.0)
+        tabela_exibir = tabela_exibir.rename(
+            columns={
+                "N° de venda": "Número da venda",
+                "ID do pedido": "Número do pedido",
+                "Ação sugerida operacional": "Ação sugerida",
+            }
+        )
+        tabela_exibir = tabela_exibir.drop(columns=["Total BRL"], errors="ignore")
+        _ordem_final = [
+            "Número da venda",
+            "Número do pedido",
+            "Número da nota",
+            "Data de emissão",
+            "Data de pagamento",
+            "Valor da nota",
+            "Valor a receber",
+            "Valor pago",
+            "Diferença",
+            "Situação",
+            "Ação sugerida",
+        ]
+        tabela_exibir = tabela_exibir[[c for c in _ordem_final if c in tabela_exibir.columns]]
+        # Ordenação padrão operacional: pagamentos mais recentes primeiro.
+        if not tabela_exibir.empty and "Data de pagamento" in tabela_exibir.columns:
+            tabela_exibir = tabela_exibir.sort_values(
+                by="Data de pagamento", ascending=False, na_position="last"
+            ).reset_index(drop=True)
+    
+    st.markdown(
+        """
+        <div class="queue-head">
+          <div>
+            <div class="queue-title">Fila Operacional</div>
+            <div class="queue-sub">Casos prontos para tratamento</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    
+    btn1, btn2, btn3 = st.columns([1, 1, 1])
+    csv_bytes = tabela_exibir.to_csv(index=False).encode("utf-8-sig")
+    with btn1:
+        st.download_button(
+            "Exportar CSV",
+            data=csv_bytes,
+            file_name="conciliacao_operacional_filtrada.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+    # Exportação Excel: datas já são datetime (mesmo critério da tela); só formato de célula.
+    tabela_excel = tabela_exibir.copy()
+    
+    excel_buf = BytesIO()
+    with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
+        tabela_excel.to_excel(writer, index=False, sheet_name="Conciliação")
+        ws = writer.sheets["Conciliação"]
+        header_row = [cell.value for cell in ws[1]]
+        for c_data in ("Data de emissão", "Data de pagamento"):
+            if c_data in header_row:
+                col_idx = header_row.index(c_data) + 1
+                for row_idx in range(2, ws.max_row + 1):
+                    cell = ws.cell(row=row_idx, column=col_idx)
+                    if cell.value is not None:
+                        cell.number_format = numbers.FORMAT_DATE_DDMMYY
+    excel_buf.seek(0)
+    with btn2:
+        st.download_button(
+            "⭐ Exportar Excel",
+            data=excel_buf.getvalue(),
+            file_name="conciliacao_operacional_filtrada.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+    with btn3:
+        st.download_button(
+            "Exportar PDF",
+            data=_build_pdf_bytes(tabela_exibir),
+            file_name="conciliacao_operacional_filtrada.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+    
+    if tabela_exibir.empty:
+        st.info(
+            "**Nenhum registo** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
+        )
+        st.dataframe(tabela_exibir, use_container_width=True, height=160)
+    else:
+        st.dataframe(
+            tabela_exibir,
+            use_container_width=True,
+            height=550,
+            column_config=_column_config_conciliacao(tabela_exibir),
+        )
+    st.write(f"Linhas filtradas: **{len(tabela_exibir)}**")
+
 _admin_mode = _is_admin_mode()
 if _admin_mode and _data_source_mode() == "upload_zip":
     _render_cloud_data_loader()
@@ -1547,328 +1875,5 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.container():
-    st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
-    r1 = st.columns((1.15, 1.15, 1.15, 1.55))
-    r2 = st.columns((1.15, 1.15, 2.3))
-    dp_series_full = pd.to_datetime(tabela_operacional_base["Data de pagamento"], errors="coerce")
-    if dp_series_full.notna().any():
-        _d_min: date = dp_series_full.min().date()
-        _d_max: date = dp_series_full.max().date()
-    else:
-        _d_min = _d_max = datetime.now().date()
-    plats = (
-        sorted([x for x in tabela_operacional_base["Plataforma"].dropna().unique().tolist() if str(x).strip()])
-        if "Plataforma" in tabela_operacional_base.columns
-        else []
-    )
-    acoes = sorted(
-        [
-            x
-            for x in tabela_operacional_base["Ação sugerida operacional"].dropna().unique().tolist()
-            if str(x).strip()
-        ]
-    )
-    sit = sorted(
-        [x for x in tabela_operacional_base["Situação"].dropna().unique().tolist() if str(x).strip()]
-    )
-    with r1[0]:
-        sel_plat = _multiselect_stable("op_ms_plat", "Plataforma", plats)
-    with r1[1]:
-        sel_acao = _multiselect_stable("op_ms_acao", "Ação sugerida", acoes)
-    with r1[2]:
-        sel_sit = _multiselect_stable("op_ms_sit", "Situação", sit)
-    with r1[3]:
-        busca = st.text_input("Busca (venda / pedido / nota)", "").strip().lower()
-    with r2[0]:
-        data_pag_ini = st.date_input(
-            "Data de pagamento — início",
-            value=_d_min,
-            min_value=_d_min,
-            max_value=_d_max,
-            format="DD/MM/YYYY",
-        )
-    with r2[1]:
-        data_pag_fim = st.date_input(
-            "Data de pagamento — fim",
-            value=_d_max,
-            min_value=_d_min,
-            max_value=_d_max,
-            format="DD/MM/YYYY",
-        )
-    st.caption(
-        "O intervalo de datas restringe as linhas pela **data de pagamento** do registro (comparado por dia)."
-    )
-
-if data_pag_fim < data_pag_ini:
-    st.warning("A data final não pode ser anterior à data inicial. Ajuste o período.")
-    data_pag_fim = data_pag_ini
-
-tabela = tabela_operacional_base.copy()
-if "Plataforma" in tabela.columns and sel_plat:
-    tabela = tabela[tabela["Plataforma"].isin(sel_plat)]
-if sel_acao:
-    tabela = tabela[tabela["Ação sugerida operacional"].isin(sel_acao)]
-if sel_sit:
-    tabela = tabela[tabela["Situação"].isin(sel_sit)]
-if busca:
-    m_busca = (
-        tabela["N° de venda"].fillna("").astype(str).str.lower().str.contains(busca, regex=False)
-        | tabela["ID do pedido"].fillna("").astype(str).str.lower().str.contains(busca, regex=False)
-        | tabela["Número da nota"].fillna("").astype(str).str.lower().str.contains(busca, regex=False)
-    )
-    tabela = tabela[m_busca]
-
-_dp_filt = pd.to_datetime(tabela["Data de pagamento"], errors="coerce")
-_dd = _dp_filt.dt.normalize()
-_ini_ts = pd.Timestamp(data_pag_ini)
-_fim_ts = pd.Timestamp(data_pag_fim) + pd.Timedelta(days=1)
-m_data = _dp_filt.notna() & (_dd >= _ini_ts) & (_dd < _fim_ts)
-tabela = tabela.loc[m_data].copy()
-
-if "Plataforma" in tabela_operacional_base.columns:
-    n_plat = len(plats)
-    # Multiselect vazio = não filtra por plataforma (mostra todas) — não confundir com «nenhuma linha».
-    if not n_plat:
-        plataforma_label = "—"
-    elif len(sel_plat) == 0 or (n_plat and len(sel_plat) == n_plat):
-        plataforma_label = "Todas"
-    else:
-        plataforma_label = ", ".join(sel_plat[:2]) + ("..." if len(sel_plat) > 2 else "")
-else:
-    plataforma_label = "Mercado Livre"
-
-st.markdown(
-    f"""
-    <p class="page-meta" style="margin-bottom:1.1rem;">
-      <strong>Plataforma (filtro):</strong> {plataforma_label}
-      &nbsp;·&nbsp;
-      <strong>Dados carregados:</strong> {ts_proc}
-      &nbsp;·&nbsp;
-      <strong>Pagamento:</strong> {data_pag_ini.strftime("%d/%m/%Y")} a {data_pag_fim.strftime("%d/%m/%Y")}
-    </p>
-    """,
-    unsafe_allow_html=True,
-)
-
-# Tipos numéricos para a base já filtrada (mesmo conjunto usado nos KPIs e na tabela)
-tabela["Valor da nota"] = pd.to_numeric(tabela["Valor da nota"], errors="coerce").fillna(0.0)
-tabela["Total BRL"] = pd.to_numeric(tabela.get("Total BRL"), errors="coerce")
-tabela["Valor a receber"] = pd.to_numeric(tabela.get("Valor a receber"), errors="coerce")
-tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
-tabela["Diferença"] = pd.to_numeric(tabela.get("Diferença"), errors="coerce")
-
-# KPIs — mesma lógica de sempre, sobre a base **após** os filtros operacionais
-st.markdown('<div class="section-title">Fluxo financeiro do período</div>', unsafe_allow_html=True)
-data_pag_dt = pd.to_datetime(tabela.get("Data de pagamento"), errors="coerce")
-mask_recebido = data_pag_dt.notna() & tabela["Valor pago"].fillna(0).gt(0)
-mask_baixado = tabela["Ação sugerida operacional"].eq("Ok")
-mask_recebido_nao_baixado = tabela["Ação sugerida operacional"].eq("Baixar no Bling")
-mask_divergencia = tabela["Diferença"].abs().gt(0.01)
-mask_em_aberto = tabela["Valor pago"].fillna(0).le(0)
-kpi_valor_recebido = float(tabela.loc[mask_recebido, "Valor pago"].sum())
-kpi_baixado = float(tabela.loc[mask_baixado, "Valor pago"].sum())
-kpi_recebido_nao_baixado = float(tabela.loc[mask_recebido_nao_baixado, "Valor pago"].sum())
-kpi_divergencia = float(tabela.loc[mask_divergencia, "Diferença"].abs().sum())
-kpi_em_aberto = float(tabela.loc[mask_em_aberto, "Valor a receber"].sum())
-st.markdown(
-    f'<div class="money-hero"><b>Valor recebido no período:</b> R$ {kpi_valor_recebido:,.2f}</div>',
-    unsafe_allow_html=True,
-)
-k1, k2, k3, k4, k5 = st.columns(5)
-with k1:
-    _render_kpi_card(
-        "Valor recebido no período", f"R$ {kpi_valor_recebido:,.2f}", "◆", "kpi-total"
-    )
-with k2:
-    _render_kpi_card("Baixado no Bling", f"R$ {kpi_baixado:,.2f}", "✓", "kpi-ok")
-with k3:
-    _render_kpi_card("Recebido e não baixado", f"R$ {kpi_recebido_nao_baixado:,.2f}", "◇", "kpi-acao")
-with k4:
-    _render_kpi_card("Divergência de valores", f"R$ {kpi_divergencia:,.2f}", "!", "kpi-div")
-with k5:
-    _render_kpi_card("Em aberto", f"R$ {kpi_em_aberto:,.2f}", "○", "kpi-pend")
-
-# Validação de consistência dos KPIs (base filtrada)
-st.markdown('<div class="section-title">Validação de ações (base filtrada)</div>', unsafe_allow_html=True)
-acoes_validacao = [
-    "Ok",
-    "Baixar no Bling",
-    "Analisar diferença",
-    "Verificar recebimento",
-    "Verificar faturamento",
-    "Revisar venda zerada",
-]
-contagens_acao = {a: int(tabela["Ação sugerida operacional"].eq(a).sum()) for a in acoes_validacao}
-st.markdown(
-    f"""
-    <div class="validacao-badges">
-      <span class="badge-acao badge-ok">Ok <b>{contagens_acao["Ok"]}</b></span>
-      <span class="badge-acao badge-bling">Baixar no Bling <b>{contagens_acao["Baixar no Bling"]}</b></span>
-      <span class="badge-acao badge-analisar">Analisar diferença <b>{contagens_acao["Analisar diferença"]}</b></span>
-      <span class="badge-acao badge-verificar">Verificar recebimento <b>{contagens_acao["Verificar recebimento"]}</b></span>
-      <span class="badge-acao badge-faturamento">Verificar faturamento <b>{contagens_acao["Verificar faturamento"]}</b></span>
-      <span class="badge-acao badge-revisar">Revisar venda zerada <b>{contagens_acao["Revisar venda zerada"]}</b></span>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# Bloco C - Contexto filtrado
-st.markdown('<div class="section-title">Contexto filtrado</div>', unsafe_allow_html=True)
-data_pag = pd.to_datetime(tabela.get("Data de pagamento"), errors="coerce")
-periodo_filtro = (
-    f"{data_pag_ini.strftime('%d/%m/%Y')} a {data_pag_fim.strftime('%d/%m/%Y')} (filtro data pagamento)"
-)
-if data_pag.notna().any():
-    periodo = f"{periodo_filtro} · registros entre {data_pag.min().date()} e {data_pag.max().date()}"
-else:
-    periodo = f"{periodo_filtro} · sem registros neste recorte"
-c1, c2, c3, c4 = st.columns(4)
-c1.caption(f"Linhas filtradas: **{len(tabela)}**")
-c2.caption(f"Plataforma: **{plataforma_label}**")
-c3.caption(f"Período: **{periodo}**")
-c4.caption(f"Última atualização: **{ts_proc}**")
-
-st.caption(f"Linhas carregadas: {info.get('linhas',0)}")
-
-# Tabela operacional — Data de emissão: mesma coluna da tabela final, parse ISO (sem dayfirst).
-col_data_emissao = _resolve_col_data_emissao(list(tabela.columns))
-exibir_cols = [
-    "N° de venda",
-    "ID do pedido",
-    "Total BRL",
-    "Número da nota",
-    "Valor da nota",
-    "Valor a receber",
-    "Diferença",
-    "Situação",
-    "Ação sugerida operacional",
-]
-if "Data de pagamento" in tabela.columns:
-    exibir_cols.append("Data de pagamento")
-if "Valor pago" in tabela.columns:
-    exibir_cols.append("Valor pago")
-
-exibir_cols = [c for c in exibir_cols if c in tabela.columns]
-if not exibir_cols:
-    st.warning("Sem colunas para exibir na base filtrada.")
-    tabela_exibir = pd.DataFrame()
-else:
-    tabela_exibir = tabela[exibir_cols].copy()
-    tabela_exibir["Valor da nota"] = pd.to_numeric(tabela_exibir["Valor da nota"], errors="coerce")
-    tabela_exibir["Valor a receber"] = pd.to_numeric(tabela_exibir["Valor a receber"], errors="coerce")
-    tabela_exibir["Valor pago"] = pd.to_numeric(tabela_exibir.get("Valor pago"), errors="coerce")
-    tabela_exibir["Diferença"] = pd.to_numeric(tabela_exibir["Diferença"], errors="coerce")
-    if col_data_emissao:
-        tabela_exibir["Data de emissão"] = _parse_data_emissao_final(
-            tabela.loc[tabela_exibir.index, col_data_emissao]
-        )
-    else:
-        tabela_exibir["Data de emissão"] = pd.NaT
-    tabela_exibir["Data de pagamento"] = _parse_data_pagamento_final(
-        tabela.loc[tabela_exibir.index, "Data de pagamento"]
-        if "Data de pagamento" in tabela.columns
-        else pd.Series("", index=tabela_exibir.index)
-    )
-    tabela_exibir["Valor da nota"] = tabela_exibir["Valor da nota"].fillna(0.0)
-    tabela_exibir["Valor a receber"] = tabela_exibir["Valor a receber"].fillna(0.0)
-    tabela_exibir["Valor pago"] = tabela_exibir["Valor pago"].fillna(0.0)
-    tabela_exibir["Diferença"] = tabela_exibir["Diferença"].fillna(0.0)
-    tabela_exibir = tabela_exibir.rename(
-        columns={
-            "N° de venda": "Número da venda",
-            "ID do pedido": "Número do pedido",
-            "Ação sugerida operacional": "Ação sugerida",
-        }
-    )
-    tabela_exibir = tabela_exibir.drop(columns=["Total BRL"], errors="ignore")
-    _ordem_final = [
-        "Número da venda",
-        "Número do pedido",
-        "Número da nota",
-        "Data de emissão",
-        "Data de pagamento",
-        "Valor da nota",
-        "Valor a receber",
-        "Valor pago",
-        "Diferença",
-        "Situação",
-        "Ação sugerida",
-    ]
-    tabela_exibir = tabela_exibir[[c for c in _ordem_final if c in tabela_exibir.columns]]
-    # Ordenação padrão operacional: pagamentos mais recentes primeiro.
-    if not tabela_exibir.empty and "Data de pagamento" in tabela_exibir.columns:
-        tabela_exibir = tabela_exibir.sort_values(
-            by="Data de pagamento", ascending=False, na_position="last"
-        ).reset_index(drop=True)
-
-st.markdown(
-    """
-    <div class="queue-head">
-      <div>
-        <div class="queue-title">Fila Operacional</div>
-        <div class="queue-sub">Casos prontos para tratamento</div>
-      </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-btn1, btn2, btn3 = st.columns([1, 1, 1])
-csv_bytes = tabela_exibir.to_csv(index=False).encode("utf-8-sig")
-with btn1:
-    st.download_button(
-        "Exportar CSV",
-        data=csv_bytes,
-        file_name="conciliacao_operacional_filtrada.csv",
-        mime="text/csv",
-        use_container_width=True,
-    )
-# Exportação Excel: datas já são datetime (mesmo critério da tela); só formato de célula.
-tabela_excel = tabela_exibir.copy()
-
-excel_buf = BytesIO()
-with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
-    tabela_excel.to_excel(writer, index=False, sheet_name="Conciliação")
-    ws = writer.sheets["Conciliação"]
-    header_row = [cell.value for cell in ws[1]]
-    for c_data in ("Data de emissão", "Data de pagamento"):
-        if c_data in header_row:
-            col_idx = header_row.index(c_data) + 1
-            for row_idx in range(2, ws.max_row + 1):
-                cell = ws.cell(row=row_idx, column=col_idx)
-                if cell.value is not None:
-                    cell.number_format = numbers.FORMAT_DATE_DDMMYY
-excel_buf.seek(0)
-with btn2:
-    st.download_button(
-        "⭐ Exportar Excel",
-        data=excel_buf.getvalue(),
-        file_name="conciliacao_operacional_filtrada.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-    )
-with btn3:
-    st.download_button(
-        "Exportar PDF",
-        data=_build_pdf_bytes(tabela_exibir),
-        file_name="conciliacao_operacional_filtrada.pdf",
-        mime="application/pdf",
-        use_container_width=True,
-    )
-
-if tabela_exibir.empty:
-    st.info(
-        "**Nenhum registo** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
-    )
-    st.dataframe(tabela_exibir, use_container_width=True, height=160)
-else:
-    st.dataframe(
-        tabela_exibir,
-        use_container_width=True,
-        height=550,
-        column_config=_column_config_conciliacao(tabela_exibir),
-    )
-st.write(f"Linhas filtradas: **{len(tabela_exibir)}**")
+_painel_conciliacao_fragment(tabela_operacional_base, ts_proc, info)
 

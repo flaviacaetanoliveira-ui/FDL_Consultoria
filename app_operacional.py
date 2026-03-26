@@ -356,7 +356,13 @@ def _download_shared_folder_dataset(public_url: str) -> None:
     }
     target_client_norm = _norm_for_filter(target_client_name)
 
-    def _sync_folder(item_url: str, dest: Path, relative_parts: tuple[str, ...] = ()) -> None:
+    def _sync_folder(
+        item_url: str,
+        dest: Path,
+        relative_parts: tuple[str, ...] = (),
+        *,
+        fast_mode: bool = True,
+    ) -> None:
         dest.mkdir(parents=True, exist_ok=True)
         next_url = _children_url(item_url)
         while next_url:
@@ -375,17 +381,18 @@ def _download_shared_folder_dataset(public_url: str) -> None:
                 first_norm = _norm_for_filter(child_rel[0]) if child_rel else ""
                 child_path = dest / child_name
                 if "folder" in child:
-                    if len(child_rel) == 1 and target_client_norm and child_norm not in {target_client_norm, *required_norm_keys}:
-                        continue
-                    if (
-                        len(child_rel) == 2
-                        and target_client_norm
-                        and first_norm == target_client_norm
-                        and child_norm not in required_norm_keys
-                    ):
-                        continue
-                    if len(child_rel) >= 2 and first_norm not in {target_client_norm, *required_norm_keys}:
-                        continue
+                    if fast_mode:
+                        if len(child_rel) == 1 and target_client_norm and child_norm not in {target_client_norm, *required_norm_keys}:
+                            continue
+                        if (
+                            len(child_rel) == 2
+                            and target_client_norm
+                            and first_norm == target_client_norm
+                            and child_norm not in required_norm_keys
+                        ):
+                            continue
+                        if len(child_rel) >= 2 and first_norm not in {target_client_norm, *required_norm_keys}:
+                            continue
                     if root_is_graph:
                         child_url = _graph_item_url_from_child(child)
                     else:
@@ -393,7 +400,7 @@ def _download_shared_folder_dataset(public_url: str) -> None:
                         child_url = f"https://api.onedrive.com/v1.0/shares/u!{share_token}/root:/{rel_path}:"
                     if not child_url:
                         continue
-                    _sync_folder(child_url, child_path, child_rel)
+                    _sync_folder(child_url, child_path, child_rel, fast_mode=fast_mode)
                     continue
 
                 if "file" not in child:
@@ -415,7 +422,34 @@ def _download_shared_folder_dataset(public_url: str) -> None:
 
     root_label = target_root_name if target_root_name.strip() else "link_root"
     dataset_root = mirror_root / root_label
-    _sync_folder(cliente_1_url, dataset_root)
+
+    def _resolve_selected_mapping() -> dict[str, Path]:
+        candidate_roots = [dataset_root]
+        preferred = dataset_root / target_client_name
+        if preferred.exists() and preferred.is_dir():
+            candidate_roots.insert(0, preferred)
+        for candidate in _all_candidate_roots(dataset_root):
+            if candidate not in candidate_roots:
+                candidate_roots.append(candidate)
+
+        for candidate in candidate_roots:
+            mapping = _resolve_required_subfolders(candidate)
+            if len(mapping) == len(REQUIRED_ONEDRIVE_SOURCE_FOLDERS):
+                return mapping
+        return {}
+
+    # 1) Tenta sincronização rápida (menos chamadas e menos arquivos).
+    if dataset_root.exists():
+        shutil.rmtree(dataset_root)
+    _sync_folder(cliente_1_url, dataset_root, fast_mode=True)
+    selected_mapping = _resolve_selected_mapping()
+
+    # 2) Fallback automático: sincronização ampla (compatibilidade com estruturas diferentes).
+    if not selected_mapping:
+        if dataset_root.exists():
+            shutil.rmtree(dataset_root)
+        _sync_folder(cliente_1_url, dataset_root, fast_mode=False)
+        selected_mapping = _resolve_selected_mapping()
 
     def _norm_folder_name(value: str) -> str:
         s = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode().lower().strip()
@@ -459,24 +493,7 @@ def _download_shared_folder_dataset(public_url: str) -> None:
                             out.append(grandchild)
         return out
 
-    candidate_roots = [dataset_root]
-    preferred = dataset_root / target_client_name
-    if preferred.exists() and preferred.is_dir():
-        candidate_roots.insert(0, preferred)
-    for candidate in _all_candidate_roots(dataset_root):
-        if candidate not in candidate_roots:
-            candidate_roots.append(candidate)
-
-    selected_root: Path | None = None
-    selected_mapping: dict[str, Path] = {}
-    for candidate in candidate_roots:
-        mapping = _resolve_required_subfolders(candidate)
-        if len(mapping) == len(REQUIRED_ONEDRIVE_SOURCE_FOLDERS):
-            selected_root = candidate
-            selected_mapping = mapping
-            break
-
-    if selected_root is None:
+    if not selected_mapping:
         raise ValueError(
             "Estrutura de dados não encontrada na pasta compartilhada. "
             "Defina FDL_ONEDRIVE_CLIENT_FOLDER para o cliente correto dentro de "

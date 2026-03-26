@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from io import BytesIO
+import os
 from pathlib import Path
 import shutil
 import unicodedata
@@ -32,6 +33,26 @@ _active_org = get_active_organization(_app_ctx)
 
 # Alinhado a PIPELINE_DATA_REVISION (liberações / Valor pago). Subir junto quando mudar o fluxo.
 OPERACIONAL_CACHE_REVISION = PIPELINE_DATA_REVISION
+
+
+def _is_admin_mode() -> bool:
+    env_mode = os.environ.get("FDL_APP_MODE", "").strip().lower()
+    if env_mode == "admin":
+        return True
+    try:
+        return str(st.secrets.get("FDL_APP_MODE", "")).strip().lower() == "admin"
+    except Exception:
+        return False
+
+
+def _data_source_mode() -> str:
+    env_source = os.environ.get("FDL_DATA_SOURCE", "").strip().lower()
+    if env_source:
+        return env_source
+    try:
+        return str(st.secrets.get("FDL_DATA_SOURCE", "filesystem")).strip().lower()
+    except Exception:
+        return "filesystem"
 
 
 def _prepare_uploaded_base(zip_bytes: bytes) -> Path:
@@ -67,17 +88,29 @@ def _prepare_uploaded_base(zip_bytes: bytes) -> Path:
 
 
 def _render_cloud_data_loader() -> None:
-    st.info(
-        "Ambiente cloud: envie um arquivo .zip com as pastas "
-        "`Vendas - Mercado Livre`, `Liberações_ML`, `notas_saida` e `contas_receber`."
-    )
-    uploaded_zip = st.file_uploader("Base de dados (.zip)", type=["zip"], key="fdl_data_zip")
-    if uploaded_zip is not None:
-        with st.spinner("Processando base enviada..."):
-            _prepare_uploaded_base(uploaded_zip.getvalue())
-            st.cache_data.clear()
-        st.success("Base enviada com sucesso. Recarregando app...")
-        st.rerun()
+    with st.sidebar.expander("Admin: atualização de dados", expanded=False):
+        st.caption("Uso interno. Não disponibilizar para cliente final.")
+        uploaded_zip = st.file_uploader("Base de dados (.zip)", type=["zip"], key="fdl_data_zip")
+        if uploaded_zip is not None:
+            with st.spinner("Processando base enviada..."):
+                _prepare_uploaded_base(uploaded_zip.getvalue())
+                st.cache_data.clear()
+            st.success("Base atualizada. Recarregando app...")
+            st.rerun()
+
+
+def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
+    source = _data_source_mode()
+    if source == "filesystem":
+        return carregar_tabela_final_operacional_cache()
+    if source == "api":
+        raise NotImplementedError(
+            "Origem por API ainda não implementada. "
+            "Defina FDL_DATA_SOURCE=filesystem até integrar a API (ex.: Bling)."
+        )
+    if source == "upload_zip":
+        return carregar_tabela_final_operacional_cache()
+    raise ValueError(f"FDL_DATA_SOURCE inválido: {source}")
 
 
 st.markdown(
@@ -475,16 +508,18 @@ def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
     return pd.to_datetime(s, errors="coerce")
 
 
-_render_cloud_data_loader()
+_admin_mode = _is_admin_mode()
+if _admin_mode and _data_source_mode() == "upload_zip":
+    _render_cloud_data_loader()
 
 try:
-    tabela_geral, info, ts_proc = carregar_tabela_final_operacional_cache()
-except FileNotFoundError as exc:
-    st.warning(
-        "Base de dados não encontrada. "
-        "Envie o arquivo .zip no carregador acima para executar o app na nuvem."
-    )
-    st.caption(f"Detalhe técnico: {exc}")
+    tabela_geral, info, ts_proc = _load_data()
+except Exception as exc:
+    if _admin_mode:
+        st.warning("Dados indisponíveis no momento.")
+        st.caption(f"Detalhe técnico: {exc}")
+    else:
+        st.warning("Dados indisponíveis no momento. Tente novamente em instantes.")
     st.stop()
 
 # Cache antigo do Streamlit ou pickle sem a coluna — alinhar ao pipeline atual.
@@ -563,16 +598,15 @@ with st.sidebar:
         logout_operacional_user()
         st.rerun()
 
-    if st.button(
+    if _admin_mode and st.button(
         "🔄 Atualizar dados",
         use_container_width=True,
-        help="Relê os arquivos das pastas e reconstrói a tabela. Limpa todo o cache de dados (vendas, liberações e tabela final).",
+        help="Atualiza a leitura de dados e limpa cache interno.",
     ):
-        # Só a tabela final não basta: vendas/liberações usam st.cache_data em carregamento_bases.
         st.cache_data.clear()
         st.session_state["_conciliacao_dados_atualizados"] = True
         st.rerun()
-    if st.session_state.pop("_conciliacao_dados_atualizados", False):
+    if _admin_mode and st.session_state.pop("_conciliacao_dados_atualizados", False):
         st.success(f"Dados atualizados com sucesso. Última leitura: **{ts_proc}**")
 
     st.markdown(
@@ -739,8 +773,6 @@ st.markdown(
       <strong>Dados carregados:</strong> {ts_proc}
       &nbsp;·&nbsp;
       <strong>Pagamento:</strong> {data_pag_ini.strftime("%d/%m/%Y")} a {data_pag_fim.strftime("%d/%m/%Y")}
-      &nbsp;·&nbsp;
-      Após trocar arquivos nas pastas, use <strong>Atualizar dados</strong> na barra lateral.
     </p>
     """,
     unsafe_allow_html=True,
@@ -825,7 +857,7 @@ c2.caption(f"Plataforma: **{plataforma_label}**")
 c3.caption(f"Período: **{periodo}**")
 c4.caption(f"Última atualização: **{ts_proc}**")
 
-st.caption(f"Base: `{info.get('base_dir','')}` | Linhas carregadas: {info.get('linhas',0)}")
+st.caption(f"Linhas carregadas: {info.get('linhas',0)}")
 
 # Tabela operacional — Data de emissão: mesma coluna da tabela final, parse ISO (sem dayfirst).
 col_data_emissao = _resolve_col_data_emissao(list(tabela.columns))

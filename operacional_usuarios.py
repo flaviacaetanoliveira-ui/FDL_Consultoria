@@ -17,6 +17,11 @@ _norm_email = normalizar_email
 
 # Chaves devem ser e-mail em minúsculas para lookup direto.
 USUARIOS: dict[str, dict[str, str | list[str]]] = {
+    "flavia.caetanoliveira@gmail.com": {
+        "senha": "123456",
+        "cliente": "Flávia Admin",
+        "empresas": ["Antomóveis"],
+    },
     "sac@antomoveis.com.br": {
         "senha": "123456",
         "cliente": "Everton",

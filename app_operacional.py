@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from io import BytesIO
 import base64
+import json
 import hashlib
 import os
 from pathlib import Path
@@ -49,6 +50,12 @@ REQUIRED_ONEDRIVE_CSV_COLUMNS = {
     "Valor a receber",
     "Diferença",
     "Data de pagamento",
+}
+REQUIRED_ONEDRIVE_SOURCE_FOLDERS = {
+    "Vendas - Mercado Livre",
+    "Liberações_ML",
+    "notas_saida",
+    "contas_receber",
 }
 
 
@@ -114,6 +121,32 @@ def _onedrive_public_url() -> str:
         return ""
 
 
+def _onedrive_root_folder_name() -> str:
+    env_name = os.environ.get("FDL_ONEDRIVE_ROOT_FOLDER", "").strip()
+    if env_name:
+        return env_name
+    try:
+        value = str(st.secrets.get("FDL_ONEDRIVE_ROOT_FOLDER", "")).strip()
+        if value:
+            return value
+    except Exception:
+        pass
+    return "cursor"
+
+
+def _onedrive_client_folder_name() -> str:
+    env_name = os.environ.get("FDL_ONEDRIVE_CLIENT_FOLDER", "").strip()
+    if env_name:
+        return env_name
+    try:
+        value = str(st.secrets.get("FDL_ONEDRIVE_CLIENT_FOLDER", "")).strip()
+        if value:
+            return value
+    except Exception:
+        pass
+    return "cliente_1"
+
+
 def _build_onedrive_download_url(public_url: str) -> str:
     parsed = urlparse(public_url)
     host = parsed.netloc.lower()
@@ -133,6 +166,203 @@ def _build_onedrive_download_url(public_url: str) -> str:
             parsed.fragment,
         )
     )
+
+
+def _encode_share_token(public_url: str) -> str:
+    return base64.urlsafe_b64encode(public_url.encode("utf-8")).decode("utf-8").rstrip("=")
+
+
+def _graph_bearer_token() -> str:
+    env_token = os.environ.get("FDL_MS_GRAPH_TOKEN", "").strip()
+    if env_token:
+        return env_token
+    try:
+        return str(st.secrets.get("FDL_MS_GRAPH_TOKEN", "")).strip()
+    except Exception:
+        return ""
+
+
+def _download_json(url: str, headers: dict[str, str] | None = None) -> dict[str, object]:
+    req_headers = {"User-Agent": "FDL-Streamlit-App/1.0"}
+    if headers:
+        req_headers.update(headers)
+    req = Request(url, headers=req_headers)
+    with urlopen(req, timeout=60) as resp:
+        raw = resp.read()
+    data = json.loads(raw.decode("utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("Resposta JSON inválida ao listar pasta compartilhada.")
+    return data
+
+
+def _fetch_shared_driveitem_metadata(public_url: str) -> tuple[str, dict[str, object]]:
+    token = _encode_share_token(public_url)
+    bearer = _graph_bearer_token()
+    graph_headers = {"Authorization": f"Bearer {bearer}"} if bearer else None
+
+    candidates = [
+        (
+            f"https://graph.microsoft.com/v1.0/shares/u!{token}/driveItem",
+            graph_headers,
+        ),
+        (
+            f"https://api.onedrive.com/v1.0/shares/u!{token}/root",
+            None,
+        ),
+    ]
+    last_exc: Exception | None = None
+    for url, headers in candidates:
+        try:
+            payload = _download_json(url, headers=headers)
+            return url, payload
+        except Exception as exc:  # pragma: no cover - fallback de conectividade/autorizacao
+            last_exc = exc
+    raise ValueError(
+        "Não foi possível acessar metadados da pasta compartilhada. "
+        "Verifique se o link permite leitura pública ou configure FDL_MS_GRAPH_TOKEN."
+    ) from last_exc
+
+
+def _download_shared_folder_dataset(public_url: str) -> None:
+    base_dir = Path(BASE_DIR)
+    mirror_root = base_dir / "_onedrive_shared"
+    target_root_name = _onedrive_root_folder_name()
+    target_client_name = _onedrive_client_folder_name()
+    if mirror_root.exists():
+        shutil.rmtree(mirror_root)
+    mirror_root.mkdir(parents=True, exist_ok=True)
+
+    share_token = _encode_share_token(public_url)
+    root_url, root_meta = _fetch_shared_driveitem_metadata(public_url)
+    root_is_graph = "graph.microsoft.com" in root_url.lower()
+    root_name = str(root_meta.get("name", "")).strip()
+    token = _graph_bearer_token()
+    graph_headers = {"Authorization": f"Bearer {token}"} if (token and root_is_graph) else None
+
+    def _children_url(item_url: str) -> str:
+        return f"{item_url}/children"
+
+    def _download_url(item: dict[str, object]) -> str:
+        for k in ("@microsoft.graph.downloadUrl", "@content.downloadUrl"):
+            v = str(item.get(k, "")).strip()
+            if v:
+                return v
+        return ""
+
+    def _iter_children(item_url: str) -> list[dict[str, object]]:
+        entries: list[dict[str, object]] = []
+        next_url = _children_url(item_url)
+        while next_url:
+            payload = _download_json(next_url, headers=graph_headers)
+            chunk = payload.get("value", [])
+            if isinstance(chunk, list):
+                for entry in chunk:
+                    if isinstance(entry, dict):
+                        entries.append(entry)
+            next_url = str(payload.get("@odata.nextLink", "")).strip()
+        return entries
+
+    path_prefix = target_root_name
+
+    def _locate_cliente_1_url() -> str:
+        if root_name == target_root_name:
+            return root_url
+        if root_name == "cliente_1":
+            if root_is_graph:
+                return f"https://graph.microsoft.com/v1.0/shares/u!{share_token}/driveItem:/cliente_1:"
+            return f"https://api.onedrive.com/v1.0/shares/u!{share_token}/root:/cliente_1:"
+        for entry in _iter_children(root_url):
+            entry_name = str(entry.get("name", "")).strip()
+            if entry_name == target_root_name:
+                if root_is_graph:
+                    return f"https://graph.microsoft.com/v1.0/shares/u!{share_token}/driveItem:/{target_root_name}:"
+                return f"https://api.onedrive.com/v1.0/shares/u!{share_token}/root:/{target_root_name}:"
+            if entry_name == "cliente_1":
+                # Endpoint compatível com Graph e OneDrive API.
+                if root_is_graph:
+                    return f"https://graph.microsoft.com/v1.0/shares/u!{share_token}/driveItem:/cliente_1:"
+                return f"https://api.onedrive.com/v1.0/shares/u!{share_token}/root:/cliente_1:"
+        return ""
+
+    cliente_1_url = _locate_cliente_1_url()
+    if not cliente_1_url:
+        raise ValueError(
+            f"Pasta '{target_root_name}' não encontrada no link compartilhado."
+        )
+    if root_name == target_root_name:
+        path_prefix = ""
+
+    def _sync_folder(item_url: str, dest: Path, relative_parts: tuple[str, ...] = ()) -> None:
+        dest.mkdir(parents=True, exist_ok=True)
+        next_url = _children_url(item_url)
+        while next_url:
+            payload = _download_json(next_url, headers=graph_headers)
+            children = payload.get("value", [])
+            if not isinstance(children, list):
+                break
+            for child in children:
+                if not isinstance(child, dict):
+                    continue
+                child_name = str(child.get("name", "")).strip()
+                if not child_name:
+                    continue
+                child_rel = relative_parts + (child_name,)
+                child_path = dest / child_name
+                if "folder" in child:
+                    rel_path = "/".join(((path_prefix,) if path_prefix else ()) + child_rel)
+                    if root_is_graph:
+                        child_url = f"https://graph.microsoft.com/v1.0/shares/u!{share_token}/driveItem:/{rel_path}:"
+                    else:
+                        child_url = f"https://api.onedrive.com/v1.0/shares/u!{share_token}/root:/{rel_path}:"
+                    _sync_folder(child_url, child_path, child_rel)
+                    continue
+
+                if "file" not in child:
+                    continue
+                dl_url = _download_url(child)
+                if not dl_url:
+                    continue
+                content, _ = _download_file_bytes(dl_url)
+                child_path.parent.mkdir(parents=True, exist_ok=True)
+                child_path.write_bytes(content)
+            next_url = str(payload.get("@odata.nextLink", "")).strip()
+
+    dataset_root = mirror_root / target_root_name
+    _sync_folder(cliente_1_url, dataset_root)
+
+    candidate_roots = [dataset_root]
+    preferred = dataset_root / target_client_name
+    if preferred.exists() and preferred.is_dir():
+        candidate_roots.insert(0, preferred)
+    for child in dataset_root.iterdir():
+        if child.is_dir() and child not in candidate_roots:
+            candidate_roots.append(child)
+
+    selected_root: Path | None = None
+    for candidate in candidate_roots:
+        if all((candidate / name).exists() and (candidate / name).is_dir() for name in REQUIRED_ONEDRIVE_SOURCE_FOLDERS):
+            selected_root = candidate
+            break
+
+    if selected_root is None:
+        raise ValueError(
+            "Estrutura de dados não encontrada na pasta compartilhada. "
+            "Defina FDL_ONEDRIVE_CLIENT_FOLDER para o cliente correto dentro de "
+            f"'{target_root_name}'."
+        )
+
+    for required in REQUIRED_ONEDRIVE_SOURCE_FOLDERS:
+        dst = base_dir / required
+        src = selected_root / required
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(src, dst)
+
+    missing = [name for name in REQUIRED_ONEDRIVE_SOURCE_FOLDERS if not any((base_dir / name).rglob("*"))]
+    if missing:
+        raise ValueError(
+            "Link de pasta acessado, mas sem arquivos em: " + ", ".join(sorted(missing))
+        )
 
 
 @st.cache_data(show_spinner=False, ttl=900)
@@ -175,6 +405,10 @@ def load_data_from_onedrive() -> tuple[pd.DataFrame, dict[str, object], str]:
     if not public_url:
         raise ValueError("FDL_ONEDRIVE_URL não configurada.")
 
+    if ":f:/" in public_url.lower():
+        _download_shared_folder_dataset(public_url)
+        return carregar_tabela_final_operacional_cache()
+
     download_url = _build_onedrive_download_url(public_url)
     payload, filename = _download_file_bytes(download_url)
     lower_name = filename.lower()
@@ -198,7 +432,7 @@ def load_data_from_onedrive() -> tuple[pd.DataFrame, dict[str, object], str]:
         }
         return tabela, info, ts
 
-    raise ValueError(f"Formato não suportado no OneDrive: {filename}. Use ZIP ou CSV.")
+    raise ValueError(f"Formato não suportado no OneDrive: {filename}. Use ZIP/CSV ou link de pasta compartilhada.")
 
 
 def _render_cloud_data_loader() -> None:

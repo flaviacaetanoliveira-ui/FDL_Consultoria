@@ -1269,6 +1269,26 @@ def _column_config_conciliacao(df: pd.DataFrame) -> dict[str, NumberColumn]:
     return cfg
 
 
+def _multiselect_stable(key: str, label: str, options: list[str]) -> list[str]:
+    """
+    `default=lista_nova` a cada rerun (ex.: sorted) faz o widget do Streamlit perder estado e pode
+    deixar o ecrã em branco. Usar só `key` + estado inicial estável.
+    """
+    opts = [x for x in options if str(x).strip()]
+    if not opts:
+        return []
+    if key not in st.session_state:
+        st.session_state[key] = opts.copy()
+    else:
+        prev = st.session_state[key]
+        if not isinstance(prev, list):
+            st.session_state[key] = opts.copy()
+        else:
+            valid = [x for x in prev if x in opts]
+            st.session_state[key] = valid if valid else opts.copy()
+    return st.multiselect(label, opts, key=key)
+
+
 def _render_kpi_card(label: str, value: str, icon: str, css_class: str) -> None:
     st.markdown(
         f"""
@@ -1527,7 +1547,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.container(border=True):
+with st.container():
     st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
     r1 = st.columns((1.15, 1.15, 1.15, 1.55))
     r2 = st.columns((1.15, 1.15, 2.3))
@@ -1553,12 +1573,11 @@ with st.container(border=True):
         [x for x in tabela_operacional_base["Situação"].dropna().unique().tolist() if str(x).strip()]
     )
     with r1[0]:
-        # Sem `key`: evita conflitos default/sessão que em alguns browsers deixam o painel em branco.
-        sel_plat = st.multiselect("Plataforma", plats, default=plats)
+        sel_plat = _multiselect_stable("op_ms_plat", "Plataforma", plats)
     with r1[1]:
-        sel_acao = st.multiselect("Ação sugerida", acoes, default=acoes)
+        sel_acao = _multiselect_stable("op_ms_acao", "Ação sugerida", acoes)
     with r1[2]:
-        sel_sit = st.multiselect("Situação", sit, default=sit)
+        sel_sit = _multiselect_stable("op_ms_sit", "Situação", sit)
     with r1[3]:
         busca = st.text_input("Busca (venda / pedido / nota)", "").strip().lower()
     with r2[0]:
@@ -1804,7 +1823,7 @@ with btn1:
         data=csv_bytes,
         file_name="conciliacao_operacional_filtrada.csv",
         mime="text/csv",
-        width="stretch",
+        use_container_width=True,
     )
 # Exportação Excel: datas já são datetime (mesmo critério da tela); só formato de célula.
 tabela_excel = tabela_exibir.copy()
@@ -1828,7 +1847,7 @@ with btn2:
         data=excel_buf.getvalue(),
         file_name="conciliacao_operacional_filtrada.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        width="stretch",
+        use_container_width=True,
     )
 with btn3:
     st.download_button(
@@ -1836,18 +1855,18 @@ with btn3:
         data=_build_pdf_bytes(tabela_exibir),
         file_name="conciliacao_operacional_filtrada.pdf",
         mime="application/pdf",
-        width="stretch",
+        use_container_width=True,
     )
 
 if tabela_exibir.empty:
     st.info(
         "**Nenhum registo** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
     )
-    st.dataframe(tabela_exibir, width="stretch", height=160)
+    st.dataframe(tabela_exibir, use_container_width=True, height=160)
 else:
     st.dataframe(
         tabela_exibir,
-        width="stretch",
+        use_container_width=True,
         height=550,
         column_config=_column_config_conciliacao(tabela_exibir),
     )

@@ -10,6 +10,7 @@ from pathlib import Path
 import shutil
 import unicodedata
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import zipfile
 
@@ -187,9 +188,25 @@ def _download_json(url: str, headers: dict[str, str] | None = None) -> dict[str,
     if headers:
         req_headers.update(headers)
     req = Request(url, headers=req_headers)
-    with urlopen(req, timeout=60) as resp:
-        raw = resp.read()
-    data = json.loads(raw.decode("utf-8"))
+    try:
+        with urlopen(req, timeout=60) as resp:
+            raw = resp.read()
+    except HTTPError as exc:
+        body = ""
+        try:
+            body = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            body = ""
+        body = body.strip().replace("\n", " ")
+        body_snippet = body[:320] + ("..." if len(body) > 320 else "")
+        raise ValueError(
+            f"HTTP {exc.code} ao acessar {url}. Resposta: {body_snippet or '(sem corpo)'}"
+        ) from exc
+    except URLError as exc:
+        raise ValueError(f"Erro de rede ao acessar {url}: {exc.reason}") from exc
+    except Exception as exc:
+        raise ValueError(f"Falha ao acessar {url}: {exc}") from exc
+    data = json.loads(raw.decode("utf-8", errors="replace"))
     if not isinstance(data, dict):
         raise ValueError("Resposta JSON inválida ao listar pasta compartilhada.")
     return data
@@ -210,17 +227,19 @@ def _fetch_shared_driveitem_metadata(public_url: str) -> tuple[str, dict[str, ob
             None,
         ),
     ]
-    last_exc: Exception | None = None
+    errors: list[str] = []
     for url, headers in candidates:
         try:
             payload = _download_json(url, headers=headers)
             return url, payload
         except Exception as exc:  # pragma: no cover - fallback de conectividade/autorizacao
-            last_exc = exc
+            errors.append(f"- {url}: {exc}")
     raise ValueError(
         "Não foi possível acessar metadados da pasta compartilhada. "
-        "Verifique se o link permite leitura pública ou configure FDL_MS_GRAPH_TOKEN."
-    ) from last_exc
+        "Verifique se o link permite leitura pública ou configure FDL_MS_GRAPH_TOKEN. "
+        "Tentativas: "
+        + " | ".join(errors)
+    )
 
 
 def _download_shared_folder_dataset(public_url: str) -> None:

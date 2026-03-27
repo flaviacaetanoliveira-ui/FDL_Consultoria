@@ -1605,6 +1605,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     Não usar @st.fragment aqui: ao mudar para «Frete», o fragment deixava de ser invocado e o Streamlit
     podia mostrar ecrã em branco (desincronização da árvore de widgets entre vistas).
     """
+    if base.empty or "Data de pagamento" not in base.columns:
+        st.warning("Base de repasse indisponível para esta visualização.")
+        return
+
     with st.container():
         st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
         r1 = st.columns((1.15, 1.15, 1.15, 1.55))
@@ -2085,6 +2089,12 @@ with st.sidebar:
         """,
         unsafe_allow_html=True,
     )
+
+# Ao trocar o radio, o Streamlit pode expor estado antigo no início do rerun.
+# Se houver divergência, força um rerun limpo para evitar execução mista (ecrã branco).
+_fin_now = st.session_state.get("op_financeiro_view", "repasse")
+if _fin_now != _fin_early:
+    st.rerun()
 
 if _fin_early == "repasse":
     map_acao = {

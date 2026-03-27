@@ -2408,7 +2408,16 @@ else:
     )
 
 if _fv == "repasse":
-    _painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
+    try:
+        _painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
+    except Exception as exc:
+        if _is_admin_mode():
+            st.error("Erro no carregamento do repasse")
+            st.exception(exc)
+        else:
+            st.warning("Dados indisponíveis no momento. Tente novamente em instantes.")
+            with st.expander("Detalhes para suporte", expanded=False):
+                st.code(str(exc), language="text")
 else:
     try:
         _painel_frete_emergencial(_active_org.org_id)

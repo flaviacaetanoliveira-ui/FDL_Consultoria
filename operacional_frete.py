@@ -9,6 +9,7 @@ import hashlib
 import os
 import re
 import tempfile
+import time
 import unicodedata
 from io import BytesIO
 from pathlib import Path
@@ -66,7 +67,10 @@ def _is_http_url(s: str) -> bool:
     return t.startswith("http://") or t.startswith("https://")
 
 
-def _download_frete_payload(url: str) -> tuple[bytes, str, str | None]:
+def _download_frete_payload(
+    url: str,
+    debug_log: callable | None = None,
+) -> tuple[bytes, str, str | None]:
     """Descarrega ficheiro de Frete — mesma estratégia que FDL_PRECOMPUTED_URL (SharePoint/Graph)."""
     from app_operacional import (  # noqa: PLC0415 — evita import circular no carregamento do módulo
         PRECOMPUTED_HTTP_TIMEOUT,
@@ -76,14 +80,26 @@ def _download_frete_payload(url: str) -> tuple[bytes, str, str | None]:
 
     errs: list[str] = []
     for dl_url, hdr in _precomputed_download_attempts(url.strip()):
+        t0 = time.perf_counter()
+        if debug_log:
+            debug_log(f"download_tentativa url={dl_url}")
         try:
-            return _download_file_bytes(
+            payload, filename, last_modified = _download_file_bytes(
                 dl_url,
                 extra_headers=hdr or None,
                 timeout=PRECOMPUTED_HTTP_TIMEOUT,
                 http_retries=1,
             )
+            if debug_log:
+                elapsed = time.perf_counter() - t0
+                debug_log(
+                    f"download_sucesso url={dl_url} tempo={elapsed:.2f}s arquivo={filename or 'download.bin'} bytes={len(payload)}"
+                )
+            return payload, filename, last_modified
         except Exception as exc:  # noqa: BLE001
+            if debug_log:
+                elapsed = time.perf_counter() - t0
+                debug_log(f"download_falha url={dl_url} tempo={elapsed:.2f}s erro={exc}")
             errs.append(str(exc))
     raise ValueError(
         "Não foi possível descarregar o ficheiro de Frete a partir do URL. "
@@ -366,21 +382,39 @@ def carregar_base_frete_ml(
         "frete_arquivo": None,
         "frete_tabular": False,
         "avisos": [],
+        "debug_logs": [],
     }
 
+    t_global = time.perf_counter()
+
+    def _dbg(msg: str) -> None:
+        elapsed = time.perf_counter() - t_global
+        meta["debug_logs"].append(f"[{elapsed:7.2f}s] {msg}")
+
     if _is_http_url(vendas_path_str):
-        payload_v, fn_v, _lm_v = _download_frete_payload(vendas_path_str.strip())
+        _dbg("origem_vendas=url")
+        t_dl = time.perf_counter()
+        payload_v, fn_v, _lm_v = _download_frete_payload(vendas_path_str.strip(), debug_log=_dbg)
         del _lm_v
+        _dbg(f"download_vendas_total={time.perf_counter() - t_dl:.2f}s")
+        t_parse = time.perf_counter()
         df = _read_vendas_ml_bytes(payload_v, fn_v)
+        _dbg(f"parse_vendas_total={time.perf_counter() - t_parse:.2f}s")
         meta["vendas_arquivo"] = fn_v or "vendas_ml_remoto"
     else:
+        _dbg(f"origem_vendas=local path={vendas_path_str}")
         meta["vendas_arquivo"] = Path(vendas_path_str).name
+        t_parse = time.perf_counter()
         df = read_sales_file(Path(vendas_path_str))
+        _dbg(f"parse_vendas_total={time.perf_counter() - t_parse:.2f}s")
     df = df.dropna(axis=1, how="all")
+    _dbg(f"colunas_vendas={list(df.columns)}")
     cmap = _resolve_columns(df)
+    _dbg(f"colunas_detectadas={cmap}")
     needed = ("n_venda", "receita_envio", "tarifas_envio", "unidades", "id_anuncio")
     miss = [k for k in needed if k not in cmap]
     if miss:
+        _dbg(f"colunas_obrigatorias_faltando={miss}")
         raise ValueError(
             "Relatório de vendas ML sem colunas necessárias. "
             f"Falta: {miss}. Primeiras colunas: {list(df.columns)[:20]}"
@@ -411,8 +445,11 @@ def carregar_base_frete_ml(
     tab: pd.DataFrame | None = None
     if frete_path_str:
         if _is_http_url(frete_path_str):
+            _dbg("origem_frete_anuncio=url")
             try:
-                payload_f, fn_f, _lm_f = _download_frete_payload(frete_path_str.strip())
+                payload_f, fn_f, _lm_f = _download_frete_payload(
+                    frete_path_str.strip(), debug_log=_dbg
+                )
                 del _lm_f
                 sfx = Path(fn_f).suffix.lower()
                 if sfx not in {".xlsx", ".xls"}:
@@ -426,13 +463,17 @@ def carregar_base_frete_ml(
                     try:
                         meta["frete_arquivo"] = fn_f
                         tab = _try_read_tabular_frete_anuncio(tmp_p)
+                        _dbg(f"frete_anuncio_tabular_detectado={tab is not None}")
                     finally:
                         tmp_p.unlink(missing_ok=True)
             except Exception as exc:  # noqa: BLE001
+                _dbg(f"erro_frete_anuncio_url={exc}")
                 meta["avisos"].append(f"Erro ao descarregar frete por anúncio (URL): {exc}")
         elif Path(frete_path_str).is_file():
+            _dbg(f"origem_frete_anuncio=local path={frete_path_str}")
             meta["frete_arquivo"] = Path(frete_path_str).name
             tab = _try_read_tabular_frete_anuncio(Path(frete_path_str))
+            _dbg(f"frete_anuncio_tabular_detectado={tab is not None}")
 
     if tab is not None:
         if tab.empty:
@@ -485,6 +526,8 @@ def carregar_base_frete_ml(
     }
     v = v.rename(columns={a: b for a, b in rename_final.items() if a in v.columns})
     meta["linhas"] = int(len(v))
+    _dbg(f"linhas_carregadas={meta['linhas']}")
+    _dbg(f"colunas_saida={list(v.columns)}")
     return v, meta
 
 

@@ -1554,12 +1554,58 @@ def _painel_frete_emergencial(org_id: str) -> None:
     evita o ecrã branco em alguns navegadores ao renderizar o painel de Frete completo.
     """
     st.info("Modo de compatibilidade do painel de Frete.")
+    _is_admin = _is_admin_mode()
+    _t0 = time.perf_counter()
+
+    def _log_step(msg: str) -> None:
+        if _is_admin:
+            _elapsed = time.perf_counter() - _t0
+            st.caption(f"[frete-debug { _elapsed:6.2f}s] {msg}")
+
+    def _frete_source_signature(_org_id: str, fontes_obj: object) -> str:
+        vendas_origin = (getattr(fontes_obj, "vendas_url", "") or "").strip() or (
+            str(getattr(fontes_obj, "vendas_path").resolve())
+            if getattr(fontes_obj, "vendas_path", None)
+            else ""
+        )
+        if (getattr(fontes_obj, "vendas_url", "") or "").strip():
+            vendas_sig = str(stable_mtime_ns_for_frete_url(fontes_obj.vendas_url))
+        elif getattr(fontes_obj, "vendas_path", None) and fontes_obj.vendas_path.is_file():
+            vendas_sig = str(int(fontes_obj.vendas_path.stat().st_mtime_ns))
+        else:
+            vendas_sig = "none"
+
+        frete_origin = (getattr(fontes_obj, "frete_url", "") or "").strip() or (
+            str(getattr(fontes_obj, "frete_path").resolve())
+            if getattr(fontes_obj, "frete_path", None)
+            else ""
+        )
+        if (getattr(fontes_obj, "frete_url", "") or "").strip():
+            frete_sig = str(stable_mtime_ns_for_frete_url(fontes_obj.frete_url))
+        elif getattr(fontes_obj, "frete_path", None) and fontes_obj.frete_path.is_file():
+            frete_sig = str(int(fontes_obj.frete_path.stat().st_mtime_ns))
+        else:
+            frete_sig = "none"
+
+        return "|".join(
+            [
+                f"org={_org_id}",
+                f"v_origin={vendas_origin}",
+                f"v_sig={vendas_sig}",
+                f"f_origin={frete_origin}",
+                f"f_sig={frete_sig}",
+            ]
+        )
+
+    _log_step("inicio _painel_frete_emergencial")
+    _log_step("antes descobrir_fontes_frete()")
     try:
         fontes = descobrir_fontes_frete()
     except Exception as exc:
         st.error("Erro ao localizar ficheiros de frete.")
         st.exception(exc)
         return
+    _log_step("depois descobrir_fontes_frete()")
 
     vendas_ref = (fontes.vendas_url or "").strip() or (
         str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
@@ -1595,39 +1641,74 @@ def _painel_frete_emergencial(org_id: str) -> None:
     if not st.session_state.get(_load_key, False):
         return
 
-    try:
-        with st.spinner("A carregar base de Frete..."):
-            v_ns = (
-                stable_mtime_ns_for_frete_url(fontes.vendas_url)
-                if (fontes.vendas_url or "").strip()
-                else int(fontes.vendas_path.stat().st_mtime_ns)
-            )
-            frete_ref = (fontes.frete_url or "").strip() or (
-                str(fontes.frete_path.resolve())
-                if fontes.frete_path and fontes.frete_path.is_file()
-                else None
-            )
-            if (fontes.frete_url or "").strip():
-                f_ns = stable_mtime_ns_for_frete_url(fontes.frete_url)
-            elif fontes.frete_path and fontes.frete_path.is_file():
-                f_ns = int(fontes.frete_path.stat().st_mtime_ns)
-            else:
-                f_ns = None
-            df_frete, meta_frete = carregar_base_frete_ml(
-                org_id, vendas_ref, v_ns, frete_ref, f_ns
-            )
-    except ValueError as exc:
-        st.error("O ficheiro não parece ser o **export de vendas ML** (detalhe envios).")
-        st.warning(
-            "Confirme que **FDL_FRETE_VENDAS_URL** aponta para o mesmo tipo de ficheiro que está em "
-            "**Vendas - Mercado Livre** no OneDrive (não use a planilha de **Repasse**)."
+    _frete_ss_key = f"_frete_cache_{org_id}"
+    _sig = _frete_source_signature(org_id, fontes)
+    _cached = st.session_state.get(_frete_ss_key)
+
+    if isinstance(_cached, dict) and str(_cached.get("source_signature", "")) == _sig:
+        df_frete = _cached.get("df_frete", pd.DataFrame())
+        meta_frete = _cached.get("meta_frete", {})
+        _log_step(
+            "cache_hit frete_session "
+            f"linhas={len(df_frete) if isinstance(df_frete, pd.DataFrame) else 0} "
+            f"loaded_at={_cached.get('loaded_at', '-')}"
         )
-        st.code(str(exc), language="text")
-        return
-    except Exception as exc:
-        st.error("Falha ao carregar base de Frete (rede, formato ou timeout).")
-        st.exception(exc)
-        return
+        if _is_admin:
+            for _line in (_cached.get("debug_logs") or []):
+                st.caption(f"[frete-debug] {_line}")
+    else:
+        _log_step("cache_miss frete_session")
+        _log_step("antes carregar_base_frete_ml()")
+        try:
+            with st.spinner("A carregar base de Frete..."):
+                t_load0 = time.perf_counter()
+                v_ns = (
+                    stable_mtime_ns_for_frete_url(fontes.vendas_url)
+                    if (fontes.vendas_url or "").strip()
+                    else int(fontes.vendas_path.stat().st_mtime_ns)
+                )
+                frete_ref = (fontes.frete_url or "").strip() or (
+                    str(fontes.frete_path.resolve())
+                    if fontes.frete_path and fontes.frete_path.is_file()
+                    else None
+                )
+                if (fontes.frete_url or "").strip():
+                    f_ns = stable_mtime_ns_for_frete_url(fontes.frete_url)
+                elif fontes.frete_path and fontes.frete_path.is_file():
+                    f_ns = int(fontes.frete_path.stat().st_mtime_ns)
+                else:
+                    f_ns = None
+                df_frete, meta_frete = carregar_base_frete_ml(
+                    org_id, vendas_ref, v_ns, frete_ref, f_ns
+                )
+                t_load = time.perf_counter() - t_load0
+                _log_step(f"depois carregar_base_frete_ml() tempo={t_load:.2f}s linhas={len(df_frete)}")
+        except ValueError as exc:
+            st.error("O ficheiro não parece ser o **export de vendas ML** (detalhe envios).")
+            st.warning(
+                "Confirme que **FDL_FRETE_VENDAS_URL** aponta para o mesmo tipo de ficheiro que está em "
+                "**Vendas - Mercado Livre** no OneDrive (não use a planilha de **Repasse**)."
+            )
+            st.code(str(exc), language="text")
+            return
+        except Exception as exc:
+            st.error("Falha ao carregar base de Frete (rede, formato ou timeout).")
+            st.exception(exc)
+            return
+
+        _loaded_at = _now_ts_br_str()
+        _debug_logs = list(meta_frete.get("debug_logs") or [])
+        st.session_state[_frete_ss_key] = {
+            "df_frete": df_frete,
+            "meta_frete": meta_frete,
+            "debug_logs": _debug_logs,
+            "loaded_at": _loaded_at,
+            "source_signature": _sig,
+        }
+        if _is_admin:
+            st.caption(f"[frete-debug] session_store loaded_at={_loaded_at} linhas={len(df_frete)}")
+            for _line in _debug_logs:
+                st.caption(f"[frete-debug] {_line}")
 
     st.caption(f"Ficheiro vendas: {meta_frete.get('vendas_arquivo')} | Linhas: {len(df_frete)}")
     for w in meta_frete.get("avisos") or []:
@@ -2197,6 +2278,10 @@ with st.sidebar:
         help="Atualiza a leitura de dados e limpa cache interno.",
     ):
         st.cache_data.clear()
+        # Invalida explicitamente cache de sessão do módulo de frete.
+        for _k in list(st.session_state.keys()):
+            if str(_k).startswith("_frete_cache_"):
+                st.session_state.pop(_k, None)
         st.session_state["_conciliacao_dados_atualizados"] = True
         st.rerun()
     if _admin_mode and st.session_state.pop("_conciliacao_dados_atualizados", False):

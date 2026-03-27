@@ -4,8 +4,9 @@ headless = true
 [browser]
 gatherUsageStats = false
 
-# Glide Data Grid (st.dataframe): cabeçalho e contraste — alinhado à identidade FDL da app
+# Glide Data Grid: fundo de cabeçalho compatível com tema claro (texto escuro legível).
+# Evitar cabeçalho escuro aqui — o Streamlit não expõe cor de texto do cabeçalho separada.
 [theme]
 base = "light"
-dataframeHeaderBackgroundColor = "#1e3a5f"
+dataframeHeaderBackgroundColor = "#e2e8f0"
 dataframeBorderColor = "#cbd5e1"

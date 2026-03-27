@@ -1419,12 +1419,54 @@ def _excluir_linhas_fora_conciliacao(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _column_config_conciliacao(df: pd.DataFrame) -> dict[str, NumberColumn | DatetimeColumn | TextColumn]:
-    """Moeda formatada; venda / pedido / NF como texto (códigos, não quantidade)."""
+def _fmt_brl_ptbr_celula(x: object) -> str:
+    """Moeda pt-BR para células de grelha (R$ 1.234,56) — evita estilo US do NumberColumn."""
+    if x is None:
+        return ""
+    try:
+        if pd.isna(x):
+            return ""
+    except TypeError:
+        pass
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return str(x).strip()
+    if math.isnan(v):
+        return ""
+    neg = v < 0
+    v = abs(v)
+    cents = int(round(v * 100 + 1e-9))
+    inteiro, cent = divmod(cents, 100)
+    int_str = f"{inteiro:,}".replace(",", ".")
+    corpo = f"{int_str},{cent:02d}"
+    if neg:
+        return f"R$ -{corpo}"
+    return f"R$ {corpo}"
+
+
+def _dataframe_conciliacao_somente_grid(df: pd.DataFrame) -> pd.DataFrame:
+    """Cópia para st.dataframe: valores monetários como texto pt-BR (export continua numérico)."""
+    if df.empty:
+        return df
+    g = df.copy()
+    for c in ("Valor da nota", "Valor a receber", "Valor pago", "Diferença"):
+        if c in g.columns:
+            g[c] = g[c].map(_fmt_brl_ptbr_celula).astype(object)
+    return g
+
+
+def _column_config_conciliacao(
+    df: pd.DataFrame, *, moeda_como_texto: bool = False
+) -> dict[str, NumberColumn | DatetimeColumn | TextColumn]:
+    """Moeda em coluna numérica (export) ou texto pt-BR (grid). Referências sempre TextColumn."""
     cfg: dict[str, NumberColumn | DatetimeColumn | TextColumn] = {}
     for c in ("Valor da nota", "Valor a receber", "Valor pago", "Diferença"):
         if c in df.columns:
-            cfg[c] = NumberColumn(c, format="R$ %,.2f")
+            if moeda_como_texto:
+                cfg[c] = TextColumn(c, width="medium")
+            else:
+                cfg[c] = NumberColumn(c, format="R$ %,.2f")
     for c in ("Número da venda", "Número do pedido", "Número da nota"):
         if c in df.columns:
             cfg[c] = TextColumn(c, width="medium")
@@ -1839,27 +1881,32 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             mime="application/pdf",
             use_container_width=True,
         )
-    
+
+    tabela_grid = _dataframe_conciliacao_somente_grid(tabela_exibir)
+    _cfg_grid = (
+        _column_config_conciliacao(tabela_grid, moeda_como_texto=True)
+        if not tabela_grid.empty
+        else None
+    )
+
     if tabela_exibir.empty:
         st.info(
             "**Nenhum registo** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
         )
         st.dataframe(
-            tabela_exibir,
+            tabela_grid,
             use_container_width=True,
             height=160,
             hide_index=True,
-            column_config=_column_config_conciliacao(tabela_exibir)
-            if not tabela_exibir.empty
-            else None,
+            column_config=_cfg_grid,
         )
     else:
         st.dataframe(
-            tabela_exibir,
+            tabela_grid,
             use_container_width=True,
             height=550,
             hide_index=True,
-            column_config=_column_config_conciliacao(tabela_exibir),
+            column_config=_cfg_grid,
         )
     st.write(f"Linhas filtradas: **{len(tabela_exibir)}**")
 

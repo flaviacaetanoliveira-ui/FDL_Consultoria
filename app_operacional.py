@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 from streamlit.column_config import DatetimeColumn, NumberColumn, TextColumn
-from openpyxl.styles import numbers
+from openpyxl.styles import numbers as oxl_number_formats
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
@@ -1821,7 +1821,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 for row_idx in range(2, ws.max_row + 1):
                     cell = ws.cell(row=row_idx, column=col_idx)
                     if cell.value is not None:
-                        cell.number_format = numbers.FORMAT_DATE_DDMMYY
+                        cell.number_format = oxl_number_formats.FORMAT_DATE_DDMMYY
     excel_buf.seek(0)
     with btn2:
         st.download_button(

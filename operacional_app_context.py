@@ -81,131 +81,6 @@ def nomes_permitidos_com_registro(nomes_permitidos: list[str]) -> list[str]:
 
 SESSION_ACTIVE_ORG_KEY = "_active_org_id"
 
-# Estilos só na rota de login — referência visual tipo portal institucional (ex.: FGV).
-_LOGIN_PAGE_STYLES = """
-<style>
-  .stApp {
-    background: #ffffff !important;
-  }
-  [data-testid="stSidebar"],
-  [data-testid="collapsedControl"],
-  [data-testid="stHeader"],
-  [data-testid="stToolbar"],
-  [data-testid="stDecoration"] {
-    display: none !important;
-  }
-  #MainMenu { visibility: hidden; }
-  footer { visibility: hidden; }
-  /* Não forçar flex no stMain — em Streamlit 1.4x+ pode deixar o ecrã em branco. */
-  /* Largura estilo FGV (~350px), centralizado em telas grandes */
-  .main .block-container {
-    max-width: min(352px, calc(100vw - 2.5rem)) !important;
-    width: min(352px, calc(100vw - 2.5rem)) !important;
-    padding: 1rem 0.75rem 1.5rem 0.75rem !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-    flex: 0 0 auto !important;
-    box-sizing: border-box !important;
-  }
-  /* Card branco fino (tipo portal acadêmico/corporativo) */
-  div[data-testid="stVerticalBlockBorderWrapper"] {
-    background: #ffffff !important;
-    border-radius: 4px !important;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06) !important;
-    border: 1px solid #e5e7eb !important;
-    padding: 1.35rem 1.25rem 1.2rem 1.25rem !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-    max-width: 100% !important;
-    width: 100% !important;
-    box-sizing: border-box !important;
-  }
-  .fdl-login-brand { text-align: center; }
-  .fdl-login-topline {
-    height: 3px;
-    background: #005baa;
-    margin: -1.35rem -1.25rem 1.2rem -1.25rem;
-    border-radius: 3px 3px 0 0;
-  }
-  .fdl-login-divider {
-    height: 1px;
-    background: #e5e7eb;
-    margin: 0.85rem 0 1rem 0;
-    border: 0;
-  }
-  div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stElementContainer"] {
-    width: 100% !important;
-    max-width: 100% !important;
-  }
-  /* Prateleira do formulário (cinza claro, como no FGV) */
-  form[data-testid="stForm"] {
-    background: #f3f4f6 !important;
-    border: 1px solid #e5e7eb !important;
-    border-radius: 6px !important;
-    padding: 1rem 1rem 1.1rem 1rem !important;
-    margin-top: 0.25rem !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-  }
-  form[data-testid="stForm"] label p {
-    font-size: 0.8125rem !important;
-    font-weight: 600 !important;
-    text-transform: none !important;
-    letter-spacing: 0 !important;
-    color: #374151 !important;
-  }
-  form[data-testid="stForm"] [data-baseweb="input"] > div {
-    border-radius: 4px !important;
-    border-color: #d1d5db !important;
-    background: #ffffff !important;
-  }
-  form[data-testid="stForm"] [data-baseweb="input"]:focus-within > div {
-    border-color: #005baa !important;
-    box-shadow: 0 0 0 1px #005baa !important;
-  }
-  form[data-testid="stForm"] .stFormSubmitButton,
-  form[data-testid="stForm"] div.row-widget.stButton {
-    width: 100% !important;
-  }
-  form[data-testid="stForm"] button,
-  form[data-testid="stForm"] .stButton > button {
-    width: 100% !important;
-    margin-top: 1rem !important;
-    border-radius: 4px !important;
-    padding: 0.72rem 1rem !important;
-    font-weight: 700 !important;
-    font-size: 0.875rem !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
-    background: #0086e5 !important;
-    color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
-    border: none !important;
-    box-shadow: none !important;
-    transition: background 0.15s ease !important;
-  }
-  form[data-testid="stForm"] button:hover,
-  form[data-testid="stForm"] .stButton > button:hover {
-    background: #0070c2 !important;
-    filter: none !important;
-    transform: none !important;
-  }
-  form[data-testid="stForm"] button:focus-visible,
-  form[data-testid="stForm"] .stButton > button:focus-visible {
-    outline: 2px solid #005baa !important;
-    outline-offset: 2px !important;
-  }
-  /* Checkbox “manter conectado” */
-  div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stCheckbox"] label p {
-    font-size: 0.8125rem !important;
-    color: #1f2937 !important;
-  }
-  div[data-testid="stAlert"] {
-    border-radius: 6px !important;
-  }
-</style>
-"""
-
 
 def require_app_user() -> AppUserContext:
     """
@@ -213,78 +88,43 @@ def require_app_user() -> AppUserContext:
     Encerra a execução da página com st.stop() se não houver sessão.
     """
     if not st.session_state.get("logged_in"):
+        # Só widgets nativos — CSS/HTML pesado na página de login causava ecrã em branco na
+        # Streamlit Cloud / modo anónimo em alguns browsers.
         st.title("FDL Analytics")
-        st.caption("Acesso ao painel financeiro — se o ecrã abaixo estiver vazio, atualize a página ou use outro navegador.")
-        st.markdown(_LOGIN_PAGE_STYLES, unsafe_allow_html=True)
-        with st.container(border=True):
-            st.markdown(
-                """
-                <div class="fdl-login-brand">
-                  <div class="fdl-login-topline" aria-hidden="true"></div>
-                  <h1 style="
-                    font-family: Georgia, 'Times New Roman', serif;
-                    font-size:1.6rem;
-                    font-weight:700;
-                    letter-spacing:-0.02em;
-                    color:#003978;
-                    margin:0 0 0.4rem 0;
-                    line-height:1.2;
-                  ">FDL Analytics</h1>
-                  <p style="
-                    font-size:0.8125rem;
-                    color:#6b7280;
-                    margin:0 0 0.5rem 0;
-                    line-height:1.5;
-                  ">Financial Intelligence for E-commerce</p>
-                  <hr class="fdl-login-divider" />
-                  <p style="
-                    font-size:1rem;
-                    font-weight:600;
-                    color:#003978;
-                    margin:0 0 0.15rem 0;
-                    line-height:1.3;
-                  ">Autenticação</p>
-                  <p style="
-                    font-size:0.75rem;
-                    color:#6b7280;
-                    margin:0;
-                    line-height:1.45;
-                  ">Acesso ao painel operacional</p>
-                </div>
-                """,
-                unsafe_allow_html=True,
+        st.caption("Financial Intelligence for E-commerce")
+        st.subheader("Autenticação")
+        st.caption("Acesso ao painel operacional.")
+        with st.form("operacional_login"):
+            email = st.text_input(
+                "E-mail",
+                placeholder="nome@empresa.com.br",
+                autocomplete="email",
             )
-            with st.form("operacional_login"):
-                email = st.text_input(
-                    "E-mail",
-                    placeholder="nome@empresa.com.br",
-                    autocomplete="email",
-                )
-                senha = st.text_input(
-                    "Senha",
-                    type="password",
-                    placeholder="Digite sua senha",
-                    autocomplete="current-password",
-                )
-                submitted = st.form_submit_button("ENTRAR")
-                if submitted:
-                    if autenticar(email, senha):
-                        email_key = normalizar_email(email)
-                        row = USUARIOS[email_key]
-                        st.session_state["logged_in"] = True
-                        st.session_state["usuario"] = email.strip()
-                        st.session_state["cliente"] = row["cliente"]
-                        st.session_state["empresas_permitidas"] = list(row["empresas"])
-                        st.session_state[SESSION_ACTIVE_ORG_KEY] = None
-                        st.rerun()
-                    else:
-                        st.error("E-mail ou senha incorretos. Verifique suas credenciais e tente novamente.")
-            st.checkbox(
-                "Mantenha-se conectado",
-                key="fdl_login_manter_conectado",
-                help="Preferência local neste navegador (sem alterar a segurança do servidor).",
+            senha = st.text_input(
+                "Senha",
+                type="password",
+                placeholder="Digite sua senha",
+                autocomplete="current-password",
             )
-            st.caption("Problemas para entrar? Procure o administrador do sistema.")
+            submitted = st.form_submit_button("Entrar")
+            if submitted:
+                if autenticar(email, senha):
+                    email_key = normalizar_email(email)
+                    row = USUARIOS[email_key]
+                    st.session_state["logged_in"] = True
+                    st.session_state["usuario"] = email.strip()
+                    st.session_state["cliente"] = row["cliente"]
+                    st.session_state["empresas_permitidas"] = list(row["empresas"])
+                    st.session_state[SESSION_ACTIVE_ORG_KEY] = None
+                    st.rerun()
+                else:
+                    st.error("E-mail ou senha incorretos. Verifique suas credenciais e tente novamente.")
+        st.checkbox(
+            "Mantenha-se conectado",
+            key="fdl_login_manter_conectado",
+            help="Preferência local neste navegador (sem alterar a segurança do servidor).",
+        )
+        st.caption("Problemas para entrar? Procure o administrador do sistema.")
         st.stop()
 
     try:

@@ -46,7 +46,7 @@ from operacional_frete import (
 from operacional_frete_ui import painel_frete_fragment
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
-BUILD_TAG = "build-20260327-frete-ml-header"
+BUILD_TAG = "build-20260327-login-native-only"
 
 try:
     st.set_page_config(page_title="FDL Analytics — Financeiro", layout="wide")

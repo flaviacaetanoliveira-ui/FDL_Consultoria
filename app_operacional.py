@@ -42,7 +42,7 @@ from operacional_frete import carregar_base_frete_ml, descobrir_fontes_frete
 from operacional_frete_ui import painel_frete_fragment
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
-BUILD_TAG = "build-20260327-0ae9e7d"
+BUILD_TAG = "build-20260327-frete-native"
 
 st.set_page_config(page_title="FDL Analytics — Financeiro", layout="wide")
 
@@ -50,6 +50,8 @@ _app_ctx = require_app_user()
 _active_org = get_active_organization(_app_ctx)
 
 if "op_financeiro_view" not in st.session_state:
+    st.session_state["op_financeiro_view"] = "repasse"
+elif st.session_state["op_financeiro_view"] not in ("repasse", "frete"):
     st.session_state["op_financeiro_view"] = "repasse"
 
 # Alinhado a PIPELINE_DATA_REVISION (liberações / Valor pago). Subir junto quando mudar o fluxo.
@@ -1574,7 +1576,11 @@ def _painel_frete_emergencial(org_id: str) -> None:
         st.info(w)
 
     show = df_frete[[c for c in df_frete.columns if not str(c).startswith("_")]].copy()
-    st.dataframe(show, use_container_width=True, hide_index=True, height=520)
+    _max_rows = 2000
+    show_ui = show.head(_max_rows)
+    if len(show) > _max_rows:
+        st.caption(f"Amostra de {_max_rows} linhas (total {len(show)}). O CSV exporta todas.")
+    st.dataframe(show_ui, hide_index=True, height=480)
     st.download_button(
         "Exportar CSV",
         show.to_csv(index=False).encode("utf-8-sig"),
@@ -1997,8 +2003,8 @@ _admin_mode = _is_admin_mode()
 if _admin_mode and _data_source_mode() == "upload_zip":
     _render_cloud_data_loader()
 
-_fin_early = st.session_state.get("op_financeiro_view", "repasse")
-if _fin_early == "frete":
+_fv = st.session_state["op_financeiro_view"]
+if _fv == "frete":
     # Evita carregar precomputed/ZIP da conciliação de repasse — só vendas ML em FDL_BASE_DIR.
     try:
         _vpath, _ = descobrir_fontes_frete()
@@ -2138,7 +2144,7 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-if _fin_early == "repasse":
+if _fv == "repasse":
     map_acao = {
         "Ok": "Ok",
         "Baixar no Bling": "Baixar no Bling",
@@ -2167,10 +2173,10 @@ if _fin_early == "repasse":
 else:
     tabela_operacional_base = pd.DataFrame()
 
-_fin_nav = st.session_state.get("op_financeiro_view", "repasse")
+_fv = st.session_state["op_financeiro_view"]
 _h_cl = html.escape(str(_app_ctx.display_name))
 _h_org = html.escape(str(_active_org.display_name))
-if _fin_nav == "repasse":
+if _fv == "repasse":
     _hero_body = f"""
       <nav class="fdl-breadcrumb" aria-label="Localização no sistema">
         <span class="fdl-bc-item">{_h_cl}</span>
@@ -2186,40 +2192,34 @@ if _fin_nav == "repasse":
         Painel para acompanhar valores recebidos na plataforma, conferência com notas e fila de ações
         sugeridas — sempre sobre a base já filtrada pelos critérios operacionais do módulo.
       </p>"""
+    st.markdown(
+        f"""
+        <div class="fdl-topbar">
+          <div class="fdl-topbar-brand">FDL Analytics</div>
+          <div class="fdl-topbar-meta">
+            <span><strong>Cliente:</strong> {_h_cl}</span>
+            <span class="fdl-sep">|</span>
+            <span><strong>Empresa:</strong> {_h_org}</span>
+          </div>
+        </div>
+        <div class="page-hero">{_hero_body}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 else:
-    _hero_body = f"""
-      <nav class="fdl-breadcrumb" aria-label="Localização no sistema">
-        <span class="fdl-bc-item">{_h_cl}</span>
-        <span class="fdl-bc-sep" aria-hidden="true">›</span>
-        <span class="fdl-bc-item">{_h_org}</span>
-        <span class="fdl-bc-sep" aria-hidden="true">›</span>
-        <span class="fdl-bc-item">Financeiro</span>
-        <span class="fdl-bc-sep" aria-hidden="true">›</span>
-        <span class="fdl-bc-item fdl-bc-current">Conciliação de Frete</span>
-      </nav>
-      <h1>Conciliação de Frete</h1>
-      <p class="page-sub">
-        Frete líquido no relatório ML (soma receita e tarifa de envio) e cruzamento opcional com preço por anúncio.
-        Apenas este painel é montado quando selecionado.
-      </p>"""
+    # Frete: só widgets nativos — evita ecrã branco em alguns builds Cloud/React.
+    st.caption("FDL Analytics")
+    st.markdown(
+        f"{_h_cl} › {_h_org} › Financeiro › **Conciliação de Frete**",
+        unsafe_allow_html=True,
+    )
+    st.title("Conciliação de Frete")
+    st.caption(
+        "Frete líquido no relatório ML (soma receita e tarifa de envio) e cruzamento opcional com preço por anúncio."
+    )
 
-st.markdown(
-    f"""
-    <div class="fdl-topbar">
-      <div class="fdl-topbar-brand">FDL Analytics</div>
-      <div class="fdl-topbar-meta">
-        <span><strong>Cliente:</strong> {_h_cl}</span>
-        <span class="fdl-sep">|</span>
-        <span><strong>Empresa:</strong> {_h_org}</span>
-      </div>
-    </div>
-    <div class="page-hero">{_hero_body}
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-if _fin_nav == "repasse":
+if _fv == "repasse":
     _painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
 else:
     try:

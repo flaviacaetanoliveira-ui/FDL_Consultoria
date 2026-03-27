@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import html as html_lib
 from datetime import datetime
+from pathlib import Path
 from typing import Callable
 
 import pandas as pd
@@ -69,10 +70,18 @@ def painel_frete_fragment(
             st.exception(exc)
         return
     if not vpath:
-        st.warning(
-            "Pasta Vendas - Mercado Livre nao encontrada. Defina FDL_BASE_DIR com a base do cliente."
-        )
-        st.caption(str(CLIENTE_BASE_DIR))
+        vendas_dir = Path(CLIENTE_BASE_DIR) / "Vendas - Mercado Livre"
+        if not vendas_dir.is_dir():
+            st.warning(
+                "Não existe a pasta **Vendas - Mercado Livre** na base do cliente. "
+                "Crie-a sob a pasta indicada abaixo ou defina **FDL_BASE_DIR** / segredo com a raiz certa."
+            )
+        else:
+            st.warning(
+                "A pasta **Vendas - Mercado Livre** existe mas **não há ficheiros .xlsx, .xls ou .csv** "
+                "de vendas ML (export do relatório). Copie o export para essa pasta e atualize a página."
+            )
+        st.caption(str(Path(CLIENTE_BASE_DIR).resolve()))
         return
     v_ns = int(vpath.stat().st_mtime_ns)
     fp = str(fpath.resolve()) if fpath and fpath.is_file() else None

@@ -1,0 +1,14 @@
+@echo off
+REM Copie para config_local.bat (nao versionar caminhos reais) e ajuste.
+
+REM Pasta onde caem os exports de vendas ML (.xlsx / .csv) — exemplo pasta OneDrive local sincronizada:
+REM set "FDL_SYNC_VENDAS_SRC=C:\Users\SEU_USER\OneDrive - Empresa\VendasML"
+
+REM Ficheiro OU pasta com Excel *Frete*Anuncio*.xlsx (nome deve bater com o aplicativo):
+REM set "FDL_SYNC_FRETE_SRC=C:\Users\SEU_USER\OneDrive - Empresa\Frete_Anuncio.xlsx"
+
+REM Base do cliente para o export Python (mirror / pipeline) — normalmente a pasta data_cliente do repo:
+REM set "FDL_BASE_DIR=C:\caminho\para\V2\data_cliente"
+
+REM Para SO copiar ficheiros sem correr export_powerbi_dataset.py (mais rapido):
+REM set "SKIP_POWERBI_EXPORT=1"

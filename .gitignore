@@ -7,3 +7,7 @@ venv/
 .env
 *.xlsx~
 ~$*
+
+# Agendamento local (caminhos da maquina)
+agendamento/config_local.bat
+agendamento/logs/

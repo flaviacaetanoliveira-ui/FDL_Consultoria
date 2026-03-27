@@ -38,7 +38,7 @@ from operacional_app_context import (
     require_app_user,
 )
 from operacional_data_config import DATASET_EMPRESA
-from operacional_frete import descobrir_fontes_frete
+from operacional_frete import carregar_base_frete_ml, descobrir_fontes_frete
 from operacional_frete_ui import painel_frete_fragment
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
@@ -1539,6 +1539,51 @@ def _render_kpi_card(label: str, value: str, icon: str, css_class: str) -> None:
     )
 
 
+def _painel_frete_emergencial(org_id: str) -> None:
+    """
+    Fallback robusto para Cloud:
+    evita o ecrã branco em alguns navegadores ao renderizar o painel de Frete completo.
+    """
+    st.info("Modo de compatibilidade do painel de Frete.")
+    try:
+        vpath, fpath = descobrir_fontes_frete()
+    except Exception as exc:
+        st.error("Erro ao localizar ficheiros de frete.")
+        st.exception(exc)
+        return
+
+    if not vpath:
+        st.warning(
+            "Pasta Vendas - Mercado Livre ausente ou sem ficheiros de vendas (.xlsx/.xls/.csv)."
+        )
+        st.caption(str(BASE_DIR))
+        return
+
+    try:
+        v_ns = int(vpath.stat().st_mtime_ns)
+        fp = str(fpath.resolve()) if fpath and fpath.is_file() else None
+        f_ns = int(fpath.stat().st_mtime_ns) if fpath and fpath.is_file() else None
+        df_frete, meta_frete = carregar_base_frete_ml(org_id, str(vpath.resolve()), v_ns, fp, f_ns)
+    except Exception as exc:
+        st.error("Falha ao carregar base de Frete.")
+        st.exception(exc)
+        return
+
+    st.caption(f"Ficheiro vendas: {meta_frete.get('vendas_arquivo')} | Linhas: {len(df_frete)}")
+    for w in meta_frete.get("avisos") or []:
+        st.info(w)
+
+    show = df_frete[[c for c in df_frete.columns if not str(c).startswith("_")]].copy()
+    st.dataframe(show, use_container_width=True, hide_index=True, height=520)
+    st.download_button(
+        "Exportar CSV",
+        show.to_csv(index=False).encode("utf-8-sig"),
+        file_name="conciliacao_frete_filtrada.csv",
+        mime="text/csv",
+        key="frete_dl_csv_emergencial",
+    )
+
+
 def _build_pdf_bytes(df: pd.DataFrame) -> bytes:
     buff = BytesIO()
     c = canvas.Canvas(buff, pagesize=A4)
@@ -2178,14 +2223,7 @@ if _fin_nav == "repasse":
     _painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
 else:
     try:
-        painel_frete_fragment(
-            _active_org.org_id,
-            br_tz=_BR_TZ,
-            multiselect_stable=_multiselect_stable,
-            render_kpi_card=_render_kpi_card,
-            fmt_brl_ptbr_celula=_fmt_brl_ptbr_celula,
-            col_referencia_como_texto=_col_referencia_como_texto,
-        )
+        _painel_frete_emergencial(_active_org.org_id)
     except Exception as exc:
         st.error("Não foi possível carregar o painel de Frete.")
         st.exception(exc)

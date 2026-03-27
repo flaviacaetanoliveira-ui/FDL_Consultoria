@@ -1,4 +1,4 @@
-﻿"""
+"""
 Conciliação de Frete — vendas Mercado Livre + arquivo opcional «frete por anúncio» tabular.
 
 Frete líquido ML (detalhe envios): soma algébrica Receita por envio + Tarifas de envio.
@@ -96,10 +96,16 @@ def _resolve_columns(df: pd.DataFrame) -> dict[str, str]:
 def _latest_vendas_ml_path(folder: Path) -> Path | None:
     if not folder.is_dir():
         return None
-    files = [p for p in list_sales_files(folder) if p.suffix.lower() in {".xlsx", ".xls", ".csv"}]
+    try:
+        files = [p for p in list_sales_files(folder) if p.suffix.lower() in {".xlsx", ".xls", ".csv"}]
+    except OSError:
+        return None
     if not files:
         return None
-    return max(files, key=lambda p: p.stat().st_mtime)
+    try:
+        return max(files, key=lambda p: p.stat().st_mtime)
+    except OSError:
+        return None
 
 
 def _find_frete_anuncio_path(base: Path) -> Path | None:

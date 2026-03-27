@@ -1936,9 +1936,15 @@ if _admin_mode and _data_source_mode() == "upload_zip":
 _fin_early = st.session_state.get("op_financeiro_view", "repasse")
 if _fin_early == "frete":
     # Evita carregar precomputed/ZIP da conciliação de repasse — só vendas ML em FDL_BASE_DIR.
-    _vpath, _ = descobrir_fontes_frete()
+    try:
+        _vpath, _ = descobrir_fontes_frete()
+    except Exception:
+        _vpath = None
     if _vpath:
-        ts_proc = _ts_br_from_mtime_ns(int(_vpath.stat().st_mtime_ns))
+        try:
+            ts_proc = _ts_br_from_mtime_ns(int(_vpath.stat().st_mtime_ns))
+        except OSError:
+            ts_proc = _now_ts_br_str()
     else:
         ts_proc = _now_ts_br_str()
     tabela_geral = pd.DataFrame()

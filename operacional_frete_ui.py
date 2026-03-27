@@ -1,6 +1,7 @@
-﻿"""UI em fragmento para ConciliaÃ§Ã£o de Frete (importado por app_operacional)."""
+"""UI para Conciliação de Frete (importada por app_operacional)."""
 from __future__ import annotations
 
+import html as html_lib
 from datetime import datetime
 from typing import Callable
 
@@ -50,7 +51,6 @@ def _column_config_frete(df: pd.DataFrame) -> dict[str, TextColumn]:
     return cfg
 
 
-@st.fragment
 def painel_frete_fragment(
     org_id: str,
     *,
@@ -60,7 +60,14 @@ def painel_frete_fragment(
     fmt_brl_ptbr_celula: Callable[[object], str],
     col_referencia_como_texto: Callable[[pd.Series], pd.Series],
 ) -> None:
-    vpath, fpath = descobrir_fontes_frete(CLIENTE_BASE_DIR)
+    try:
+        vpath, fpath = descobrir_fontes_frete(CLIENTE_BASE_DIR)
+    except Exception as exc:
+        st.error("Erro ao localizar ficheiros de frete / vendas ML.")
+        st.caption(str(exc))
+        with st.expander("Detalhe técnico", expanded=False):
+            st.exception(exc)
+        return
     if not vpath:
         st.warning(
             "Pasta Vendas - Mercado Livre nao encontrada. Defina FDL_BASE_DIR com a base do cliente."
@@ -193,41 +200,47 @@ def painel_frete_fragment(
                 .agg(vendas=("N.Âº venda", "count"), impacto_r=("_ab", "sum"))
                 .sort_values("impacto_r", ascending=False)
             )
-            top_id = str(grp.index[0])
-            top_imp = float(grp.iloc[0]["impacto_r"])
-            top_nv = int(grp.iloc[0]["vendas"])
-            tit = ""
-            if "TÃ­tulo do anÃºncio" in tbl_show.columns:
-                sub = tbl_show.loc[tbl_show["# de anÃºncio"].astype(str).eq(top_id), "TÃ­tulo do anÃºncio"]
-                if len(sub):
-                    tit = str(sub.iloc[0])[:120]
-            extra = (
-                f"<br /><span style=\"font-size:0.82rem;color:#57534e\">{tit}</span>" if tit else ""
-            )
-            st.markdown(
-                f"""
+            if grp.empty:
+                st.info("Sem linhas agrupáveis por anúncio para o destaque.")
+            else:
+                top_id = str(grp.index[0])
+                top_imp = float(grp.iloc[0]["impacto_r"])
+                top_nv = int(grp.iloc[0]["vendas"])
+                tit = ""
+                if "TÃ­tulo do anÃºncio" in tbl_show.columns:
+                    sub = tbl_show.loc[
+                        tbl_show["# de anÃºncio"].astype(str).eq(top_id), "TÃ­tulo do anÃºncio"
+                    ]
+                    if len(sub):
+                        tit = html_lib.escape(str(sub.iloc[0])[:120])
+                extra = (
+                    f'<br /><span style="font-size:0.82rem;color:#57534e">{tit}</span>' if tit else ""
+                )
+                top_safe = html_lib.escape(top_id)
+                st.markdown(
+                    f"""
                 <div class="fdl-frete-spotlight">
                   <p class="fdl-fs-title">Anuncio com maior impacto |diferenca|</p>
-                  <p class="fdl-fs-an">{top_id}</p>
+                  <p class="fdl-fs-an">{top_safe}</p>
                   <p class="fdl-fs-metrics">
-                    <strong>{top_nv}</strong> venda(s) Â· <strong>R$ {top_imp:,.2f}</strong> |Delta| acumulado
+                    <strong>{top_nv}</strong> venda(s) · <strong>R$ {top_imp:,.2f}</strong> |Delta| acumulado
                     {extra}
                   </p>
                   <p class="fdl-fs-metrics" style="margin-top:0.6rem;">
-                    Linhas em divergencia: <strong>{n_div}</strong> Â· |Delta| total: <strong>R$ {soma_abs:,.2f}</strong>
+                    Linhas em divergencia: <strong>{n_div}</strong> · |Delta| total: <strong>R$ {soma_abs:,.2f}</strong>
                   </p>
                 </div>
                 """,
-                unsafe_allow_html=True,
-            )
-            chart_df = grp.head(8).reset_index()
-            id_col = chart_df.columns[0]
-            chart_df = chart_df[[id_col, "impacto_r"]].rename(
-                columns={id_col: "Anuncio", "impacto_r": "Impacto"}
-            )
-            chart_df = chart_df.set_index("Anuncio")
-            st.markdown('<div class="section-title">Top anuncios</div>', unsafe_allow_html=True)
-            st.bar_chart(chart_df)
+                    unsafe_allow_html=True,
+                )
+                chart_df = grp.head(8).reset_index()
+                id_col = chart_df.columns[0]
+                chart_df = chart_df[[id_col, "impacto_r"]].rename(
+                    columns={id_col: "Anuncio", "impacto_r": "Impacto"}
+                )
+                chart_df = chart_df.set_index("Anuncio")
+                st.markdown('<div class="section-title">Top anuncios</div>', unsafe_allow_html=True)
+                st.bar_chart(chart_df)
         elif n_div == 0:
             st.success("Sem divergencias acima da tolerancia.")
     elif not meta.get("frete_tabular"):

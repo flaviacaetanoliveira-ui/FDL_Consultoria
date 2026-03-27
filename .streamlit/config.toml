@@ -10,3 +10,9 @@ gatherUsageStats = false
 base = "light"
 dataframeHeaderBackgroundColor = "#e2e8f0"
 dataframeBorderColor = "#cbd5e1"
+
+[theme.sidebar]
+backgroundColor = "#f1f5f9"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#0f172a"
+primaryColor = "#0284c7"

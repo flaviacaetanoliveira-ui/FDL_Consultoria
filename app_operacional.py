@@ -2050,28 +2050,14 @@ with st.sidebar:
             '<p class="sb-nav-section-label" style="margin-top:0.15rem;">💰 Financeiro · visualização</p>',
             unsafe_allow_html=True,
         )
-        # Evita glitches do frontend com radio+format_func em alguns navegadores da Cloud.
-        _labels = ["Conciliação de Repasse", "Conciliação de Frete"]
-        _label_to_value = {
-            "Conciliação de Repasse": "repasse",
-            "Conciliação de Frete": "frete",
-        }
-        _curr = st.session_state.get("op_financeiro_view", "repasse")
-        _default_label = (
-            "Conciliação de Frete" if _curr == "frete" else "Conciliação de Repasse"
-        )
-        _sel_label = st.radio(
+        # Forma mais estável na Cloud: um único widget a escrever direto em op_financeiro_view.
+        st.radio(
             "Painel financeiro",
-            options=_labels,
-            index=_labels.index(_default_label),
-            key="op_financeiro_view_label",
+            options=["repasse", "frete"],
+            format_func=_financeiro_radio_label,
+            key="op_financeiro_view",
             label_visibility="collapsed",
         )
-        _next_view = _label_to_value.get(_sel_label, "repasse")
-        if _next_view != _curr:
-            st.session_state["op_financeiro_view"] = _next_view
-            st.rerun()
-        st.session_state["op_financeiro_view"] = _next_view
         st.caption("Um painel ativo de cada vez — melhor desempenho.")
 
     st.markdown('<hr class="sb-divider-soft" />', unsafe_allow_html=True)
@@ -2182,13 +2168,7 @@ st.markdown(
 )
 
 if _fin_nav == "repasse":
-    if tabela_operacional_base.empty:
-        st.warning(
-            "A base de repasse não está disponível nesta execução. "
-            "A atualizar o painel…"
-        )
-    else:
-        _painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
+    _painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
 else:
     try:
         painel_frete_fragment(

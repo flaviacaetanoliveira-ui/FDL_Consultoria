@@ -2050,13 +2050,24 @@ with st.sidebar:
             '<p class="sb-nav-section-label" style="margin-top:0.15rem;">💰 Financeiro · visualização</p>',
             unsafe_allow_html=True,
         )
-        st.radio(
+        # Evita glitches do frontend com radio+format_func em alguns navegadores da Cloud.
+        _labels = ["Conciliação de Repasse", "Conciliação de Frete"]
+        _label_to_value = {
+            "Conciliação de Repasse": "repasse",
+            "Conciliação de Frete": "frete",
+        }
+        _curr = st.session_state.get("op_financeiro_view", "repasse")
+        _default_label = (
+            "Conciliação de Frete" if _curr == "frete" else "Conciliação de Repasse"
+        )
+        _sel_label = st.radio(
             "Painel financeiro",
-            options=["repasse", "frete"],
-            format_func=_financeiro_radio_label,
-            key="op_financeiro_view",
+            options=_labels,
+            index=_labels.index(_default_label),
+            key="op_financeiro_view_label",
             label_visibility="collapsed",
         )
+        st.session_state["op_financeiro_view"] = _label_to_value.get(_sel_label, "repasse")
         st.caption("Um painel ativo de cada vez — melhor desempenho.")
 
     st.markdown('<hr class="sb-divider-soft" />', unsafe_allow_html=True)

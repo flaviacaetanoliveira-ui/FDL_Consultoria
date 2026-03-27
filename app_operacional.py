@@ -1271,22 +1271,22 @@ def _column_config_conciliacao(df: pd.DataFrame) -> dict[str, NumberColumn]:
 
 def _multiselect_stable(key: str, label: str, options: list[str]) -> list[str]:
     """
-    `default=lista_nova` a cada rerun (ex.: sorted) faz o widget do Streamlit perder estado e pode
-    deixar o ecrã em branco. Usar só `key` + estado inicial estável.
+    Evita `default=` com listas recém-ordenadas a cada rerun (perdia estado / ecrã em branco).
+    Estado inicial vazio: o cliente abre a seta e escolhe; vazio = sem filtro nessa dimensão.
+    Se o utilizador limpar o último chip, o valor mantém-se vazio — não repor «todas as opções».
     """
     opts = [x for x in options if str(x).strip()]
     if not opts:
         return []
     if key not in st.session_state:
-        st.session_state[key] = opts.copy()
+        st.session_state[key] = []
     else:
         prev = st.session_state[key]
         if not isinstance(prev, list):
-            st.session_state[key] = opts.copy()
+            st.session_state[key] = []
         else:
-            valid = [x for x in prev if x in opts]
-            st.session_state[key] = valid if valid else opts.copy()
-    return st.multiselect(label, opts, key=key)
+            st.session_state[key] = [x for x in prev if x in opts]
+    return st.multiselect(label, opts, key=key, placeholder="Escolher…")
 
 
 def _render_kpi_card(label: str, value: str, icon: str, css_class: str) -> None:

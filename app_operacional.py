@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
+from email.utils import parsedate_to_datetime
 from io import BytesIO
 import base64
 import json
@@ -14,10 +15,11 @@ from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse, urlj
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import zipfile
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
-from streamlit.column_config import NumberColumn
+from streamlit.column_config import DatetimeColumn, NumberColumn
 from openpyxl.styles import numbers
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -72,6 +74,30 @@ _BROWSER_UA_CHROME = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
+
+_BR_TZ = ZoneInfo("America/Sao_Paulo")
+
+
+def _now_ts_br_str() -> str:
+    """Carimbo para UI em Brasília (Streamlit Cloud costuma usar UTC — o dia «salta» para o utilizador BR)."""
+    return datetime.now(_BR_TZ).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _ts_br_from_mtime_ns(mtime_ns: int) -> str:
+    dt = datetime.fromtimestamp(mtime_ns / 1e9, tz=timezone.utc).astimezone(_BR_TZ)
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _ts_br_from_http_last_modified(header: str | None) -> str | None:
+    if not header or not str(header).strip():
+        return None
+    try:
+        dt = parsedate_to_datetime(str(header).strip())
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(_BR_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return None
 
 
 def _is_admin_mode() -> bool:
@@ -504,7 +530,7 @@ def _download_shared_folder_dataset(public_url: str) -> None:
                             continue
                     except Exception:
                         pass
-                content, _ = _download_file_bytes(dl_url)
+                content, _, _ = _download_file_bytes(dl_url)
                 child_path.parent.mkdir(parents=True, exist_ok=True)
                 child_path.write_bytes(content)
             next_url = str(payload.get("@odata.nextLink", "")).strip()
@@ -620,12 +646,12 @@ def _sync_shared_folder_cached(
     del root_folder
     del client_folder
     _download_shared_folder_dataset(public_url)
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return _now_ts_br_str()
 
 
 def _http_get_file_follow_redirects(
     url: str, *, timeout: int = 60, extra_headers: dict[str, str] | None = None
-) -> tuple[bytes, str, str]:
+) -> tuple[bytes, str, str, str | None]:
     """GET binário seguindo 301–308 (SharePoint / Graph devolve 308 «User migrated»)."""
     headers: dict[str, str] = {"User-Agent": "FDL-Streamlit-App/1.0"}
     if extra_headers:
@@ -643,7 +669,8 @@ def _http_get_file_follow_redirects(
                     filename = cd.split("filename=", 1)[1].strip().strip("\"'")
                 if not filename:
                     filename = Path(urlparse(final_url).path).name or "download.bin"
-                return payload, filename, final_url
+                last_mod = resp.headers.get("Last-Modified")
+                return payload, filename, final_url, last_mod
         except HTTPError as exc:
             if exc.code in (301, 302, 303, 307, 308) and exc.headers.get("Location"):
                 current = urljoin(current, exc.headers["Location"])
@@ -660,16 +687,16 @@ def _download_file_bytes(
     extra_headers: dict[str, str] | None = None,
     timeout: int = 60,
     http_retries: int | None = None,
-) -> tuple[bytes, str]:
+) -> tuple[bytes, str, str | None]:
     del _revisao
     url_original = url.strip()
     max_attempts = MAX_HTTP_RETRIES if http_retries is None else http_retries
     for attempt in range(max_attempts + 1):
         try:
-            payload, filename, _ = _http_get_file_follow_redirects(
+            payload, filename, _final_url, last_modified = _http_get_file_follow_redirects(
                 url_original, timeout=timeout, extra_headers=extra_headers
             )
-            return payload, filename
+            return payload, filename, last_modified
         except HTTPError as exc:
             if exc.code in RETRYABLE_HTTP_CODES and attempt < max_attempts:
                 retry_after = str(exc.headers.get("Retry-After", "")).strip()
@@ -799,20 +826,24 @@ def _dataframe_from_precomputed_bytes(payload: bytes, filename: str) -> pd.DataF
 
 
 def _finalize_precomputed_df(
-    tabela: pd.DataFrame, origem_arquivo: str, base_label: str
+    tabela: pd.DataFrame,
+    origem_arquivo: str,
+    base_label: str,
+    *,
+    ts: str | None = None,
 ) -> tuple[pd.DataFrame, dict[str, object], str]:
     _validate_onedrive_csv_schema(tabela)
     if "empresa" not in tabela.columns:
         tabela = tabela.copy()
         tabela["empresa"] = DATASET_EMPRESA
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts_out = ts if ts is not None else _now_ts_br_str()
     info: dict[str, object] = {
         "base_dir": base_label,
         "linhas": int(len(tabela)),
         "origem": "precomputed",
         "arquivo": origem_arquivo,
     }
-    return tabela, info, ts
+    return tabela, info, ts_out
 
 
 @st.cache_data(show_spinner=False, ttl=180)
@@ -822,14 +853,15 @@ def _load_precomputed_from_remote(url: str, _revisao: int = OPERACIONAL_CACHE_RE
     errs: list[str] = []
     for dl_url, hdr in _precomputed_download_attempts(url.strip()):
         try:
-            payload, filename = _download_file_bytes(
+            payload, filename, last_modified = _download_file_bytes(
                 dl_url,
                 extra_headers=hdr or None,
                 timeout=PRECOMPUTED_HTTP_TIMEOUT,
                 http_retries=1,
             )
             tabela = _dataframe_from_precomputed_bytes(payload, filename)
-            return _finalize_precomputed_df(tabela, filename, "precomputed_url")
+            ts = _ts_br_from_http_last_modified(last_modified) or _now_ts_br_str()
+            return _finalize_precomputed_df(tabela, filename, "precomputed_url", ts=ts)
         except Exception as exc:  # noqa: BLE001 — agregamos para mensagem única
             hint = dl_url if len(dl_url) < 120 else dl_url[:117] + "..."
             errs.append(f"{hint} → {exc}")
@@ -856,7 +888,9 @@ def _load_precomputed_from_disk(
         if path.suffix.lower() == ".csv"
         else pd.read_excel(path, engine="openpyxl")
     )
-    return _finalize_precomputed_df(tabela, path.name, str(path.parent))
+    return _finalize_precomputed_df(
+        tabela, path.name, str(path.parent), ts=_ts_br_from_mtime_ns(_mtime_ns)
+    )
 
 
 def load_precomputed_conciliacao() -> tuple[pd.DataFrame, dict[str, object], str]:
@@ -903,7 +937,7 @@ def load_data_from_onedrive() -> tuple[pd.DataFrame, dict[str, object], str]:
         return carregar_tabela_final_operacional_cache()
 
     download_url = _build_onedrive_download_url(public_url)
-    payload, filename = _download_file_bytes(download_url)
+    payload, filename, last_modified = _download_file_bytes(download_url)
     lower_name = filename.lower()
 
     if lower_name.endswith(".zip") or zipfile.is_zipfile(BytesIO(payload)):
@@ -916,7 +950,7 @@ def load_data_from_onedrive() -> tuple[pd.DataFrame, dict[str, object], str]:
         if "empresa" not in tabela.columns:
             tabela = tabela.copy()
             tabela["empresa"] = DATASET_EMPRESA
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ts = _ts_br_from_http_last_modified(last_modified) or _now_ts_br_str()
         info = {
             "base_dir": "onedrive",
             "linhas": int(len(tabela)),
@@ -1020,12 +1054,30 @@ st.markdown(
       .kpi-card {
         border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.85rem 0.95rem;
         background: #fff; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-        min-height: 5.1rem; transition: box-shadow 0.15s ease;
+        min-height: 6.85rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        gap: 0.35rem;
+        box-sizing: border-box;
+        transition: box-shadow 0.15s ease;
       }
       .kpi-card:hover { box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08); }
-      .kpi-icon { font-size: 1.15rem; margin-right: 0.35rem; opacity: 0.95; }
-      .kpi-label { font-size: 0.72rem; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; }
-      .kpi-value { font-size: 1.28rem; font-weight: 700; margin-top: 0.35rem; color: #0f172a; letter-spacing: -0.02em; }
+      .kpi-icon { font-size: 1.15rem; margin-right: 0.35rem; opacity: 0.95; flex-shrink: 0; }
+      .kpi-label {
+        font-size: 0.72rem; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.04em;
+        line-height: 1.28;
+        min-height: 3em;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        align-content: flex-start;
+        gap: 0 0.25rem;
+      }
+      .kpi-value {
+        font-size: 1.28rem; font-weight: 700; margin-top: auto; color: #0f172a;
+        letter-spacing: -0.02em;
+      }
       .kpi-total { border-left: 4px solid #0284c7; background: linear-gradient(90deg, #f0f9ff 0%, #fff 55%); }
       .kpi-ok { border-left: 4px solid #16a34a; background: linear-gradient(90deg, #f0fdf4 0%, #fff 55%); }
       .kpi-acao { border-left: 4px solid #0891b2; background: linear-gradient(90deg, #ecfeff 0%, #fff 55%); }
@@ -1255,17 +1307,30 @@ def carregar_tabela_final_operacional_cache(
     _revisao: int = OPERACIONAL_CACHE_REVISION,
 ) -> tuple[pd.DataFrame, dict[str, object], str]:
     del _revisao  # só participa da chave de cache do Streamlit
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts = _now_ts_br_str()
     tabela, info = carregar_tabela_final_operacional(BASE_DIR)
     return tabela, info, ts
 
 
-def _column_config_conciliacao(df: pd.DataFrame) -> dict[str, NumberColumn]:
+def _excluir_taxa_ml_r362(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove liberações de taxa R$ 3,62 sem nota (ruído ML — não entram na conciliação de produto)."""
+    if df.empty or "Total BRL" not in df.columns:
+        return df
+    tb = pd.to_numeric(df["Total BRL"], errors="coerce")
+    m_r362 = tb.sub(3.62).abs() < 0.005
+    return df.loc[~m_r362].copy()
+
+
+def _column_config_conciliacao(df: pd.DataFrame) -> dict[str, NumberColumn | DatetimeColumn]:
     """Formatação nativa Streamlit (pandas Styler foi removido — rebentava o browser com muitas linhas)."""
-    cfg: dict[str, NumberColumn] = {}
+    cfg: dict[str, NumberColumn | DatetimeColumn] = {}
     for c in ("Valor da nota", "Valor a receber", "Valor pago", "Diferença"):
         if c in df.columns:
             cfg[c] = NumberColumn(c, format="R$ %.2f")
+    if "Data de emissão" in df.columns:
+        cfg["Data de emissão"] = DatetimeColumn("Data de emissão", format="DD/MM/YYYY", width="small")
+    if "Data de pagamento" in df.columns:
+        cfg["Data de pagamento"] = DatetimeColumn("Data de pagamento", format="DD/MM/YYYY HH:mm", width="medium")
     return cfg
 
 
@@ -1362,7 +1427,7 @@ def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
 
 
 @st.fragment
-def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str, info: dict[str, object]) -> None:
+def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     """Filtros + KPIs + tabela — rerun isolado (evita ecrã branco ao mexer nos multiselect na Cloud)."""
     with st.container():
         st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
@@ -1373,7 +1438,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str, info: dict[st
             _d_min: date = dp_series_full.min().date()
             _d_max: date = dp_series_full.max().date()
         else:
-            _d_min = _d_max = datetime.now().date()
+            _d_min = _d_max = datetime.now(_BR_TZ).date()
         plats = (
             sorted([x for x in base["Plataforma"].dropna().unique().tolist() if str(x).strip()])
             if "Plataforma" in base.columns
@@ -1442,6 +1507,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str, info: dict[st
     _fim_ts = pd.Timestamp(data_pag_fim) + pd.Timedelta(days=1)
     m_data = _dp_filt.notna() & (_dd >= _ini_ts) & (_dd < _fim_ts)
     tabela = tabela.loc[m_data].copy()
+    tabela = _excluir_taxa_ml_r362(tabela)
     
     if "Plataforma" in base.columns:
         n_plat = len(plats)
@@ -1531,23 +1597,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str, info: dict[st
         unsafe_allow_html=True,
     )
     
-    # Bloco C - Contexto filtrado
-    st.markdown('<div class="section-title">Contexto filtrado</div>', unsafe_allow_html=True)
-    data_pag = pd.to_datetime(tabela.get("Data de pagamento"), errors="coerce")
-    periodo_filtro = (
-        f"{data_pag_ini.strftime('%d/%m/%Y')} a {data_pag_fim.strftime('%d/%m/%Y')} (filtro data pagamento)"
-    )
-    if data_pag.notna().any():
-        periodo = f"{periodo_filtro} · registros entre {data_pag.min().date()} e {data_pag.max().date()}"
-    else:
-        periodo = f"{periodo_filtro} · sem registros neste recorte"
-    c1, c2, c3, c4 = st.columns(4)
-    c1.caption(f"Linhas filtradas: **{len(tabela)}**")
-    c2.caption(f"Plataforma: **{plataforma_label}**")
-    c3.caption(f"Período: **{periodo}**")
-    c4.caption(f"Última atualização: **{ts_proc}**")
-    
-    st.caption(f"Linhas carregadas: {info.get('linhas',0)}")
+    st.caption(f"Última visualização: **{ts_proc}**")
     
     # Tabela operacional — Data de emissão: mesma coluna da tabela final, parse ISO (sem dayfirst).
     col_data_emissao = _resolve_col_data_emissao(list(tabela.columns))
@@ -1875,5 +1925,5 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-_painel_conciliacao_fragment(tabela_operacional_base, ts_proc, info)
+_painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
 

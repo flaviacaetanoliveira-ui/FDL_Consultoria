@@ -1562,6 +1562,19 @@ def _painel_frete_emergencial(org_id: str) -> None:
             _elapsed = time.perf_counter() - _t0
             st.caption(f"[frete-debug { _elapsed:6.2f}s] {msg}")
 
+    def _is_valid_frete_cache(payload: object) -> bool:
+        if not isinstance(payload, dict):
+            return False
+        if "df_frete" not in payload or "meta_frete" not in payload or "source_signature" not in payload:
+            return False
+        df_obj = payload.get("df_frete")
+        if not isinstance(df_obj, pd.DataFrame):
+            return False
+        meta_obj = payload.get("meta_frete")
+        if not isinstance(meta_obj, dict):
+            return False
+        return True
+
     def _frete_source_signature(_org_id: str, fontes_obj: object) -> str:
         vendas_origin = (getattr(fontes_obj, "vendas_url", "") or "").strip() or (
             str(getattr(fontes_obj, "vendas_path").resolve())
@@ -1598,14 +1611,17 @@ def _painel_frete_emergencial(org_id: str) -> None:
         )
 
     _log_step("inicio _painel_frete_emergencial")
-    _log_step("antes descobrir_fontes_frete()")
+    # Render mínimo imediato para evitar tela totalmente branca em caso de exceção precoce.
+    if _is_admin:
+        st.caption("[frete-debug] render_bootstrap_ok")
     try:
+        _log_step("antes descobrir_fontes_frete()")
         fontes = descobrir_fontes_frete()
+        _log_step("depois descobrir_fontes_frete()")
     except Exception as exc:
-        st.error("Erro ao localizar ficheiros de frete.")
+        st.error("Erro no carregamento do frete")
         st.exception(exc)
         return
-    _log_step("depois descobrir_fontes_frete()")
 
     vendas_ref = (fontes.vendas_url or "").strip() or (
         str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
@@ -1644,19 +1660,32 @@ def _painel_frete_emergencial(org_id: str) -> None:
     _frete_ss_key = f"_frete_cache_{org_id}"
     _sig = _frete_source_signature(org_id, fontes)
     _cached = st.session_state.get(_frete_ss_key)
+    _log_step(f"cache_key={_frete_ss_key}")
 
-    if isinstance(_cached, dict) and str(_cached.get("source_signature", "")) == _sig:
-        df_frete = _cached.get("df_frete", pd.DataFrame())
-        meta_frete = _cached.get("meta_frete", {})
-        _log_step(
-            "cache_hit frete_session "
-            f"linhas={len(df_frete) if isinstance(df_frete, pd.DataFrame) else 0} "
-            f"loaded_at={_cached.get('loaded_at', '-')}"
-        )
-        if _is_admin:
-            for _line in (_cached.get("debug_logs") or []):
-                st.caption(f"[frete-debug] {_line}")
-    else:
+    # Cache inválido/corrompido -> invalida e recarrega com segurança.
+    if _cached is not None and not _is_valid_frete_cache(_cached):
+        _log_step("cache_invalido_detectado -> reset")
+        st.session_state.pop(_frete_ss_key, None)
+        _cached = None
+
+    if _is_valid_frete_cache(_cached) and str(_cached.get("source_signature", "")) == _sig:
+        try:
+            df_frete = _cached.get("df_frete", pd.DataFrame())
+            meta_frete = _cached.get("meta_frete", {})
+            _log_step(
+                "cache_hit frete_session "
+                f"linhas={len(df_frete)} loaded_at={_cached.get('loaded_at', '-')}"
+            )
+            if _is_admin:
+                for _line in (_cached.get("debug_logs") or []):
+                    st.caption(f"[frete-debug] {_line}")
+        except Exception as exc:
+            _log_step(f"cache_hit_falhou -> recarga_forcada erro={exc}")
+            st.session_state.pop(_frete_ss_key, None)
+            _cached = None
+            df_frete = pd.DataFrame()
+            meta_frete = {}
+    if not (_is_valid_frete_cache(_cached) and str(_cached.get("source_signature", "")) == _sig):
         _log_step("cache_miss frete_session")
         _log_step("antes carregar_base_frete_ml()")
         try:
@@ -1692,7 +1721,7 @@ def _painel_frete_emergencial(org_id: str) -> None:
             st.code(str(exc), language="text")
             return
         except Exception as exc:
-            st.error("Falha ao carregar base de Frete (rede, formato ou timeout).")
+            st.error("Erro no carregamento do frete")
             st.exception(exc)
             return
 
@@ -1710,7 +1739,12 @@ def _painel_frete_emergencial(org_id: str) -> None:
             for _line in _debug_logs:
                 st.caption(f"[frete-debug] {_line}")
 
-    st.caption(f"Ficheiro vendas: {meta_frete.get('vendas_arquivo')} | Linhas: {len(df_frete)}")
+    try:
+        st.caption(f"Ficheiro vendas: {meta_frete.get('vendas_arquivo')} | Linhas: {len(df_frete)}")
+    except Exception as exc:
+        st.error("Erro no carregamento do frete")
+        st.exception(exc)
+        return
     for w in meta_frete.get("avisos") or []:
         st.info(w)
 

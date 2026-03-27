@@ -11,7 +11,18 @@ import streamlit as st
 from streamlit.column_config import TextColumn
 
 from fdl_paths import CLIENTE_BASE_DIR
-from operacional_frete import carregar_base_frete_ml, descobrir_fontes_frete
+from operacional_frete import (
+    FRETE_UI_ANUNCIO,
+    FRETE_UI_DIFERENCA,
+    FRETE_UI_FRETE_ESPERADO,
+    FRETE_UI_N_VENDA,
+    FRETE_UI_QTD_PRECO_ML,
+    FRETE_UI_STATUS_CONC,
+    FRETE_UI_TITULO_ANUNCIO,
+    FRETE_UI_VAL_DIVERGENCIA,
+    carregar_base_frete_ml,
+    descobrir_fontes_frete,
+)
 
 
 def _dataframe_frete_grid(
@@ -26,16 +37,16 @@ def _dataframe_frete_grid(
         "Receita por envio (BRL)",
         "Tarifas de envio (BRL)",
         "Frete ML (receita+tarifa)",
-        "Frete esperado (qtd Ã— preÃ§o arquivo)",
-        "DiferenÃ§a",
-        "Qtd Ã— preÃ§o unit. produto (ML)",
+        FRETE_UI_FRETE_ESPERADO,
+        FRETE_UI_DIFERENCA,
+        FRETE_UI_QTD_PRECO_ML,
     ):
         if c in g.columns:
             g[c] = g[c].map(fmt_brl).astype(object)
-    if "N.Âº venda" in g.columns:
-        g["N.Âº venda"] = col_ref(g["N.Âº venda"])
-    if "# de anÃºncio" in g.columns:
-        g["# de anÃºncio"] = col_ref(g["# de anÃºncio"])
+    if FRETE_UI_N_VENDA in g.columns:
+        g[FRETE_UI_N_VENDA] = col_ref(g[FRETE_UI_N_VENDA])
+    if FRETE_UI_ANUNCIO in g.columns:
+        g[FRETE_UI_ANUNCIO] = col_ref(g[FRETE_UI_ANUNCIO])
     return g
 
 
@@ -43,11 +54,11 @@ def _column_config_frete(df: pd.DataFrame) -> dict[str, TextColumn]:
     cfg: dict[str, TextColumn] = {}
     for c in df.columns:
         cl = str(c).lower()
-        if c in ("N.Âº venda", "# de anÃºncio"):
+        if c in (FRETE_UI_N_VENDA, FRETE_UI_ANUNCIO):
             cfg[c] = TextColumn(str(c), width="medium")
-        elif c in ("Estado", "Status conciliaÃ§Ã£o"):
+        elif c in ("Estado", FRETE_UI_STATUS_CONC):
             cfg[c] = TextColumn(str(c), width="small")
-        elif "descri" in cl or "titulo" in cl or "tÃ­tulo" in cl:
+        elif "descri" in cl or "titulo" in cl or "título" in cl:
             cfg[c] = TextColumn(str(c), width="large")
     return cfg
 
@@ -95,6 +106,36 @@ def painel_frete_fragment(
     for w in meta.get("avisos") or []:
         st.info(w)
 
+    try:
+        _painel_frete_conteudo(
+            org_id=org_id,
+            br_tz=br_tz,
+            multiselect_stable=multiselect_stable,
+            render_kpi_card=render_kpi_card,
+            fmt_brl_ptbr_celula=fmt_brl_ptbr_celula,
+            col_referencia_como_texto=col_referencia_como_texto,
+            base_df=base_df,
+            meta=meta,
+            vpath=vpath,
+        )
+    except Exception as exc:
+        st.error("Erro ao montar o painel de Frete. Detalhe abaixo.")
+        st.exception(exc)
+
+
+def _painel_frete_conteudo(
+    *,
+    org_id: str,
+    br_tz: object,
+    multiselect_stable: Callable[[str, str, list[str]], list[str]],
+    render_kpi_card: Callable[[str, str, str, str], None],
+    fmt_brl_ptbr_celula: Callable[[object], str],
+    col_referencia_como_texto: Callable[[pd.Series], pd.Series],
+    base_df: pd.DataFrame,
+    meta: dict[str, object],
+    vpath: Path,
+) -> None:
+    del org_id
     work = base_df.copy()
     if "_data_venda_dt" in work.columns:
         dts = work["_data_venda_dt"].dropna()
@@ -112,7 +153,7 @@ def painel_frete_fragment(
             {str(x).strip() for x in work["Estado"].dropna().unique().tolist() if str(x).strip()}
         )
 
-    st.markdown('<p class="filtros-panel-title">Filtros â€” Frete ML</p>', unsafe_allow_html=True)
+    st.markdown('<p class="filtros-panel-title">Filtros — Frete ML</p>', unsafe_allow_html=True)
     r1 = st.columns((1.2, 1.2, 1.6))
     with r1[0]:
         sel_est = multiselect_stable("frete_ms_estado", "Estado da venda", estados)
@@ -120,7 +161,7 @@ def painel_frete_fragment(
         t_busca = st.text_input("Busca (venda ou # anuncio)", "", key="frete_busca").strip().lower()
     with r1[2]:
         data_ini = st.date_input(
-            "Data da venda â€” inicio",
+            "Data da venda — início",
             value=d_min,
             min_value=d_min,
             max_value=d_max,
@@ -130,7 +171,7 @@ def painel_frete_fragment(
     r2 = st.columns((1.2, 2.8))
     with r2[0]:
         data_fim = st.date_input(
-            "Data da venda â€” fim",
+            "Data da venda — fim",
             value=d_max,
             min_value=d_min,
             max_value=d_max,
@@ -153,12 +194,12 @@ def painel_frete_fragment(
         tbl = tbl[tbl["Estado"].isin(sel_est)]
     if t_busca:
         m = (
-            tbl["N.Âº venda"].fillna("").astype(str).str.lower().str.contains(t_busca, regex=False)
-            if "N.Âº venda" in tbl.columns
+            tbl[FRETE_UI_N_VENDA].fillna("").astype(str).str.lower().str.contains(t_busca, regex=False)
+            if FRETE_UI_N_VENDA in tbl.columns
             else pd.Series(False, index=tbl.index)
         )
-        if "# de anÃºncio" in tbl.columns:
-            m = m | tbl["# de anÃºncio"].fillna("").astype(str).str.lower().str.contains(
+        if FRETE_UI_ANUNCIO in tbl.columns:
+            m = m | tbl[FRETE_UI_ANUNCIO].fillna("").astype(str).str.lower().str.contains(
                 t_busca, regex=False
             )
         tbl = tbl.loc[m]
@@ -173,7 +214,7 @@ def painel_frete_fragment(
 
     ts_v = datetime.fromtimestamp(vpath.stat().st_mtime, tz=br_tz).strftime("%d/%m/%Y %H:%M")
     st.caption(
-        f"**Ficheiro vendas:** {meta.get('vendas_arquivo')} Â· _{ts_v}_ Â· **Linhas:** {len(tbl_show)}"
+        f"**Ficheiro vendas:** {meta.get('vendas_arquivo')} · _{ts_v}_ · **Linhas:** {len(tbl_show)}"
     )
 
     fm = pd.to_numeric(tbl_show.get("Frete ML (receita+tarifa)"), errors="coerce")
@@ -192,21 +233,21 @@ def painel_frete_fragment(
     with k4:
         render_kpi_card("Soma Frete ML", f"R$ {soma_frete:,.2f}", "â—†", "kpi-acao")
 
-    if meta.get("frete_tabular") and "Status conciliaÃ§Ã£o" in tbl_show.columns:
-        div = tbl_show[tbl_show["Status conciliaÃ§Ã£o"].eq("DivergÃªncia")]
+    if meta.get("frete_tabular") and FRETE_UI_STATUS_CONC in tbl_show.columns:
+        div = tbl_show[tbl_show[FRETE_UI_STATUS_CONC].eq(FRETE_UI_VAL_DIVERGENCIA)]
         n_div = len(div)
         soma_abs = (
-            float(pd.to_numeric(div["DiferenÃ§a"], errors="coerce").abs().sum())
-            if n_div and "DiferenÃ§a" in div.columns
+            float(pd.to_numeric(div[FRETE_UI_DIFERENCA], errors="coerce").abs().sum())
+            if n_div and FRETE_UI_DIFERENCA in div.columns
             else 0.0
         )
         st.markdown('<div class="section-title">Maior divergencia por anuncio</div>', unsafe_allow_html=True)
-        if n_div and "# de anÃºncio" in div.columns and "DiferenÃ§a" in div.columns:
+        if n_div and FRETE_UI_ANUNCIO in div.columns and FRETE_UI_DIFERENCA in div.columns:
             dnum = div.copy()
-            dnum["_ab"] = pd.to_numeric(dnum["DiferenÃ§a"], errors="coerce").abs()
+            dnum["_ab"] = pd.to_numeric(dnum[FRETE_UI_DIFERENCA], errors="coerce").abs()
             grp = (
-                dnum.groupby("# de anÃºncio", dropna=False)
-                .agg(vendas=("N.Âº venda", "count"), impacto_r=("_ab", "sum"))
+                dnum.groupby(FRETE_UI_ANUNCIO, dropna=False)
+                .agg(vendas=(FRETE_UI_N_VENDA, "count"), impacto_r=("_ab", "sum"))
                 .sort_values("impacto_r", ascending=False)
             )
             if grp.empty:
@@ -216,9 +257,9 @@ def painel_frete_fragment(
                 top_imp = float(grp.iloc[0]["impacto_r"])
                 top_nv = int(grp.iloc[0]["vendas"])
                 tit = ""
-                if "TÃ­tulo do anÃºncio" in tbl_show.columns:
+                if FRETE_UI_TITULO_ANUNCIO in tbl_show.columns:
                     sub = tbl_show.loc[
-                        tbl_show["# de anÃºncio"].astype(str).eq(top_id), "TÃ­tulo do anÃºncio"
+                        tbl_show[FRETE_UI_ANUNCIO].astype(str).eq(top_id), FRETE_UI_TITULO_ANUNCIO
                     ]
                     if len(sub):
                         tit = html_lib.escape(str(sub.iloc[0])[:120])
@@ -249,7 +290,10 @@ def painel_frete_fragment(
                 )
                 chart_df = chart_df.set_index("Anuncio")
                 st.markdown('<div class="section-title">Top anuncios</div>', unsafe_allow_html=True)
-                st.bar_chart(chart_df)
+                try:
+                    st.bar_chart(chart_df)
+                except Exception:
+                    st.dataframe(chart_df.reset_index(), use_container_width=True, hide_index=True)
         elif n_div == 0:
             st.success("Sem divergencias acima da tolerancia.")
     elif not meta.get("frete_tabular"):

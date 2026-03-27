@@ -16,6 +16,16 @@ import streamlit as st
 from etapa1_vendas import list_sales_files, read_sales_file
 from fdl_paths import CLIENTE_BASE_DIR
 
+# Colunas e valores na UI (UTF-8). operacional_frete_ui deve importar estes nomes — evita mojibake no .py.
+FRETE_UI_N_VENDA = "N.º venda"
+FRETE_UI_ANUNCIO = "# de anúncio"
+FRETE_UI_STATUS_CONC = "Status conciliação"
+FRETE_UI_DIFERENCA = "Diferença"
+FRETE_UI_VAL_DIVERGENCIA = "Divergência"
+FRETE_UI_TITULO_ANUNCIO = "Título do anúncio"
+FRETE_UI_FRETE_ESPERADO = "Frete esperado (qtd × preço arquivo)"
+FRETE_UI_QTD_PRECO_ML = "Qtd × preço unit. produto (ML)"
+
 
 def _strip_ascii_lower(s: str) -> str:
     s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
@@ -266,7 +276,7 @@ def carregar_base_frete_ml(
             tol = 0.02
             st_ok = np.where(
                 m["frete_esperado"].notna() & m["frete_ml"].notna(),
-                np.where(m["diferenca"].abs() <= tol, "OK", "Divergência"),
+                np.where(m["diferenca"].abs() <= tol, "OK", FRETE_UI_VAL_DIVERGENCIA),
                 np.where(both_na2, "Sem dados envio no ML", "Sem preço arquivo"),
             )
             m["status_conc"] = st_ok
@@ -276,20 +286,21 @@ def carregar_base_frete_ml(
     if drop_h:
         v = v.drop(columns=drop_h)
 
+    # Nomes finais expostos à UI — manter UTF-8; importar FRETE_UI_* em operacional_frete_ui.
     rename_final = {
-        "n_venda": "N.º venda",
+        "n_venda": FRETE_UI_N_VENDA,
         "estado": "Estado",
         "descricao_status": "Descrição do status",
         "unidades": "Unidades",
         "receita_envio": "Receita por envio (BRL)",
         "tarifas_envio": "Tarifas de envio (BRL)",
         "frete_ml": "Frete ML (receita+tarifa)",
-        "frete_esperado": "Frete esperado (qtd × preço arquivo)",
-        "diferenca": "Diferença",
-        "status_conc": "Status conciliação",
-        "id_anuncio": "# de anúncio",
-        "titulo_anuncio": "Título do anúncio",
-        "qtd_x_preco_produto_ml": "Qtd × preço unit. produto (ML)",
+        "frete_esperado": FRETE_UI_FRETE_ESPERADO,
+        "diferenca": FRETE_UI_DIFERENCA,
+        "status_conc": FRETE_UI_STATUS_CONC,
+        "id_anuncio": FRETE_UI_ANUNCIO,
+        "titulo_anuncio": FRETE_UI_TITULO_ANUNCIO,
+        "qtd_x_preco_produto_ml": FRETE_UI_QTD_PRECO_ML,
     }
     v = v.rename(columns={a: b for a, b in rename_final.items() if a in v.columns})
     meta["linhas"] = int(len(v))

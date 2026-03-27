@@ -37,13 +37,18 @@ from operacional_app_context import (
     require_app_user,
 )
 from operacional_data_config import DATASET_EMPRESA
+from operacional_frete import descobrir_fontes_frete
+from operacional_frete_ui import painel_frete_fragment
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
 
-st.set_page_config(page_title="Conciliação de Repasse", layout="wide")
+st.set_page_config(page_title="FDL Analytics — Financeiro", layout="wide")
 
 _app_ctx = require_app_user()
 _active_org = get_active_organization(_app_ctx)
+
+if "op_financeiro_view" not in st.session_state:
+    st.session_state["op_financeiro_view"] = "repasse"
 
 # Alinhado a PIPELINE_DATA_REVISION (liberações / Valor pago). Subir junto quando mudar o fluxo.
 OPERACIONAL_CACHE_REVISION = PIPELINE_DATA_REVISION
@@ -1086,6 +1091,20 @@ st.markdown(
       .kpi-div { border-left: 4px solid #ea580c; background: linear-gradient(90deg, #fff7ed 0%, #fff 55%); }
       .kpi-pend { border-left: 4px solid #7c3aed; background: linear-gradient(90deg, #f5f3ff 0%, #fff 55%); }
 
+      .fdl-frete-spotlight {
+        border-radius: 14px;
+        border: 1px solid #fde68a;
+        background: linear-gradient(118deg, #fffbeb 0%, #fef3c7 35%, #ffffff 92%);
+        padding: 1.05rem 1.2rem;
+        margin: 0 0 1.1rem 0;
+        box-shadow: 0 6px 22px rgba(180, 83, 9, 0.1);
+      }
+      .fdl-frete-spotlight .fdl-fs-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #b45309; margin: 0 0 0.35rem 0; }
+      .fdl-frete-spotlight .fdl-fs-an { font-size: 1.05rem; font-weight: 800; color: #0f172a; letter-spacing: -0.02em; margin: 0; word-break: break-all; }
+      .fdl-frete-spotlight .fdl-fs-metrics { font-size: 0.88rem; color: #57534e; margin-top: 0.55rem; line-height: 1.55; }
+      .fdl-frete-spotlight .fdl-fs-metrics strong { color: #0f172a; }
+      .fdl-frete-hint { font-size: 0.8rem; color: #64748b; margin: -0.35rem 0 0.9rem 0; line-height: 1.45; }
+
       .queue-head { margin-top: 0.25rem; margin-bottom: 0.65rem; }
       .queue-title { font-size: 1.05rem; font-weight: 700; color: #0f172a; }
       .queue-sub { font-size: 0.86rem; color: #64748b; margin-top: 0.2rem; }
@@ -1914,43 +1933,54 @@ _admin_mode = _is_admin_mode()
 if _admin_mode and _data_source_mode() == "upload_zip":
     _render_cloud_data_loader()
 
-try:
-    with st.spinner("A carregar dados (a ir buscar o ficheiro à nuvem, se aplicável)…"):
-        tabela_geral, info, ts_proc = _load_data()
-except Exception as exc:
-    err_text = str(exc).strip() or exc.__class__.__name__
-    if _expose_load_errors():
-        st.error("Erro ao carregar os dados. Ajuste Secrets/URL ou use o detalhe abaixo.")
-        st.exception(exc)
-    elif _admin_mode:
-        st.warning("Dados indisponíveis no momento.")
-        st.caption(f"Detalhe técnico: {exc}")
+_fin_early = st.session_state.get("op_financeiro_view", "repasse")
+if _fin_early == "frete":
+    # Evita carregar precomputed/ZIP da conciliação de repasse — só vendas ML em FDL_BASE_DIR.
+    _vpath, _ = descobrir_fontes_frete()
+    if _vpath:
+        ts_proc = _ts_br_from_mtime_ns(int(_vpath.stat().st_mtime_ns))
     else:
-        st.warning("Dados indisponíveis no momento. Tente novamente em instantes.")
-        with st.expander("Detalhes para suporte", expanded=False):
-            st.code(err_text, language="text")
-    od_url = _onedrive_public_url()
-    if (
-        _data_source_mode() in {"onedrive", "filesystem"}
-        and od_url
-        and ":f:/" in od_url.lower()
-    ):
-        st.info(
-            "A configuração atual usa **link de pasta** do SharePoint (`:f:/`), que depende de "
-            "acesso à API Microsoft e costuma falhar na Streamlit Cloud. "
-            "Use **FDL_DATA_SOURCE = \"precomputed\"** com `FDL_PRECOMPUTED_URL` (link direto ao "
-            "`.csv` ou `.xlsx`) ou `FDL_PRECOMPUTED_PATH` no servidor."
-        )
-    st.stop()
+        ts_proc = _now_ts_br_str()
+    tabela_geral = pd.DataFrame()
+    info = {"origem": "frete_ml_lazy", "linhas": 0}
+else:
+    try:
+        with st.spinner("A carregar dados (a ir buscar o ficheiro à nuvem, se aplicável)…"):
+            tabela_geral, info, ts_proc = _load_data()
+    except Exception as exc:
+        err_text = str(exc).strip() or exc.__class__.__name__
+        if _expose_load_errors():
+            st.error("Erro ao carregar os dados. Ajuste Secrets/URL ou use o detalhe abaixo.")
+            st.exception(exc)
+        elif _admin_mode:
+            st.warning("Dados indisponíveis no momento.")
+            st.caption(f"Detalhe técnico: {exc}")
+        else:
+            st.warning("Dados indisponíveis no momento. Tente novamente em instantes.")
+            with st.expander("Detalhes para suporte", expanded=False):
+                st.code(err_text, language="text")
+        od_url = _onedrive_public_url()
+        if (
+            _data_source_mode() in {"onedrive", "filesystem"}
+            and od_url
+            and ":f:/" in od_url.lower()
+        ):
+            st.info(
+                "A configuração atual usa **link de pasta** do SharePoint (`:f:/`), que depende de "
+                "acesso à API Microsoft e costuma falhar na Streamlit Cloud. "
+                "Use **FDL_DATA_SOURCE = \"precomputed\"** com `FDL_PRECOMPUTED_URL` (link direto ao "
+                "`.csv` ou `.xlsx`) ou `FDL_PRECOMPUTED_PATH` no servidor."
+            )
+        st.stop()
 
-# Cache antigo do Streamlit ou pickle sem a coluna — alinhar ao pipeline atual.
-if "empresa" not in tabela_geral.columns:
-    tabela_geral = tabela_geral.copy()
-    tabela_geral["empresa"] = DATASET_EMPRESA
+    # Cache antigo do Streamlit ou pickle sem a coluna — alinhar ao pipeline atual.
+    if "empresa" not in tabela_geral.columns:
+        tabela_geral = tabela_geral.copy()
+        tabela_geral["empresa"] = DATASET_EMPRESA
 
-empresas = st.session_state["empresas_permitidas"]
-tabela_geral = tabela_geral[tabela_geral["empresa"].isin(empresas)].copy()
-info = {**info, "linhas": int(len(tabela_geral))}
+    empresas = st.session_state["empresas_permitidas"]
+    tabela_geral = tabela_geral[tabela_geral["empresa"].isin(empresas)].copy()
+    info = {**info, "linhas": int(len(tabela_geral))}
 
 try:
     _sb_ts_display = datetime.strptime(ts_proc, "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M")
@@ -1997,22 +2027,17 @@ with st.sidebar:
 
     with st.expander(f"🏢 {_active_org.display_name}", expanded=True):
         with st.expander("💰 Financeiro", expanded=True):
-            st.markdown(
-                """
-                <nav class="sb-nav-tree" aria-label="Páginas do módulo Financeiro">
-                  <div class="sb-nav-item sb-nav-item-active" aria-current="page">
-                    <span class="sb-active-accent" aria-hidden="true"></span>
-                    <span class="sb-ico" aria-hidden="true">📊</span>
-                    <span class="sb-nav-label">Conciliação de Repasse</span>
-                  </div>
-                  <div class="sb-nav-item sb-nav-item-placeholder" aria-disabled="true">
-                    <span class="sb-ico" aria-hidden="true">🚚</span>
-                    <span class="sb-nav-label">Conciliação de Frete <span class="sb-soon">em breve</span></span>
-                  </div>
-                </nav>
-                """,
-                unsafe_allow_html=True,
+            st.markdown('<p class="sb-nav-section-label" style="margin-top:0.15rem;">Visualização</p>', unsafe_allow_html=True)
+            st.radio(
+                "Painel financeiro",
+                options=["repasse", "frete"],
+                format_func=lambda x: "📊 Conciliação de Repasse"
+                if x == "repasse"
+                else "🚚 Conciliação de Frete",
+                key="op_financeiro_view",
+                label_visibility="collapsed",
             )
+            st.caption("Um painel ativo de cada vez — melhor desempenho.")
 
     st.markdown('<hr class="sb-divider-soft" />', unsafe_allow_html=True)
     if st.button("Sair", use_container_width=True, help="Encerra a sessão neste navegador."):
@@ -2040,43 +2065,38 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-map_acao = {
-    "Ok": "Ok",
-    "Baixar no Bling": "Baixar no Bling",
-    "Analisar manualmente": "Analisar diferença",
-    "Verificar título no Bling": "Verificar recebimento",
-    "Revisar venda zerada": "Revisar venda zerada",
-    "Verificar faturamento": "Verificar faturamento",
-}
-tabela_geral["Ação sugerida operacional"] = (
-    tabela_geral["Ação sugerida"].map(map_acao).fillna(tabela_geral["Ação sugerida"])
-)
-tabela = tabela_geral.copy()
+if _fin_early == "repasse":
+    map_acao = {
+        "Ok": "Ok",
+        "Baixar no Bling": "Baixar no Bling",
+        "Analisar manualmente": "Analisar diferença",
+        "Verificar título no Bling": "Verificar recebimento",
+        "Revisar venda zerada": "Revisar venda zerada",
+        "Verificar faturamento": "Verificar faturamento",
+    }
+    tabela_geral["Ação sugerida operacional"] = (
+        tabela_geral["Ação sugerida"].map(map_acao).fillna(tabela_geral["Ação sugerida"])
+    )
+    tabela = tabela_geral.copy()
 
-# Base operacional exclusiva de extrato (liberações/pagamentos):
-# somente linhas com Valor pago > 0.
-tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
-tabela = tabela[tabela["Valor pago"].fillna(0).gt(0)].copy()
+    # Base operacional exclusiva de extrato (liberações/pagamentos):
+    # somente linhas com Valor pago > 0.
+    tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
+    tabela = tabela[tabela["Valor pago"].fillna(0).gt(0)].copy()
 
-# Exibição operacional focada em vendas:
-# mantém somente linhas com N° de venda preenchido.
-tabela["N° de venda"] = tabela["N° de venda"].fillna("").astype(str).str.strip()
-tabela = tabela[tabela["N° de venda"].ne("")].copy()
+    # Exibição operacional focada em vendas:
+    # mantém somente linhas com N° de venda preenchido.
+    tabela["N° de venda"] = tabela["N° de venda"].fillna("").astype(str).str.strip()
+    tabela = tabela[tabela["N° de venda"].ne("")].copy()
 
-# Base operacional antes dos filtros da UI (mesma regra de negócio de sempre).
-tabela_operacional_base = tabela.copy()
+    # Base operacional antes dos filtros da UI (mesma regra de negócio de sempre).
+    tabela_operacional_base = tabela.copy()
+else:
+    tabela_operacional_base = pd.DataFrame()
 
-st.markdown(
-    f"""
-    <div class="fdl-topbar">
-      <div class="fdl-topbar-brand">FDL Analytics</div>
-      <div class="fdl-topbar-meta">
-        <span><strong>Cliente:</strong> {_app_ctx.display_name}</span>
-        <span class="fdl-sep">|</span>
-        <span><strong>Empresa:</strong> {_active_org.display_name}</span>
-      </div>
-    </div>
-    <div class="page-hero">
+_fin_nav = st.session_state.get("op_financeiro_view", "repasse")
+if _fin_nav == "repasse":
+    _hero_body = f"""
       <nav class="fdl-breadcrumb" aria-label="Localização no sistema">
         <span class="fdl-bc-item">{_app_ctx.display_name}</span>
         <span class="fdl-bc-sep" aria-hidden="true">›</span>
@@ -2090,11 +2110,49 @@ st.markdown(
       <p class="page-sub">
         Painel para acompanhar valores recebidos na plataforma, conferência com notas e fila de ações
         sugeridas — sempre sobre a base já filtrada pelos critérios operacionais do módulo.
-      </p>
+      </p>"""
+else:
+    _hero_body = f"""
+      <nav class="fdl-breadcrumb" aria-label="Localização no sistema">
+        <span class="fdl-bc-item">{_app_ctx.display_name}</span>
+        <span class="fdl-bc-sep" aria-hidden="true">›</span>
+        <span class="fdl-bc-item">{_active_org.display_name}</span>
+        <span class="fdl-bc-sep" aria-hidden="true">›</span>
+        <span class="fdl-bc-item">Financeiro</span>
+        <span class="fdl-bc-sep" aria-hidden="true">›</span>
+        <span class="fdl-bc-item fdl-bc-current">Conciliação de Frete</span>
+      </nav>
+      <h1>Conciliação de Frete</h1>
+      <p class="page-sub">
+        Frete líquido no relatório ML (soma receita e tarifa de envio) e cruzamento opcional com preço por anúncio.
+        Apenas este painel é montado quando selecionado.
+      </p>"""
+
+st.markdown(
+    f"""
+    <div class="fdl-topbar">
+      <div class="fdl-topbar-brand">FDL Analytics</div>
+      <div class="fdl-topbar-meta">
+        <span><strong>Cliente:</strong> {_app_ctx.display_name}</span>
+        <span class="fdl-sep">|</span>
+        <span><strong>Empresa:</strong> {_active_org.display_name}</span>
+      </div>
+    </div>
+    <div class="page-hero">{_hero_body}
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-_painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
+if _fin_nav == "repasse":
+    _painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
+else:
+    painel_frete_fragment(
+        _active_org.org_id,
+        br_tz=_BR_TZ,
+        multiselect_stable=_multiselect_stable,
+        render_kpi_card=_render_kpi_card,
+        fmt_brl_ptbr_celula=_fmt_brl_ptbr_celula,
+        col_referencia_como_texto=_col_referencia_como_texto,
+    )
 

@@ -107,20 +107,63 @@ def painel_frete_fragment(
         st.info(w)
 
     try:
-        _painel_frete_conteudo(
-            org_id=org_id,
-            br_tz=br_tz,
-            multiselect_stable=multiselect_stable,
-            render_kpi_card=render_kpi_card,
+        # Modo seguro temporário: evita ecrã branco na Cloud em navegadores afetados.
+        # Mostra os dados essenciais de frete sem blocos HTML complexos.
+        _painel_frete_conteudo_safe(
             fmt_brl_ptbr_celula=fmt_brl_ptbr_celula,
             col_referencia_como_texto=col_referencia_como_texto,
             base_df=base_df,
             meta=meta,
             vpath=vpath,
+            br_tz=br_tz,
         )
     except Exception as exc:
         st.error("Erro ao montar o painel de Frete. Detalhe abaixo.")
         st.exception(exc)
+
+
+def _painel_frete_conteudo_safe(
+    *,
+    fmt_brl_ptbr_celula: Callable[[object], str],
+    col_referencia_como_texto: Callable[[pd.Series], pd.Series],
+    base_df: pd.DataFrame,
+    meta: dict[str, object],
+    vpath: Path,
+    br_tz: object,
+) -> None:
+    tbl_show = base_df[[c for c in base_df.columns if not str(c).startswith("_")]].copy()
+    ts_v = datetime.fromtimestamp(vpath.stat().st_mtime, tz=br_tz).strftime("%d/%m/%Y %H:%M")
+    st.caption(
+        f"Ficheiro vendas: {meta.get('vendas_arquivo')} | {ts_v} | Linhas: {len(tbl_show)}"
+    )
+
+    fm = pd.to_numeric(tbl_show.get("Frete ML (receita+tarifa)"), errors="coerce")
+    n_com_frete = int(fm.notna().sum())
+    soma_frete = float(fm.fillna(0).sum())
+    n_sem = int(len(tbl_show) - n_com_frete)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Vendas", f"{len(tbl_show):,}".replace(",", "."))
+    c2.metric("Com frete ML", f"{n_com_frete:,}".replace(",", "."))
+    c3.metric("Soma frete ML", f"R$ {soma_frete:,.2f}")
+    if n_sem:
+        st.info(f"Linhas sem dados de envio no ML: {n_sem}")
+
+    if meta.get("frete_tabular") and FRETE_UI_STATUS_CONC in tbl_show.columns:
+        n_div = int(tbl_show[FRETE_UI_STATUS_CONC].eq(FRETE_UI_VAL_DIVERGENCIA).sum())
+        st.caption(f"Divergências: {n_div}")
+    elif not meta.get("frete_tabular"):
+        st.info("Sem tabela de frete por anúncio reconhecida na pasta do cliente.")
+
+    t_grid = _dataframe_frete_grid(tbl_show, fmt_brl_ptbr_celula, col_referencia_como_texto)
+    st.dataframe(t_grid, use_container_width=True, hide_index=True, height=520)
+    st.download_button(
+        "Exportar CSV",
+        tbl_show.to_csv(index=False).encode("utf-8-sig"),
+        file_name="conciliacao_frete_filtrada.csv",
+        mime="text/csv",
+        key="frete_dl_csv_safe",
+    )
 
 
 def _painel_frete_conteudo(

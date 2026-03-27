@@ -1598,9 +1598,13 @@ def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
     return pd.to_datetime(s, errors="coerce")
 
 
-@st.fragment
 def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
-    """Filtros + KPIs + tabela — rerun isolado (evita ecrã branco ao mexer nos multiselect na Cloud)."""
+    """
+    Filtros + KPIs + tabela de repasse.
+
+    Não usar @st.fragment aqui: ao mudar para «Frete», o fragment deixava de ser invocado e o Streamlit
+    podia mostrar ecrã em branco (desincronização da árvore de widgets entre vistas).
+    """
     with st.container():
         st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
         r1 = st.columns((1.15, 1.15, 1.15, 1.55))

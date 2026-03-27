@@ -1506,14 +1506,6 @@ def _multiselect_stable(key: str, label: str, options: list[str]) -> list[str]:
     if not opts:
         if key not in st.session_state:
             st.session_state[key] = []
-        st.multiselect(
-            label,
-            ["(sem opções neste ficheiro)"],
-            default=[],
-            key=key,
-            disabled=True,
-            help="Quando os dados tiverem valores nesta dimensão, o filtro fica disponível.",
-        )
         return []
     if key not in st.session_state:
         st.session_state[key] = []

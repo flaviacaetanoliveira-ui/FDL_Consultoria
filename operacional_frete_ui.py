@@ -135,7 +135,9 @@ def _painel_frete_conteudo(
     meta: dict[str, object],
     vpath: Path,
 ) -> None:
-    del org_id
+    # Sufixo único por empresa + ficheiro: evita date_input/multiselect com estado antigo fora de min/max
+    # (erro no servidor / ecrã branco na Cloud ao mudar Repasse → Frete ou ao atualizar o .xlsx).
+    _sig = f"{org_id}_{vpath.stat().st_mtime_ns}"
     work = base_df.copy()
     if "_data_venda_dt" in work.columns:
         dts = work["_data_venda_dt"].dropna()
@@ -146,6 +148,8 @@ def _painel_frete_conteudo(
             d_min = d_max = datetime.now(br_tz).date()
     else:
         d_min = d_max = datetime.now(br_tz).date()
+    if d_max < d_min:
+        d_min, d_max = d_max, d_min
 
     estados = []
     if "Estado" in work.columns:
@@ -156,9 +160,11 @@ def _painel_frete_conteudo(
     st.markdown('<p class="filtros-panel-title">Filtros — Frete ML</p>', unsafe_allow_html=True)
     r1 = st.columns((1.2, 1.2, 1.6))
     with r1[0]:
-        sel_est = multiselect_stable("frete_ms_estado", "Estado da venda", estados)
+        sel_est = multiselect_stable(f"frete_ms_estado_{_sig}", "Estado da venda", estados)
     with r1[1]:
-        t_busca = st.text_input("Busca (venda ou # anuncio)", "", key="frete_busca").strip().lower()
+        t_busca = st.text_input(
+            "Busca (venda ou # anuncio)", "", key=f"frete_busca_{_sig}"
+        ).strip().lower()
     with r1[2]:
         data_ini = st.date_input(
             "Data da venda — início",
@@ -166,7 +172,7 @@ def _painel_frete_conteudo(
             min_value=d_min,
             max_value=d_max,
             format="DD/MM/YYYY",
-            key="frete_d_ini",
+            key=f"frete_d_ini_{_sig}",
         )
     r2 = st.columns((1.2, 2.8))
     with r2[0]:
@@ -176,7 +182,7 @@ def _painel_frete_conteudo(
             min_value=d_min,
             max_value=d_max,
             format="DD/MM/YYYY",
-            key="frete_d_fim",
+            key=f"frete_d_fim_{_sig}",
         )
 
     st.markdown(
@@ -314,7 +320,7 @@ def _painel_frete_conteudo(
         tbl_show.to_csv(index=False).encode("utf-8-sig"),
         file_name="conciliacao_frete_filtrada.csv",
         mime="text/csv",
-        key="frete_dl_csv",
+        key=f"frete_dl_csv_{_sig}",
     )
 
 

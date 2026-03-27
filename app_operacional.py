@@ -1312,13 +1312,29 @@ def carregar_tabela_final_operacional_cache(
     return tabela, info, ts
 
 
-def _excluir_taxa_ml_r362(df: pd.DataFrame) -> pd.DataFrame:
-    """Remove liberações de taxa R$ 3,62 sem nota (ruído ML — não entram na conciliação de produto)."""
-    if df.empty or "Total BRL" not in df.columns:
+def _serie_numero_nota_valida(s: pd.Series) -> pd.Series:
+    """True quando há identificador de NF para conciliar (exclui vazio, None literal, NaN)."""
+    x = s.fillna("").astype(str).str.strip()
+    lower = x.str.lower()
+    return x.ne("") & ~lower.isin({"none", "nan", "nat", "<na>", "null"})
+
+
+def _excluir_linhas_fora_conciliacao(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Remove linhas sem nota fiscal e taxas ML residuais (ex.: 3,62 / 3,54) típicas de encargos sem NF.
+    """
+    if df.empty:
         return df
-    tb = pd.to_numeric(df["Total BRL"], errors="coerce")
-    m_r362 = tb.sub(3.62).abs() < 0.005
-    return df.loc[~m_r362].copy()
+    out = df
+    if "Número da nota" in out.columns:
+        out = out.loc[_serie_numero_nota_valida(out["Número da nota"])].copy()
+    if out.empty or "Total BRL" not in out.columns:
+        return out
+    tb = pd.to_numeric(out["Total BRL"], errors="coerce")
+    for fee in (3.62, 3.54):
+        out = out.loc[~(tb.sub(fee).abs() < 0.005)].copy()
+        tb = pd.to_numeric(out["Total BRL"], errors="coerce")
+    return out
 
 
 def _column_config_conciliacao(df: pd.DataFrame) -> dict[str, NumberColumn | DatetimeColumn]:
@@ -1412,17 +1428,17 @@ def _parse_data_emissao_final(series: pd.Series) -> pd.Series:
     Tabela final persiste emissão como YYYY-MM-DD (integracao_notas + etapa4b).
     Parse fixo — evita ambiguidade de dayfirst na UI.
     """
-    s = series.fillna("").astype(str).str.strip().str.replace("NaT", "", regex=False).str.replace(
-        "None", "", regex=False
-    )
+    s = series.fillna("").astype(str).str.strip()
+    s = s.str.replace("NaT", "", regex=False).str.replace("None", "", regex=False)
+    s = s.mask(s.str.lower().isin({"none", "nan", "nat", "<na>", "null"}), "")
     return pd.to_datetime(s, format="%Y-%m-%d", errors="coerce")
 
 
 def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
     """Tabela final: YYYY-MM-DD HH:MM:SS — ISO, sem dayfirst."""
-    s = series.fillna("").astype(str).str.strip().str.replace("NaT", "", regex=False).str.replace(
-        "None", "", regex=False
-    )
+    s = series.fillna("").astype(str).str.strip()
+    s = s.str.replace("NaT", "", regex=False).str.replace("None", "", regex=False)
+    s = s.mask(s.str.lower().isin({"none", "nan", "nat", "<na>", "null"}), "")
     return pd.to_datetime(s, errors="coerce")
 
 
@@ -1507,7 +1523,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     _fim_ts = pd.Timestamp(data_pag_fim) + pd.Timedelta(days=1)
     m_data = _dp_filt.notna() & (_dd >= _ini_ts) & (_dd < _fim_ts)
     tabela = tabela.loc[m_data].copy()
-    tabela = _excluir_taxa_ml_r362(tabela)
+    tabela = _excluir_linhas_fora_conciliacao(tabela)
     
     if "Plataforma" in base.columns:
         n_plat = len(plats)
@@ -1669,6 +1685,9 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             tabela_exibir = tabela_exibir.sort_values(
                 by="Data de pagamento", ascending=False, na_position="last"
             ).reset_index(drop=True)
+        for _dc in ("Data de emissão", "Data de pagamento"):
+            if _dc in tabela_exibir.columns:
+                tabela_exibir[_dc] = pd.to_datetime(tabela_exibir[_dc], errors="coerce")
     
     st.markdown(
         """

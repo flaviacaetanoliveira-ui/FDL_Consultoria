@@ -46,7 +46,7 @@ from operacional_frete import (
 from operacional_frete_ui import painel_frete_fragment
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
-BUILD_TAG = "build-20260327-frete-grid-safe"
+BUILD_TAG = "build-20260327-frete-table-auto"
 
 try:
     st.set_page_config(page_title="FDL Analytics — Financeiro", layout="wide")
@@ -1572,15 +1572,26 @@ def _painel_frete_emergencial(org_id: str) -> None:
         st.caption(str(BASE_DIR))
         return
 
-    if (fontes.vendas_url or "").strip():
+    _vu = (fontes.vendas_url or "").strip()
+    if _vu:
         st.success("**FDL_FRETE_VENDAS_URL** detetado — a base será descarregada a partir do SharePoint.")
+        if "..." in _vu:
+            st.error(
+                "O URL de **FDL_FRETE_VENDAS_URL** parece um **placeholder**. "
+                "Nos Secrets, substitua por o **link completo** do Excel (Partilhar → copiar ligação do ficheiro)."
+            )
+            return
     else:
         st.caption(f"Fonte local: `{fontes.vendas_path}`")
 
-    st.caption("Para evitar travamentos no navegador, a base é carregada sob demanda.")
     _load_key = f"frete_emergencial_load_{org_id}"
-    if st.button("Carregar base de Frete", key=f"{_load_key}_btn"):
-        st.session_state[_load_key] = True
+    # Na Cloud (URL) carrega automaticamente — o botão era esquecido e parecia «Frete não funciona».
+    if _vu:
+        st.session_state.setdefault(_load_key, True)
+    else:
+        st.caption("Carregue a base quando estiver pronto (ficheiros locais podem ser grandes).")
+        if st.button("Carregar base de Frete", key=f"{_load_key}_btn"):
+            st.session_state[_load_key] = True
     if not st.session_state.get(_load_key, False):
         return
 
@@ -1635,11 +1646,10 @@ def _painel_frete_emergencial(org_id: str) -> None:
             show_grid[_c] = s.dt.strftime("%Y-%m-%d %H:%M:%S")
         else:
             show_grid[_c] = s.map(lambda x: "" if pd.isna(x) else x).astype(str)
-    try:
-        st.dataframe(show_grid, hide_index=True, height=420)
-    except Exception:
-        st.warning("A pré-visualização em grelha falhou; amostra em texto.")
-        st.table(show_grid.head(80))
+    # Sem st.dataframe (Arrow/React) — só tabela HTML leve; export CSV tem o ficheiro completo.
+    st.subheader("Pré-visualização")
+    st.caption(f"Primeiras {min(150, len(show_grid))} linhas de {len(show)} (use o CSV para tudo).")
+    st.table(show_grid.head(150))
 
     st.download_button(
         "Exportar CSV",

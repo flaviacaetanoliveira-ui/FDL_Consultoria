@@ -46,7 +46,7 @@ from operacional_frete import (
 from operacional_frete_ui import painel_frete_fragment
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
-BUILD_TAG = "build-20260327-login-native-only"
+BUILD_TAG = "build-20260327-frete-grid-safe"
 
 try:
     st.set_page_config(page_title="FDL Analytics — Financeiro", layout="wide")
@@ -1627,7 +1627,20 @@ def _painel_frete_emergencial(org_id: str) -> None:
     show_ui = show.head(_max_rows)
     if len(show) > _max_rows:
         st.caption(f"Amostra de {_max_rows} linhas (total {len(show)}). O CSV exporta todas.")
-    st.dataframe(show_ui, hide_index=True, height=480)
+    # Tipos mistos / datas quebram o Arrow do dataframe em alguns browsers — colunas homogéneas string.
+    show_grid = show_ui.copy()
+    for _c in show_grid.columns:
+        s = show_grid[_c]
+        if pd.api.types.is_datetime64_any_dtype(s):
+            show_grid[_c] = s.dt.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            show_grid[_c] = s.map(lambda x: "" if pd.isna(x) else x).astype(str)
+    try:
+        st.dataframe(show_grid, hide_index=True, height=420)
+    except Exception:
+        st.warning("A pré-visualização em grelha falhou; amostra em texto.")
+        st.table(show_grid.head(80))
+
     st.download_button(
         "Exportar CSV",
         show.to_csv(index=False).encode("utf-8-sig"),
@@ -2255,11 +2268,10 @@ if _fv == "repasse":
         unsafe_allow_html=True,
     )
 else:
-    # Frete: só widgets nativos — evita ecrã branco em alguns builds Cloud/React.
+    # Frete: texto só via widgets nativos (sem unsafe_allow_html) — evita ecrã branco no painel Frete.
     st.caption("FDL Analytics")
-    st.markdown(
-        f"{_h_cl} › {_h_org} › Financeiro › **Conciliação de Frete**",
-        unsafe_allow_html=True,
+    st.caption(
+        f"{_app_ctx.display_name} › {_active_org.display_name} › Financeiro › Conciliação de Frete"
     )
     st.title("Conciliação de Frete")
     st.caption(

@@ -42,6 +42,7 @@ from operacional_frete import descobrir_fontes_frete
 from operacional_frete_ui import painel_frete_fragment
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
+BUILD_TAG = "build-20260327-0ae9e7d"
 
 st.set_page_config(page_title="FDL Analytics — Financeiro", layout="wide")
 
@@ -2085,6 +2086,8 @@ with st.sidebar:
         <div class="sb-sync-block">
           <div class="sb-sync-label">Última atualização</div>
           <div class="sb-sync-ts">{_sb_ts_display}</div>
+          <div class="sb-sync-label" style="margin-top:0.65rem;">Versão</div>
+          <div class="sb-sync-ts">{BUILD_TAG}</div>
         </div>
         """,
         unsafe_allow_html=True,

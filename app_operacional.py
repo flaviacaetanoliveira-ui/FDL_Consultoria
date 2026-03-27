@@ -2067,7 +2067,11 @@ with st.sidebar:
             key="op_financeiro_view_label",
             label_visibility="collapsed",
         )
-        st.session_state["op_financeiro_view"] = _label_to_value.get(_sel_label, "repasse")
+        _next_view = _label_to_value.get(_sel_label, "repasse")
+        if _next_view != _curr:
+            st.session_state["op_financeiro_view"] = _next_view
+            st.rerun()
+        st.session_state["op_financeiro_view"] = _next_view
         st.caption("Um painel ativo de cada vez — melhor desempenho.")
 
     st.markdown('<hr class="sb-divider-soft" />', unsafe_allow_html=True)
@@ -2178,7 +2182,13 @@ st.markdown(
 )
 
 if _fin_nav == "repasse":
-    _painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
+    if tabela_operacional_base.empty:
+        st.warning(
+            "A base de repasse não está disponível nesta execução. "
+            "A atualizar o painel…"
+        )
+    else:
+        _painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
 else:
     try:
         painel_frete_fragment(

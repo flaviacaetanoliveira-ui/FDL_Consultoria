@@ -46,9 +46,12 @@ from operacional_frete import (
 from operacional_frete_ui import painel_frete_fragment
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
-BUILD_TAG = "build-20260327-frete-url"
+BUILD_TAG = "build-20260327-login-css-fix"
 
-st.set_page_config(page_title="FDL Analytics — Financeiro", layout="wide")
+try:
+    st.set_page_config(page_title="FDL Analytics — Financeiro", layout="wide")
+except Exception:
+    pass  # já definido por app.py no primeiro arranque
 
 _app_ctx = require_app_user()
 _active_org = get_active_organization(_app_ctx)

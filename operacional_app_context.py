@@ -96,15 +96,7 @@ _LOGIN_PAGE_STYLES = """
   }
   #MainMenu { visibility: hidden; }
   footer { visibility: hidden; }
-  section[data-testid="stMain"] > div {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
-    min-height: 100dvh !important;
-    padding-top: 0 !important;
-    padding-bottom: 2.5rem !important;
-  }
+  /* Não forçar flex no stMain — em Streamlit 1.4x+ pode deixar o ecrã em branco. */
   /* Largura estilo FGV (~350px), centralizado em telas grandes */
   .main .block-container {
     max-width: min(352px, calc(100vw - 2.5rem)) !important;
@@ -221,6 +213,8 @@ def require_app_user() -> AppUserContext:
     Encerra a execução da página com st.stop() se não houver sessão.
     """
     if not st.session_state.get("logged_in"):
+        st.title("FDL Analytics")
+        st.caption("Acesso ao painel financeiro — se o ecrã abaixo estiver vazio, atualize a página ou use outro navegador.")
         st.markdown(_LOGIN_PAGE_STYLES, unsafe_allow_html=True)
         with st.container(border=True):
             st.markdown(

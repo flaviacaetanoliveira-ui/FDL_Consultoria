@@ -2093,12 +2093,6 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-# Ao trocar o radio, o Streamlit pode expor estado antigo no início do rerun.
-# Se houver divergência, força um rerun limpo para evitar execução mista (ecrã branco).
-_fin_now = st.session_state.get("op_financeiro_view", "repasse")
-if _fin_now != _fin_early:
-    st.rerun()
-
 if _fin_early == "repasse":
     map_acao = {
         "Ok": "Ok",

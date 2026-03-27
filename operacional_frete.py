@@ -5,15 +5,20 @@ Frete líquido ML (detalhe envios): soma algébrica Receita por envio + Tarifas 
 """
 from __future__ import annotations
 
+import hashlib
+import os
 import re
+import tempfile
 import unicodedata
+from io import BytesIO
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
 import streamlit as st
 
-from etapa1_vendas import list_sales_files, read_sales_file
+from etapa1_vendas import detect_excel_header_row, list_sales_files, read_sales_file
 from fdl_paths import CLIENTE_BASE_DIR
 
 # Colunas e valores na UI (UTF-8). operacional_frete_ui deve importar estes nomes — evita mojibake no .py.
@@ -25,6 +30,107 @@ FRETE_UI_VAL_DIVERGENCIA = "Divergência"
 FRETE_UI_TITULO_ANUNCIO = "Título do anúncio"
 FRETE_UI_FRETE_ESPERADO = "Frete esperado (qtd × preço arquivo)"
 FRETE_UI_QTD_PRECO_ML = "Qtd × preço unit. produto (ML)"
+
+
+class FontesFrete(NamedTuple):
+    """Fontes para o painel de Frete: pastas locais (FDL_BASE_DIR) ou URLs (Secrets Cloud)."""
+
+    vendas_path: Path | None
+    frete_path: Path | None
+    vendas_url: str
+    frete_url: str
+
+
+def _frete_secret_str(*keys: str) -> str:
+    for k in keys:
+        v = os.environ.get(k, "").strip()
+        if v:
+            return v
+    try:
+        sec = st.secrets
+        for k in keys:
+            if k in sec and str(sec[k]).strip():
+                return str(sec[k]).strip()
+    except Exception:
+        pass
+    return ""
+
+
+def stable_mtime_ns_for_frete_url(url: str) -> int:
+    """Chave estável para @st.cache_data quando a fonte é URL (ficheiro remoto)."""
+    return int.from_bytes(hashlib.sha256(url.strip().encode()).digest()[:8], "big", signed=False)
+
+
+def _is_http_url(s: str) -> bool:
+    t = s.strip().lower()
+    return t.startswith("http://") or t.startswith("https://")
+
+
+def _download_frete_payload(url: str) -> tuple[bytes, str, str | None]:
+    """Descarrega ficheiro de Frete — mesma estratégia que FDL_PRECOMPUTED_URL (SharePoint/Graph)."""
+    from app_operacional import (  # noqa: PLC0415 — evita import circular no carregamento do módulo
+        PRECOMPUTED_HTTP_TIMEOUT,
+        _download_file_bytes,
+        _precomputed_download_attempts,
+    )
+
+    errs: list[str] = []
+    for dl_url, hdr in _precomputed_download_attempts(url.strip()):
+        try:
+            return _download_file_bytes(
+                dl_url,
+                extra_headers=hdr or None,
+                timeout=PRECOMPUTED_HTTP_TIMEOUT,
+                http_retries=1,
+            )
+        except Exception as exc:  # noqa: BLE001
+            errs.append(str(exc))
+    raise ValueError(
+        "Não foi possível descarregar o ficheiro de Frete a partir do URL. "
+        "Confirme partilha «qualquer pessoa com a ligação». Detalhes: "
+        + " | ".join(errs[:5])
+        + (" …" if len(errs) > 5 else "")
+    )
+
+
+def _read_vendas_ml_bytes(payload: bytes, filename: str) -> pd.DataFrame:
+    """Lê export ML (.csv / .xlsx) a partir de bytes (URL remota)."""
+    fn = (filename or "download").lower()
+    if fn.endswith(".csv"):
+        bio = BytesIO(payload)
+        last_err: Exception | None = None
+        for encoding in ("utf-8-sig", "utf-8", "latin1", "cp1252"):
+            try:
+                bio.seek(0)
+                return pd.read_csv(
+                    bio,
+                    encoding=encoding,
+                    sep=None,
+                    engine="python",
+                    dtype=str,
+                )
+            except Exception as e:  # noqa: BLE001
+                last_err = e
+        raise RuntimeError(f"Falha ao ler CSV de vendas ML: {last_err}")
+    head = payload.lstrip()[:4]
+    is_xlsx = fn.endswith(".xlsx") or fn.endswith(".xls") or head == b"PK\x03\x04"
+    if not is_xlsx:
+        bio = BytesIO(payload)
+        try:
+            return pd.read_csv(bio, sep=None, engine="python", dtype=str, encoding="utf-8-sig")
+        except Exception as exc:
+            raise ValueError(
+                f"Formato de ficheiro não reconhecido para vendas ML ({filename!r}). Use .csv ou .xlsx."
+            ) from exc
+    sfx = ".xlsx" if fn.endswith(".xlsx") or head == b"PK\x03\x04" else ".xls"
+    with tempfile.NamedTemporaryFile(suffix=sfx, delete=False) as tmp:
+        tmp.write(payload)
+        tmp_path = Path(tmp.name)
+    try:
+        header_row = detect_excel_header_row(tmp_path)
+        return pd.read_excel(tmp_path, header=header_row, engine="openpyxl")
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 def _strip_ascii_lower(s: str) -> str:
@@ -219,13 +325,20 @@ def carregar_base_frete_ml(
     del vendas_mtime_ns
     del frete_mtime_ns
     meta: dict[str, object] = {
-        "vendas_arquivo": Path(vendas_path_str).name,
-        "frete_arquivo": Path(frete_path_str).name if frete_path_str else None,
+        "vendas_arquivo": "",
+        "frete_arquivo": None,
         "frete_tabular": False,
         "avisos": [],
     }
 
-    df = read_sales_file(Path(vendas_path_str))
+    if _is_http_url(vendas_path_str):
+        payload_v, fn_v, _lm_v = _download_frete_payload(vendas_path_str.strip())
+        del _lm_v
+        df = _read_vendas_ml_bytes(payload_v, fn_v)
+        meta["vendas_arquivo"] = fn_v or "vendas_ml_remoto"
+    else:
+        meta["vendas_arquivo"] = Path(vendas_path_str).name
+        df = read_sales_file(Path(vendas_path_str))
     df = df.dropna(axis=1, how="all")
     cmap = _resolve_columns(df)
     needed = ("n_venda", "receita_envio", "tarifas_envio", "unidades", "id_anuncio")
@@ -258,9 +371,34 @@ def carregar_base_frete_ml(
     if "data_venda" in v.columns:
         v["_data_venda_dt"] = pd.to_datetime(v["data_venda"], errors="coerce", dayfirst=True)
 
-    if frete_path_str and Path(frete_path_str).is_file():
-        tab = _try_read_tabular_frete_anuncio(Path(frete_path_str))
-        if tab is None or tab.empty:
+    tab: pd.DataFrame | None = None
+    if frete_path_str:
+        if _is_http_url(frete_path_str):
+            try:
+                payload_f, fn_f, _lm_f = _download_frete_payload(frete_path_str.strip())
+                del _lm_f
+                sfx = Path(fn_f).suffix.lower()
+                if sfx not in {".xlsx", ".xls"}:
+                    meta["avisos"].append(
+                        "FDL_FRETE_ANUNCIO_URL deve apontar para ficheiro .xlsx ou .xls (tabela de frete por anúncio)."
+                    )
+                else:
+                    with tempfile.NamedTemporaryFile(suffix=sfx, delete=False) as tmp:
+                        tmp.write(payload_f)
+                        tmp_p = Path(tmp.name)
+                    try:
+                        meta["frete_arquivo"] = fn_f
+                        tab = _try_read_tabular_frete_anuncio(tmp_p)
+                    finally:
+                        tmp_p.unlink(missing_ok=True)
+            except Exception as exc:  # noqa: BLE001
+                meta["avisos"].append(f"Erro ao descarregar frete por anúncio (URL): {exc}")
+        elif Path(frete_path_str).is_file():
+            meta["frete_arquivo"] = Path(frete_path_str).name
+            tab = _try_read_tabular_frete_anuncio(Path(frete_path_str))
+
+    if tab is not None:
+        if tab.empty:
             meta["avisos"].append(
                 "Arquivo de frete por anúncio não reconhecido como tabela (p.ex. export de ecrã). "
                 "Divergências por anúncio ficam indisponíveis até existir Excel/CSV com colunas MLB + preço."
@@ -281,6 +419,12 @@ def carregar_base_frete_ml(
             )
             m["status_conc"] = st_ok
             v = m.drop(columns=["_id_anuncio_norm"], errors="ignore")
+
+    if frete_path_str and tab is None and meta.get("frete_arquivo"):
+        meta["avisos"].append(
+            "Arquivo de frete por anúncio não reconhecido como tabela (p.ex. export de ecrã). "
+            "Divergências por anúncio ficam indisponíveis até existir Excel/CSV com colunas MLB + preço."
+        )
 
     drop_h = [c for c in ("_id_norm", "_qtd", "_preco_frete_unit_arquivo") if c in v.columns]
     if drop_h:
@@ -307,8 +451,21 @@ def carregar_base_frete_ml(
     return v, meta
 
 
-def descobrir_fontes_frete(base_dir: Path | None = None) -> tuple[Path | None, Path | None]:
+def descobrir_fontes_frete(base_dir: Path | None = None) -> FontesFrete:
+    """
+    Prioridade na Cloud: `FDL_FRETE_VENDAS_URL` (e opc. `FDL_FRETE_ANUNCIO_URL`) nos Secrets.
+    Caso contrário, pastas sob FDL_BASE_DIR / `Vendas - Mercado Livre`.
+    """
+    vendas_url = _frete_secret_str("FDL_FRETE_VENDAS_URL", "FDL_FRETE_PRECOMPUTED_URL")
+    frete_url = _frete_secret_str("FDL_FRETE_ANUNCIO_URL")
     root = base_dir or CLIENTE_BASE_DIR
     vendas_dir = root / "Vendas - Mercado Livre"
-    return _latest_vendas_ml_path(vendas_dir), _find_frete_anuncio_path(root)
+    v_local = None if vendas_url else _latest_vendas_ml_path(vendas_dir)
+    f_local = None if frete_url else _find_frete_anuncio_path(root)
+    return FontesFrete(
+        vendas_path=v_local,
+        frete_path=f_local,
+        vendas_url=vendas_url,
+        frete_url=frete_url,
+    )
 

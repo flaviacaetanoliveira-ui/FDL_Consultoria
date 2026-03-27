@@ -22,6 +22,7 @@ from operacional_frete import (
     FRETE_UI_VAL_DIVERGENCIA,
     carregar_base_frete_ml,
     descobrir_fontes_frete,
+    stable_mtime_ns_for_frete_url,
 )
 
 
@@ -73,32 +74,47 @@ def painel_frete_fragment(
     col_referencia_como_texto: Callable[[pd.Series], pd.Series],
 ) -> None:
     try:
-        vpath, fpath = descobrir_fontes_frete(CLIENTE_BASE_DIR)
+        fontes = descobrir_fontes_frete(CLIENTE_BASE_DIR)
     except Exception as exc:
         st.error("Erro ao localizar ficheiros de frete / vendas ML.")
         st.caption(str(exc))
         with st.expander("Detalhe técnico", expanded=False):
             st.exception(exc)
         return
-    if not vpath:
+    vendas_ref = (fontes.vendas_url or "").strip() or (
+        str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
+    )
+    if not vendas_ref:
         vendas_dir = Path(CLIENTE_BASE_DIR) / "Vendas - Mercado Livre"
         if not vendas_dir.is_dir():
             st.warning(
-                "Não existe a pasta **Vendas - Mercado Livre** na base do cliente. "
-                "Crie-a sob a pasta indicada abaixo ou defina **FDL_BASE_DIR** / segredo com a raiz certa."
+                "Não existe fonte de vendas ML: defina **FDL_FRETE_VENDAS_URL** nos Secrets ou a pasta "
+                "**Vendas - Mercado Livre** na base do cliente (**FDL_BASE_DIR**)."
             )
         else:
             st.warning(
                 "A pasta **Vendas - Mercado Livre** existe mas **não há ficheiros .xlsx, .xls ou .csv** "
-                "de vendas ML (export do relatório). Copie o export para essa pasta e atualize a página."
+                "de vendas ML (export do relatório). Copie o export para essa pasta ou configure **FDL_FRETE_VENDAS_URL**."
             )
         st.caption(str(Path(CLIENTE_BASE_DIR).resolve()))
         return
-    v_ns = int(vpath.stat().st_mtime_ns)
-    fp = str(fpath.resolve()) if fpath and fpath.is_file() else None
-    f_ns = int(fpath.stat().st_mtime_ns) if fpath and fpath.is_file() else None
+    if (fontes.vendas_url or "").strip():
+        v_ns = stable_mtime_ns_for_frete_url(fontes.vendas_url)
+    else:
+        v_ns = int(fontes.vendas_path.stat().st_mtime_ns)
+    frete_ref = (fontes.frete_url or "").strip() or (
+        str(fontes.frete_path.resolve())
+        if fontes.frete_path and fontes.frete_path.is_file()
+        else None
+    )
+    if (fontes.frete_url or "").strip():
+        f_ns = stable_mtime_ns_for_frete_url(fontes.frete_url)
+    elif fontes.frete_path and fontes.frete_path.is_file():
+        f_ns = int(fontes.frete_path.stat().st_mtime_ns)
+    else:
+        f_ns = None
     try:
-        base_df, meta = carregar_base_frete_ml(org_id, str(vpath.resolve()), v_ns, fp, f_ns)
+        base_df, meta = carregar_base_frete_ml(org_id, vendas_ref, v_ns, frete_ref, f_ns)
     except Exception as exc:
         st.error("Falha ao ler vendas ML.")
         st.caption(str(exc))
@@ -114,7 +130,8 @@ def painel_frete_fragment(
             col_referencia_como_texto=col_referencia_como_texto,
             base_df=base_df,
             meta=meta,
-            vpath=vpath,
+            vpath=fontes.vendas_path,
+            vendas_url=(fontes.vendas_url or "").strip(),
             br_tz=br_tz,
         )
     except Exception as exc:
@@ -128,11 +145,17 @@ def _painel_frete_conteudo_safe(
     col_referencia_como_texto: Callable[[pd.Series], pd.Series],
     base_df: pd.DataFrame,
     meta: dict[str, object],
-    vpath: Path,
+    vpath: Path | None,
+    vendas_url: str,
     br_tz: object,
 ) -> None:
     tbl_show = base_df[[c for c in base_df.columns if not str(c).startswith("_")]].copy()
-    ts_v = datetime.fromtimestamp(vpath.stat().st_mtime, tz=br_tz).strftime("%d/%m/%Y %H:%M")
+    if vpath is not None:
+        ts_v = datetime.fromtimestamp(vpath.stat().st_mtime, tz=br_tz).strftime("%d/%m/%Y %H:%M")
+    elif vendas_url:
+        ts_v = "fonte remota (URL)"
+    else:
+        ts_v = "—"
     st.caption(
         f"Ficheiro vendas: {meta.get('vendas_arquivo')} | {ts_v} | Linhas: {len(tbl_show)}"
     )

@@ -38,11 +38,15 @@ from operacional_app_context import (
     require_app_user,
 )
 from operacional_data_config import DATASET_EMPRESA
-from operacional_frete import carregar_base_frete_ml, descobrir_fontes_frete
+from operacional_frete import (
+    carregar_base_frete_ml,
+    descobrir_fontes_frete,
+    stable_mtime_ns_for_frete_url,
+)
 from operacional_frete_ui import painel_frete_fragment
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
-BUILD_TAG = "build-20260327-frete-native"
+BUILD_TAG = "build-20260327-frete-url"
 
 st.set_page_config(page_title="FDL Analytics — Financeiro", layout="wide")
 
@@ -1548,15 +1552,19 @@ def _painel_frete_emergencial(org_id: str) -> None:
     """
     st.info("Modo de compatibilidade do painel de Frete.")
     try:
-        vpath, fpath = descobrir_fontes_frete()
+        fontes = descobrir_fontes_frete()
     except Exception as exc:
         st.error("Erro ao localizar ficheiros de frete.")
         st.exception(exc)
         return
 
-    if not vpath:
+    vendas_ref = (fontes.vendas_url or "").strip() or (
+        str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
+    )
+    if not vendas_ref:
         st.warning(
-            "Pasta Vendas - Mercado Livre ausente ou sem ficheiros de vendas (.xlsx/.xls/.csv)."
+            "Sem fonte de vendas ML para Frete. Defina **FDL_FRETE_VENDAS_URL** nos Secrets (Cloud) "
+            "ou coloque ficheiros .xlsx/.csv em **Vendas - Mercado Livre** sob **FDL_BASE_DIR**."
         )
         st.caption(str(BASE_DIR))
         return
@@ -1570,11 +1578,24 @@ def _painel_frete_emergencial(org_id: str) -> None:
 
     try:
         with st.spinner("A carregar base de Frete..."):
-            v_ns = int(vpath.stat().st_mtime_ns)
-            fp = str(fpath.resolve()) if fpath and fpath.is_file() else None
-            f_ns = int(fpath.stat().st_mtime_ns) if fpath and fpath.is_file() else None
+            v_ns = (
+                stable_mtime_ns_for_frete_url(fontes.vendas_url)
+                if (fontes.vendas_url or "").strip()
+                else int(fontes.vendas_path.stat().st_mtime_ns)
+            )
+            frete_ref = (fontes.frete_url or "").strip() or (
+                str(fontes.frete_path.resolve())
+                if fontes.frete_path and fontes.frete_path.is_file()
+                else None
+            )
+            if (fontes.frete_url or "").strip():
+                f_ns = stable_mtime_ns_for_frete_url(fontes.frete_url)
+            elif fontes.frete_path and fontes.frete_path.is_file():
+                f_ns = int(fontes.frete_path.stat().st_mtime_ns)
+            else:
+                f_ns = None
             df_frete, meta_frete = carregar_base_frete_ml(
-                org_id, str(vpath.resolve()), v_ns, fp, f_ns
+                org_id, vendas_ref, v_ns, frete_ref, f_ns
             )
     except Exception as exc:
         st.error("Falha ao carregar base de Frete.")
@@ -2015,14 +2036,14 @@ if _admin_mode and _data_source_mode() == "upload_zip":
 
 _fv = st.session_state["op_financeiro_view"]
 if _fv == "frete":
-    # Evita carregar precomputed/ZIP da conciliação de repasse — só vendas ML em FDL_BASE_DIR.
+    # Evita carregar precomputed/ZIP da conciliação de repasse — vendas ML locais ou FDL_FRETE_VENDAS_URL.
     try:
-        _vpath, _ = descobrir_fontes_frete()
+        _ff = descobrir_fontes_frete()
     except Exception:
-        _vpath = None
-    if _vpath:
+        _ff = None
+    if _ff and _ff.vendas_path:
         try:
-            ts_proc = _ts_br_from_mtime_ns(int(_vpath.stat().st_mtime_ns))
+            ts_proc = _ts_br_from_mtime_ns(int(_ff.vendas_path.stat().st_mtime_ns))
         except OSError:
             ts_proc = _now_ts_br_str()
     else:

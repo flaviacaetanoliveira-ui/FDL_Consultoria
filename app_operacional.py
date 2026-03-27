@@ -1561,11 +1561,21 @@ def _painel_frete_emergencial(org_id: str) -> None:
         st.caption(str(BASE_DIR))
         return
 
+    st.caption("Para evitar travamentos no navegador, a base é carregada sob demanda.")
+    _load_key = f"frete_emergencial_load_{org_id}"
+    if st.button("Carregar base de Frete", key=f"{_load_key}_btn"):
+        st.session_state[_load_key] = True
+    if not st.session_state.get(_load_key, False):
+        return
+
     try:
-        v_ns = int(vpath.stat().st_mtime_ns)
-        fp = str(fpath.resolve()) if fpath and fpath.is_file() else None
-        f_ns = int(fpath.stat().st_mtime_ns) if fpath and fpath.is_file() else None
-        df_frete, meta_frete = carregar_base_frete_ml(org_id, str(vpath.resolve()), v_ns, fp, f_ns)
+        with st.spinner("A carregar base de Frete..."):
+            v_ns = int(vpath.stat().st_mtime_ns)
+            fp = str(fpath.resolve()) if fpath and fpath.is_file() else None
+            f_ns = int(fpath.stat().st_mtime_ns) if fpath and fpath.is_file() else None
+            df_frete, meta_frete = carregar_base_frete_ml(
+                org_id, str(vpath.resolve()), v_ns, fp, f_ns
+            )
     except Exception as exc:
         st.error("Falha ao carregar base de Frete.")
         st.exception(exc)

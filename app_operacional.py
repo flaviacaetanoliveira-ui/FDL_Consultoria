@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
 from io import BytesIO
@@ -83,6 +84,13 @@ _BROWSER_UA_CHROME = (
 )
 
 _BR_TZ = ZoneInfo("America/Sao_Paulo")
+
+
+def _financeiro_radio_label(option: str) -> str:
+    """Label estável para st.radio — lambdas aqui fazem o widget «resetar» e podem dar ecrã em branco na Cloud."""
+    if option == "repasse":
+        return "📊 Conciliação de Repasse"
+    return "🚚 Conciliação de Frete"
 
 
 def _now_ts_br_str() -> str:
@@ -2038,18 +2046,18 @@ with st.sidebar:
             st.rerun()
 
     with st.expander(f"🏢 {_active_org.display_name}", expanded=True):
-        with st.expander("💰 Financeiro", expanded=True):
-            st.markdown('<p class="sb-nav-section-label" style="margin-top:0.15rem;">Visualização</p>', unsafe_allow_html=True)
-            st.radio(
-                "Painel financeiro",
-                options=["repasse", "frete"],
-                format_func=lambda x: "📊 Conciliação de Repasse"
-                if x == "repasse"
-                else "🚚 Conciliação de Frete",
-                key="op_financeiro_view",
-                label_visibility="collapsed",
-            )
-            st.caption("Um painel ativo de cada vez — melhor desempenho.")
+        st.markdown(
+            '<p class="sb-nav-section-label" style="margin-top:0.15rem;">💰 Financeiro · visualização</p>',
+            unsafe_allow_html=True,
+        )
+        st.radio(
+            "Painel financeiro",
+            options=["repasse", "frete"],
+            format_func=_financeiro_radio_label,
+            key="op_financeiro_view",
+            label_visibility="collapsed",
+        )
+        st.caption("Um painel ativo de cada vez — melhor desempenho.")
 
     st.markdown('<hr class="sb-divider-soft" />', unsafe_allow_html=True)
     if st.button("Sair", use_container_width=True, help="Encerra a sessão neste navegador."):
@@ -2107,12 +2115,14 @@ else:
     tabela_operacional_base = pd.DataFrame()
 
 _fin_nav = st.session_state.get("op_financeiro_view", "repasse")
+_h_cl = html.escape(str(_app_ctx.display_name))
+_h_org = html.escape(str(_active_org.display_name))
 if _fin_nav == "repasse":
     _hero_body = f"""
       <nav class="fdl-breadcrumb" aria-label="Localização no sistema">
-        <span class="fdl-bc-item">{_app_ctx.display_name}</span>
+        <span class="fdl-bc-item">{_h_cl}</span>
         <span class="fdl-bc-sep" aria-hidden="true">›</span>
-        <span class="fdl-bc-item">{_active_org.display_name}</span>
+        <span class="fdl-bc-item">{_h_org}</span>
         <span class="fdl-bc-sep" aria-hidden="true">›</span>
         <span class="fdl-bc-item">Financeiro</span>
         <span class="fdl-bc-sep" aria-hidden="true">›</span>
@@ -2126,9 +2136,9 @@ if _fin_nav == "repasse":
 else:
     _hero_body = f"""
       <nav class="fdl-breadcrumb" aria-label="Localização no sistema">
-        <span class="fdl-bc-item">{_app_ctx.display_name}</span>
+        <span class="fdl-bc-item">{_h_cl}</span>
         <span class="fdl-bc-sep" aria-hidden="true">›</span>
-        <span class="fdl-bc-item">{_active_org.display_name}</span>
+        <span class="fdl-bc-item">{_h_org}</span>
         <span class="fdl-bc-sep" aria-hidden="true">›</span>
         <span class="fdl-bc-item">Financeiro</span>
         <span class="fdl-bc-sep" aria-hidden="true">›</span>
@@ -2145,9 +2155,9 @@ st.markdown(
     <div class="fdl-topbar">
       <div class="fdl-topbar-brand">FDL Analytics</div>
       <div class="fdl-topbar-meta">
-        <span><strong>Cliente:</strong> {_app_ctx.display_name}</span>
+        <span><strong>Cliente:</strong> {_h_cl}</span>
         <span class="fdl-sep">|</span>
-        <span><strong>Empresa:</strong> {_active_org.display_name}</span>
+        <span><strong>Empresa:</strong> {_h_org}</span>
       </div>
     </div>
     <div class="page-hero">{_hero_body}
@@ -2159,12 +2169,16 @@ st.markdown(
 if _fin_nav == "repasse":
     _painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
 else:
-    painel_frete_fragment(
-        _active_org.org_id,
-        br_tz=_BR_TZ,
-        multiselect_stable=_multiselect_stable,
-        render_kpi_card=_render_kpi_card,
-        fmt_brl_ptbr_celula=_fmt_brl_ptbr_celula,
-        col_referencia_como_texto=_col_referencia_como_texto,
-    )
+    try:
+        painel_frete_fragment(
+            _active_org.org_id,
+            br_tz=_BR_TZ,
+            multiselect_stable=_multiselect_stable,
+            render_kpi_card=_render_kpi_card,
+            fmt_brl_ptbr_celula=_fmt_brl_ptbr_celula,
+            col_referencia_como_texto=_col_referencia_como_texto,
+        )
+    except Exception as exc:
+        st.error("Não foi possível carregar o painel de Frete.")
+        st.exception(exc)
 

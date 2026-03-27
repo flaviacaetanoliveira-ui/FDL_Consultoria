@@ -231,13 +231,13 @@ def _painel_frete_conteudo(
     st.markdown('<div class="section-title">Resumo do recorte</div>', unsafe_allow_html=True)
     k1, k2, k3, k4 = st.columns(4)
     with k1:
-        render_kpi_card("Vendas no recorte", f"{len(tbl_show):,}".replace(",", "."), "â—‡", "kpi-total")
+        render_kpi_card("Vendas no recorte", f"{len(tbl_show):,}".replace(",", "."), "\u25c6", "kpi-total")
     with k2:
-        render_kpi_card("Com frete ML", f"{n_com_frete:,}".replace(",", "."), "âˆš", "kpi-ok")
+        render_kpi_card("Com frete ML", f"{n_com_frete:,}".replace(",", "."), "\u2713", "kpi-ok")
     with k3:
-        render_kpi_card("Sem dados envio", f"{n_sem:,}".replace(",", "."), "â—‹", "kpi-pend")
+        render_kpi_card("Sem dados envio", f"{n_sem:,}".replace(",", "."), "\u25cb", "kpi-pend")
     with k4:
-        render_kpi_card("Soma Frete ML", f"R$ {soma_frete:,.2f}", "â—†", "kpi-acao")
+        render_kpi_card("Soma Frete ML", f"R$ {soma_frete:,.2f}", "\u2605", "kpi-acao")
 
     if meta.get("frete_tabular") and FRETE_UI_STATUS_CONC in tbl_show.columns:
         div = tbl_show[tbl_show[FRETE_UI_STATUS_CONC].eq(FRETE_UI_VAL_DIVERGENCIA)]
@@ -308,13 +308,17 @@ def _painel_frete_conteudo(
 
     st.markdown('<div class="section-title">Tabela</div>', unsafe_allow_html=True)
     t_grid = _dataframe_frete_grid(tbl_show, fmt_brl_ptbr_celula, col_referencia_como_texto)
-    st.dataframe(
-        t_grid,
-        column_config=_column_config_frete(t_grid),
-        use_container_width=True,
-        hide_index=True,
-        height=min(520, 120 + 28 * min(len(t_grid), 18)),
-    )
+    _h_df = min(520, 120 + 28 * min(len(t_grid), 18))
+    try:
+        st.dataframe(
+            t_grid,
+            column_config=_column_config_frete(t_grid),
+            use_container_width=True,
+            hide_index=True,
+            height=_h_df,
+        )
+    except Exception:
+        st.dataframe(t_grid, use_container_width=True, hide_index=True, height=_h_df)
     st.download_button(
         "Exportar CSV",
         tbl_show.to_csv(index=False).encode("utf-8-sig"),

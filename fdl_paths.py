@@ -4,7 +4,8 @@ Diretório base dos dados do cliente (vendas, liberações, notas, contas a rece
 Ordem de resolução (primeiro que existir):
 1. Variável de ambiente `FDL_BASE_DIR`
 2. `st.secrets["FDL_BASE_DIR"]` (Streamlit Community Cloud / local)
-3. Pasta padrão no repositório: `./data_cliente`
+3. Pasta `./cliente_1` na raiz do repositório, **se existir** (dados originais / mesma árvore que no OneDrive)
+4. Senão `./data_cliente`
 
 Não altera regras de negócio — apenas centraliza onde o pipeline lê arquivos.
 """
@@ -30,6 +31,10 @@ def _resolve_base_dir() -> Path:
                 return Path(str(sec["FDL_BASE_DIR"])).expanduser().resolve()
     except Exception:
         pass
+
+    cliente1 = _REPO_ROOT / "cliente_1"
+    if cliente1.is_dir():
+        return cliente1.resolve()
 
     return (_REPO_ROOT / "data_cliente").resolve()
 

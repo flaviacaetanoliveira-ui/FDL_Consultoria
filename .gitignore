@@ -8,6 +8,13 @@ venv/
 *.xlsx~
 ~$*
 
+# Dados reais em cliente_1 (estrutura versionada; ficheiros não)
+cliente_1/**/*.xlsx
+cliente_1/**/*.xls
+cliente_1/**/*.csv
+cliente_1/**/*.zip
+!cliente_1/**/.gitkeep
+
 # Agendamento local (caminhos da maquina)
 agendamento/config_local.bat
 agendamento/logs/

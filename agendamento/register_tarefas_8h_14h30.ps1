@@ -38,7 +38,7 @@ $settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances IgnoreNew
 
 $description = @"
-Sincroniza Vendas - Mercado Livre e frete por anuncio para data_cliente; executa powerbi_mirror/export (se nao SKIP).
+Sincroniza Vendas - Mercado Livre e frete por anuncio para cliente_1 (se existir) ou data_cliente; executa powerbi_mirror/export (se nao SKIP).
 Configurar caminhos em agendamento\config_local.bat (copiar de config_local.bat.example).
 "@
 

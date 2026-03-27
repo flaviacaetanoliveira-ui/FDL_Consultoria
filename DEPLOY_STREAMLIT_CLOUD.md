@@ -16,7 +16,7 @@ O repositório deve apontar para este arquivo como entrada do Streamlit (`stream
 2. **`requirements.txt`** — dependências do app e do pipeline.
 3. **`.streamlit/config.toml`** — configuração mínima do servidor.
 4. **`.streamlit/secrets.toml.example`** — modelo de segredo (sem credenciais reais).
-5. **`data_cliente/`** — pasta padrão quando nenhum caminho é configurado (vazia no repo, com `.gitkeep`).
+5. **`cliente_1/`** — se existir na raiz do repo, torna-se a base padrão (`FDL_BASE_DIR`) para dados originais; senão usa **`data_cliente/`** (vazia no repo, com `.gitkeep`).
 6. **`.gitignore`** — ignora `secrets.toml` e artefatos comuns.
 
 Nenhuma regra de negócio, cálculo ou etapa do pipeline foi alterada — apenas a origem do caminho `BASE_DIR`.
@@ -43,9 +43,9 @@ O app **lê arquivos CSV/Excel do disco** nas pastas:
    - Limite de tamanho do repo / GitHub: atenção ao volume; para bases grandes, isso não escala.
 2. **Definir o segredo `FDL_BASE_DIR`** no painel do Streamlit Cloud **apenas se** no futuro houver suporte a caminho montado ou outra origem — hoje, na prática, o caminho útil no Cloud é **relativo ao diretório do app** (repo).
 
-**Valor padrão sem configuração:** `FDL_BASE_DIR` não definido → usa `data_cliente/` na raiz do projeto.
+**Valor padrão sem configuração:** `FDL_BASE_DIR` não definido → se existir `./cliente_1` no repositório (pasta real ou junction para o OneDrive), usa essa; senão `data_cliente/`.
 
-**Desenvolvimento local com a pasta antiga:** defina variável de ambiente antes de rodar:
+**Desenvolvimento local com `cliente_1` fora do repo:** defina variável de ambiente antes de rodar:
 
 ```powershell
 $env:FDL_BASE_DIR = "C:\caminho\para\cliente_1"

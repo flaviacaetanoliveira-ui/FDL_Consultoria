@@ -1,6 +1,8 @@
-# Dados do cliente (pasta base)
+# Dados do cliente (pasta base — *fallback*)
 
-Quando `FDL_BASE_DIR` não está definido (variável de ambiente ou `st.secrets`), o app usa esta pasta como raiz.
+Quando `FDL_BASE_DIR` não está definido **e não existe** a pasta `cliente_1/` na raiz do projeto, o app usa **`data_cliente/`** como raiz.
+
+Se existir **`cliente_1/`** no repositório (ou junção para a pasta real do cliente), essa pasta tem **prioridade** — é o local recomendado para a planilha original e a mesma árvore do OneDrive.
 
 Estrutura esperada pelo pipeline (mesmos nomes de pastas):
 

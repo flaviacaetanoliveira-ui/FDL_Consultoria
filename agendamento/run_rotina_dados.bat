@@ -1,5 +1,5 @@
 @echo off
-REM Rotina: copia vendas ML + frete por anuncio para data_cliente e (opcional) gera CSV do mirror Power BI.
+REM Rotina: copia vendas ML + frete por anuncio para cliente_1 (se existir) senao data_cliente; opcional export Power BI.
 REM Agendador do Windows: apontar para este ficheiro. Opcoes em config_local.bat (ver .example).
 setlocal EnableExtensions EnableDelayedExpansion
 set "ROOT=%~dp0.."
@@ -14,8 +14,12 @@ set "LOG=%LOGDIR%\rotina.log"
 echo. >> "%LOG%"
 echo ========== %date% %time% INICIO ========== >> "%LOG%"
 
-set "DEST_VENDAS=%ROOT%\data_cliente\Vendas - Mercado Livre"
-set "DEST_BASE=%ROOT%\data_cliente"
+if exist "%ROOT%\cliente_1\" (
+  set "DEST_BASE=%ROOT%\cliente_1"
+) else (
+  set "DEST_BASE=%ROOT%\data_cliente"
+)
+set "DEST_VENDAS=%DEST_BASE%\Vendas - Mercado Livre"
 if not exist "%DEST_VENDAS%" mkdir "%DEST_VENDAS%" 2>nul
 
 if defined FDL_SYNC_VENDAS_SRC (

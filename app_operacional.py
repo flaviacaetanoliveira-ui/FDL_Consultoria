@@ -1273,29 +1273,71 @@ st.markdown(
         color: #64748b; margin: 0 0 0.75rem 0;
       }
 
-      div[data-testid="stDataFrame"] [data-testid="stTable"] { border-collapse: separate; border-spacing: 0; font-size: 0.9rem; }
-      div[data-testid="stDataFrame"] [data-testid="stTable"] table tbody tr:nth-child(even) { background-color: #f8fafc; }
-      div[data-testid="stDataFrame"] [data-testid="stTable"] table tbody tr:hover { background-color: #f1f5f9 !important; }
-      div[data-testid="stDataFrame"] [data-testid="stTable"] table thead tr th {
-        background: linear-gradient(180deg, #0f172a 0%, #1e293b 55%, #0f172a 100%) !important;
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-        font-weight: 800 !important;
-        font-size: 0.84rem !important;
+      /* Tabela conciliação — só área principal (evita afetar sidebar) */
+      section.main div[data-testid="stDataFrame"] {
+        border-radius: 14px !important;
+        overflow: hidden !important;
+        border: 1px solid #d8e2ec !important;
+        box-shadow:
+          0 1px 2px rgba(15, 23, 42, 0.04),
+          0 8px 28px rgba(15, 23, 42, 0.07) !important;
+        background: #ffffff !important;
+      }
+      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] {
+        border-collapse: separate !important;
+        border-spacing: 0 !important;
+        font-size: 0.9rem !important;
+        font-variant-numeric: tabular-nums;
+      }
+      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table { width: 100%; }
+      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table thead tr th {
+        background: linear-gradient(165deg, #1e3a5f 0%, #0f172a 48%, #172554 100%) !important;
+        color: #f1f5f9 !important;
+        -webkit-text-fill-color: #f1f5f9 !important;
+        font-weight: 700 !important;
+        font-size: 0.76rem !important;
+        line-height: 1.25 !important;
         text-transform: uppercase;
-        letter-spacing: 0.07em;
-        padding: 0.85rem 0.8rem !important;
-        border-bottom: 3px solid #0ea5e9 !important;
+        letter-spacing: 0.09em;
+        padding: 0.95rem 0.85rem !important;
+        border-bottom: none !important;
         border-top: none !important;
-        text-shadow: 0 1px 3px rgba(0,0,0,0.45);
+        border-left: 1px solid rgba(148, 163, 184, 0.12) !important;
+        border-right: none !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
       }
-      div[data-testid="stDataFrame"] [data-testid="stTable"] table thead tr th * {
-        color: #ffffff !important;
+      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table thead tr th:first-child {
+        border-left: none !important;
+        border-top-left-radius: 0;
       }
-      div[data-testid="stDataFrame"] [data-testid="stTable"] table tbody td {
-        padding: 0.55rem 0.75rem !important;
-        border-bottom: 1px solid #e2e8f0;
+      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table thead tr th:last-child {
+        border-right: none !important;
+      }
+      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table thead tr {
+        box-shadow: 0 3px 0 #38bdf8, 0 8px 16px rgba(14, 165, 233, 0.12);
+      }
+      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table thead tr th * {
+        color: #f8fafc !important;
+        font-weight: 700 !important;
+      }
+      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table tbody tr:nth-child(even) {
+        background-color: #f8fafc !important;
+      }
+      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table tbody tr:nth-child(odd) {
+        background-color: #ffffff !important;
+      }
+      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table tbody tr:hover td {
+        background-color: #e0f2fe !important;
+        transition: background-color 0.12s ease;
+      }
+      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table tbody td {
+        padding: 0.65rem 0.8rem !important;
+        border-bottom: 1px solid #e8eef4 !important;
+        color: #1e293b;
         vertical-align: middle;
+      }
+      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table tbody tr:last-child td {
+        border-bottom: none !important;
       }
     </style>
     """,
@@ -1338,11 +1380,17 @@ def _excluir_linhas_fora_conciliacao(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _column_config_conciliacao(df: pd.DataFrame) -> dict[str, NumberColumn | DatetimeColumn]:
-    """Formatação nativa Streamlit (pandas Styler foi removido — rebentava o browser com muitas linhas)."""
+    """Formatação nativa Streamlit — moeda com milhares; IDs numéricos com separador de milhares."""
     cfg: dict[str, NumberColumn | DatetimeColumn] = {}
+    _is_num = pd.api.types.is_numeric_dtype
     for c in ("Valor da nota", "Valor a receber", "Valor pago", "Diferença"):
         if c in df.columns:
-            cfg[c] = NumberColumn(c, format="R$ %.2f")
+            cfg[c] = NumberColumn(c, format="R$ %,.2f")
+    for c in ("Número da venda", "Número do pedido"):
+        if c in df.columns and _is_num(df[c]):
+            cfg[c] = NumberColumn(c, format="%,.0f", width="medium")
+    if "Número da nota" in df.columns and _is_num(df["Número da nota"]):
+        cfg["Número da nota"] = NumberColumn("Número da nota", format="%,.0f", width="small")
     if "Data de emissão" in df.columns:
         cfg["Data de emissão"] = DatetimeColumn("Data de emissão", format="DD/MM/YYYY", width="small")
     if "Data de pagamento" in df.columns:

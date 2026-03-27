@@ -127,10 +127,27 @@ def _read_vendas_ml_bytes(payload: bytes, filename: str) -> pd.DataFrame:
         tmp.write(payload)
         tmp_path = Path(tmp.name)
     try:
-        header_row = detect_excel_header_row(tmp_path)
-        return pd.read_excel(tmp_path, header=header_row, engine="openpyxl")
+        return _read_excel_frete_ml_best_header(tmp_path)
     finally:
         tmp_path.unlink(missing_ok=True)
+
+
+def _read_excel_frete_ml_best_header(path: Path) -> pd.DataFrame:
+    """
+    Vários exports ML têm linhas de título antes do cabeçalho real.
+    Procura a primeira linha de cabeçalho onde existem colunas de frete ML reconhecíveis.
+    """
+    peek = pd.read_excel(path, header=None, engine="openpyxl", nrows=35)
+    nrows = len(peek)
+    needed = ("n_venda", "receita_envio", "tarifas_envio", "unidades", "id_anuncio")
+    for hr in range(0, min(18, nrows)):
+        df = pd.read_excel(path, header=hr, engine="openpyxl")
+        df = df.dropna(axis=1, how="all")
+        cmap = _resolve_columns(df)
+        if all(k in cmap for k in needed):
+            return df
+    hr = detect_excel_header_row(path)
+    return pd.read_excel(path, header=hr, engine="openpyxl")
 
 
 def _strip_ascii_lower(s: str) -> str:
@@ -176,6 +193,12 @@ def _resolve_columns(df: pd.DataFrame) -> dict[str, str]:
     rec = _pick_col(cols, "receita", "envio") or _pick_col(cols, "receita", "frete")
     if rec:
         out["receita_envio"] = rec
+    if "receita_envio" not in out:
+        for c in cols:
+            n = _strip_ascii_lower(str(c))
+            if "receita" in n and ("envio" in n or "frete" in n or "shipping" in n):
+                out["receita_envio"] = c
+                break
 
     tar = next(
         (
@@ -187,10 +210,24 @@ def _resolve_columns(df: pd.DataFrame) -> dict[str, str]:
     )
     if tar:
         out["tarifas_envio"] = tar
+    if "tarifas_envio" not in out:
+        for c in cols:
+            n = _strip_ascii_lower(str(c))
+            if ("tarifa" in n or "tarifas" in n) and ("envio" in n or "frete" in n):
+                out["tarifas_envio"] = c
+                break
 
     an = next((c for c in cols if "#" in str(c) and "an" in _strip_ascii_lower(str(c))), None)
     if an is None:
         an = _pick_col(cols, "de", "anuncio")
+    if an is None:
+        an = _pick_col(cols, "id", "anuncio")
+    if an is None:
+        for c in cols:
+            n = _strip_ascii_lower(str(c))
+            if "mlb" in n.replace(" ", "") or ("item" in n and "id" in n):
+                an = c
+                break
     if an:
         out["id_anuncio"] = an
 

@@ -46,7 +46,7 @@ from operacional_frete import (
 from operacional_frete_ui import painel_frete_fragment
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
-BUILD_TAG = "build-20260327-login-css-fix"
+BUILD_TAG = "build-20260327-frete-ml-header"
 
 try:
     st.set_page_config(page_title="FDL Analytics — Financeiro", layout="wide")
@@ -1572,6 +1572,11 @@ def _painel_frete_emergencial(org_id: str) -> None:
         st.caption(str(BASE_DIR))
         return
 
+    if (fontes.vendas_url or "").strip():
+        st.success("**FDL_FRETE_VENDAS_URL** detetado — a base será descarregada a partir do SharePoint.")
+    else:
+        st.caption(f"Fonte local: `{fontes.vendas_path}`")
+
     st.caption("Para evitar travamentos no navegador, a base é carregada sob demanda.")
     _load_key = f"frete_emergencial_load_{org_id}"
     if st.button("Carregar base de Frete", key=f"{_load_key}_btn"):
@@ -1600,8 +1605,16 @@ def _painel_frete_emergencial(org_id: str) -> None:
             df_frete, meta_frete = carregar_base_frete_ml(
                 org_id, vendas_ref, v_ns, frete_ref, f_ns
             )
+    except ValueError as exc:
+        st.error("O ficheiro não parece ser o **export de vendas ML** (detalhe envios).")
+        st.warning(
+            "Confirme que **FDL_FRETE_VENDAS_URL** aponta para o mesmo tipo de ficheiro que está em "
+            "**Vendas - Mercado Livre** no OneDrive (não use a planilha de **Repasse**)."
+        )
+        st.code(str(exc), language="text")
+        return
     except Exception as exc:
-        st.error("Falha ao carregar base de Frete.")
+        st.error("Falha ao carregar base de Frete (rede, formato ou timeout).")
         st.exception(exc)
         return
 

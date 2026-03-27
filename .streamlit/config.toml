@@ -3,3 +3,9 @@ headless = true
 
 [browser]
 gatherUsageStats = false
+
+# Glide Data Grid (st.dataframe): cabeçalho e contraste — alinhado à identidade FDL da app
+[theme]
+base = "light"
+dataframeHeaderBackgroundColor = "#1e3a5f"
+dataframeBorderColor = "#cbd5e1"

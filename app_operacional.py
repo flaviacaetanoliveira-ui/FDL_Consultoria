@@ -6,6 +6,8 @@ from io import BytesIO
 import base64
 import json
 import hashlib
+import math
+import numbers
 import os
 from pathlib import Path
 import shutil
@@ -19,7 +21,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
-from streamlit.column_config import DatetimeColumn, NumberColumn
+from streamlit.column_config import DatetimeColumn, NumberColumn, TextColumn
 from openpyxl.styles import numbers
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -1273,7 +1275,9 @@ st.markdown(
         color: #64748b; margin: 0 0 0.75rem 0;
       }
 
-      /* Tabela conciliação — só área principal (evita afetar sidebar) */
+      /* Tabela conciliação: o st.dataframe atual usa Glide Data Grid (canvas) — o cabeçalho
+         real vem de theme.dataframeHeaderBackgroundColor em .streamlit/config.toml.
+         Regras abaixo sobem o cartão à volta do widget; células HTML stTable só em legacy. */
       section.main div[data-testid="stDataFrame"] {
         border-radius: 14px !important;
         overflow: hidden !important;
@@ -1361,6 +1365,42 @@ def _serie_numero_nota_valida(s: pd.Series) -> pd.Series:
     return x.ne("") & ~lower.isin({"none", "nan", "nat", "<na>", "null"})
 
 
+def _col_referencia_como_texto(s: pd.Series) -> pd.Series:
+    """Venda / pedido / NF como texto literal (incl. numpy.int64; sem «.0» em IDs float)."""
+    def _um(v: object) -> str:
+        if v is None:
+            return ""
+        if isinstance(v, str):
+            t = v.strip()
+            return "" if t.lower() in {"nan", "none", "nat", "<na>", "null"} else t
+        try:
+            if pd.isna(v):
+                return ""
+        except TypeError:
+            pass
+        if isinstance(v, bool):
+            return str(v)
+        if isinstance(v, numbers.Integral):
+            return str(int(v))
+        if isinstance(v, numbers.Real):
+            fv = float(v)
+            if math.isnan(fv):
+                return ""
+            iv = int(round(fv))
+            if abs(fv - iv) < 1e-9:
+                return str(iv)
+            t = str(v).strip()
+            return "" if t.lower() in {"nan", "none"} else t
+        t = str(v).strip()
+        if t.lower() in {"nan", "none", "nat", "<na>", "null"}:
+            return ""
+        if t.endswith(".0") and t.replace(".", "", 1).replace("-", "", 1).isdigit():
+            return t[:-2]
+        return t
+
+    return s.map(_um).astype("string")
+
+
 def _excluir_linhas_fora_conciliacao(df: pd.DataFrame) -> pd.DataFrame:
     """
     Remove linhas sem nota fiscal e taxas ML residuais (ex.: 3,62 / 3,54) típicas de encargos sem NF.
@@ -1379,18 +1419,15 @@ def _excluir_linhas_fora_conciliacao(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _column_config_conciliacao(df: pd.DataFrame) -> dict[str, NumberColumn | DatetimeColumn]:
-    """Formatação nativa Streamlit — moeda com milhares; IDs numéricos com separador de milhares."""
-    cfg: dict[str, NumberColumn | DatetimeColumn] = {}
-    _is_num = pd.api.types.is_numeric_dtype
+def _column_config_conciliacao(df: pd.DataFrame) -> dict[str, NumberColumn | DatetimeColumn | TextColumn]:
+    """Moeda formatada; venda / pedido / NF como texto (códigos, não quantidade)."""
+    cfg: dict[str, NumberColumn | DatetimeColumn | TextColumn] = {}
     for c in ("Valor da nota", "Valor a receber", "Valor pago", "Diferença"):
         if c in df.columns:
             cfg[c] = NumberColumn(c, format="R$ %,.2f")
-    for c in ("Número da venda", "Número do pedido"):
-        if c in df.columns and _is_num(df[c]):
-            cfg[c] = NumberColumn(c, format="%,.0f", width="medium")
-    if "Número da nota" in df.columns and _is_num(df["Número da nota"]):
-        cfg["Número da nota"] = NumberColumn("Número da nota", format="%,.0f", width="small")
+    for c in ("Número da venda", "Número do pedido", "Número da nota"):
+        if c in df.columns:
+            cfg[c] = TextColumn(c, width="medium")
     if "Data de emissão" in df.columns:
         cfg["Data de emissão"] = DatetimeColumn("Data de emissão", format="DD/MM/YYYY", width="small")
     if "Data de pagamento" in df.columns:
@@ -1736,6 +1773,17 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         for _dc in ("Data de emissão", "Data de pagamento"):
             if _dc in tabela_exibir.columns:
                 tabela_exibir[_dc] = pd.to_datetime(tabela_exibir[_dc], errors="coerce")
+        for _ref in ("Número da venda", "Número do pedido", "Número da nota"):
+            if _ref in tabela_exibir.columns:
+                # object + str puro: o Glide Data Grid formata int/float com separadores de milhar
+                _txt = _col_referencia_como_texto(tabela_exibir[_ref])
+                _obj: list[str | None] = []
+                for x in _txt:
+                    if pd.isna(x) or x == "":
+                        _obj.append(None)
+                    else:
+                        _obj.append(str(x))
+                tabela_exibir[_ref] = pd.Series(_obj, dtype=object, index=tabela_exibir.index)
     
     st.markdown(
         """
@@ -1796,12 +1844,21 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.info(
             "**Nenhum registo** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
         )
-        st.dataframe(tabela_exibir, use_container_width=True, height=160)
+        st.dataframe(
+            tabela_exibir,
+            use_container_width=True,
+            height=160,
+            hide_index=True,
+            column_config=_column_config_conciliacao(tabela_exibir)
+            if not tabela_exibir.empty
+            else None,
+        )
     else:
         st.dataframe(
             tabela_exibir,
             use_container_width=True,
             height=550,
+            hide_index=True,
             column_config=_column_config_conciliacao(tabela_exibir),
         )
     st.write(f"Linhas filtradas: **{len(tabela_exibir)}**")

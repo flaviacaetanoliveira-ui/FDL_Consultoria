@@ -151,6 +151,16 @@ def _dynamic_materialized_repasse_rel_path(org_id: str) -> str:
     return f"{root}/{cliente}/{oid}/repasse/current/dataset_repasse_app.csv"
 
 
+def _dynamic_materialized_frete_rel_path(org_id: str) -> str:
+    """Mesmo layout que materialize_financeiro; não depender do CSV de repasse existir para derivar o path."""
+    cliente = _materialized_cliente_slug()
+    if not cliente or not (org_id or "").strip():
+        return ""
+    root = _materialized_data_products_root().strip().strip("/\\")
+    oid = org_id.strip()
+    return f"{root}/{cliente}/{oid}/frete/current/dataset_frete_app.csv"
+
+
 _fdl_global_trace("01: início app_operacional (módulo reexecutado)")
 _app_ctx = require_app_user()
 _fdl_global_trace("02: após autenticação (require_app_user)")
@@ -477,7 +487,7 @@ def _frete_consume_mode() -> str:
 
 def _frete_materialized_path_str() -> str:
     if _materialized_path_mode() == "dynamic":
-        return ""
+        return _dynamic_materialized_frete_rel_path(_active_org.org_id)
     raw = os.environ.get("FDL_FRETE_MATERIALIZED_PATH", "").strip()
     if raw:
         return raw

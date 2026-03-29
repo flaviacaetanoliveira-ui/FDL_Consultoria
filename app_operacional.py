@@ -33,7 +33,6 @@ from etapa4b_integracao_contas_receber import BASE_DIR, carregar_tabela_final_op
 from operacional_app_context import (
     SESSION_ACTIVE_ORG_KEY,
     get_active_organization,
-    get_app_context,
     logout_operacional_user,
     nomes_permitidos_com_registro,
     organizacao_por_nome_cadastrado,
@@ -72,7 +71,7 @@ from operacional_frete import (
 from operacional_frete_ui import _dataframe_frete_grid
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
-BUILD_TAG = "build-20260328-frete-auto-load"
+BUILD_TAG = "build-20260329-multiempresa-data-products"
 
 _SB_LOGO_MINI_SVG = """
 <svg class="fdl-sb-logo-mini" width="38" height="38" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -104,54 +103,76 @@ def _fdl_global_trace(msg: str) -> None:
         pass
 
 
-def _ui_single_empresa_mode() -> bool:
+def _materialized_path_mode() -> str:
     """
-    Deploy onde repasse/frete materializado vem de um único path (secrets), sem troca por org.
-    Com FDL_UI_SINGLE_EMPRESA ativo, o seletor de empresa não sugere mudança de dataset.
+    fixed — FDL_REPASSE_MATERIALIZED_PATH / frete / faturamento nos secrets (legado).
+    dynamic — repasse/frete/faturamento derivados de data_products/<cliente>/<org_id>/... pela org ativa.
     """
-    raw = os.environ.get("FDL_UI_SINGLE_EMPRESA", "").strip().lower()
-    if raw in {"1", "true", "yes", "on"}:
-        return True
-    if raw in {"0", "false", "no", "off"}:
-        return False
+    raw = os.environ.get("FDL_MATERIALIZED_PATH_MODE", "").strip().lower()
+    if raw in {"dynamic", "fixed"}:
+        return raw
     try:
-        sec = st.secrets.get("FDL_UI_SINGLE_EMPRESA", False)
-        if isinstance(sec, bool):
-            return sec
-        return str(sec).strip().lower() in {"1", "true", "yes", "on"}
+        s = str(st.secrets.get("FDL_MATERIALIZED_PATH_MODE", "")).strip().lower()
+        if s in {"dynamic", "fixed"}:
+            return s
     except Exception:
-        return False
+        pass
+    return "fixed"
 
 
-def _ui_single_empresa_nome_display() -> str:
-    """Nome exibido quando FDL_UI_SINGLE_EMPRESA está ligado (deve bater com _REGISTRO_EMPRESA)."""
-    env = os.environ.get("FDL_UI_SINGLE_EMPRESA_NAME", "").strip()
-    if env:
-        return env
+def _materialized_cliente_slug() -> str:
+    """Segmento de pasta do cliente (ex.: cliente_2), alinhado a materialize_financeiro --cliente."""
+    raw = os.environ.get("FDL_MATERIALIZED_CLIENTE_SLUG", "").strip()
+    if raw:
+        return raw
     try:
-        v = str(st.secrets.get("FDL_UI_SINGLE_EMPRESA_NAME", "Gama Home")).strip()
-        return v or "Gama Home"
+        return str(st.secrets.get("FDL_MATERIALIZED_CLIENTE_SLUG", "")).strip()
     except Exception:
-        return "Gama Home"
+        return ""
 
 
-def _apply_single_empresa_session_lock() -> None:
-    """Força active_org_id para a empresa do dataset fixo (alinhado ao path materializado)."""
-    if not _ui_single_empresa_mode():
-        return
-    nome = _ui_single_empresa_nome_display()
-    org = organizacao_por_nome_cadastrado(nome)
-    if not org:
-        return
-    st.session_state[SESSION_ACTIVE_ORG_KEY] = org.org_id
+def _materialized_data_products_root() -> str:
+    raw = os.environ.get("FDL_DATA_PRODUCTS_ROOT", "").strip()
+    if raw:
+        return raw
+    try:
+        v = str(st.secrets.get("FDL_DATA_PRODUCTS_ROOT", "data_products")).strip()
+        return v or "data_products"
+    except Exception:
+        return "data_products"
+
+
+def _dynamic_materialized_repasse_rel_path(org_id: str) -> str:
+    cliente = _materialized_cliente_slug()
+    if not cliente or not (org_id or "").strip():
+        return ""
+    root = _materialized_data_products_root().strip().strip("/\\")
+    oid = org_id.strip()
+    return f"{root}/{cliente}/{oid}/repasse/current/dataset_repasse_app.csv"
 
 
 _fdl_global_trace("01: início app_operacional (módulo reexecutado)")
 _app_ctx = require_app_user()
 _fdl_global_trace("02: após autenticação (require_app_user)")
-_apply_single_empresa_session_lock()
-_app_ctx = get_app_context()
 _active_org = get_active_organization(_app_ctx)
+
+
+def _dataset_empresa_label() -> str:
+    """Rótulo da coluna `empresa` quando o dataset não a traz; em dynamic alinha à org ativa."""
+    if _materialized_path_mode() == "dynamic":
+        return _active_org.display_name
+    return DATASET_EMPRESA
+
+
+def _filtrar_df_col_empresa_por_contexto(df: pd.DataFrame) -> pd.DataFrame:
+    """Em dynamic, restringe à empresa ativa (evita mistura se o CSV estiver errado)."""
+    if df.empty or "empresa" not in df.columns:
+        return df
+    if _materialized_path_mode() == "dynamic":
+        return df[df["empresa"] == _active_org.display_name].copy()
+    empresas = st.session_state["empresas_permitidas"]
+    return df[df["empresa"].isin(empresas)].copy()
+
 
 if "op_financeiro_view" not in st.session_state:
     st.session_state["op_financeiro_view"] = "repasse"
@@ -418,6 +439,8 @@ def _repasse_consume_mode() -> str:
 
 
 def _repasse_materialized_path_str() -> str:
+    if _materialized_path_mode() == "dynamic":
+        return _dynamic_materialized_repasse_rel_path(_active_org.org_id)
     raw = os.environ.get("FDL_REPASSE_MATERIALIZED_PATH", "").strip()
     if raw:
         return raw
@@ -428,6 +451,8 @@ def _repasse_materialized_path_str() -> str:
 
 
 def _repasse_materialized_url_str() -> str:
+    if _materialized_path_mode() == "dynamic":
+        return ""
     raw = os.environ.get("FDL_REPASSE_MATERIALIZED_URL", "").strip()
     if raw:
         return raw
@@ -451,6 +476,8 @@ def _frete_consume_mode() -> str:
 
 
 def _frete_materialized_path_str() -> str:
+    if _materialized_path_mode() == "dynamic":
+        return ""
     raw = os.environ.get("FDL_FRETE_MATERIALIZED_PATH", "").strip()
     if raw:
         return raw
@@ -461,6 +488,8 @@ def _frete_materialized_path_str() -> str:
 
 
 def _frete_materialized_url_str() -> str:
+    if _materialized_path_mode() == "dynamic":
+        return ""
     raw = os.environ.get("FDL_FRETE_MATERIALIZED_URL", "").strip()
     if raw:
         return raw
@@ -485,6 +514,8 @@ def _faturamento_consume_mode() -> str:
 
 
 def _faturamento_materialized_path_str() -> str:
+    if _materialized_path_mode() == "dynamic":
+        return ""
     raw = os.environ.get("FDL_FATURAMENTO_MATERIALIZED_PATH", "").strip()
     if raw:
         return raw
@@ -495,6 +526,8 @@ def _faturamento_materialized_path_str() -> str:
 
 
 def _faturamento_materialized_url_str() -> str:
+    if _materialized_path_mode() == "dynamic":
+        return ""
     raw = os.environ.get("FDL_FATURAMENTO_MATERIALIZED_URL", "").strip()
     if raw:
         return raw
@@ -1878,7 +1911,7 @@ def _finalize_precomputed_df(
     _validate_onedrive_csv_schema(tabela)
     if "empresa" not in tabela.columns:
         tabela = tabela.copy()
-        tabela["empresa"] = DATASET_EMPRESA
+        tabela["empresa"] = _dataset_empresa_label()
     ts_out = ts if ts is not None else _now_ts_br_str()
     info: dict[str, object] = {
         "base_dir": base_label,
@@ -1992,7 +2025,7 @@ def load_data_from_onedrive() -> tuple[pd.DataFrame, dict[str, object], str]:
         _validate_onedrive_csv_schema(tabela)
         if "empresa" not in tabela.columns:
             tabela = tabela.copy()
-            tabela["empresa"] = DATASET_EMPRESA
+            tabela["empresa"] = _dataset_empresa_label()
         ts = _ts_br_from_http_last_modified(last_modified) or _now_ts_br_str()
         info = {
             "base_dir": "onedrive",
@@ -2039,6 +2072,23 @@ def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
 
     path_s = _repasse_materialized_path_str()
     url_s = _repasse_materialized_url_str()
+    if _materialized_path_mode() == "dynamic" and not path_s and not url_s:
+        msg = (
+            "Repasse em modo FDL_MATERIALIZED_PATH_MODE=dynamic: defina FDL_MATERIALIZED_CLIENTE_SLUG "
+            f"(ex.: cliente_2). Esperado: {_materialized_data_products_root().strip()}/<cliente>/{_active_org.org_id}/"
+            "repasse/current/dataset_repasse_app.csv"
+        )
+        if _strict_materialized():
+            raise ValueError(msg + " " + _STRICT_MATERIALIZED_USER_MSG)
+        tabela, info, ts = _load_data_live()
+        if _is_admin_mode():
+            info = {
+                **info,
+                "repasse_consume": "live",
+                "repasse_materialized_note": msg,
+            }
+        return tabela, info, ts
+
     if not path_s and not url_s:
         if _strict_materialized():
             raise ValueError(
@@ -4373,11 +4423,10 @@ elif _fv == "faturamento":
 
     if not faturamento_df.empty and "empresa" not in faturamento_df.columns:
         faturamento_df = faturamento_df.copy()
-        faturamento_df["empresa"] = DATASET_EMPRESA
+        faturamento_df["empresa"] = _dataset_empresa_label()
 
-    empresas = st.session_state["empresas_permitidas"]
     if not faturamento_df.empty:
-        faturamento_df = faturamento_df[faturamento_df["empresa"].isin(empresas)].copy()
+        faturamento_df = _filtrar_df_col_empresa_por_contexto(faturamento_df)
 
     faturamento_info = {**faturamento_info, "linhas": int(len(faturamento_df))}
     tabela_geral = pd.DataFrame()
@@ -4435,10 +4484,9 @@ else:
     # Cache antigo do Streamlit ou pickle sem a coluna — alinhar ao pipeline atual.
     if "empresa" not in tabela_geral.columns:
         tabela_geral = tabela_geral.copy()
-        tabela_geral["empresa"] = DATASET_EMPRESA
+        tabela_geral["empresa"] = _dataset_empresa_label()
 
-    empresas = st.session_state["empresas_permitidas"]
-    tabela_geral = tabela_geral[tabela_geral["empresa"].isin(empresas)].copy()
+    tabela_geral = _filtrar_df_col_empresa_por_contexto(tabela_geral)
     info = {**info, "linhas": int(len(tabela_geral))}
     _fdl_global_trace(f"repasse: após filtro empresa ({len(tabela_geral)} linhas)")
 
@@ -4482,28 +4530,23 @@ with st.sidebar:
     _nomes_nav = nomes_permitidos_com_registro(_empresas_usuario)
 
     if _nomes_nav:
-        if _ui_single_empresa_mode():
-            _nome_ui = _ui_single_empresa_nome_display()
-            st.caption("Empresa")
-            st.markdown(f"**{_nome_ui}**")
-        else:
-            _org_idx = 0
-            for i, n in enumerate(_nomes_nav):
-                _o = organizacao_por_nome_cadastrado(n)
-                if _o and _o.org_id == _app_ctx.active_org_id:
-                    _org_idx = i
-                    break
-            _sel_nome = st.selectbox(
-                "Empresa",
-                options=_nomes_nav,
-                index=_org_idx,
-                key="operacional_empresa_ativa_select",
-                label_visibility="visible",
-            )
-            _chosen_org = organizacao_por_nome_cadastrado(_sel_nome)
-            if _chosen_org and _chosen_org.org_id != _app_ctx.active_org_id:
-                st.session_state[SESSION_ACTIVE_ORG_KEY] = _chosen_org.org_id
-                st.rerun()
+        _org_idx = 0
+        for i, n in enumerate(_nomes_nav):
+            _o = organizacao_por_nome_cadastrado(n)
+            if _o and _o.org_id == _app_ctx.active_org_id:
+                _org_idx = i
+                break
+        _sel_nome = st.selectbox(
+            "Empresa",
+            options=_nomes_nav,
+            index=_org_idx,
+            key="operacional_empresa_ativa_select",
+            label_visibility="visible",
+        )
+        _chosen_org = organizacao_por_nome_cadastrado(_sel_nome)
+        if _chosen_org and _chosen_org.org_id != _app_ctx.active_org_id:
+            st.session_state[SESSION_ACTIVE_ORG_KEY] = _chosen_org.org_id
+            st.rerun()
 
     _sb_view = st.session_state.get("op_financeiro_view", "repasse")
     st.caption("Módulos")

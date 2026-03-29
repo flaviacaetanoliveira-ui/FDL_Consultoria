@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import html
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from io import BytesIO
 import base64
@@ -14,6 +14,7 @@ from pathlib import Path
 import shutil
 import time
 import unicodedata
+from textwrap import dedent
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse, urljoin
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -22,7 +23,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
-from streamlit.column_config import DatetimeColumn, NumberColumn, TextColumn
+from streamlit.column_config import DatetimeColumn, NumberColumn, SelectboxColumn, TextColumn
 from openpyxl.styles import numbers as oxl_number_formats
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -39,14 +40,47 @@ from operacional_app_context import (
 )
 from operacional_data_config import DATASET_EMPRESA
 from operacional_frete import (
-    carregar_base_frete_ml,
+    FRETE_ML_COL,
+    FRETE_UI_ANUNCIO,
+    FRETE_UI_ANALISADO_COBRADO_MAIOR,
+    FRETE_UI_ANALISADO_COBRADO_MENOR,
+    FRETE_UI_ANALISADO_REPASSE_FRETE,
+    FRETE_UI_CLASSIFICACAO,
+    FRETE_UI_DIFERENCA,
+    FRETE_UI_N_VENDA,
+    FRETE_UI_RECEBIDO,
+    FRETE_UI_SITUACAO_FRETE,
+    FRETE_UI_STATUS_CONC,
+    FRETE_UI_VAL_DIVERGENCIA,
+    FRETE_SITUACAO_FRETE_VALORES_FILTRO,
+    FRETE_VAL_RECEBIDO_NAO,
+    FRETE_VAL_RECEBIDO_SIM,
+    FontesFrete,
+    carregar_tabela_final_frete_operacional,
+    compute_frete_situacao_frete_column,
+    dataframe_frete_conciliacao_principal,
     descobrir_fontes_frete,
+    frete_kpis_executivos,
+    frete_series_normalize_sale_dt,
+    frete_tabela_anuncios_cobrado_maior,
+    frete_tabela_anuncios_repasse_frete,
+    normalize_frete_status_conc_display,
     stable_mtime_ns_for_frete_url,
+    validate_frete_operacional_dataframe,
 )
-from operacional_frete_ui import painel_frete_fragment
+from operacional_frete_ui import _dataframe_frete_grid
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
-BUILD_TAG = "build-20260327-frete-table-auto"
+BUILD_TAG = "build-20260328-frete-auto-load"
+
+_SB_LOGO_MINI_SVG = """
+<svg class="fdl-sb-logo-mini" width="38" height="38" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <defs><linearGradient id="fdlSbLogoGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#0284c7"/>
+  </linearGradient></defs>
+  <rect width="40" height="40" rx="11" fill="url(#fdlSbLogoGrad)"/>
+  <path d="M9 28h5V16H9v12zm8 0h5V10h-5v18zm8-6h5v6h-5v-6zm8-8h5v14h-5V14z" fill="#fff" fill-opacity="0.95"/>
+</svg>"""
 
 try:
     st.set_page_config(page_title="FDL Analytics — Financeiro", layout="wide")
@@ -96,11 +130,39 @@ _BROWSER_UA_CHROME = (
 _BR_TZ = ZoneInfo("America/Sao_Paulo")
 
 
-def _financeiro_radio_label(option: str) -> str:
-    """Label estável para st.radio — lambdas aqui fazem o widget «resetar» e podem dar ecrã em branco na Cloud."""
-    if option == "repasse":
-        return "📊 Conciliação de Repasse"
-    return "🚚 Conciliação de Frete"
+def _sb_user_initials(display_name: str) -> str:
+    """Iniciais para avatar (máx. 2 caracteres)."""
+    parts = [p for p in str(display_name).strip().split() if p]
+    if len(parts) >= 2:
+        return (parts[0][0] + parts[1][0]).upper()[:2]
+    if parts:
+        return parts[0][:2].upper()
+    return "?"
+
+
+def _sidebar_brand_logo_html() -> str:
+    """Uma única imagem PNG horizontal (marca + texto); proporção preservada. Fallback: ícone SVG."""
+    logo_path = _REPO_APP_ROOT / "assets" / "fdl_analytics_logo.png"
+    if logo_path.is_file():
+        b64 = base64.b64encode(logo_path.read_bytes()).decode("ascii")
+        return (
+            f'<img src="data:image/png;base64,{b64}" alt="FDL Analytics" '
+            'class="fdl-sb-brand-logo-img" loading="eager" decoding="async" />'
+        )
+    return f'<div class="fdl-sb-logo-fallback" aria-hidden="true">{_SB_LOGO_MINI_SVG}</div>'
+
+
+def _sb_nav_set_repasse() -> None:
+    st.session_state["op_financeiro_view"] = "repasse"
+
+
+def _sb_nav_set_frete() -> None:
+    st.session_state["op_financeiro_view"] = "frete"
+
+
+def _sb_logout_click() -> None:
+    logout_operacional_user()
+    st.rerun()
 
 
 def _now_ts_br_str() -> str:
@@ -167,6 +229,609 @@ def _data_source_mode() -> str:
         return str(st.secrets.get("FDL_DATA_SOURCE", "onedrive")).strip().lower()
     except Exception:
         return "onedrive"
+
+
+_STRICT_MATERIALIZED_USER_MSG = "Base não encontrada. Execute o processo de materialização."
+
+
+def _strict_materialized() -> bool:
+    """Produção: sem fallback live quando repasse/frete em modo materialized."""
+    raw = os.environ.get("FDL_STRICT_MATERIALIZED", "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    try:
+        sec = st.secrets.get("FDL_STRICT_MATERIALIZED", False)
+        if isinstance(sec, bool):
+            return sec
+        return str(sec).strip().lower() in {"1", "true", "yes", "on"}
+    except Exception:
+        return False
+
+
+def _repasse_consume_mode() -> str:
+    """Repasse: live = pipeline; materialized = CSV/XLSX. Com FDL_STRICT_MATERIALIZED, sem fallback para live."""
+    raw = os.environ.get("FDL_REPASSE_CONSUME_MODE", "").strip().lower()
+    if raw in {"materialized", "live"}:
+        return raw
+    try:
+        s = str(st.secrets.get("FDL_REPASSE_CONSUME_MODE", "")).strip().lower()
+        if s in {"materialized", "live"}:
+            return s
+    except Exception:
+        pass
+    return "live"
+
+
+def _repasse_materialized_path_str() -> str:
+    raw = os.environ.get("FDL_REPASSE_MATERIALIZED_PATH", "").strip()
+    if raw:
+        return raw
+    try:
+        return str(st.secrets.get("FDL_REPASSE_MATERIALIZED_PATH", "")).strip()
+    except Exception:
+        return ""
+
+
+def _repasse_materialized_url_str() -> str:
+    raw = os.environ.get("FDL_REPASSE_MATERIALIZED_URL", "").strip()
+    if raw:
+        return raw
+    try:
+        return str(st.secrets.get("FDL_REPASSE_MATERIALIZED_URL", "")).strip()
+    except Exception:
+        return ""
+
+
+def _frete_consume_mode() -> str:
+    raw = os.environ.get("FDL_FRETE_CONSUME_MODE", "").strip().lower()
+    if raw in {"materialized", "live"}:
+        return raw
+    try:
+        s = str(st.secrets.get("FDL_FRETE_CONSUME_MODE", "")).strip().lower()
+        if s in {"materialized", "live"}:
+            return s
+    except Exception:
+        pass
+    return "live"
+
+
+def _frete_materialized_path_str() -> str:
+    raw = os.environ.get("FDL_FRETE_MATERIALIZED_PATH", "").strip()
+    if raw:
+        return raw
+    try:
+        return str(st.secrets.get("FDL_FRETE_MATERIALIZED_PATH", "")).strip()
+    except Exception:
+        return ""
+
+
+def _frete_materialized_url_str() -> str:
+    raw = os.environ.get("FDL_FRETE_MATERIALIZED_URL", "").strip()
+    if raw:
+        return raw
+    try:
+        return str(st.secrets.get("FDL_FRETE_MATERIALIZED_URL", "")).strip()
+    except Exception:
+        return ""
+
+
+def _derive_frete_materialized_path_from_repasse_anchor(anchor: str) -> str:
+    """
+    Pipeline `materialize_financeiro`: repasse em .../repasse/current/ e frete em .../frete/current/dataset_frete_app.csv.
+    `anchor` pode ser FDL_REPASSE_MATERIALIZED_PATH ou FDL_PRECOMPUTED_PATH nesse layout (muitos clientes só definem precomputed).
+    """
+    if not (anchor or "").strip():
+        return ""
+    path = Path(anchor.strip()).expanduser()
+    if not path.is_absolute():
+        path = (_REPO_APP_ROOT / path).resolve()
+    if not path.is_file():
+        return ""
+    if path.parent.name != "current" or path.parent.parent.name != "repasse":
+        return ""
+    candidate = path.parent.parent / "frete" / "current" / "dataset_frete_app.csv"
+    if candidate.is_file():
+        return str(candidate.resolve())
+    return ""
+
+
+def _derive_frete_materialized_path_from_repasse() -> str:
+    for anchor in (_repasse_materialized_path_str(), _precomputed_path_str()):
+        d = _derive_frete_materialized_path_from_repasse_anchor(anchor)
+        if d:
+            return d
+    return ""
+
+
+def _frete_materialized_targets() -> tuple[str, str]:
+    """
+    PATH/URL explícitos do frete (com FDL_FRETE_CONSUME_MODE=materialized);
+    se vazios, tenta dataset_frete_app.csv ao lado do CSV do repasse em .../repasse/current/
+    (via FDL_REPASSE_MATERIALIZED_PATH ou FDL_PRECOMPUTED_PATH nesse layout).
+
+    Sem FDL_FRETE_MATERIALIZED_*: usa o derivado se repasse materializado, ou se FDL_DATA_SOURCE=precomputed|ready|table
+    (o repasse costuma ler a tabela final por FDL_PRECOMPUTED_PATH — o frete alinha ao mesmo padrão).
+    """
+    mp = _frete_materialized_path_str()
+    mu = _frete_materialized_url_str()
+    derived = _derive_frete_materialized_path_from_repasse()
+
+    if mp or mu:
+        if _frete_consume_mode() == "materialized":
+            return mp, mu
+        return "", ""
+
+    if not derived:
+        return "", ""
+
+    if _frete_consume_mode() == "materialized":
+        return derived, ""
+
+    if _repasse_consume_mode() == "materialized":
+        return derived, ""
+
+    if _data_source_mode() in {"precomputed", "ready", "table"}:
+        return derived, ""
+
+    return "", ""
+
+
+def _validate_frete_materialized_schema(df: pd.DataFrame) -> None:
+    validate_frete_operacional_dataframe(df)
+
+
+def _dataframe_from_frete_materialized_bytes(payload: bytes, filename: str) -> pd.DataFrame:
+    head = payload.lstrip()[:800]
+    if head.startswith(b"<") or head.upper().startswith(b"<!DOCTYPE"):
+        raise ValueError(
+            "Resposta HTML em vez do CSV do frete materializado. Confirme URL/partilha do ficheiro."
+        )
+    lower = (filename or "").lower()
+    if lower.endswith(".csv"):
+        return pd.read_csv(BytesIO(payload), sep=None, engine="python", encoding="utf-8-sig")
+    if lower.endswith(".xlsx") or lower.endswith(".xls") or zipfile.is_zipfile(BytesIO(payload)):
+        return pd.read_excel(BytesIO(payload), engine="openpyxl")
+    try:
+        return pd.read_csv(BytesIO(payload), sep=None, engine="python", encoding="utf-8-sig")
+    except Exception as exc:
+        raise ValueError(f"Formato não suportado para frete materializado: {filename!r}") from exc
+
+
+def _frete_materialized_session_signature(path_s: str, url_s: str) -> str:
+    if path_s:
+        p = Path(path_s).expanduser()
+        if not p.is_absolute():
+            p = (_REPO_APP_ROOT / p).resolve()
+        if p.is_file():
+            return f"mat|p|{p.resolve()}|{int(p.stat().st_mtime_ns)}"
+        return f"mat|p|missing|{path_s.strip()[:180]}"
+    if url_s:
+        return f"mat|u|{url_s.strip()[:240]}"
+    return "mat|empty"
+
+
+def _load_frete_materialized_dataframe(path_s: str, url_s: str) -> pd.DataFrame:
+    if path_s:
+        path = Path(path_s).expanduser()
+        if not path.is_absolute():
+            path = (_REPO_APP_ROOT / path).resolve()
+        if not path.is_file():
+            raise FileNotFoundError(f"FDL_FRETE_MATERIALIZED_PATH não encontrado: {path}")
+        if path.suffix.lower() not in {".csv", ".xlsx", ".xls"}:
+            raise ValueError("FDL_FRETE_MATERIALIZED_PATH deve ser .csv, .xlsx ou .xls")
+        if path.suffix.lower() == ".csv":
+            return pd.read_csv(path, sep=None, engine="python", encoding="utf-8-sig")
+        return pd.read_excel(path, engine="openpyxl")
+    errs: list[str] = []
+    for dl_url, hdr in _precomputed_download_attempts(url_s.strip()):
+        try:
+            payload, filename, _lm = _download_file_bytes(
+                dl_url,
+                extra_headers=hdr or None,
+                timeout=PRECOMPUTED_HTTP_TIMEOUT,
+                http_retries=1,
+            )
+            return _dataframe_from_frete_materialized_bytes(payload, filename)
+        except Exception as exc:  # noqa: BLE001
+            hint = dl_url if len(dl_url) < 100 else dl_url[:97] + "..."
+            errs.append(f"{hint} → {exc}")
+    raise ValueError(
+        "Não foi possível ler o frete materializado a partir do URL. "
+        + " | ".join(errs[:5])
+        + (" …" if len(errs) > 5 else "")
+    )
+
+
+def _frete_session_cache_is_valid(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    if "df_frete" not in payload or "meta_frete" not in payload or "source_signature" not in payload:
+        return False
+    df_obj = payload.get("df_frete")
+    if not isinstance(df_obj, pd.DataFrame):
+        return False
+    meta_obj = payload.get("meta_frete")
+    if not isinstance(meta_obj, dict):
+        return False
+    return True
+
+
+def _frete_loader_source_signature(org_id: str, fontes: FontesFrete) -> str:
+    vendas_origin = (fontes.vendas_url or "").strip() or (
+        str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
+    )
+    if (fontes.vendas_url or "").strip():
+        vendas_sig = str(stable_mtime_ns_for_frete_url(fontes.vendas_url))
+    elif fontes.vendas_path and fontes.vendas_path.is_file():
+        vendas_sig = str(int(fontes.vendas_path.stat().st_mtime_ns))
+    else:
+        vendas_sig = "none"
+
+    frete_origin = (fontes.frete_url or "").strip() or (
+        str(fontes.frete_path.resolve()) if fontes.frete_path else ""
+    )
+    if (fontes.frete_url or "").strip():
+        frete_sig = str(stable_mtime_ns_for_frete_url(fontes.frete_url))
+    elif fontes.frete_path and fontes.frete_path.is_file():
+        frete_sig = str(int(fontes.frete_path.stat().st_mtime_ns))
+    else:
+        frete_sig = "none"
+
+    return "|".join(
+        [
+            f"org={org_id}",
+            f"v_origin={vendas_origin}",
+            f"v_sig={vendas_sig}",
+            f"f_origin={frete_origin}",
+            f"f_sig={frete_sig}",
+        ]
+    )
+
+
+def _frete_merge_info_from_meta(meta: dict[str, object], **extra: object) -> dict[str, object]:
+    out: dict[str, object] = {**meta, **extra}
+    out.setdefault("origem", "frete_operacional")
+    return out
+
+
+def _frete_ts_for_path(path: Path) -> str:
+    try:
+        return _ts_br_from_mtime_ns(int(path.stat().st_mtime_ns))
+    except OSError:
+        return _now_ts_br_str()
+
+
+def _load_frete_data_strict_materialized_only(
+    org_id: str,
+) -> tuple[pd.DataFrame, dict[str, object], str]:
+    """
+    FDL_STRICT_MATERIALIZED + FDL_FRETE_CONSUME_MODE=materialized: só lê artefato (dataset_frete_app.csv
+    via path/URL ou derivado); nunca descobrir_fontes_frete nem carregar_tabela_final_frete_operacional.
+    """
+    _f_mp_exp = _frete_materialized_path_str()
+    _f_mu_exp = _frete_materialized_url_str()
+    _f_mp, _f_mu = _frete_materialized_targets()
+    _mat_try = bool(_f_mp) or bool(_f_mu)
+    _frete_mat_from_repasse_sibling = bool(_f_mp) and not _f_mp_exp and not _f_mu_exp
+    _frete_ss_key = f"_frete_cache_{org_id}"
+
+    if not _mat_try:
+        raise ValueError(
+            "Frete em modo materialized: defina FDL_FRETE_MATERIALIZED_PATH ou FDL_FRETE_MATERIALIZED_URL, "
+            "ou dataset_frete_app.csv em .../frete/current/ (derivado do repasse em .../repasse/current/). "
+            + _STRICT_MATERIALIZED_USER_MSG
+        )
+
+    _sig_mat = _frete_materialized_session_signature(_f_mp, _f_mu)
+    _cached_top = st.session_state.get(_frete_ss_key)
+    if _cached_top is not None and not _frete_session_cache_is_valid(_cached_top):
+        st.session_state.pop(_frete_ss_key, None)
+        _cached_top = None
+
+    df_mat: pd.DataFrame | None = None
+    meta_mat: dict[str, object] = {}
+
+    if _frete_session_cache_is_valid(_cached_top) and str(_cached_top.get("source_signature", "")) == _sig_mat:
+        try:
+            df_mat = _cached_top.get("df_frete", pd.DataFrame())
+            meta_mat = _cached_top.get("meta_frete", {})
+            if not isinstance(df_mat, pd.DataFrame):
+                raise TypeError("df_frete inválido em cache")
+            if not isinstance(meta_mat, dict):
+                meta_mat = {}
+        except Exception:
+            st.session_state.pop(_frete_ss_key, None)
+            df_mat = None
+
+    if df_mat is None:
+        try:
+            df_mat = _load_frete_materialized_dataframe(_f_mp, _f_mu)
+            validate_frete_operacional_dataframe(df_mat)
+            df_mat = normalize_frete_status_conc_display(df_mat)
+            meta_mat = {
+                "vendas_arquivo": "dataset_frete_app.csv (materializado)",
+                "frete_arquivo": None,
+                "frete_tabular": FRETE_UI_STATUS_CONC in df_mat.columns,
+                "debug_logs": [],
+                "avisos": [],
+                "linhas": int(len(df_mat)),
+            }
+            _loaded_at = _now_ts_br_str()
+            st.session_state[_frete_ss_key] = {
+                "df_frete": df_mat,
+                "meta_frete": meta_mat,
+                "debug_logs": [],
+                "loaded_at": _loaded_at,
+                "source_signature": _sig_mat,
+            }
+        except Exception as exc:
+            raise ValueError(
+                f"{_STRICT_MATERIALIZED_USER_MSG} Frete: não foi possível ler o dataset materializado. "
+                f"Detalhe: {exc}"
+            ) from exc
+
+    df_mat = normalize_frete_status_conc_display(df_mat)
+    ts_mat = _now_ts_br_str()
+    if _f_mp:
+        p = Path(_f_mp).expanduser()
+        if not p.is_absolute():
+            p = (_REPO_APP_ROOT / p).resolve()
+        if p.is_file():
+            ts_mat = _frete_ts_for_path(p)
+    info_ok = _frete_merge_info_from_meta(
+        meta_mat,
+        frete_consume="materialized",
+        frete_materialized_target=(_f_mp or _f_mu)[:500],
+        linhas=len(df_mat),
+        frete_mat_from_repasse_sibling=_frete_mat_from_repasse_sibling,
+    )
+    return df_mat, info_ok, ts_mat
+
+
+def _load_frete_data(org_id: str) -> tuple[pd.DataFrame, dict[str, object], str]:
+    """
+    Ponto único de carregamento do Frete (materializado primeiro, live com fallback).
+    Devolve DataFrame operacional, info (frete_consume, metadados de loader) e timestamp BR.
+    """
+    if _strict_materialized() and _frete_consume_mode() == "materialized":
+        return _load_frete_data_strict_materialized_only(org_id)
+
+    _f_mp_exp = _frete_materialized_path_str()
+    _f_mu_exp = _frete_materialized_url_str()
+    _f_mp, _f_mu = _frete_materialized_targets()
+    _mat_try = bool(_f_mp) or bool(_f_mu)
+    _frete_mat_from_repasse_sibling = bool(_f_mp) and not _f_mp_exp and not _f_mu_exp
+    _frete_ss_key = f"_frete_cache_{org_id}"
+    mat_load_error: Exception | None = None
+
+    def _empty_info(**k: object) -> dict[str, object]:
+        base: dict[str, object] = {"origem": "frete_operacional", "linhas": 0}
+        base.update(k)
+        return base
+
+    if _mat_try:
+        _sig_mat = _frete_materialized_session_signature(_f_mp, _f_mu)
+        _cached_top = st.session_state.get(_frete_ss_key)
+        if _cached_top is not None and not _frete_session_cache_is_valid(_cached_top):
+            st.session_state.pop(_frete_ss_key, None)
+            _cached_top = None
+
+        df_mat: pd.DataFrame | None = None
+        meta_mat: dict[str, object] = {}
+
+        if _frete_session_cache_is_valid(_cached_top) and str(_cached_top.get("source_signature", "")) == _sig_mat:
+            try:
+                df_mat = _cached_top.get("df_frete", pd.DataFrame())
+                meta_mat = _cached_top.get("meta_frete", {})
+                if not isinstance(df_mat, pd.DataFrame):
+                    raise TypeError("df_frete inválido em cache")
+                if not isinstance(meta_mat, dict):
+                    meta_mat = {}
+            except Exception:
+                st.session_state.pop(_frete_ss_key, None)
+                df_mat = None
+
+        if df_mat is None:
+            try:
+                df_mat = _load_frete_materialized_dataframe(_f_mp, _f_mu)
+                validate_frete_operacional_dataframe(df_mat)
+                df_mat = normalize_frete_status_conc_display(df_mat)
+                meta_mat = {
+                    "vendas_arquivo": "dataset_frete_app.csv (materializado)",
+                    "frete_arquivo": None,
+                    "frete_tabular": FRETE_UI_STATUS_CONC in df_mat.columns,
+                    "debug_logs": [],
+                    "avisos": [],
+                    "linhas": int(len(df_mat)),
+                }
+                _loaded_at = _now_ts_br_str()
+                st.session_state[_frete_ss_key] = {
+                    "df_frete": df_mat,
+                    "meta_frete": meta_mat,
+                    "debug_logs": [],
+                    "loaded_at": _loaded_at,
+                    "source_signature": _sig_mat,
+                }
+            except Exception as exc:
+                mat_load_error = exc
+                df_mat = None
+
+        if df_mat is not None:
+            df_mat = normalize_frete_status_conc_display(df_mat)
+            ts_mat = _now_ts_br_str()
+            if _f_mp:
+                p = Path(_f_mp).expanduser()
+                if not p.is_absolute():
+                    p = (_REPO_APP_ROOT / p).resolve()
+                if p.is_file():
+                    ts_mat = _frete_ts_for_path(p)
+            info_ok = _frete_merge_info_from_meta(
+                meta_mat,
+                frete_consume="materialized",
+                frete_materialized_target=(_f_mp or _f_mu)[:500],
+                linhas=len(df_mat),
+                frete_mat_from_repasse_sibling=_frete_mat_from_repasse_sibling,
+            )
+            return df_mat, info_ok, ts_mat
+
+    try:
+        fontes = descobrir_fontes_frete()
+    except Exception as exc:
+        return pd.DataFrame(), _empty_info(frete_consume="error", frete_fontes_error=str(exc)), _now_ts_br_str()
+
+    vendas_ref = (fontes.vendas_url or "").strip() or (
+        str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
+    )
+
+    if not _mat_try and not vendas_ref:
+        return (
+            pd.DataFrame(),
+            _empty_info(frete_consume="empty", frete_no_vendas_source=True),
+            _now_ts_br_str(),
+        )
+
+    _vu = (fontes.vendas_url or "").strip()
+    if _vu and "..." in _vu:
+        return (
+            pd.DataFrame(),
+            _empty_info(frete_consume="empty", frete_placeholder_vendas_url=True),
+            _now_ts_br_str(),
+        )
+
+    # Live local: carregamento automático (sem botão), alinhado ao repasse — vendas ML + frete anúncio
+    # descobertos por descobrir_fontes_frete() sob FDL_BASE_DIR.
+
+    _sig_desired = _frete_loader_source_signature(org_id, fontes)
+    _cached = st.session_state.get(_frete_ss_key)
+    if _cached is not None and not _frete_session_cache_is_valid(_cached):
+        st.session_state.pop(_frete_ss_key, None)
+        _cached = None
+
+    if _frete_session_cache_is_valid(_cached) and str(_cached.get("source_signature", "")) == _sig_desired:
+        try:
+            df_frete = _cached.get("df_frete", pd.DataFrame())
+            meta_frete = _cached.get("meta_frete", {})
+            if not isinstance(meta_frete, dict):
+                meta_frete = {}
+            ts_live = _now_ts_br_str()
+            if fontes.vendas_path and fontes.vendas_path.is_file():
+                try:
+                    ts_live = _frete_ts_for_path(fontes.vendas_path)
+                except OSError:
+                    pass
+            consume = "live_fallback" if (_mat_try and mat_load_error is not None) else "live"
+            fb_err = str(mat_load_error).strip() if mat_load_error else ""
+            t_fallback = ((_f_mp or _f_mu)[:500] if _mat_try else "") or ""
+            info_fb = _frete_merge_info_from_meta(
+                meta_frete,
+                frete_consume=consume,
+                linhas=len(df_frete),
+                frete_materialized_target=t_fallback,
+                frete_materialized_error=fb_err,
+            )
+            if (fontes.vendas_url or "").strip():
+                info_fb["frete_vendas_from_url"] = True
+            elif fontes.vendas_path:
+                info_fb["frete_fonte_local_path"] = str(fontes.vendas_path.resolve())
+            if (
+                _is_admin_mode()
+                and _frete_consume_mode() == "materialized"
+                and not _f_mp_exp
+                and not _f_mu_exp
+                and not _derive_frete_materialized_path_from_repasse()
+            ):
+                info_fb["frete_mat_note"] = (
+                    "Frete: **FDL_FRETE_CONSUME_MODE=materialized** sem **FDL_FRETE_MATERIALIZED_PATH** / "
+                    "**FDL_FRETE_MATERIALIZED_URL** e sem **dataset_frete_app.csv** ao lado do repasse em "
+                    "`.../repasse/current/` — fluxo **live** em uso."
+                )
+            return df_frete, info_fb, ts_live
+        except Exception:
+            st.session_state.pop(_frete_ss_key, None)
+
+    if not vendas_ref:
+        return (
+            pd.DataFrame(),
+            _empty_info(frete_consume="empty", frete_no_vendas_source=True),
+            _now_ts_br_str(),
+        )
+
+    try:
+        v_ns = (
+            stable_mtime_ns_for_frete_url(fontes.vendas_url)
+            if (fontes.vendas_url or "").strip()
+            else int(fontes.vendas_path.stat().st_mtime_ns)
+        )
+        frete_ref = (fontes.frete_url or "").strip() or (
+            str(fontes.frete_path.resolve())
+            if fontes.frete_path and fontes.frete_path.is_file()
+            else None
+        )
+        if (fontes.frete_url or "").strip():
+            f_ns = stable_mtime_ns_for_frete_url(fontes.frete_url)
+        elif fontes.frete_path and fontes.frete_path.is_file():
+            f_ns = int(fontes.frete_path.stat().st_mtime_ns)
+        else:
+            f_ns = None
+        df_frete, meta_frete = carregar_tabela_final_frete_operacional(
+            org_id, vendas_ref, v_ns, frete_ref, f_ns
+        )
+    except ValueError as exc:
+        return (
+            pd.DataFrame(),
+            _empty_info(
+                frete_consume="error",
+                frete_loader_error=str(exc),
+                frete_ml_validation_failed=True,
+            ),
+            _now_ts_br_str(),
+        )
+
+    _sig_store = _frete_loader_source_signature(org_id, fontes)
+    _loaded_at = _now_ts_br_str()
+    st.session_state[_frete_ss_key] = {
+        "df_frete": df_frete,
+        "meta_frete": meta_frete,
+        "debug_logs": list(meta_frete.get("debug_logs") or []),
+        "loaded_at": _loaded_at,
+        "source_signature": _sig_store,
+    }
+    ts_live = _now_ts_br_str()
+    if fontes.vendas_path and fontes.vendas_path.is_file():
+        try:
+            ts_live = _frete_ts_for_path(fontes.vendas_path)
+        except OSError:
+            pass
+    consume = "live_fallback" if (_mat_try and mat_load_error is not None) else "live"
+    fb_err = ""
+    if mat_load_error:
+        fb_err = str(mat_load_error).strip() or mat_load_error.__class__.__name__
+    info_out = _frete_merge_info_from_meta(
+        meta_frete,
+        frete_consume=consume,
+        linhas=len(df_frete),
+        frete_materialized_target=((_f_mp or _f_mu)[:500] if _mat_try else ""),
+        frete_materialized_error=fb_err,
+    )
+    if (fontes.vendas_url or "").strip():
+        info_out["frete_vendas_from_url"] = True
+    elif fontes.vendas_path:
+        info_out["frete_fonte_local_path"] = str(fontes.vendas_path.resolve())
+    if (
+        _is_admin_mode()
+        and _frete_consume_mode() == "materialized"
+        and not _f_mp_exp
+        and not _f_mu_exp
+        and not _derive_frete_materialized_path_from_repasse()
+    ):
+        info_out["frete_mat_note"] = (
+            "Frete: **FDL_FRETE_CONSUME_MODE=materialized** sem **FDL_FRETE_MATERIALIZED_PATH** / "
+            "**FDL_FRETE_MATERIALIZED_URL** e sem **dataset_frete_app.csv** ao lado do repasse em "
+            "`.../repasse/current/` — fluxo **live** em uso."
+        )
+    return df_frete, info_out, ts_live
 
 
 def _prepare_uploaded_base(zip_bytes: bytes) -> Path:
@@ -999,7 +1664,7 @@ def _render_cloud_data_loader() -> None:
             st.rerun()
 
 
-def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
+def _load_data_live() -> tuple[pd.DataFrame, dict[str, object], str]:
     source = _data_source_mode()
     if source in {"precomputed", "ready", "table"}:
         return load_precomputed_conciliacao()
@@ -1015,6 +1680,72 @@ def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
     raise ValueError(f"FDL_DATA_SOURCE inválido: {source}")
 
 
+def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
+    if _repasse_consume_mode() != "materialized":
+        return _load_data_live()
+
+    path_s = _repasse_materialized_path_str()
+    url_s = _repasse_materialized_url_str()
+    if not path_s and not url_s:
+        if _strict_materialized():
+            raise ValueError(
+                "Repasse em modo materialized: defina FDL_REPASSE_MATERIALIZED_PATH ou "
+                "FDL_REPASSE_MATERIALIZED_URL. "
+                + _STRICT_MATERIALIZED_USER_MSG
+            )
+        tabela, info, ts = _load_data_live()
+        if _is_admin_mode():
+            info = {
+                **info,
+                "repasse_consume": "live",
+                "repasse_materialized_note": (
+                    "FDL_REPASSE_CONSUME_MODE=materialized mas FDL_REPASSE_MATERIALIZED_PATH e "
+                    "FDL_REPASSE_MATERIALIZED_URL estão vazios — utilizado fluxo live (FDL_DATA_SOURCE)."
+                ),
+            }
+        return tabela, info, ts
+
+    target_label = path_s or url_s
+    try:
+        if path_s:
+            path = Path(path_s).expanduser()
+            if not path.is_absolute():
+                path = (_REPO_APP_ROOT / path).resolve()
+            if not path.is_file():
+                raise FileNotFoundError(f"FDL_REPASSE_MATERIALIZED_PATH não encontrado: {path}")
+            if path.suffix.lower() not in {".csv", ".xlsx", ".xls"}:
+                raise ValueError("FDL_REPASSE_MATERIALIZED_PATH deve ser .csv, .xlsx ou .xls")
+            mtime_ns = int(path.stat().st_mtime_ns)
+            tabela, info, ts = _load_precomputed_from_disk(str(path.resolve()), mtime_ns)
+        else:
+            tabela, info, ts = _load_precomputed_from_remote(url_s.strip())
+        return (
+            tabela,
+            {
+                **info,
+                "repasse_consume": "materialized",
+                "repasse_materialized_target": target_label[:500],
+            },
+            ts,
+        )
+    except Exception as exc:
+        if _strict_materialized():
+            raise ValueError(
+                f"{_STRICT_MATERIALIZED_USER_MSG} Repasse: não foi possível ler o ficheiro materializado. "
+                f"Detalhe: {exc}"
+            ) from exc
+        tabela, info, ts = _load_data_live()
+        if _is_admin_mode():
+            info = {
+                **info,
+                "repasse_consume": "live_fallback",
+                "repasse_materialized_attempted": True,
+                "repasse_materialized_target": target_label[:500],
+                "repasse_materialized_error": str(exc).strip() or exc.__class__.__name__,
+            }
+        return tabela, info, ts
+
+
 st.markdown(
     """
     <style>
@@ -1024,17 +1755,103 @@ st.markdown(
       .main .block-container { padding-top: 0.5rem; padding-bottom: 2rem; max-width: 1400px; }
 
       .fdl-topbar {
-        display: flex; justify-content: space-between; align-items: center;
-        background: linear-gradient(105deg, #0f172a 0%, #1e3a5f 55%, #0f172a 100%);
-        color: #f8fafc; padding: 0.85rem 1.35rem; margin: 0 0 1.35rem 0;
-        border-radius: 12px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
-        border: 1px solid rgba(148, 163, 184, 0.15);
+        display: flex;
+        justify-content: space-between;
+        align-items: stretch;
+        gap: 1.25rem 2rem;
+        flex-wrap: wrap;
+        background: linear-gradient(118deg, #0f172a 0%, #1e3a5f 48%, #0f172a 100%);
+        color: #f8fafc;
+        padding: 1rem 1.45rem 1.05rem 1.45rem;
+        margin: 0 0 1.25rem 0;
+        border-radius: 14px;
+        box-shadow: 0 10px 32px rgba(15, 23, 42, 0.22);
+        border: 1px solid rgba(148, 163, 184, 0.18);
       }
-      .fdl-topbar-brand { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; color: #fff; }
-      .fdl-topbar-brand span { font-weight: 500; opacity: 0.85; font-size: 0.82rem; margin-left: 0.35rem; vertical-align: middle; }
-      .fdl-topbar-meta { text-align: right; font-size: 0.88rem; line-height: 1.55; color: #e2e8f0; }
-      .fdl-topbar-meta strong { color: #fff; font-weight: 600; }
-      .fdl-topbar-meta .fdl-sep { color: #64748b; margin: 0 0.5rem; }
+      .fdl-topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 0.95rem;
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      .fdl-topbar-logo .fdl-logo-svg {
+        display: block;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        flex-shrink: 0;
+        box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);
+      }
+      .fdl-topbar-titles {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        min-width: 0;
+      }
+      .fdl-topbar-title {
+        font-size: 1.48rem;
+        font-weight: 800;
+        letter-spacing: -0.035em;
+        color: #ffffff;
+        line-height: 1.12;
+        margin: 0;
+      }
+      .fdl-topbar-tagline {
+        font-size: 0.68rem;
+        font-weight: 500;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #94a3b8;
+        margin: 0;
+        line-height: 1.35;
+      }
+      .fdl-topbar-right {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex: 0 1 auto;
+        min-width: min(100%, 14rem);
+      }
+      .fdl-topbar-client {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.55rem;
+        text-align: right;
+      }
+      .fdl-topbar-client-block {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.12rem;
+        max-width: 22rem;
+      }
+      .fdl-topbar-lbl {
+        font-size: 0.62rem;
+        font-weight: 600;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+        color: #64748b;
+        line-height: 1.2;
+      }
+      .fdl-topbar-client-name {
+        font-size: 0.86rem;
+        font-weight: 500;
+        color: #cbd5e1;
+        letter-spacing: 0.01em;
+        line-height: 1.35;
+        word-break: break-word;
+      }
+      .fdl-topbar-block-org .fdl-topbar-lbl { color: #64748b; }
+      .fdl-topbar-org-name {
+        font-size: 1.12rem;
+        font-weight: 700;
+        color: #f8fafc;
+        letter-spacing: -0.025em;
+        line-height: 1.25;
+        word-break: break-word;
+      }
 
       .fdl-breadcrumb {
         display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.5rem;
@@ -1127,69 +1944,252 @@ st.markdown(
       .queue-title { font-size: 1.05rem; font-weight: 700; color: #0f172a; }
       .queue-sub { font-size: 0.86rem; color: #64748b; margin-top: 0.2rem; }
 
-      /* Sidebar — navegação em árvore (desktop app / SaaS) */
+      /* Painel Conciliação de Frete — refinamento financeiro */
+      .fdl-frete-section-title {
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #94a3b8;
+        margin: 1.85rem 0 0.8rem 0;
+      }
+      .fdl-frete-section-title.fdl-frete-st-first { margin-top: 0.5rem; }
+      .fdl-frete-queue-head {
+        margin-top: 2rem;
+        margin-bottom: 0.85rem;
+      }
+      .fdl-frete-kpi-card {
+        padding: 1.2rem 1.3rem 1.35rem 1.3rem !important;
+        min-height: 7.5rem !important;
+        border-radius: 14px !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06) !important;
+      }
+      .fdl-frete-kpi-card .kpi-label {
+        font-size: 0.62rem !important;
+        font-weight: 600 !important;
+        color: #94a3b8 !important;
+        letter-spacing: 0.07em !important;
+        min-height: 2.4em !important;
+      }
+      .fdl-frete-kpi-card .kpi-value {
+        font-size: 1.58rem !important;
+        font-weight: 800 !important;
+        color: #0f172a !important;
+        letter-spacing: -0.025em !important;
+      }
+      .fdl-frete-meta-line {
+        font-size: 0.8rem;
+        color: #64748b;
+        margin: 0.35rem 0 0 0;
+        letter-spacing: 0.01em;
+      }
+
+      /* Sidebar — hierarquia Empresa → Módulos → Funcionalidades */
       div[data-testid="stSidebar"] {
-        background: linear-gradient(195deg, #f1f5f9 0%, #e8eef4 50%, #f8fafc 100%) !important;
-        border-right: 1px solid #c7d2e0 !important;
-        box-shadow: inset -1px 0 0 rgba(255,255,255,0.5), 3px 0 20px rgba(15, 23, 42, 0.05);
+        background: #f9fafb !important;
+        border-right: 1px solid #e5e7eb !important;
+        box-shadow: none !important;
       }
       div[data-testid="stSidebar"] .block-container {
         padding-top: 1rem !important;
         padding-bottom: 2rem !important;
       }
 
-      .sb-header-shell {
-        background: linear-gradient(145deg, #ffffff 0%, #f8fafc 55%, #f1f5f9 100%);
-        border: 1px solid #e2e8f0; border-radius: 14px;
-        padding: 1.15rem 1.1rem 1rem 1.1rem; margin: 0 0 1.25rem 0;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06), 0 1px 0 rgba(255,255,255,0.8) inset;
+      .fdl-sb-header {
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        padding: 0.5rem 0 0.65rem 0;
+        margin: 0 0 0.6rem 0;
+        box-shadow: none;
+        border-bottom: 1px solid #eceef2;
       }
-      .sb-header-title {
-        font-size: 1.28rem; font-weight: 800; letter-spacing: -0.035em; color: #0f172a;
-        line-height: 1.15; margin: 0;
+      /* Integra a marca ao fundo da sidebar — remove “caixa” branca dos blocos Streamlit */
+      div[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+        background: transparent !important;
       }
-      .sb-header-sub {
-        font-size: 0.74rem; font-weight: 500; color: #64748b; margin: 0.45rem 0 0 0;
-        line-height: 1.4; letter-spacing: 0.03em;
+      div[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
       }
-      .sb-client-line {
-        font-size: 0.8rem; color: #475569; margin: 1rem 0 0 0; padding-top: 0.85rem;
-        border-top: 1px solid #e2e8f0; font-weight: 500;
+      div[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"]:has(.fdl-sb-header) {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
       }
-      .sb-client-line .sb-client-k { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; display: block; margin-bottom: 0.2rem; }
-      .sb-client-line strong { color: #0f172a; font-weight: 700; font-size: 0.92rem; }
-
+      div[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] img.fdl-sb-brand-logo-img {
+        image-rendering: auto;
+      }
+      /* Faixa horizontal: largura = sidebar; altura vem só da proporção do PNG (sem max-height agressivo). */
+      .fdl-sb-brand-logo-wrap {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        margin: 0 0 0.65rem 0;
+        padding: 0;
+        line-height: 0;
+      }
+      .fdl-sb-brand-logo-img {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        object-fit: contain;
+        object-position: left top;
+      }
+      .fdl-sb-brand-logo-wrap .fdl-sb-brand-logo-img ~ .fdl-sb-brand-logo-img {
+        display: none !important;
+      }
+      .fdl-sb-logo-fallback {
+        display: flex;
+        align-items: center;
+      }
+      .fdl-sb-logo-fallback svg {
+        display: block;
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+      }
+      .fdl-sb-user {
+        display: flex;
+        align-items: center;
+        gap: 0.38rem;
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
+      }
+      .fdl-sb-avatar {
+        width: 1.35rem;
+        height: 1.35rem;
+        border-radius: 999px;
+        background: #eef2f6;
+        color: #64748b;
+        font-size: 0.48rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        box-shadow: none;
+        border: 1px solid #e2e8f0;
+      }
+      .fdl-sb-user-name {
+        font-size: 0.76rem;
+        font-weight: 500;
+        color: #94a3b8;
+        line-height: 1.25;
+        word-break: break-word;
+      }
+      /* Seletor de empresa — dropdown alinhado ao restante da sidebar */
+      div[data-testid="stSidebar"] [data-testid="stSelectbox"] { margin-top: 0.85rem; margin-bottom: 0.15rem; }
+      div[data-testid="stSidebar"] [data-testid="stSelectbox"] label p {
+        font-size: 0.68rem !important;
+        font-weight: 800 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.1em !important;
+        color: #94a3b8 !important;
+      }
+      div[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+      div[data-testid="stSidebar"] [data-testid="stSelectbox"] div[data-baseweb="select"] {
+        transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+      }
+      div[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {
+        border-radius: 8px !important;
+        border-color: #e5e7eb !important;
+        background: #ffffff !important;
+      }
+      div[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"]:focus-within > div {
+        border-color: #93c5fd !important;
+        box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.45) !important;
+      }
+      .fdl-sb-system-modules-title {
+        font-size: 0.68rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.11em;
+        color: #9ca3af;
+        margin: 1rem 0 0.45rem 0.15rem;
+      }
+      div[data-testid="stSidebar"] [data-testid="stExpander"] {
+        margin: 0 0 0.35rem 0 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+      div[data-testid="stSidebar"] [data-testid="stExpander"] details {
+        border: none !important;
+        border-radius: 8px !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        transition: background 0.2s ease !important;
+      }
+      div[data-testid="stSidebar"] [data-testid="stExpander"] details:hover {
+        background: rgba(255, 255, 255, 0.45) !important;
+      }
+      div[data-testid="stSidebar"] [data-testid="stExpander"] summary {
+        padding: 0.45rem 0.5rem !important;
+        font-weight: 600 !important;
+        font-size: 0.8125rem !important;
+        color: #374151 !important;
+        letter-spacing: 0.01em;
+        list-style: none;
+        cursor: pointer !important;
+        border-radius: 6px !important;
+        border: 1px solid #eceef2 !important;
+        background: rgba(255, 255, 255, 0.65) !important;
+        transition: background 0.2s ease, border-color 0.2s ease !important;
+      }
+      div[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
+        background: #ffffff !important;
+        border-color: #e5e7eb !important;
+      }
+      div[data-testid="stSidebar"] [data-testid="stExpander"] summary::-webkit-details-marker { display: none; }
+      div[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] > div {
+        padding: 0.35rem 0.45rem 0.45rem 0.55rem !important;
+      }
+      div[data-testid="stSidebar"] [data-testid="stExpander"] .stButton { margin-top: 0.2rem !important; }
+      div[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button {
+        border-radius: 6px !important;
+        font-weight: 600 !important;
+        font-size: 0.8125rem !important;
+        text-align: left !important;
+        justify-content: flex-start !important;
+        white-space: nowrap !important;
+        line-height: 1.35 !important;
+        padding: 0.4rem 0.65rem !important;
+        min-height: 0 !important;
+        cursor: pointer !important;
+        transition: background 0.2s ease, border-color 0.2s ease !important;
+      }
+      div[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="primary"] {
+        background: #eff6ff !important;
+        color: #1e3a8a !important;
+        border: 1px solid #93c5fd !important;
+        box-shadow: none !important;
+      }
+      div[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="secondary"] {
+        background: transparent !important;
+        color: #374151 !important;
+        border: 1px solid transparent !important;
+        box-shadow: none !important;
+      }
+      div[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="secondary"]:hover {
+        background: #f3f4f6 !important;
+        border-color: #e5e7eb !important;
+      }
+      div[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="primary"]:hover {
+        background: #dbeafe !important;
+        border-color: #60a5fa !important;
+      }
       .sb-nav-section-label {
         font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em;
         color: #94a3b8; margin: 0 0 0.5rem 0.15rem;
       }
 
       .sb-divider-soft { height: 1px; background: linear-gradient(90deg, transparent, #cbd5e1 12%, #cbd5e1 88%, transparent); margin: 0 0 1rem 0; border: 0; }
-
-      /* Nível 1 — empresa (árvore; expander aninhado sobrescreve abaixo) */
-      div[data-testid="stSidebar"] [data-testid="stExpander"] {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        margin: 0 0 0.35rem 0 !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] details {
-        border: 1px solid #e2e8f0 !important;
-        border-radius: 10px !important;
-        background: rgba(255,255,255,0.75) !important;
-        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] summary {
-        padding: 0.72rem 0.85rem !important;
-        font-weight: 700 !important; font-size: 0.9rem !important; color: #0f172a !important;
-        background: transparent !important;
-        border-radius: 10px !important;
-        list-style: none;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
-        background: rgba(241,245,249,0.95) !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] summary::-webkit-details-marker { display: none; }
 
       /* Nível 2 — módulo (indentado, guia vertical) */
       div[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpander"] {
@@ -1257,24 +2257,21 @@ st.markdown(
         text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8;
       }
 
-      /* Botão secundário premium */
-      div[data-testid="stSidebar"] .stButton { margin-top: 0.5rem; }
-      div[data-testid="stSidebar"] .stButton > button {
-        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
-        color: #0f172a !important; border: 1px solid #cbd5e1 !important;
-        font-weight: 600 !important; font-size: 0.88rem !important;
-        padding: 0.65rem 1rem !important; border-radius: 10px !important;
-        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.07), 0 1px 0 rgba(255,255,255,0.9) inset !important;
-        width: 100%;
-        transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+      /* Botões da sidebar fora dos cards de módulo (rodapé, expander admin) */
+      div[data-testid="stSidebar"] div[data-testid="element-container"] .stButton > button[kind="tertiary"] {
+        background: transparent !important;
+        color: #64748b !important;
+        border: 1px solid #e2e8f0 !important;
+        font-weight: 600 !important;
+        min-height: unset !important;
+        white-space: normal !important;
+        padding: 0.65rem 1rem !important;
+        box-shadow: none !important;
       }
-      div[data-testid="stSidebar"] .stButton > button:hover {
+      div[data-testid="stSidebar"] div[data-testid="element-container"] .stButton > button[kind="tertiary"]:hover {
         background: #f1f5f9 !important;
-        border-color: #94a3b8 !important;
-        box-shadow: 0 3px 10px rgba(15, 23, 42, 0.1) !important;
-      }
-      div[data-testid="stSidebar"] .stButton > button:focus {
-        box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.35) !important;
+        border-color: #cbd5e1 !important;
+        color: #0f172a !important;
       }
 
       .sb-sync-block { margin-top: 1.35rem; padding-top: 1.1rem; border-top: 1px solid #d1d9e6; }
@@ -1482,6 +2479,119 @@ def _fmt_brl_ptbr_celula(x: object) -> str:
     return f"R$ {corpo}"
 
 
+_FRETE_UI_COL_SITUACAO = "Situação do Frete"
+_FRETE_UI_COL_DIFERENCA = "Diferença"
+_FRETE_UI_COL_N_VENDA = "N.º venda"
+
+
+def _parse_br_money_display(s: object) -> float:
+    """Interpreta célula pt-BR «R$ 1.234,56» ou «R$ -15,00» para float."""
+    if s is None:
+        return float("nan")
+    try:
+        if pd.isna(s):
+            return float("nan")
+    except TypeError:
+        pass
+    if isinstance(s, (int, float)) and not isinstance(s, bool):
+        return float(s)
+    raw = str(s).strip().replace("R$", "").replace(" ", "")
+    if not raw:
+        return float("nan")
+    neg = raw.startswith("-")
+    raw = raw.lstrip("-")
+    raw = raw.replace(".", "").replace(",", ".")
+    v = float(pd.to_numeric(raw, errors="coerce"))
+    if pd.isna(v):
+        return float("nan")
+    return -v if neg else v
+
+
+def _fmt_int_ptbr(n: int) -> str:
+    """Quantidade com separador de milhar pt-BR."""
+    return f"{int(n):,}".replace(",", ".")
+
+
+def _styler_frete_conciliacao_principal(df: pd.DataFrame) -> pd.io.formats.style.Styler:
+    """Cores por situação e por sinal da diferença (valores já formatados em texto)."""
+    sty = df.style.hide(axis="index")
+    sty = sty.set_table_styles(
+        [
+            {
+                "selector": "th",
+                "props": [
+                    ("font-size", "0.72rem"),
+                    ("font-weight", "600"),
+                    ("color", "#475569"),
+                    ("background-color", "#f1f5f9"),
+                    ("border-bottom", "2px solid #e2e8f0"),
+                    ("padding", "0.55rem 0.65rem"),
+                ],
+            },
+            {
+                "selector": "td",
+                "props": [
+                    ("font-size", "0.84rem"),
+                    ("padding", "0.5rem 0.65rem"),
+                    ("border-bottom", "1px solid #f1f5f9"),
+                ],
+            },
+        ],
+        overwrite=False,
+    )
+
+    def _sit_styles(col: pd.Series) -> list[str]:
+        out: list[str] = []
+        for v in col:
+            t = str(v).strip() if pd.notna(v) else ""
+            if t == "OK":
+                out.append("background-color:#ecfdf5;color:#047857;font-weight:600;")
+            elif t == FRETE_UI_ANALISADO_REPASSE_FRETE:
+                out.append("background-color:#fef9c3;color:#a16207;font-weight:600;")
+            elif t == FRETE_UI_ANALISADO_COBRADO_MAIOR:
+                out.append("background-color:#fee2e2;color:#b91c1c;font-weight:600;")
+            elif t == FRETE_UI_ANALISADO_COBRADO_MENOR:
+                out.append("background-color:#ffedd5;color:#c2410c;font-weight:600;")
+            else:
+                out.append("")
+        return out
+
+    def _diff_styles(col: pd.Series) -> list[str]:
+        out: list[str] = []
+        for v in col:
+            x = _parse_br_money_display(v)
+            if pd.isna(x):
+                out.append("color:#64748b;background-color:#fafafa;")
+            elif abs(x) < 1e-9:
+                out.append("color:#334155;background-color:#f8fafc;font-weight:500;")
+            elif x > 0:
+                out.append("background-color:#ecfdf5;color:#047857;font-weight:600;")
+            else:
+                out.append("background-color:#fef2f2;color:#b91c1c;font-weight:600;")
+        return out
+
+    if _FRETE_UI_COL_SITUACAO in df.columns:
+        sty = sty.apply(_sit_styles, subset=[_FRETE_UI_COL_SITUACAO], axis=0)
+    if _FRETE_UI_COL_DIFERENCA in df.columns:
+        sty = sty.apply(_diff_styles, subset=[_FRETE_UI_COL_DIFERENCA], axis=0)
+    return sty
+
+
+def _format_frete_anuncio_tabela_display(df: pd.DataFrame) -> pd.DataFrame:
+    """Formata moeda pt-BR, quantidades com milhar e mantém «Recebido?» como texto."""
+    if df.empty:
+        return df
+    out = df.copy()
+    for c in ("Valor total (R$)", "Impacto (R$)"):
+        if c in out.columns:
+            out[c] = out[c].map(lambda x: _fmt_brl_ptbr_celula(x) if pd.notna(x) and x != "" else "")
+    if "Qtde ocorrências" in out.columns:
+        out["Qtde ocorrências"] = out["Qtde ocorrências"].map(
+            lambda n: _fmt_int_ptbr(int(n)) if pd.notna(n) else ""
+        )
+    return out
+
+
 def _dataframe_conciliacao_somente_grid(df: pd.DataFrame) -> pd.DataFrame:
     """Cópia para st.dataframe: valores monetários como texto pt-BR (export continua numérico)."""
     if df.empty:
@@ -1536,97 +2646,416 @@ def _multiselect_stable(key: str, label: str, options: list[str]) -> list[str]:
     return st.multiselect(label, opts, key=key, placeholder="Escolher…")
 
 
-def _render_kpi_card(label: str, value: str, icon: str, css_class: str) -> None:
+def _html_fdl_topbar(client_esc: str, org_esc: str) -> str:
+    """
+    Cabeçalho superior SaaS: logo + marca + cliente/empresa.
+    ``client_esc`` e ``org_esc`` devem vir de ``html.escape``.
+    """
+    _logo = """
+<svg class="fdl-logo-svg" width="44" height="44" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <defs><linearGradient id="fdlLogoGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#0284c7"/>
+  </linearGradient></defs>
+  <rect width="40" height="40" rx="11" fill="url(#fdlLogoGrad)"/>
+  <path d="M9 28h5V16H9v12zm8 0h5V10h-5v18zm8-6h5v6h-5v-6zm8-8h5v14h-5V14z" fill="#fff" fill-opacity="0.95"/>
+</svg>"""
+    return f"""
+<div class="fdl-topbar">
+  <div class="fdl-topbar-left">
+    <div class="fdl-topbar-logo">{_logo}</div>
+    <div class="fdl-topbar-titles">
+      <p class="fdl-topbar-title">FDL Analytics</p>
+      <p class="fdl-topbar-tagline">Financial Intelligence</p>
+    </div>
+  </div>
+  <div class="fdl-topbar-right">
+    <div class="fdl-topbar-client">
+      <div class="fdl-topbar-client-block">
+        <span class="fdl-topbar-lbl">Cliente</span>
+        <span class="fdl-topbar-client-name">{client_esc}</span>
+      </div>
+      <div class="fdl-topbar-client-block fdl-topbar-block-org">
+        <span class="fdl-topbar-lbl">Empresa</span>
+        <span class="fdl-topbar-org-name">{org_esc}</span>
+      </div>
+    </div>
+  </div>
+</div>
+""".strip()
+
+
+def _render_kpi_card(
+    label: str,
+    value: str,
+    icon: str,
+    css_class: str,
+    *,
+    frete_variant: bool = False,
+) -> None:
+    extra = " fdl-frete-kpi-card" if frete_variant else ""
     st.markdown(
         f"""
-        <div class="kpi-card {css_class}">
+        <div class="kpi-card {css_class}{extra}">
           <div class="kpi-label"><span class="kpi-icon" aria-hidden="true">{icon}</span>{label}</div>
-          <div class="kpi-value">{value}</div>
+          <div class="kpi-value">{html.escape(value)}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
-def _painel_frete_emergencial(org_id: str) -> None:
-    """
-    Fallback robusto para Cloud:
-    evita o ecrã branco em alguns navegadores ao renderizar o painel de Frete completo.
-    """
-    st.info("Modo de compatibilidade do painel de Frete.")
+def _frete_meta_for_render(load_info: dict[str, object]) -> dict[str, object]:
+    keys = (
+        "vendas_arquivo",
+        "frete_arquivo",
+        "frete_tabular",
+        "debug_logs",
+        "avisos",
+        "linhas",
+    )
+    return {k: load_info[k] for k in keys if k in load_info}
+
+
+def _frete_org_widget_suffix(org_id: str) -> str:
+    return "".join(c if c.isalnum() else "_" for c in org_id)[:80]
+
+
+def _render_frete_operacional_ui(
+    org_id: str,
+    df_frete: pd.DataFrame,
+    meta_frete: dict[str, object],
+    ts_proc: str,
+    load_info: dict[str, object],
+) -> None:
+    """Filtros + contexto + KPIs + tabela + export (alinhado ao painel de repasse)."""
     _is_admin = _is_admin_mode()
-    _t0 = time.perf_counter()
+    _sig = _frete_org_widget_suffix(org_id)
+    work = df_frete.copy()
+    today = datetime.now(_BR_TZ).date()
+    default_ini = today - timedelta(days=29)
+    default_fim = today
 
-    def _log_step(msg: str) -> None:
+    if "_data_venda_dt" in work.columns:
+        dts = frete_series_normalize_sale_dt(work["_data_venda_dt"])
+        if dts.notna().any():
+            d_min_data = dts.min().date()
+            d_max_data = dts.max().date()
+        else:
+            d_min_data = d_max_data = today
+    else:
+        d_min_data = d_max_data = today
+
+    picker_min = min(d_min_data, default_ini)
+    picker_max = max(d_max_data, default_fim, today)
+    if picker_max < picker_min:
+        picker_min, picker_max = picker_max, picker_min
+
+    d_ini_val = max(picker_min, min(default_ini, picker_max))
+    d_fim_val = max(picker_min, min(default_fim, picker_max))
+    if d_ini_val > d_fim_val:
+        d_ini_val = d_fim_val
+
+    estados: list[str] = []
+    if "Estado" in work.columns:
+        estados = sorted(
+            {str(x).strip() for x in work["Estado"].dropna().unique().tolist() if str(x).strip()}
+        )
+    situacao_opts: list[str] = list(FRETE_SITUACAO_FRETE_VALORES_FILTRO)
+
+    with st.container():
+        st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
+        r1 = st.columns((1.15, 1.15, 1.7))
+        r2 = st.columns((1.15, 1.15, 2.3))
+        with r1[0]:
+            sel_est = _multiselect_stable(f"op_frete_ms_est_{_sig}", "Estado da venda", estados)
+        with r1[1]:
+            sel_sit = _multiselect_stable(
+                f"op_frete_ms_situacao_{_sig}", FRETE_UI_SITUACAO_FRETE, situacao_opts
+            )
+        with r1[2]:
+            busca = st.text_input("Busca (venda ou # anúncio)", "", key=f"op_frete_busca_{_sig}")
+            busca = busca.strip().lower()
+        with r2[0]:
+            data_ini = st.date_input(
+                "Data da venda — início",
+                value=d_ini_val,
+                min_value=picker_min,
+                max_value=picker_max,
+                format="DD/MM/YYYY",
+                key=f"op_frete_d_ini_{_sig}",
+            )
+        with r2[1]:
+            data_fim = st.date_input(
+                "Data da venda — fim",
+                value=d_fim_val,
+                min_value=picker_min,
+                max_value=picker_max,
+                format="DD/MM/YYYY",
+                key=f"op_frete_d_fim_{_sig}",
+            )
+        st.caption(
+            "O intervalo restringe as linhas pela **data da venda** (comparado por dia). "
+            "Por omissão: últimos 30 dias corridos até hoje."
+        )
+
+    if data_fim < data_ini:
+        st.warning("A data final não pode ser anterior à data inicial. Ajuste o período.")
+        data_fim = data_ini
+
+    tbl = work
+    if sel_est and "Estado" in tbl.columns:
+        tbl = tbl[tbl["Estado"].isin(sel_est)]
+    if sel_sit:
+        sit_tbl = compute_frete_situacao_frete_column(tbl)
+        tbl = tbl.loc[sit_tbl.isin(sel_sit)]
+    if busca:
+        m = (
+            tbl[FRETE_UI_N_VENDA].fillna("").astype(str).str.lower().str.contains(busca, regex=False)
+            if FRETE_UI_N_VENDA in tbl.columns
+            else pd.Series(False, index=tbl.index)
+        )
+        if FRETE_UI_ANUNCIO in tbl.columns:
+            m = m | tbl[FRETE_UI_ANUNCIO].fillna("").astype(str).str.lower().str.contains(
+                busca, regex=False
+            )
+        tbl = tbl.loc[m]
+
+    if "_data_venda_dt" in tbl.columns:
+        dd = frete_series_normalize_sale_dt(tbl["_data_venda_dt"])
+        if dd.notna().any():
+            ini = pd.Timestamp(data_ini)
+            fim = pd.Timestamp(data_fim) + pd.Timedelta(days=1)
+            tbl = tbl.loc[dd.notna() & (dd >= ini) & (dd < fim)]
+
+    tbl_show = tbl[[c for c in tbl.columns if not str(c).startswith("_")]].copy()
+    if "data_venda" not in tbl_show.columns and "_data_venda_dt" in tbl.columns:
+        tbl_show["data_venda"] = tbl["_data_venda_dt"]
+    if FRETE_UI_CLASSIFICACAO in tbl_show.columns:
+        tbl_show = tbl_show.drop(columns=[FRETE_UI_CLASSIFICACAO])
+
+    _va = html.escape(str(meta_frete.get("vendas_arquivo", "—")))
+    _ts_esc = html.escape(str(ts_proc))
+    _pl = "Todas"
+    if estados and sel_est and len(sel_est) < len(estados):
+        _pl = ", ".join(sel_est[:2]) + ("..." if len(sel_est) > 2 else "")
+    elif estados and not sel_est:
+        _pl = "Todas"
+    elif not estados:
+        _pl = "—"
+    st.markdown(
+        f"""
+        <p class="page-meta" style="margin-bottom:0.65rem;">
+          <strong>Estado (filtro):</strong> {_pl}
+          &nbsp;·&nbsp;
+          <strong>Dados carregados:</strong> {_ts_esc}
+          &nbsp;·&nbsp;
+          <strong>Venda:</strong> {data_ini.strftime("%d/%m/%Y")} a {data_fim.strftime("%d/%m/%Y")}
+          &nbsp;·&nbsp;
+          <strong>Fonte:</strong> {_va}
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    _rec_key = f"op_frete_recebido_{_sig}"
+    if _rec_key not in st.session_state:
+        st.session_state[_rec_key] = {}
+    rec_map: dict[str, bool] = st.session_state[_rec_key]
+
+    nv_s = tbl_show[FRETE_UI_N_VENDA].map(lambda x: str(x).strip() if pd.notna(x) else "")
+    recebido_series = nv_s.map(lambda x: FRETE_VAL_RECEBIDO_SIM if rec_map.get(x) else FRETE_VAL_RECEBIDO_NAO)
+    recebido_series.index = tbl_show.index
+
+    kpi_ex = frete_kpis_executivos(tbl_show)
+    tbl_cob_maior = frete_tabela_anuncios_cobrado_maior(tbl_show)
+    tbl_repasse = frete_tabela_anuncios_repasse_frete(tbl_show, recebido_series)
+
+    st.markdown(
+        '<div class="fdl-frete-section-title fdl-frete-st-first">Indicadores executivos</div>',
+        unsafe_allow_html=True,
+    )
+    ek1, ek2 = st.columns(2)
+    with ek1:
+        _render_kpi_card(
+            "Cobrado a maior (valor a recuperar)",
+            _fmt_brl_ptbr_celula(kpi_ex["cobrado_maior"]),
+            "!",
+            "kpi-div",
+            frete_variant=True,
+        )
+    with ek2:
+        _render_kpi_card(
+            "Repasse de frete (valor a conferir)",
+            _fmt_brl_ptbr_celula(kpi_ex["repasse"]),
+            "◎",
+            "kpi-total",
+            frete_variant=True,
+        )
+
+    if _is_admin and FRETE_UI_STATUS_CONC in tbl_show.columns:
+        st.caption(
+            "Modo técnico: coluna **Status conciliação** existe nos dados exportados; "
+            "a priorização usa **Situação do Frete** (Cobrado a maior / Repasse)."
+        )
+
+    _sem_anuncio = FRETE_UI_ANUNCIO not in tbl_show.columns
+    st.markdown(
+        '<div class="fdl-frete-section-title">Anúncios com Cobrado a maior</div>',
+        unsafe_allow_html=True,
+    )
+    if _sem_anuncio:
+        st.info("Inclua o **# do anúncio** no export de vendas para agregar por anúncio.")
+    elif tbl_cob_maior.empty:
+        st.info("Nenhum anúncio com **Cobrado a maior** nos filtros atuais.")
+    else:
+        _h1 = min(420, 120 + 36 * max(len(tbl_cob_maior), 1))
+        st.dataframe(
+            _format_frete_anuncio_tabela_display(tbl_cob_maior),
+            use_container_width=True,
+            hide_index=True,
+            height=_h1,
+        )
+
+    st.markdown(
+        '<div class="fdl-frete-section-title">Anúncios com Repasse de frete</div>',
+        unsafe_allow_html=True,
+    )
+    if _sem_anuncio:
+        pass
+    elif tbl_repasse.empty:
+        st.info("Nenhum anúncio com **Repasse de frete** nos filtros atuais.")
+    else:
+        _h2 = min(420, 120 + 36 * max(len(tbl_repasse), 1))
+        st.dataframe(
+            _format_frete_anuncio_tabela_display(tbl_repasse),
+            use_container_width=True,
+            hide_index=True,
+            height=_h2,
+        )
+
+    for w in meta_frete.get("avisos") or []:
+        st.info(w)
+
+    st.markdown(
+        """
+        <div class="queue-head fdl-frete-queue-head">
+          <div>
+            <div class="queue-title">Detalhe de vendas</div>
+            <div class="queue-sub">Linhas filtradas para análise e exportação</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    btn1, btn2 = st.columns([1, 1])
+    t_export_view = dataframe_frete_conciliacao_principal(
+        tbl_show, recebido=recebido_series, layout="executivo"
+    )
+    csv_bytes = t_export_view.to_csv(index=False).encode("utf-8-sig")
+    with btn1:
+        st.download_button(
+            "Exportar CSV",
+            data=csv_bytes,
+            file_name="conciliacao_frete_filtrada.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key=f"op_frete_dl_csv_{_sig}",
+        )
+    t_excel = dataframe_frete_conciliacao_principal(
+        tbl_show, recebido=recebido_series, layout="executivo"
+    )
+    excel_buf = BytesIO()
+    with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
+        t_excel.to_excel(writer, index=False, sheet_name="Frete")
+        ws = writer.sheets["Frete"]
+        header_row = [cell.value for cell in ws[1]]
+        for c_data in ("Data da venda",):
+            if c_data in header_row:
+                col_idx = header_row.index(c_data) + 1
+                for row_idx in range(2, ws.max_row + 1):
+                    cell = ws.cell(row=row_idx, column=col_idx)
+                    if cell.value is not None:
+                        cell.number_format = oxl_number_formats.FORMAT_DATE_DDMMYY
+    excel_buf.seek(0)
+    with btn2:
+        st.download_button(
+            "Exportar Excel",
+            data=excel_buf.getvalue(),
+            file_name="conciliacao_frete_filtrada.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            key=f"op_frete_dl_xlsx_{_sig}",
+        )
+
+    t_grid = _dataframe_frete_grid(tbl_show, _fmt_brl_ptbr_celula, _col_referencia_como_texto)
+    t_main = dataframe_frete_conciliacao_principal(
+        t_grid, recebido=recebido_series, layout="executivo"
+    )
+    _h_df = 550 if len(t_main) > 8 else 360
+
+    if t_main.empty:
+        st.info(
+            "**Nenhuma venda** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
+        )
+    else:
+        st.dataframe(
+            _styler_frete_conciliacao_principal(t_main),
+            use_container_width=True,
+            height=_h_df,
+        )
+        st.caption(
+            "Ajuste **Recebido?** na tabela abaixo quando aplicável (linhas de repasse de frete)."
+        )
+        _recv = t_main[[_FRETE_UI_COL_N_VENDA, FRETE_UI_RECEBIDO]].copy()
+        _cfg_recv: dict[str, object] = {
+            _FRETE_UI_COL_N_VENDA: TextColumn(_FRETE_UI_COL_N_VENDA, width="medium"),
+            FRETE_UI_RECEBIDO: SelectboxColumn(
+                FRETE_UI_RECEBIDO,
+                options=[FRETE_VAL_RECEBIDO_SIM, FRETE_VAL_RECEBIDO_NAO],
+                required=True,
+            ),
+        }
+        edited_recv = st.data_editor(
+            _recv,
+            column_config=_cfg_recv,
+            disabled=[_FRETE_UI_COL_N_VENDA],
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            key=f"op_frete_editor_{_sig}",
+        )
+        for _, row in edited_recv.iterrows():
+            vid = str(row[_FRETE_UI_COL_N_VENDA]).strip() if pd.notna(row.get(_FRETE_UI_COL_N_VENDA)) else ""
+            if vid:
+                rec_map[vid] = row[FRETE_UI_RECEBIDO] == FRETE_VAL_RECEBIDO_SIM
+        st.session_state[_rec_key] = rec_map
+    st.markdown(
+        f'<p class="fdl-frete-meta-line">Linhas filtradas: <strong>{_fmt_int_ptbr(len(t_main))}</strong></p>',
+        unsafe_allow_html=True,
+    )
+
+    if _is_admin and load_info.get("frete_consume") in ("live", "live_fallback"):
+        st.caption(
+            "Modo técnico: **live** — dados calculados diretamente das fontes; materializado indisponível ou falhou."
+        )
+
+
+def _painel_frete_emergencial(
+    org_id: str, df_frete: pd.DataFrame, load_info: dict[str, object], ts_proc: str
+) -> None:
+    """
+    Apresentação do painel Frete. O carregamento é feito em _load_frete_data (ponto único).
+    """
+    _is_admin = _is_admin_mode()
+
+    if load_info.get("frete_fontes_error"):
+        st.error("Erro ao localizar fontes de Frete / vendas ML.")
         if _is_admin:
-            _elapsed = time.perf_counter() - _t0
-            st.caption(f"[frete-debug { _elapsed:6.2f}s] {msg}")
-
-    def _is_valid_frete_cache(payload: object) -> bool:
-        if not isinstance(payload, dict):
-            return False
-        if "df_frete" not in payload or "meta_frete" not in payload or "source_signature" not in payload:
-            return False
-        df_obj = payload.get("df_frete")
-        if not isinstance(df_obj, pd.DataFrame):
-            return False
-        meta_obj = payload.get("meta_frete")
-        if not isinstance(meta_obj, dict):
-            return False
-        return True
-
-    def _frete_source_signature(_org_id: str, fontes_obj: object) -> str:
-        vendas_origin = (getattr(fontes_obj, "vendas_url", "") or "").strip() or (
-            str(getattr(fontes_obj, "vendas_path").resolve())
-            if getattr(fontes_obj, "vendas_path", None)
-            else ""
-        )
-        if (getattr(fontes_obj, "vendas_url", "") or "").strip():
-            vendas_sig = str(stable_mtime_ns_for_frete_url(fontes_obj.vendas_url))
-        elif getattr(fontes_obj, "vendas_path", None) and fontes_obj.vendas_path.is_file():
-            vendas_sig = str(int(fontes_obj.vendas_path.stat().st_mtime_ns))
-        else:
-            vendas_sig = "none"
-
-        frete_origin = (getattr(fontes_obj, "frete_url", "") or "").strip() or (
-            str(getattr(fontes_obj, "frete_path").resolve())
-            if getattr(fontes_obj, "frete_path", None)
-            else ""
-        )
-        if (getattr(fontes_obj, "frete_url", "") or "").strip():
-            frete_sig = str(stable_mtime_ns_for_frete_url(fontes_obj.frete_url))
-        elif getattr(fontes_obj, "frete_path", None) and fontes_obj.frete_path.is_file():
-            frete_sig = str(int(fontes_obj.frete_path.stat().st_mtime_ns))
-        else:
-            frete_sig = "none"
-
-        return "|".join(
-            [
-                f"org={_org_id}",
-                f"v_origin={vendas_origin}",
-                f"v_sig={vendas_sig}",
-                f"f_origin={frete_origin}",
-                f"f_sig={frete_sig}",
-            ]
-        )
-
-    _log_step("inicio _painel_frete_emergencial")
-    # Render mínimo imediato para evitar tela totalmente branca em caso de exceção precoce.
-    if _is_admin:
-        st.caption("[frete-debug] render_bootstrap_ok")
-    try:
-        _log_step("antes descobrir_fontes_frete()")
-        fontes = descobrir_fontes_frete()
-        _log_step("depois descobrir_fontes_frete()")
-    except Exception as exc:
-        st.error("Erro no carregamento do frete")
-        st.exception(exc)
+            st.code(str(load_info.get("frete_fontes_error")), language="text")
         return
 
-    vendas_ref = (fontes.vendas_url or "").strip() or (
-        str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
-    )
-    if not vendas_ref:
+    if load_info.get("frete_no_vendas_source"):
         st.warning(
             "Sem fonte de vendas ML para Frete. Defina **FDL_FRETE_VENDAS_URL** nos Secrets (Cloud) "
             "ou coloque ficheiros .xlsx/.csv em **Vendas - Mercado Livre** sob **FDL_BASE_DIR**."
@@ -1634,145 +3063,44 @@ def _painel_frete_emergencial(org_id: str) -> None:
         st.caption(str(BASE_DIR))
         return
 
-    _vu = (fontes.vendas_url or "").strip()
-    if _vu:
-        st.success("**FDL_FRETE_VENDAS_URL** detetado — a base será descarregada a partir do SharePoint.")
-        if "..." in _vu:
-            st.error(
-                "O URL de **FDL_FRETE_VENDAS_URL** parece um **placeholder**. "
-                "Nos Secrets, substitua por o **link completo** do Excel (Partilhar → copiar ligação do ficheiro)."
-            )
-            return
-    else:
-        st.caption(f"Fonte local: `{fontes.vendas_path}`")
-
-    _load_key = f"frete_emergencial_load_{org_id}"
-    # Na Cloud (URL) carrega automaticamente — o botão era esquecido e parecia «Frete não funciona».
-    if _vu:
-        st.session_state.setdefault(_load_key, True)
-    else:
-        st.caption("Carregue a base quando estiver pronto (ficheiros locais podem ser grandes).")
-        if st.button("Carregar base de Frete", key=f"{_load_key}_btn"):
-            st.session_state[_load_key] = True
-    if not st.session_state.get(_load_key, False):
+    if load_info.get("frete_placeholder_vendas_url"):
+        st.error(
+            "O URL de **FDL_FRETE_VENDAS_URL** parece um **placeholder**. "
+            "Nos Secrets, substitua por o **link completo** do Excel (Partilhar → copiar ligação do ficheiro)."
+        )
         return
 
-    _frete_ss_key = f"_frete_cache_{org_id}"
-    _sig = _frete_source_signature(org_id, fontes)
-    _cached = st.session_state.get(_frete_ss_key)
-    _log_step(f"cache_key={_frete_ss_key}")
-
-    # Cache inválido/corrompido -> invalida e recarrega com segurança.
-    if _cached is not None and not _is_valid_frete_cache(_cached):
-        _log_step("cache_invalido_detectado -> reset")
-        st.session_state.pop(_frete_ss_key, None)
-        _cached = None
-
-    if _is_valid_frete_cache(_cached) and str(_cached.get("source_signature", "")) == _sig:
-        try:
-            df_frete = _cached.get("df_frete", pd.DataFrame())
-            meta_frete = _cached.get("meta_frete", {})
-            _log_step(
-                "cache_hit frete_session "
-                f"linhas={len(df_frete)} loaded_at={_cached.get('loaded_at', '-')}"
-            )
-            if _is_admin:
-                for _line in (_cached.get("debug_logs") or []):
-                    st.caption(f"[frete-debug] {_line}")
-        except Exception as exc:
-            _log_step(f"cache_hit_falhou -> recarga_forcada erro={exc}")
-            st.session_state.pop(_frete_ss_key, None)
-            _cached = None
-            df_frete = pd.DataFrame()
-            meta_frete = {}
-    if not (_is_valid_frete_cache(_cached) and str(_cached.get("source_signature", "")) == _sig):
-        _log_step("cache_miss frete_session")
-        _log_step("antes carregar_base_frete_ml()")
-        try:
-            with st.spinner("A carregar base de Frete..."):
-                t_load0 = time.perf_counter()
-                v_ns = (
-                    stable_mtime_ns_for_frete_url(fontes.vendas_url)
-                    if (fontes.vendas_url or "").strip()
-                    else int(fontes.vendas_path.stat().st_mtime_ns)
-                )
-                frete_ref = (fontes.frete_url or "").strip() or (
-                    str(fontes.frete_path.resolve())
-                    if fontes.frete_path and fontes.frete_path.is_file()
-                    else None
-                )
-                if (fontes.frete_url or "").strip():
-                    f_ns = stable_mtime_ns_for_frete_url(fontes.frete_url)
-                elif fontes.frete_path and fontes.frete_path.is_file():
-                    f_ns = int(fontes.frete_path.stat().st_mtime_ns)
-                else:
-                    f_ns = None
-                df_frete, meta_frete = carregar_base_frete_ml(
-                    org_id, vendas_ref, v_ns, frete_ref, f_ns
-                )
-                t_load = time.perf_counter() - t_load0
-                _log_step(f"depois carregar_base_frete_ml() tempo={t_load:.2f}s linhas={len(df_frete)}")
-        except ValueError as exc:
-            st.error("O ficheiro não parece ser o **export de vendas ML** (detalhe envios).")
-            st.warning(
-                "Confirme que **FDL_FRETE_VENDAS_URL** aponta para o mesmo tipo de ficheiro que está em "
-                "**Vendas - Mercado Livre** no OneDrive (não use a planilha de **Repasse**)."
-            )
-            st.code(str(exc), language="text")
-            return
-        except Exception as exc:
-            st.error("Erro no carregamento do frete")
-            st.exception(exc)
-            return
-
-        _loaded_at = _now_ts_br_str()
-        _debug_logs = list(meta_frete.get("debug_logs") or [])
-        st.session_state[_frete_ss_key] = {
-            "df_frete": df_frete,
-            "meta_frete": meta_frete,
-            "debug_logs": _debug_logs,
-            "loaded_at": _loaded_at,
-            "source_signature": _sig,
-        }
+    if load_info.get("frete_ml_validation_failed") or load_info.get("frete_loader_error"):
+        st.error("O ficheiro não parece ser o **export de vendas ML** (detalhe envios).")
+        st.warning(
+            "Confirme que **FDL_FRETE_VENDAS_URL** aponta para o mesmo tipo de ficheiro que está em "
+            "**Vendas - Mercado Livre** no OneDrive (não use a planilha de **Repasse**)."
+        )
         if _is_admin:
-            st.caption(f"[frete-debug] session_store loaded_at={_loaded_at} linhas={len(df_frete)}")
-            for _line in _debug_logs:
+            st.code(str(load_info.get("frete_loader_error", "")), language="text")
+        return
+
+    if load_info.get("frete_vendas_from_url"):
+        st.success("**FDL_FRETE_VENDAS_URL** detetado — a base foi descarregada a partir do SharePoint.")
+    elif load_info.get("frete_fonte_local_path"):
+        st.caption(f"Fonte local: `{load_info['frete_fonte_local_path']}`")
+
+    if _is_admin and load_info.get("frete_mat_from_repasse_sibling"):
+        st.caption(
+            "Frete: **dataset_frete_app.csv** ao lado do repasse (`.../repasse/current/` → "
+            "`.../frete/current/`), via **FDL_REPASSE_MATERIALIZED_PATH** ou **FDL_PRECOMPUTED_PATH**."
+        )
+
+    if load_info.get("frete_consume") == "materialized" and _is_admin:
+        for _line in (load_info.get("debug_logs") or []):
+            if _line:
                 st.caption(f"[frete-debug] {_line}")
 
-    try:
-        st.caption(f"Ficheiro vendas: {meta_frete.get('vendas_arquivo')} | Linhas: {len(df_frete)}")
-    except Exception as exc:
-        st.error("Erro no carregamento do frete")
-        st.exception(exc)
+    meta = _frete_meta_for_render(load_info)
+    if df_frete.empty:
+        st.info("Não há linhas de frete para exibir. Verifique o export de vendas ML ou a materialização.")
         return
-    for w in meta_frete.get("avisos") or []:
-        st.info(w)
-
-    show = df_frete[[c for c in df_frete.columns if not str(c).startswith("_")]].copy()
-    _max_rows = 2000
-    show_ui = show.head(_max_rows)
-    if len(show) > _max_rows:
-        st.caption(f"Amostra de {_max_rows} linhas (total {len(show)}). O CSV exporta todas.")
-    # Tipos mistos / datas quebram o Arrow do dataframe em alguns browsers — colunas homogéneas string.
-    show_grid = show_ui.copy()
-    for _c in show_grid.columns:
-        s = show_grid[_c]
-        if pd.api.types.is_datetime64_any_dtype(s):
-            show_grid[_c] = s.dt.strftime("%Y-%m-%d %H:%M:%S")
-        else:
-            show_grid[_c] = s.map(lambda x: "" if pd.isna(x) else x).astype(str)
-    # Sem st.dataframe (Arrow/React) — só tabela HTML leve; export CSV tem o ficheiro completo.
-    st.subheader("Pré-visualização")
-    st.caption(f"Primeiras {min(150, len(show_grid))} linhas de {len(show)} (use o CSV para tudo).")
-    st.table(show_grid.head(150))
-
-    st.download_button(
-        "Exportar CSV",
-        show.to_csv(index=False).encode("utf-8-sig"),
-        file_name="conciliacao_frete_filtrada.csv",
-        mime="text/csv",
-        key="frete_dl_csv_emergencial",
-    )
+    _render_frete_operacional_ui(org_id, df_frete, meta, ts_proc, load_info)
 
 
 def _build_pdf_bytes(df: pd.DataFrame) -> bytes:
@@ -2185,30 +3513,67 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     st.write(f"Linhas filtradas: **{len(tabela_exibir)}**")
 
 _admin_mode = _is_admin_mode()
-if _admin_mode and _data_source_mode() == "upload_zip":
-    _render_cloud_data_loader()
 
 _fv = st.session_state["op_financeiro_view"]
+frete_df = pd.DataFrame()
+frete_info: dict[str, object] = {}
 if _fv == "frete":
-    # Evita carregar precomputed/ZIP da conciliação de repasse — vendas ML locais ou FDL_FRETE_VENDAS_URL.
+    # Ponto único de carga Frete (materializado → live); não carrega repasse/precomputed.
     try:
-        _ff = descobrir_fontes_frete()
-    except Exception:
-        _ff = None
-    if _ff and _ff.vendas_path:
-        try:
-            ts_proc = _ts_br_from_mtime_ns(int(_ff.vendas_path.stat().st_mtime_ns))
-        except OSError:
-            ts_proc = _now_ts_br_str()
-    else:
-        ts_proc = _now_ts_br_str()
+        with st.spinner("A carregar dados de Frete…"):
+            frete_df, frete_info, ts_proc = _load_frete_data(_active_org.org_id)
+        if _admin_mode:
+            if frete_info.get("frete_consume") == "live_fallback":
+                st.warning(
+                    "Frete: tentativa de carregar **materializado** falhou — em uso **fluxo live** (fallback)."
+                )
+                st.caption(f"Path/URL tentado: `{frete_info.get('frete_materialized_target', '')}`")
+                st.caption(f"Erro: {frete_info.get('frete_materialized_error', '')}")
+            elif frete_info.get("frete_consume") == "materialized":
+                _t_disp = str(frete_info.get("frete_materialized_target", ""))[:500]
+                st.caption(f"Frete: dados **materializados** (`{_t_disp}`).")
+            elif frete_info.get("frete_mat_note"):
+                st.info(str(frete_info["frete_mat_note"]))
+    except Exception as exc:
+        if _strict_materialized() and isinstance(exc, ValueError):
+            st.error(str(exc))
+            st.stop()
+        err_text = str(exc).strip() or exc.__class__.__name__
+        if _expose_load_errors():
+            st.error("Erro ao carregar os dados de Frete.")
+            st.exception(exc)
+        elif _admin_mode:
+            st.warning("Dados de Frete indisponíveis no momento.")
+            st.caption(f"Detalhe técnico: {exc}")
+        else:
+            st.warning("Dados indisponíveis no momento. Tente novamente em instantes.")
+            with st.expander("Detalhes para suporte", expanded=False):
+                st.code(err_text, language="text")
+        st.stop()
+
     tabela_geral = pd.DataFrame()
-    info = {"origem": "frete_ml_lazy", "linhas": 0}
+    info = frete_info
 else:
     try:
         with st.spinner("A carregar dados (a ir buscar o ficheiro à nuvem, se aplicável)…"):
             tabela_geral, info, ts_proc = _load_data()
+            if _admin_mode:
+                if info.get("repasse_consume") == "live_fallback":
+                    st.warning(
+                        "Repasse: tentativa de carregar **materializado** falhou — em uso **fluxo live** (fallback)."
+                    )
+                    st.caption(f"Path/URL tentado: `{info.get('repasse_materialized_target', '')}`")
+                    st.caption(f"Erro: {info.get('repasse_materialized_error', '')}")
+                elif info.get("repasse_materialized_note"):
+                    st.info(str(info["repasse_materialized_note"]))
+                elif info.get("repasse_consume") == "materialized":
+                    st.caption(
+                        f"Repasse: dados **materializados** (`{info.get('repasse_materialized_target', '')}`)."
+                    )
     except Exception as exc:
+        if _strict_materialized() and isinstance(exc, ValueError):
+            st.error(str(exc))
+            st.stop()
         err_text = str(exc).strip() or exc.__class__.__name__
         if _expose_load_errors():
             st.error("Erro ao carregar os dados. Ajuste Secrets/URL ou use o detalhe abaixo.")
@@ -2249,26 +3614,26 @@ except ValueError:
     _sb_ts_display = ts_proc
 
 with st.sidebar:
+    _sb_dn_esc = html.escape(str(_app_ctx.display_name))
+    _sb_ini = html.escape(_sb_user_initials(_app_ctx.display_name))
+
     st.markdown(
         f"""
-        <div class="sb-header-shell">
-          <div class="sb-header-title">FDL Analytics</div>
-          <div class="sb-header-sub">Financial Intelligence for E-commerce</div>
-          <div class="sb-client-line">
-            <span class="sb-client-k">Cliente</span>
-            <strong>{_app_ctx.display_name}</strong>
+        <header class="fdl-sb-header" aria-label="Marca e utilizador">
+          <div class="fdl-sb-brand-logo-wrap">{_sidebar_brand_logo_html()}</div>
+          <div class="fdl-sb-user">
+            <div class="fdl-sb-avatar">{_sb_ini}</div>
+            <span class="fdl-sb-user-name">{_sb_dn_esc}</span>
           </div>
-        </div>
+        </header>
         """,
         unsafe_allow_html=True,
     )
-    st.markdown('<hr class="sb-divider-soft" />', unsafe_allow_html=True)
-    st.markdown('<p class="sb-nav-section-label">Empresas</p>', unsafe_allow_html=True)
 
     _empresas_usuario = list(st.session_state["empresas_permitidas"])
     _nomes_nav = nomes_permitidos_com_registro(_empresas_usuario)
 
-    if len(_nomes_nav) > 1:
+    if _nomes_nav:
         _org_idx = 0
         for i, n in enumerate(_nomes_nav):
             _o = organizacao_por_nome_cadastrado(n)
@@ -2276,61 +3641,84 @@ with st.sidebar:
                 _org_idx = i
                 break
         _sel_nome = st.selectbox(
-            "Empresa ativa",
+            "Empresa",
             options=_nomes_nav,
             index=_org_idx,
             key="operacional_empresa_ativa_select",
+            label_visibility="visible",
         )
         _chosen_org = organizacao_por_nome_cadastrado(_sel_nome)
         if _chosen_org and _chosen_org.org_id != _app_ctx.active_org_id:
             st.session_state[SESSION_ACTIVE_ORG_KEY] = _chosen_org.org_id
             st.rerun()
 
-    with st.expander(f"🏢 {_active_org.display_name}", expanded=True):
-        st.markdown(
-            '<p class="sb-nav-section-label" style="margin-top:0.15rem;">💰 Financeiro · visualização</p>',
-            unsafe_allow_html=True,
-        )
-        # Forma mais estável na Cloud: um único widget a escrever direto em op_financeiro_view.
-        st.radio(
-            "Painel financeiro",
-            options=["repasse", "frete"],
-            format_func=_financeiro_radio_label,
-            key="op_financeiro_view",
-            label_visibility="collapsed",
-        )
-        st.caption("Um painel ativo de cada vez — melhor desempenho.")
+    _sb_view = st.session_state.get("op_financeiro_view", "repasse")
+    st.markdown('<p class="fdl-sb-system-modules-title">Módulos</p>', unsafe_allow_html=True)
 
-    st.markdown('<hr class="sb-divider-soft" />', unsafe_allow_html=True)
-    if st.button("Sair", use_container_width=True, help="Encerra a sessão neste navegador."):
-        logout_operacional_user()
-        st.rerun()
+    _lbl_repasse = "Conciliação de Repasse"
+    _lbl_frete = "Conciliação de Frete"
 
-    if _admin_mode and st.button(
-        "🔄 Atualizar dados",
-        use_container_width=True,
-        help="Atualiza a leitura de dados e limpa cache interno.",
-    ):
-        st.cache_data.clear()
-        # Invalida explicitamente cache de sessão do módulo de frete.
-        for _k in list(st.session_state.keys()):
-            if str(_k).startswith("_frete_cache_"):
-                st.session_state.pop(_k, None)
-        st.session_state["_conciliacao_dados_atualizados"] = True
-        st.rerun()
-    if _admin_mode and st.session_state.pop("_conciliacao_dados_atualizados", False):
-        st.success(f"Dados atualizados com sucesso. Última leitura: **{ts_proc}**")
+    with st.expander("💰 Financeiro", expanded=True):
+        st.button(
+            _lbl_repasse,
+            key="fdl_mod_repasse",
+            use_container_width=True,
+            type="primary" if _sb_view == "repasse" else "secondary",
+            on_click=_sb_nav_set_repasse,
+        )
+        st.button(
+            _lbl_frete,
+            key="fdl_mod_frete",
+            use_container_width=True,
+            type="primary" if _sb_view == "frete" else "secondary",
+            on_click=_sb_nav_set_frete,
+        )
+
+    with st.expander("📦 Estoque", expanded=False):
+        st.caption("Em breve")
+
+    with st.expander("🛒 Comercial", expanded=False):
+        st.caption("Em breve")
 
     st.markdown(
         f"""
         <div class="sb-sync-block">
           <div class="sb-sync-label">Última atualização</div>
-          <div class="sb-sync-ts">{_sb_ts_display}</div>
+          <div class="sb-sync-ts">{html.escape(str(_sb_ts_display))}</div>
           <div class="sb-sync-label" style="margin-top:0.65rem;">Versão</div>
-          <div class="sb-sync-ts">{BUILD_TAG}</div>
+          <div class="sb-sync-ts">{html.escape(str(BUILD_TAG))}</div>
         </div>
         """,
         unsafe_allow_html=True,
+    )
+
+    if _admin_mode and _data_source_mode() == "upload_zip":
+        _render_cloud_data_loader()
+
+    st.markdown(
+        '<hr class="sb-divider-soft" style="margin:1.15rem 0 0.75rem 0;" />',
+        unsafe_allow_html=True,
+    )
+
+    if _admin_mode and st.button(
+        "🔄 Atualizar dados",
+        use_container_width=True,
+        help="Limpa caches e recarrega (releitura dos artefatos); não executa materialização.",
+        key="fdl_sb_admin_refresh",
+    ):
+        st.cache_data.clear()
+        for _k in list(st.session_state.keys()):
+            if str(_k).startswith("_frete_cache_"):
+                st.session_state.pop(_k, None)
+        st.rerun()
+
+    st.button(
+        "Sair",
+        use_container_width=True,
+        help="Encerra a sessão neste navegador.",
+        type="tertiary",
+        key="fdl_sb_logout",
+        on_click=_sb_logout_click,
     )
 
 if _fv == "repasse":
@@ -2366,45 +3754,45 @@ _fv = st.session_state["op_financeiro_view"]
 _h_cl = html.escape(str(_app_ctx.display_name))
 _h_org = html.escape(str(_active_org.display_name))
 if _fv == "repasse":
-    _hero_body = f"""
-      <nav class="fdl-breadcrumb" aria-label="Localização no sistema">
-        <span class="fdl-bc-item">{_h_cl}</span>
-        <span class="fdl-bc-sep" aria-hidden="true">›</span>
-        <span class="fdl-bc-item">{_h_org}</span>
-        <span class="fdl-bc-sep" aria-hidden="true">›</span>
-        <span class="fdl-bc-item">Financeiro</span>
-        <span class="fdl-bc-sep" aria-hidden="true">›</span>
-        <span class="fdl-bc-item fdl-bc-current">Conciliação de Repasse</span>
-      </nav>
-      <h1>Conciliação de Repasse</h1>
-      <p class="page-sub">
-        Painel para acompanhar valores recebidos na plataforma, conferência com notas e fila de ações
-        sugeridas — sempre sobre a base já filtrada pelos critérios operacionais do módulo.
-      </p>"""
-    st.markdown(
+    # Sem indentação à esquerda nas linhas HTML: o Markdown do Streamlit trata 4+ espaços como bloco de código.
+    _hero_body = dedent(
         f"""
-        <div class="fdl-topbar">
-          <div class="fdl-topbar-brand">FDL Analytics</div>
-          <div class="fdl-topbar-meta">
-            <span><strong>Cliente:</strong> {_h_cl}</span>
-            <span class="fdl-sep">|</span>
-            <span><strong>Empresa:</strong> {_h_org}</span>
-          </div>
-        </div>
-        <div class="page-hero">{_hero_body}
-        </div>
-        """,
+        <nav class="fdl-breadcrumb" aria-label="Localização no sistema">
+          <span class="fdl-bc-item">{_h_cl}</span>
+          <span class="fdl-bc-sep" aria-hidden="true">›</span>
+          <span class="fdl-bc-item">{_h_org}</span>
+          <span class="fdl-bc-sep" aria-hidden="true">›</span>
+          <span class="fdl-bc-item">Financeiro</span>
+          <span class="fdl-bc-sep" aria-hidden="true">›</span>
+          <span class="fdl-bc-item fdl-bc-current">Conciliação de Repasse</span>
+        </nav>
+        <h1>Conciliação de Repasse</h1>
+        <p class="page-sub">
+          Painel para acompanhar valores recebidos na plataforma, conferência com notas e fila de ações
+          sugeridas — sempre sobre a base já filtrada pelos critérios operacionais do módulo.
+        </p>
+        """
+    ).strip()
+    st.markdown(
+        _html_fdl_topbar(_h_cl, _h_org)
+        + '<div class="page-hero">'
+        + _hero_body
+        + "</div>",
         unsafe_allow_html=True,
     )
 else:
-    # Frete: texto só via widgets nativos (sem unsafe_allow_html) — evita ecrã branco no painel Frete.
-    st.caption("FDL Analytics")
-    st.caption(
-        f"{_app_ctx.display_name} › {_active_org.display_name} › Financeiro › Conciliação de Frete"
-    )
-    st.title("Conciliação de Frete")
-    st.caption(
-        "Frete líquido no relatório ML (soma receita e tarifa de envio) e cruzamento opcional com preço por anúncio."
+    _hero_frete = dedent(
+        """
+        <h1>Conciliação de Frete</h1>
+        <p class="page-sub">
+          Compare o frete cobrado pelo Mercado Livre no relatório de envios com o valor esperado
+          quando existir tabela de preço por anúncio — filtros e KPIs refletem o período selecionado.
+        </p>
+        """
+    ).strip()
+    st.markdown(
+        _html_fdl_topbar(_h_cl, _h_org) + '<div class="page-hero">' + _hero_frete + "</div>",
+        unsafe_allow_html=True,
     )
 
 if _fv == "repasse":
@@ -2420,7 +3808,7 @@ if _fv == "repasse":
                 st.code(str(exc), language="text")
 else:
     try:
-        _painel_frete_emergencial(_active_org.org_id)
+        _painel_frete_emergencial(_active_org.org_id, frete_df, frete_info, ts_proc)
     except Exception as exc:
         st.error("Não foi possível carregar o painel de Frete.")
         st.exception(exc)

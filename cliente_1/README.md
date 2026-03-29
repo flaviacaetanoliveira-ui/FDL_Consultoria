@@ -1,6 +1,9 @@
-# `cliente_1` — base de dados original (local)
+# `cliente_1` — cópia local / exemplo no repositório
 
-Quando esta pasta **existe** na raiz do repositório V2, o código usa **`cliente_1`** como `FDL_BASE_DIR` por defeito (ver `fdl_paths.py`), em vez de `data_cliente/`.
+**Produção (Anto Moveis):** defina em `.streamlit/secrets.toml` o **`FDL_BASE_DIR`** com o caminho absoluto da base real no OneDrive, por exemplo  
+`.../OneDrive - FDL Consultoria/Cursor/Anto Moveis/cliente_1`. Assim Repasse e Frete leem a mesma pasta que os dados operacionais — **não** esta pasta de exemplo dentro do V2.
+
+Se esta pasta **existir** na raiz do V2 **e** `FDL_BASE_DIR` **não** estiver definido (secrets nem variável de ambiente), o código usa-a como fallback (`fdl_paths.py`), em vez de `data_cliente/`.
 
 ## Opções
 

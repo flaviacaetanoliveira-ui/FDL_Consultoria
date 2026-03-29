@@ -7,8 +7,17 @@ REM set "FDL_SYNC_VENDAS_SRC=C:\Users\SEU_USER\OneDrive - Empresa\VendasML"
 REM Ficheiro OU pasta com Excel *Frete*Anuncio*.xlsx (nome deve bater com o aplicativo):
 REM set "FDL_SYNC_FRETE_SRC=C:\Users\SEU_USER\OneDrive - Empresa\Frete_Anuncio.xlsx"
 
-REM Base do cliente para o export Python (mirror / pipeline) — normalmente a pasta data_cliente do repo:
+REM Base do cliente: deve ser a mesma pasta onde existem Vendas - Mercado Livre, Liberações_ML, etc.
+REM (igual a FDL_BASE_DIR em .streamlit/secrets.toml). O materialize_financeiro usa isto.
 REM set "FDL_BASE_DIR=C:\caminho\para\V2\data_cliente"
+
+REM Opcional: segmentos em data_products (omitir = default + empresa do operacional_data_config, ex. antomoveis)
+REM set "FDL_MATERIALIZE_CLIENTE=default"
+REM set "FDL_MATERIALIZE_EMPRESA=antomoveis"
+REM set "FDL_MATERIALIZE_ORG_ID=antomoveis"
+
+REM Para SO copiar ficheiros sem gerar data_products (repasse/frete materializado):
+REM set "SKIP_MATERIALIZE=1"
 
 REM Para SO copiar ficheiros sem correr export_powerbi_dataset.py (mais rapido):
 REM set "SKIP_POWERBI_EXPORT=1"

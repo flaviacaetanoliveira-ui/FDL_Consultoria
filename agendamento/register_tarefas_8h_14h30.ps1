@@ -38,8 +38,8 @@ $settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances IgnoreNew
 
 $description = @"
-Sincroniza Vendas - Mercado Livre e frete por anuncio para cliente_1 (se existir) ou data_cliente; executa powerbi_mirror/export (se nao SKIP).
-Configurar caminhos em agendamento\config_local.bat (copiar de config_local.bat.example).
+Sincroniza Vendas ML e frete por anuncio; executa processing/materialize_financeiro (repasse+frete em data_products/.../current/, se nao SKIP_MATERIALIZE); depois powerbi_mirror/export (se nao SKIP_POWERBI_EXPORT).
+Configurar FDL_BASE_DIR e sync em agendamento\config_local.bat (copiar de config_local.bat.example).
 "@
 
 Register-ScheduledTask `

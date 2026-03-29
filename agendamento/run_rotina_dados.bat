@@ -59,13 +59,33 @@ if defined FDL_SYNC_FRETE_SRC (
   echo INFO FDL_SYNC_FRETE_SRC nao definido — copia frete ignorada. >> "%LOG%"
 )
 
+if not defined FDL_BASE_DIR set "FDL_BASE_DIR=%DEST_BASE%"
+echo FDL_BASE_DIR=!FDL_BASE_DIR! >> "%LOG%"
+
+REM Materializa repasse + frete em data_products/.../repasse|frete/current/ (alinhado ao consumo FDL_FRETE_CONSUME_MODE=materialized).
+if /i "%SKIP_MATERIALIZE%"=="1" (
+  echo INFO SKIP_MATERIALIZE=1 — materialize_financeiro ignorado. >> "%LOG%"
+  goto :after_materialize
+)
+if defined FDL_FATURAMENTO_PARAMS (
+  echo [materialize_financeiro] python processing\materialize_financeiro.py --modulo all com faturamento >> "%LOG%"
+  python "processing\materialize_financeiro.py" --modulo all --base-dir "!FDL_BASE_DIR!" --faturamento-params "!FDL_FATURAMENTO_PARAMS!" 1>> "%LOG%" 2>>&1
+) else (
+  echo [materialize_financeiro] python processing\materialize_financeiro.py --modulo all >> "%LOG%"
+  python "processing\materialize_financeiro.py" --modulo all --base-dir "!FDL_BASE_DIR!" 1>> "%LOG%" 2>>&1
+)
+set "MZ=!errorlevel!"
+if not "!MZ!"=="0" (
+  echo ERRO materialize_financeiro codigo !MZ! >> "%LOG%"
+  exit /b !MZ!
+)
+:after_materialize
+
 if /i "%SKIP_POWERBI_EXPORT%"=="1" (
   echo INFO SKIP_POWERBI_EXPORT=1 — export Python ignorado. >> "%LOG%"
   goto :fim_ok
 )
 
-if not defined FDL_BASE_DIR set "FDL_BASE_DIR=%DEST_BASE%"
-echo FDL_BASE_DIR=!FDL_BASE_DIR! >> "%LOG%"
 echo [powerbi_mirror] python export_powerbi_dataset.py >> "%LOG%"
 python "powerbi_mirror\export_powerbi_dataset.py" 1>> "%LOG%" 2>>&1
 set "EX=%errorlevel%"

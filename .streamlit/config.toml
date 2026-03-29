@@ -8,6 +8,8 @@ gatherUsageStats = false
 # Evitar cabeçalho escuro aqui — o Streamlit não expõe cor de texto do cabeçalho separada.
 [theme]
 base = "light"
+# Cor primária da área principal (botões, links, foco). Sem isto, o Streamlit usa vermelho por defeito.
+primaryColor = "#2563eb"
 dataframeHeaderBackgroundColor = "#e2e8f0"
 dataframeBorderColor = "#cbd5e1"
 

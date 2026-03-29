@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import html as html_lib
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -12,16 +12,27 @@ from streamlit.column_config import TextColumn
 
 from fdl_paths import CLIENTE_BASE_DIR
 from operacional_frete import (
+    FRETE_ML_COL,
     FRETE_UI_ANUNCIO,
+    FRETE_UI_CLASSIFICACAO,
     FRETE_UI_DIFERENCA,
     FRETE_UI_FRETE_ESPERADO,
     FRETE_UI_N_VENDA,
     FRETE_UI_QTD_PRECO_ML,
     FRETE_UI_STATUS_CONC,
+    FRETE_UI_ANALISADO_REPASSE_FRETE,
+    FRETE_UI_STATUS_SEM_FRETE_ML,
     FRETE_UI_TITULO_ANUNCIO,
     FRETE_UI_VAL_DIVERGENCIA,
-    carregar_base_frete_ml,
+    FRETE_UI_VALOR_FRETE_ANUNCIO,
+    FRETE_UI_SITUACAO_FRETE,
+    FRETE_UI_ACAO_RECOMENDADA,
+    FRETE_UI_RECEBIDO,
+    compute_frete_situacao_frete_column,
+    carregar_tabela_final_frete_operacional,
+    dataframe_frete_conciliacao_principal,
     descobrir_fontes_frete,
+    frete_series_normalize_sale_dt,
     stable_mtime_ns_for_frete_url,
 )
 
@@ -37,7 +48,9 @@ def _dataframe_frete_grid(
     for c in (
         "Receita por envio (BRL)",
         "Tarifas de envio (BRL)",
-        "Frete ML (receita+tarifa)",
+        "Custo do envio (BRL)",
+        FRETE_ML_COL,
+        FRETE_UI_VALOR_FRETE_ANUNCIO,
         FRETE_UI_FRETE_ESPERADO,
         FRETE_UI_DIFERENCA,
         FRETE_UI_QTD_PRECO_ML,
@@ -55,9 +68,13 @@ def _column_config_frete(df: pd.DataFrame) -> dict[str, TextColumn]:
     cfg: dict[str, TextColumn] = {}
     for c in df.columns:
         cl = str(c).lower()
-        if c in (FRETE_UI_N_VENDA, FRETE_UI_ANUNCIO):
+        if c in (FRETE_UI_N_VENDA, FRETE_UI_ANUNCIO, "Número do anúncio", "Data da venda", "N.º venda"):
             cfg[c] = TextColumn(str(c), width="medium")
-        elif c in ("Estado", FRETE_UI_STATUS_CONC):
+        elif c in ("Estado", FRETE_UI_SITUACAO_FRETE):
+            cfg[c] = TextColumn(str(c), width="small")
+        elif c == FRETE_UI_ACAO_RECOMENDADA:
+            cfg[c] = TextColumn(str(c), width="medium")
+        elif c == FRETE_UI_RECEBIDO:
             cfg[c] = TextColumn(str(c), width="small")
         elif "descri" in cl or "titulo" in cl or "título" in cl:
             cfg[c] = TextColumn(str(c), width="large")
@@ -114,7 +131,7 @@ def painel_frete_fragment(
     else:
         f_ns = None
     try:
-        base_df, meta = carregar_base_frete_ml(org_id, vendas_ref, v_ns, frete_ref, f_ns)
+        base_df, meta = carregar_tabela_final_frete_operacional(org_id, vendas_ref, v_ns, frete_ref, f_ns)
     except Exception as exc:
         st.error("Falha ao ler vendas ML.")
         st.caption(str(exc))
@@ -149,37 +166,75 @@ def _painel_frete_conteudo_safe(
     vendas_url: str,
     br_tz: object,
 ) -> None:
-    tbl_show = base_df[[c for c in base_df.columns if not str(c).startswith("_")]].copy()
+    today = datetime.now(br_tz).date()
+    ini_30 = today - timedelta(days=29)
+    work = base_df
+    recorte_30 = False
+    if "_data_venda_dt" in base_df.columns:
+        dts = frete_series_normalize_sale_dt(base_df["_data_venda_dt"])
+        if dts.notna().any():
+            ini_ts = pd.Timestamp(ini_30)
+            fim_ts = pd.Timestamp(today) + pd.Timedelta(days=1)
+            m = dts.notna() & (dts >= ini_ts) & (dts < fim_ts)
+            work = base_df.loc[m]
+            recorte_30 = True
+    elif "data_venda" in base_df.columns:
+        dv = pd.to_datetime(base_df["data_venda"], errors="coerce", dayfirst=True)
+        if dv.notna().any():
+            ddn = dv.dt.normalize()
+            ini_ts = pd.Timestamp(ini_30)
+            fim_ts = pd.Timestamp(today) + pd.Timedelta(days=1)
+            m = dv.notna() & (ddn >= ini_ts) & (ddn < fim_ts)
+            work = base_df.loc[m]
+            recorte_30 = True
+
+    tbl_show = work[[c for c in work.columns if not str(c).startswith("_")]].copy()
+    if "data_venda" not in tbl_show.columns and "_data_venda_dt" in work.columns:
+        tbl_show["data_venda"] = work["_data_venda_dt"]
+    if FRETE_UI_CLASSIFICACAO in tbl_show.columns:
+        tbl_show = tbl_show.drop(columns=[FRETE_UI_CLASSIFICACAO])
     if vpath is not None:
         ts_v = datetime.fromtimestamp(vpath.stat().st_mtime, tz=br_tz).strftime("%d/%m/%Y %H:%M")
     elif vendas_url:
         ts_v = "fonte remota (URL)"
     else:
         ts_v = "—"
-    st.caption(
-        f"Ficheiro vendas: {meta.get('vendas_arquivo')} | {ts_v} | Linhas: {len(tbl_show)}"
-    )
+    if recorte_30:
+        st.caption(
+            f"Ficheiro vendas: {meta.get('vendas_arquivo')} | {ts_v} | "
+            f"**Cenário A (30 dias):** {ini_30.strftime('%d/%m/%Y')} a {today.strftime('%d/%m/%Y')} — "
+            f"{len(tbl_show)} linhas"
+        )
+    else:
+        st.caption(
+            f"Ficheiro vendas: {meta.get('vendas_arquivo')} | {ts_v} | "
+            f"{len(tbl_show)} linhas (sem coluna de data — sem recorte de 30 dias)."
+        )
 
-    fm = pd.to_numeric(tbl_show.get("Frete ML (receita+tarifa)"), errors="coerce")
-    n_com_frete = int(fm.notna().sum())
+    fm = pd.to_numeric(tbl_show.get(FRETE_ML_COL), errors="coerce")
     soma_frete = float(fm.fillna(0).sum())
-    n_sem = int(len(tbl_show) - n_com_frete)
+    stc = tbl_show[FRETE_UI_STATUS_CONC] if FRETE_UI_STATUS_CONC in tbl_show.columns else None
+    n_repasse = int(
+        compute_frete_situacao_frete_column(tbl_show).eq(FRETE_UI_ANALISADO_REPASSE_FRETE).sum()
+    )
+    n_sem_ml = int(stc.eq(FRETE_UI_STATUS_SEM_FRETE_ML).sum()) if stc is not None else 0
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Vendas", f"{len(tbl_show):,}".replace(",", "."))
-    c2.metric("Com frete ML", f"{n_com_frete:,}".replace(",", "."))
-    c3.metric("Soma frete ML", f"R$ {soma_frete:,.2f}")
-    if n_sem:
-        st.info(f"Linhas sem dados de envio no ML: {n_sem}")
+    c2.metric("Repasse de frete (situação)", f"{n_repasse:,}".replace(",", "."))
+    c3.metric("Soma frete cobrado", f"R$ {soma_frete:,.2f}")
+    if n_sem_ml:
+        st.info(f"Linhas sem receita e tarifas de envio no ML: {n_sem_ml}")
 
     if meta.get("frete_tabular") and FRETE_UI_STATUS_CONC in tbl_show.columns:
         n_div = int(tbl_show[FRETE_UI_STATUS_CONC].eq(FRETE_UI_VAL_DIVERGENCIA).sum())
-        st.caption(f"Divergências: {n_div}")
+        st.caption(f"Divergências (status técnico): {n_div} · Repasse de frete (situação): {n_repasse}")
     elif not meta.get("frete_tabular"):
         st.info("Sem tabela de frete por anúncio reconhecida na pasta do cliente.")
 
     t_grid = _dataframe_frete_grid(tbl_show, fmt_brl_ptbr_celula, col_referencia_como_texto)
-    st.dataframe(t_grid, use_container_width=True, hide_index=True, height=520)
+    t_main = dataframe_frete_conciliacao_principal(t_grid)
+    st.dataframe(t_main, use_container_width=True, hide_index=True, height=520)
     st.download_button(
         "Exportar CSV",
         tbl_show.to_csv(index=False).encode("utf-8-sig"),
@@ -205,17 +260,30 @@ def _painel_frete_conteudo(
     # (erro no servidor / ecrã branco na Cloud ao mudar Repasse → Frete ou ao atualizar o .xlsx).
     _sig = f"{org_id}_{vpath.stat().st_mtime_ns}"
     work = base_df.copy()
+    today = datetime.now(br_tz).date()
+    # Janela por omissão: últimos 30 dias corridos até hoje (inclusive).
+    default_ini = today - timedelta(days=29)
+    default_fim = today
+
     if "_data_venda_dt" in work.columns:
         dts = work["_data_venda_dt"].dropna()
         if len(dts):
-            d_min = dts.min().date()
-            d_max = dts.max().date()
+            d_min_data = dts.min().date()
+            d_max_data = dts.max().date()
         else:
-            d_min = d_max = datetime.now(br_tz).date()
+            d_min_data = d_max_data = today
     else:
-        d_min = d_max = datetime.now(br_tz).date()
-    if d_max < d_min:
-        d_min, d_max = d_max, d_min
+        d_min_data = d_max_data = today
+
+    picker_min = min(d_min_data, default_ini)
+    picker_max = max(d_max_data, default_fim, today)
+    if picker_max < picker_min:
+        picker_min, picker_max = picker_max, picker_min
+
+    d_ini_val = max(picker_min, min(default_ini, picker_max))
+    d_fim_val = max(picker_min, min(default_fim, picker_max))
+    if d_ini_val > d_fim_val:
+        d_ini_val = d_fim_val
 
     estados = []
     if "Estado" in work.columns:
@@ -234,9 +302,9 @@ def _painel_frete_conteudo(
     with r1[2]:
         data_ini = st.date_input(
             "Data da venda — início",
-            value=d_min,
-            min_value=d_min,
-            max_value=d_max,
+            value=d_ini_val,
+            min_value=picker_min,
+            max_value=picker_max,
             format="DD/MM/YYYY",
             key=f"frete_d_ini_{_sig}",
         )
@@ -244,16 +312,25 @@ def _painel_frete_conteudo(
     with r2[0]:
         data_fim = st.date_input(
             "Data da venda — fim",
-            value=d_max,
-            min_value=d_min,
-            max_value=d_max,
+            value=d_fim_val,
+            min_value=picker_min,
+            max_value=picker_max,
             format="DD/MM/YYYY",
             key=f"frete_d_fim_{_sig}",
         )
 
+    st.caption(
+        "**Cenário A (regra do painel):** últimos **30 dias corridos** incluindo hoje — "
+        "primeiro dia = hoje − 29 dias; último dia = hoje (fuso horário da app). "
+        f"**Período por omissão agora:** {default_ini.strftime('%d/%m/%Y')} a "
+        f"{default_fim.strftime('%d/%m/%Y')}. "
+        "*Ex.: se hoje for 28/03/2026 → 27/02/2026 a 28/03/2026.* "
+        "Ajuste as datas acima para outro período."
+    )
     st.markdown(
-        '<p class="fdl-frete-hint">Frete ML = <strong>Receita por envio + Tarifas de envio</strong> '
-        "(soma com sinais do export, alinhado ao total Envios no ML).</p>",
+        '<p class="fdl-frete-hint"><strong>Frete cobrado</strong> = valor absoluto de '
+        '<strong>Receita por envio + Tarifas de envio</strong> (sempre ≥ 0). '
+        "A coluna <strong>Custo do envio</strong> não entra no cálculo.</p>",
         unsafe_allow_html=True,
     )
 
@@ -276,34 +353,47 @@ def _painel_frete_conteudo(
             )
         tbl = tbl.loc[m]
 
-    if "_data_venda_dt" in tbl.columns and tbl["_data_venda_dt"].notna().any():
-        dd = tbl["_data_venda_dt"].dt.normalize()
-        ini = pd.Timestamp(data_ini)
-        fim = pd.Timestamp(data_fim) + pd.Timedelta(days=1)
-        tbl = tbl.loc[tbl["_data_venda_dt"].notna() & (dd >= ini) & (dd < fim)]
+    if "_data_venda_dt" in tbl.columns:
+        dd = frete_series_normalize_sale_dt(tbl["_data_venda_dt"])
+        if dd.notna().any():
+            ini = pd.Timestamp(data_ini)
+            fim = pd.Timestamp(data_fim) + pd.Timedelta(days=1)
+            tbl = tbl.loc[dd.notna() & (dd >= ini) & (dd < fim)]
 
     tbl_show = tbl[[c for c in tbl.columns if not str(c).startswith("_")]].copy()
+    if "data_venda" not in tbl_show.columns and "_data_venda_dt" in tbl.columns:
+        tbl_show["data_venda"] = tbl["_data_venda_dt"]
+    if FRETE_UI_CLASSIFICACAO in tbl_show.columns:
+        tbl_show = tbl_show.drop(columns=[FRETE_UI_CLASSIFICACAO])
 
     ts_v = datetime.fromtimestamp(vpath.stat().st_mtime, tz=br_tz).strftime("%d/%m/%Y %H:%M")
     st.caption(
         f"**Ficheiro vendas:** {meta.get('vendas_arquivo')} · _{ts_v}_ · **Linhas:** {len(tbl_show)}"
     )
 
-    fm = pd.to_numeric(tbl_show.get("Frete ML (receita+tarifa)"), errors="coerce")
-    n_com_frete = int(fm.notna().sum())
+    fm = pd.to_numeric(tbl_show.get(FRETE_ML_COL), errors="coerce")
     soma_frete = float(fm.fillna(0).sum())
-    n_sem = int(len(tbl_show) - n_com_frete)
+    stc = tbl_show[FRETE_UI_STATUS_CONC] if FRETE_UI_STATUS_CONC in tbl_show.columns else None
+    n_repasse = int(
+        compute_frete_situacao_frete_column(tbl_show).eq(FRETE_UI_ANALISADO_REPASSE_FRETE).sum()
+    )
+    n_sem_ml = int(stc.eq(FRETE_UI_STATUS_SEM_FRETE_ML).sum()) if stc is not None else 0
 
     st.markdown('<div class="section-title">Resumo do recorte</div>', unsafe_allow_html=True)
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         render_kpi_card("Vendas no recorte", f"{len(tbl_show):,}".replace(",", "."), "\u25c6", "kpi-total")
     with k2:
-        render_kpi_card("Com frete ML", f"{n_com_frete:,}".replace(",", "."), "\u2713", "kpi-ok")
+        render_kpi_card("Repasse de frete (situação)", f"{n_repasse:,}".replace(",", "."), "\u2713", "kpi-ok")
     with k3:
-        render_kpi_card("Sem dados envio", f"{n_sem:,}".replace(",", "."), "\u25cb", "kpi-pend")
+        render_kpi_card(
+            "Sem info envio (ML)",
+            f"{n_sem_ml:,}".replace(",", "."),
+            "\u25cb",
+            "kpi-pend",
+        )
     with k4:
-        render_kpi_card("Soma Frete ML", f"R$ {soma_frete:,.2f}", "\u2605", "kpi-acao")
+        render_kpi_card("Soma frete cobrado", f"R$ {soma_frete:,.2f}", "\u2605", "kpi-acao")
 
     if meta.get("frete_tabular") and FRETE_UI_STATUS_CONC in tbl_show.columns:
         div = tbl_show[tbl_show[FRETE_UI_STATUS_CONC].eq(FRETE_UI_VAL_DIVERGENCIA)]
@@ -374,17 +464,18 @@ def _painel_frete_conteudo(
 
     st.markdown('<div class="section-title">Tabela</div>', unsafe_allow_html=True)
     t_grid = _dataframe_frete_grid(tbl_show, fmt_brl_ptbr_celula, col_referencia_como_texto)
-    _h_df = min(520, 120 + 28 * min(len(t_grid), 18))
+    t_main = dataframe_frete_conciliacao_principal(t_grid)
+    _h_df = min(520, 120 + 28 * min(len(t_main), 18))
     try:
         st.dataframe(
-            t_grid,
-            column_config=_column_config_frete(t_grid),
+            t_main,
+            column_config=_column_config_frete(t_main),
             use_container_width=True,
             hide_index=True,
             height=_h_df,
         )
     except Exception:
-        st.dataframe(t_grid, use_container_width=True, hide_index=True, height=_h_df)
+        st.dataframe(t_main, use_container_width=True, hide_index=True, height=_h_df)
     st.download_button(
         "Exportar CSV",
         tbl_show.to_csv(index=False).encode("utf-8-sig"),

@@ -1,0 +1,31 @@
+Para AVALIAR com dados reais no painel:
+1. Copie para ESTA pasta o export oficial do Mercado Livre (detalhe de envios) em .xlsx ou .csv.
+2. Em .streamlit/secrets.toml use FDL_FRETE_CONSUME_MODE = "live" (sem FDL_FRETE_MATERIALIZED_PATH ativo).
+   A app usa o ficheiro mais recente desta pasta (por data de modificação).
+3. Opcional: ficheiro de frete por anúncio (MLB + preço) na pasta cliente_1 com nome tipo *Frete*Anuncio*.xlsx
+
+O ficheiro `vendas_ml_export_demo.csv` é só exemplo (2 linhas). Apague-o ou substitua-o pelo export real
+se quiser evitar confusão.
+
+Para o Frete materializado (dataset_frete_app.csv) ser gerado a partir dos dados reais:
+
+1. Copie para ESTA pasta o export do relatório Mercado Livre (detalhe de envios / vendas),
+   em formato .xlsx, .xls ou .csv — o mesmo tipo que usa o pipeline de Frete.
+
+2. Na raiz do projeto V2, execute no PowerShell:
+
+   python processing\materialize_financeiro.py --base-dir cliente_1 --cliente default --empresa antomoveis --modulo frete
+
+   Simulação (materializa + recorte 30 dias no terminal, igual à app):
+
+   python processing\simular_frete_dados_reais.py --base-dir cliente_1
+
+   (Ajuste --cliente / --empresa se usar outros pastas em data_products.)
+
+3. O ficheiro sai em:
+   data_products\default\antomoveis\frete\current\dataset_frete_app.csv
+
+4. No .streamlit\secrets.toml, mantenha:
+   FDL_FRETE_MATERIALIZED_PATH = "data_products/default/antomoveis/frete/current/dataset_frete_app.csv"
+
+Alternativa na Cloud: defina FDL_FRETE_VENDAS_URL com o link direto ao Excel do ML (Secrets).

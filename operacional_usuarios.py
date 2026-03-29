@@ -31,6 +31,14 @@ _GAMA_PBKDF2 = {
     "hash_b64": "ZxNiz4cia3d5U4W1baSGINYe4fPCqmfpGXRj1ijy+mQ=",
 }
 
+# Cliente 5 (Flávio) — PBKDF2 (sem armazenar senha em texto plano no repositório).
+# Opcional em Cloud: `FDL_FLAVIO_LOGIN_PASSWORD` em secrets/env substitui o hash abaixo.
+_FLAVIO_PBKDF2 = {
+    "iterations": 390_000,
+    "salt_b64": "Lb+fcc6zGdry0Jw7xHAuxA==",
+    "hash_b64": "NtHcsWjXG21QscrTJ8x+m0oyGwhBtO7mahr0sChpBqE=",
+}
+
 
 def _verify_pbkdf2_password(
     plain: str, salt_b64: str, hash_b64: str, *, iterations: int
@@ -44,6 +52,19 @@ def _verify_pbkdf2_password(
         "sha256", plain.encode("utf-8"), salt, iterations, dklen=len(expected)
     )
     return secrets.compare_digest(got, expected)
+
+
+def _optional_secret_str(key: str) -> str:
+    """Lê variável de ambiente ou `st.secrets` (Streamlit Cloud)."""
+    raw = os.environ.get(key, "").strip()
+    if raw:
+        return raw
+    try:
+        import streamlit as st
+
+        return str(st.secrets.get(key, "")).strip()
+    except Exception:
+        return ""
 
 
 def _gama_home_password_override(candidate: str) -> bool | None:
@@ -64,11 +85,17 @@ def _gama_home_password_override(candidate: str) -> bool | None:
 
 def _senha_ok(row: dict[str, Any], senha: str) -> bool:
     if "senha_pbkdf2" in row:
-        ow = _gama_home_password_override(senha)
-        if ow is True:
-            return True
-        if ow is False:
-            return False
+        env_override = row.get("senha_env_override")
+        if isinstance(env_override, str) and env_override.strip():
+            raw = _optional_secret_str(env_override.strip())
+            if raw:
+                return secrets.compare_digest(senha, raw)
+        else:
+            ow = _gama_home_password_override(senha)
+            if ow is True:
+                return True
+            if ow is False:
+                return False
         cfg = row["senha_pbkdf2"]
         if not isinstance(cfg, dict):
             return False
@@ -97,6 +124,13 @@ USUARIOS: dict[str, dict[str, Any]] = {
         "senha_pbkdf2": _GAMA_PBKDF2,
         "cliente": "Cliente 2",
         "empresas": ["Gama Home", "Mega Fácil", "Mega Star", "Móveis EAP"],
+    },
+    "esquilomoveis1@gmail.com": {
+        "nome": "Flávio",
+        "senha_pbkdf2": _FLAVIO_PBKDF2,
+        "senha_env_override": "FDL_FLAVIO_LOGIN_PASSWORD",
+        "cliente": "Cliente 5",
+        "empresas": ["Esquilo", "Wood"],
     },
 }
 

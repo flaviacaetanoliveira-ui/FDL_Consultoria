@@ -168,6 +168,40 @@ _REGISTRO_EMPRESA: dict[str, AppOrganization] = {
             ),
         ),
     ),
+    "Esquilo": AppOrganization(
+        org_id="esquilo",
+        display_name="Esquilo",
+        module_ids=("financeiro",),
+        routes=(
+            ModuleRoute(
+                route_id="conciliacao-repasse",
+                label="Conciliação de Repasse",
+                page_module="app_operacional",
+            ),
+            ModuleRoute(
+                route_id="faturamento",
+                label="Faturamento",
+                page_module="app_operacional",
+            ),
+        ),
+    ),
+    "Wood": AppOrganization(
+        org_id="wood",
+        display_name="Wood",
+        module_ids=("financeiro",),
+        routes=(
+            ModuleRoute(
+                route_id="conciliacao-repasse",
+                label="Conciliação de Repasse",
+                page_module="app_operacional",
+            ),
+            ModuleRoute(
+                route_id="faturamento",
+                label="Faturamento",
+                page_module="app_operacional",
+            ),
+        ),
+    ),
 }
 
 

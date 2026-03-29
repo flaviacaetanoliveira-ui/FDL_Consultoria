@@ -8,8 +8,16 @@ Uso típico (PowerShell):
   $env:FDL_BASE_DIR = "C:\\caminho\\base\\cliente"
   python processing/materialize_financeiro.py --cliente fdl_cli --empresa antomoveis --modulo all
 
+Cliente 5 (Flávio), origem ``Cliente_4/Esquilo`` → saída ``data_products/cliente_5/esquilo/...``:
+  python processing/materialize_financeiro.py ^
+    --base-dir "D:\\...\\Cliente_4\\Esquilo" --cliente cliente_5 --empresa esquilo --org-id esquilo ^
+    --dataset-empresa Esquilo --modulo all
+
 IDs opcionais (metadados e colunas no dataset):
   FDL_CLIENTE_ID, FDL_EMPRESA_ID, FDL_CNPJ
+
+Coluna «empresa» no CSV de repasse: defina ``--dataset-empresa`` (ou ``FDL_DATASET_EMPRESA``) **antes**
+do pipeline; deve coincidir com o nome no app (ex.: Esquilo, Wood).
 
 Debug repasse (stderr + metadata repasse_debug):
   FDL_DEBUG_REPASSE_PIPELINE=1 — liberações, etapa3, notas_saida/contas_receber, merges, colunas finais.
@@ -468,6 +476,51 @@ def _default_empresa_segment() -> str:
     return _slug_empresa_folder(DATASET_EMPRESA)
 
 
+def _preflight_sources(base_dir: Path) -> int:
+    """
+    Verifica pastas esperadas pelo repasse e fontes mínimas do frete (sem executar o pipeline).
+    """
+    import sys
+
+    code = 0
+    print(f"[preflight] base_dir={base_dir.resolve()}")
+    obrigatorias = ("Vendas - Mercado Livre", "Liberações_ML", "contas_receber")
+    opcionais = ("notas_saida",)
+    for sub in obrigatorias:
+        d = base_dir / sub
+        if not d.is_dir():
+            print(f"[preflight] ERRO: pasta obrigatória em falta: {d}", file=sys.stderr)
+            code = 1
+        else:
+            n = sum(1 for p in d.rglob("*") if p.is_file())
+            print(f"[preflight] OK {sub}/ ({n} ficheiros)")
+    for sub in opcionais:
+        d = base_dir / sub
+        if d.is_dir():
+            n = sum(1 for p in d.rglob("*") if p.is_file())
+            print(f"[preflight] OK {sub}/ ({n} ficheiros)")
+        else:
+            print(f"[preflight] AVISO (opcional): sem pasta {d}")
+    _ensure_repo_on_path()
+    from operacional_frete import descobrir_fontes_frete
+
+    f = descobrir_fontes_frete(base_dir)
+    v_ok = bool((f.vendas_url or "").strip() or f.vendas_path)
+    fr_ok = bool((f.frete_url or "").strip() or (f.frete_path is not None and f.frete_path.is_file()))
+    print(
+        f"[preflight] Frete — vendas ML: {'OK' if v_ok else 'FALTA'} "
+        f"({f.vendas_path or f.vendas_url or '—'})"
+    )
+    print(
+        f"[preflight] Frete — planilha «Frete por Anúncio» (ou URL): "
+        f"{'OK' if fr_ok else 'AVISO — pode falhar o módulo frete'} "
+        f"({f.frete_path or f.frete_url or '—'})"
+    )
+    if not v_ok:
+        code = 1
+    return code
+
+
 def main() -> int:
     _ensure_repo_on_path()
     from materialize_lock import MaterializeLockError, acquire_materialize_lock, release_materialize_lock
@@ -481,6 +534,16 @@ def main() -> int:
     parser.add_argument("--empresa", default=os.environ.get("FDL_MATERIALIZE_EMPRESA", "").strip(), help="Segmento de pasta empresa")
     parser.add_argument("--modulo", choices=("repasse", "frete", "faturamento", "all"), default="all")
     parser.add_argument("--org-id", default=os.environ.get("FDL_MATERIALIZE_ORG_ID", "antomoveis"), help="org_id para carregar_tabela_final_frete_operacional")
+    parser.add_argument(
+        "--dataset-empresa",
+        default=os.environ.get("FDL_DATASET_EMPRESA", "").strip(),
+        help="Valor da coluna «empresa» no dataset (repasse). Deve coincidir com o nome no app, ex.: Esquilo, Wood.",
+    )
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="Só valida pastas/fontes em --base-dir e sai (não materializa).",
+    )
     parser.add_argument(
         "--faturamento-params",
         default=os.environ.get("FDL_FATURAMENTO_PARAMS", "").strip(),
@@ -502,6 +565,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    ds_emp = (getattr(args, "dataset_empresa", None) or "").strip()
+    if ds_emp:
+        os.environ["FDL_DATASET_EMPRESA"] = ds_emp
+
     fp_raw = (args.faturamento_params or "").strip()
     faturamento_params_path = Path(fp_raw).expanduser().resolve() if fp_raw else None
 
@@ -518,6 +585,12 @@ def main() -> int:
         base_dir = _set_base_dir(Path(args.base_dir))
     else:
         base_dir = None
+
+    if getattr(args, "preflight", False):
+        if base_dir is None:
+            print("--preflight requer --base-dir.", file=sys.stderr)
+            return 1
+        return _preflight_sources(base_dir)
 
     _ensure_repo_on_path()
 

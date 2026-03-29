@@ -10,5 +10,5 @@ from fdl_streamlit_bootstrap import run_operacional_app
 
 run_operacional_app(
     entrypoint_label="app_cliente2.py",
-    page_title="FDL Analytics — Financeiro (Cliente 2)",
+    page_title="FDL Analytics — Financeiro (Grupo Mega Fácil)",
 )

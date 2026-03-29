@@ -4042,10 +4042,15 @@ with st.sidebar:
                 'letter-spacing:-0.02em;color:#111827;">FDL Analytics</p>',
                 unsafe_allow_html=True,
             )
-    _cli_nome = html.escape(str(st.session_state.get("cliente", _app_ctx.display_name)))
+    _cli_raw = str(st.session_state.get("cliente", "") or _app_ctx.display_name or "").strip()
+    if not _cli_raw:
+        _u = str(st.session_state.get("usuario", "") or "").strip()
+        _cli_raw = _u.split("@", 1)[0] if "@" in _u else (_u or "Conta")
+    _cli_nome = html.escape(_cli_raw)
+    st.caption("Cliente")
     st.markdown(
-        f'<div style="font-size:1.28rem;font-weight:700;line-height:1.25;color:#111827;'
-        f'padding:0.35rem 0 0.65rem 0;border-bottom:1px solid #e5e7eb;margin-bottom:0.6rem;">'
+        f'<div style="font-size:1.38rem;font-weight:700;line-height:1.2;color:#111827;'
+        f'padding:0.15rem 0 0.55rem 0;border-bottom:1px solid #e5e7eb;margin-bottom:0.45rem;">'
         f"{_cli_nome}</div>",
         unsafe_allow_html=True,
     )

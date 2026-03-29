@@ -122,14 +122,14 @@ USUARIOS: dict[str, dict[str, Any]] = {
     },
     "megafacilmoveis@gmail.com": {
         "senha_pbkdf2": _GAMA_PBKDF2,
-        "cliente": "Cliente 2",
+        "cliente": "Grupo Mega Fácil",
         "empresas": ["Gama Home", "Mega Fácil", "Mega Star", "Móveis EAP"],
     },
     "esquilomoveis1@gmail.com": {
         "nome": "Flávio",
         "senha_pbkdf2": _FLAVIO_PBKDF2,
         "senha_env_override": "FDL_FLAVIO_LOGIN_PASSWORD",
-        "cliente": "Cliente 5",
+        "cliente": "Flávio",
         "empresas": ["Esquilo", "Wood"],
     },
 }

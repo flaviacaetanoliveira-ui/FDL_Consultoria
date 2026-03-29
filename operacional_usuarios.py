@@ -116,7 +116,7 @@ USUARIOS: dict[str, dict[str, Any]] = {
         "empresas": ["Antomóveis"],
     },
     "sac@antomoveis.com.br": {
-        "senha": "123456",
+        "senha": "Anto@moveis",
         "cliente": "Everton",
         "empresas": ["Antomóveis"],
     },

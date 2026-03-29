@@ -83,192 +83,6 @@ def _sidebar_version_display() -> str:
     return "v—"
 
 
-def _sidebar_saas_styles_markdown() -> str:
-    """CSS da sidebar — paleta SaaS (UI apenas)."""
-    return """
-<style>
-  section[data-testid="stSidebar"] {
-    background: #F8FAFC !important;
-    border-right: 1px solid #E5E7EB !important;
-  }
-  section[data-testid="stSidebar"] > div {
-    background: #F8FAFC !important;
-  }
-  section[data-testid="stSidebar"] .block-container {
-    padding-top: 1.1rem !important;
-    padding-bottom: 1.75rem !important;
-  }
-  .fdl-sb-brand-block {
-    margin: 0.35rem 0 0.85rem 0;
-    padding: 0 0.15rem;
-  }
-  .fdl-sb-brand-title {
-    font-size: 1.125rem;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    color: #0f172a;
-    line-height: 1.2;
-    margin: 0;
-  }
-  .fdl-sb-brand-client {
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: #64748b;
-    margin: 0.35rem 0 0 0;
-    line-height: 1.35;
-  }
-  .fdl-sb-nav-heading {
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #94a3b8;
-    margin: 0.85rem 0 0.45rem 0.2rem;
-  }
-  .fdl-sb-footer-ts {
-    font-size: 0.68rem;
-    font-weight: 500;
-    color: #94a3b8;
-    line-height: 1.45;
-    margin: 1.1rem 0 0.15rem 0;
-    padding: 0 0.15rem;
-  }
-  .fdl-sb-footer-ts span {
-    color: #64748b;
-    font-weight: 500;
-  }
-  .fdl-sb-footer-ver {
-    font-size: 0.62rem !important;
-    color: #cbd5e1 !important;
-    margin-top: 0.15rem !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"]:has([data-testid="stSelectbox"]) {
-    background: #ffffff !important;
-    border: 1px solid #E5E7EB !important;
-    border-radius: 10px !important;
-    padding: 0.7rem 0.8rem 0.85rem 0.8rem !important;
-    margin: 0.25rem 0 0.65rem 0 !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stSelectbox"] label p {
-    font-size: 0.78rem !important;
-    font-weight: 600 !important;
-    color: #475569 !important;
-    text-transform: none !important;
-    letter-spacing: 0.01em !important;
-    margin-bottom: 0.35rem !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {
-    border-radius: 8px !important;
-    border-color: #E5E7EB !important;
-    background: #ffffff !important;
-    min-height: 2.65rem !important;
-    font-size: 0.92rem !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"]:focus-within > div {
-    border-color: #2563EB !important;
-    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25) !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] {
-    margin: 0 0 0.4rem 0 !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] details {
-    border: 1px solid #E5E7EB !important;
-    border-radius: 10px !important;
-    background: #ffffff !important;
-    overflow: hidden;
-    transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] details:hover {
-    background: #EFF6FF !important;
-    border-color: #BFDBFE !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] details[open] {
-    border-color: #93C5FD !important;
-    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
-  }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] details[open] > summary {
-    background: #EFF6FF !important;
-    border-bottom: 1px solid #E5E7EB !important;
-    color: #1e40af !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] summary {
-    padding: 0.55rem 0.65rem !important;
-    font-weight: 600 !important;
-    font-size: 0.875rem !important;
-    color: #334155 !important;
-    list-style: none;
-    cursor: pointer !important;
-    border: none !important;
-    background: #ffffff !important;
-    transition: background 0.18s ease !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
-    background: #EFF6FF !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] summary::-webkit-details-marker { display: none; }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] > div {
-    padding: 0.45rem 0.5rem 0.55rem 0.65rem !important;
-    background: #FAFBFC !important;
-    border-top: 1px solid #f1f5f9 !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] .stButton { margin-top: 0.25rem !important; }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button {
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    font-size: 0.8125rem !important;
-    text-align: left !important;
-    justify-content: flex-start !important;
-    padding: 0.45rem 0.7rem 0.45rem 0.85rem !important;
-    margin-left: 0.35rem !important;
-    border-left: 2px solid transparent !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="primary"] {
-    background: #EFF6FF !important;
-    color: #2563EB !important;
-    border: 1px solid #BFDBFE !important;
-    border-left: 3px solid #2563EB !important;
-    box-shadow: none !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="secondary"] {
-    background: #ffffff !important;
-    color: #475569 !important;
-    border: 1px solid transparent !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="secondary"]:hover {
-    background: #F8FAFC !important;
-    border-color: #E5E7EB !important;
-  }
-  section[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="primary"]:hover {
-    background: #DBEAFE !important;
-    border-color: #60A5FA !important;
-  }
-  section[data-testid="stSidebar"] button[kind="secondary"] {
-    border: 1px solid #E5E7EB !important;
-    background: #ffffff !important;
-    color: #64748b !important;
-    font-weight: 500 !important;
-    box-shadow: none !important;
-  }
-  section[data-testid="stSidebar"] button[kind="secondary"]:hover {
-    background: #F8FAFC !important;
-    border-color: #CBD5E1 !important;
-    color: #475569 !important;
-  }
-</style>
-"""
-
-_SB_LOGO_MINI_SVG = """
-<svg class="fdl-sb-logo-mini" width="38" height="38" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <defs><linearGradient id="fdlSbLogoGrad" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#0284c7"/>
-  </linearGradient></defs>
-  <rect width="40" height="40" rx="11" fill="url(#fdlSbLogoGrad)"/>
-  <path d="M9 28h5V16H9v12zm8 0h5V10h-5v18zm8-6h5v6h-5v-6zm8-8h5v14h-5V14z" fill="#fff" fill-opacity="0.95"/>
-</svg>"""
 
 try:
     st.set_page_config(page_title="FDL Analytics — Financeiro", layout="wide")
@@ -422,18 +236,6 @@ def _sb_user_initials(display_name: str) -> str:
     if parts:
         return parts[0][:2].upper()
     return "?"
-
-
-def _sidebar_brand_logo_html() -> str:
-    """Uma única imagem PNG horizontal (marca + texto); proporção preservada. Fallback: ícone SVG."""
-    logo_path = _REPO_APP_ROOT / "assets" / "fdl_analytics_logo.png"
-    if logo_path.is_file():
-        b64 = base64.b64encode(logo_path.read_bytes()).decode("ascii")
-        return (
-            f'<img src="data:image/png;base64,{b64}" alt="FDL Analytics" '
-            'class="fdl-sb-brand-logo-img" loading="eager" decoding="async" />'
-        )
-    return f'<div class="fdl-sb-logo-fallback" aria-hidden="true">{_SB_LOGO_MINI_SVG}</div>'
 
 
 def _sb_nav_set_repasse() -> None:
@@ -2369,642 +2171,6 @@ def _load_repasse_dataframe_cached(load_signature: str) -> tuple[pd.DataFrame, d
     return _load_data()
 
 
-if not _fdl_minimal_layout():
-    st.markdown(
-        """
-    <style>
-      html, body, [class*="css"] {
-        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      }
-      .main .block-container { padding-top: 0.5rem; padding-bottom: 2rem; max-width: 1400px; }
-
-      .fdl-topbar {
-        display: flex;
-        justify-content: space-between;
-        align-items: stretch;
-        gap: 1.25rem 2rem;
-        flex-wrap: wrap;
-        background: linear-gradient(118deg, #0f172a 0%, #1e3a5f 48%, #0f172a 100%);
-        color: #f8fafc;
-        padding: 1rem 1.45rem 1.05rem 1.45rem;
-        margin: 0 0 1.25rem 0;
-        border-radius: 14px;
-        box-shadow: 0 10px 32px rgba(15, 23, 42, 0.22);
-        border: 1px solid rgba(148, 163, 184, 0.18);
-      }
-      .fdl-topbar-left {
-        display: flex;
-        align-items: center;
-        gap: 0.95rem;
-        min-width: 0;
-        flex: 1 1 auto;
-      }
-      .fdl-topbar-logo .fdl-logo-svg {
-        display: block;
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
-        flex-shrink: 0;
-        box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);
-      }
-      .fdl-topbar-titles {
-        display: flex;
-        flex-direction: column;
-        gap: 0.2rem;
-        min-width: 0;
-      }
-      .fdl-topbar-title {
-        font-size: 1.48rem;
-        font-weight: 800;
-        letter-spacing: -0.035em;
-        color: #ffffff;
-        line-height: 1.12;
-        margin: 0;
-      }
-      .fdl-topbar-tagline {
-        font-size: 0.68rem;
-        font-weight: 500;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: #94a3b8;
-        margin: 0;
-        line-height: 1.35;
-      }
-      .fdl-topbar-right {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        flex: 0 1 auto;
-        min-width: min(100%, 14rem);
-      }
-      .fdl-topbar-client {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 0.55rem;
-        text-align: right;
-      }
-      .fdl-topbar-client-block {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 0.12rem;
-        max-width: 22rem;
-      }
-      .fdl-topbar-lbl {
-        font-size: 0.62rem;
-        font-weight: 600;
-        letter-spacing: 0.11em;
-        text-transform: uppercase;
-        color: #64748b;
-        line-height: 1.2;
-      }
-      .fdl-topbar-client-name {
-        font-size: 0.86rem;
-        font-weight: 500;
-        color: #cbd5e1;
-        letter-spacing: 0.01em;
-        line-height: 1.35;
-        word-break: break-word;
-      }
-      .fdl-topbar-block-org .fdl-topbar-lbl { color: #64748b; }
-      .fdl-topbar-org-name {
-        font-size: 1.12rem;
-        font-weight: 700;
-        color: #f8fafc;
-        letter-spacing: -0.025em;
-        line-height: 1.25;
-        word-break: break-word;
-      }
-
-      .fdl-breadcrumb {
-        display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.5rem;
-        font-size: 0.8rem; font-weight: 500; color: #64748b; margin: 0 0 0.65rem 0;
-        letter-spacing: 0.01em;
-      }
-      .fdl-breadcrumb .fdl-bc-sep { color: #cbd5e1; user-select: none; font-weight: 400; }
-      .fdl-breadcrumb .fdl-bc-item { color: #64748b; }
-      .fdl-breadcrumb .fdl-bc-item.fdl-bc-current {
-        color: #0f172a; font-weight: 700;
-      }
-
-      .page-hero {
-        margin-bottom: 1.35rem; padding-bottom: 1rem;
-        border-bottom: 1px solid #e2e8f0;
-      }
-      .page-hero h1 {
-        font-size: 1.75rem; font-weight: 700; color: #0f172a; margin: 0 0 0.35rem 0;
-        letter-spacing: -0.025em;
-      }
-      .page-hero .page-sub {
-        font-size: 0.95rem; color: #64748b; line-height: 1.5; max-width: 52rem; margin: 0;
-      }
-      .page-hero .page-meta {
-        font-size: 0.8rem; color: #94a3b8; margin-top: 0.65rem;
-      }
-      .page-hero .page-meta strong { color: #475569; }
-
-      .section-title {
-        font-size: 0.82rem; font-weight: 600; text-transform: uppercase;
-        letter-spacing: 0.06em; color: #64748b; margin: 1.35rem 0 0.65rem 0;
-      }
-
-      .money-hero {
-        background: linear-gradient(90deg, #f0f9ff 0%, #e0f2fe 45%, #f8fafc 100%);
-        border: 1px solid #bae6fd; border-radius: 12px;
-        padding: 0.9rem 1.1rem; margin-bottom: 1rem;
-        font-size: 1.05rem; color: #0c4a6e; box-shadow: 0 2px 8px rgba(14, 165, 233, 0.08);
-      }
-      .money-hero b { font-weight: 700; color: #0369a1; }
-
-      .kpi-card {
-        border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.85rem 0.95rem;
-        background: #fff; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-        min-height: 6.85rem;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-start;
-        gap: 0.35rem;
-        box-sizing: border-box;
-        transition: box-shadow 0.15s ease;
-      }
-      .kpi-card:hover { box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08); }
-      .kpi-icon { font-size: 1.15rem; margin-right: 0.35rem; opacity: 0.95; flex-shrink: 0; }
-      .kpi-label {
-        font-size: 0.72rem; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.04em;
-        line-height: 1.28;
-        min-height: 3em;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: flex-start;
-        align-content: flex-start;
-        gap: 0 0.25rem;
-      }
-      .kpi-value {
-        font-size: 1.28rem; font-weight: 700; margin-top: auto; color: #0f172a;
-        letter-spacing: -0.02em;
-      }
-      .kpi-total { border-left: 4px solid #0284c7; background: linear-gradient(90deg, #f0f9ff 0%, #fff 55%); }
-      .kpi-ok { border-left: 4px solid #16a34a; background: linear-gradient(90deg, #f0fdf4 0%, #fff 55%); }
-      .kpi-acao { border-left: 4px solid #0891b2; background: linear-gradient(90deg, #ecfeff 0%, #fff 55%); }
-      .kpi-div { border-left: 4px solid #ea580c; background: linear-gradient(90deg, #fff7ed 0%, #fff 55%); }
-      .kpi-pend { border-left: 4px solid #7c3aed; background: linear-gradient(90deg, #f5f3ff 0%, #fff 55%); }
-
-      .fdl-frete-spotlight {
-        border-radius: 14px;
-        border: 1px solid #fde68a;
-        background: linear-gradient(118deg, #fffbeb 0%, #fef3c7 35%, #ffffff 92%);
-        padding: 1.05rem 1.2rem;
-        margin: 0 0 1.1rem 0;
-        box-shadow: 0 6px 22px rgba(180, 83, 9, 0.1);
-      }
-      .fdl-frete-spotlight .fdl-fs-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #b45309; margin: 0 0 0.35rem 0; }
-      .fdl-frete-spotlight .fdl-fs-an { font-size: 1.05rem; font-weight: 800; color: #0f172a; letter-spacing: -0.02em; margin: 0; word-break: break-all; }
-      .fdl-frete-spotlight .fdl-fs-metrics { font-size: 0.88rem; color: #57534e; margin-top: 0.55rem; line-height: 1.55; }
-      .fdl-frete-spotlight .fdl-fs-metrics strong { color: #0f172a; }
-      .fdl-frete-hint { font-size: 0.8rem; color: #64748b; margin: -0.35rem 0 0.9rem 0; line-height: 1.45; }
-
-      .queue-head { margin-top: 0.25rem; margin-bottom: 0.65rem; }
-      .queue-title { font-size: 1.05rem; font-weight: 700; color: #0f172a; }
-      .queue-sub { font-size: 0.86rem; color: #64748b; margin-top: 0.2rem; }
-
-      /* Painel Conciliação de Frete — refinamento financeiro */
-      .fdl-frete-section-title {
-        font-size: 0.7rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #94a3b8;
-        margin: 1.85rem 0 0.8rem 0;
-      }
-      .fdl-frete-section-title.fdl-frete-st-first { margin-top: 0.5rem; }
-      .fdl-frete-queue-head {
-        margin-top: 2rem;
-        margin-bottom: 0.85rem;
-      }
-      .fdl-frete-kpi-card {
-        padding: 1.2rem 1.3rem 1.35rem 1.3rem !important;
-        min-height: 7.5rem !important;
-        border-radius: 14px !important;
-        border: 1px solid #e2e8f0 !important;
-        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06) !important;
-      }
-      .fdl-frete-kpi-card .kpi-label {
-        font-size: 0.62rem !important;
-        font-weight: 600 !important;
-        color: #94a3b8 !important;
-        letter-spacing: 0.07em !important;
-        min-height: 2.4em !important;
-      }
-      .fdl-frete-kpi-card .kpi-value {
-        font-size: 1.58rem !important;
-        font-weight: 800 !important;
-        color: #0f172a !important;
-        letter-spacing: -0.025em !important;
-      }
-      .fdl-frete-meta-line {
-        font-size: 0.8rem;
-        color: #64748b;
-        margin: 0.35rem 0 0 0;
-        letter-spacing: 0.01em;
-      }
-
-      /* Sidebar — hierarquia Empresa → Módulos → Funcionalidades */
-      div[data-testid="stSidebar"] {
-        background: #f9fafb !important;
-        border-right: 1px solid #e5e7eb !important;
-        box-shadow: none !important;
-      }
-      div[data-testid="stSidebar"] .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 2rem !important;
-      }
-
-      .fdl-sb-header {
-        background: transparent;
-        border: none;
-        border-radius: 0;
-        padding: 0.5rem 0 0.65rem 0;
-        margin: 0 0 0.6rem 0;
-        box-shadow: none;
-        border-bottom: 1px solid #eceef2;
-      }
-      /* Integra a marca ao fundo da sidebar — remove “caixa” branca dos blocos Streamlit */
-      div[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
-        background: transparent !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"]:has(.fdl-sb-header) {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] img.fdl-sb-brand-logo-img {
-        image-rendering: auto;
-      }
-      /* Faixa horizontal: largura = sidebar; altura vem só da proporção do PNG (sem max-height agressivo). */
-      .fdl-sb-brand-logo-wrap {
-        display: block;
-        width: 100%;
-        max-width: 100%;
-        margin: 0 0 0.65rem 0;
-        padding: 0;
-        line-height: 0;
-      }
-      .fdl-sb-brand-logo-img {
-        display: block;
-        width: 100%;
-        max-width: 100%;
-        height: auto;
-        object-fit: contain;
-        object-position: left top;
-      }
-      .fdl-sb-brand-logo-wrap .fdl-sb-brand-logo-img ~ .fdl-sb-brand-logo-img {
-        display: none !important;
-      }
-      .fdl-sb-logo-fallback {
-        display: flex;
-        align-items: center;
-      }
-      .fdl-sb-logo-fallback svg {
-        display: block;
-        width: 44px;
-        height: 44px;
-        border-radius: 8px;
-      }
-      .fdl-sb-user {
-        display: flex;
-        align-items: center;
-        gap: 0.38rem;
-        margin-top: 0;
-        padding-top: 0;
-        border-top: none;
-      }
-      .fdl-sb-avatar {
-        width: 1.35rem;
-        height: 1.35rem;
-        border-radius: 999px;
-        background: #eef2f6;
-        color: #64748b;
-        font-size: 0.48rem;
-        font-weight: 700;
-        letter-spacing: 0.02em;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        box-shadow: none;
-        border: 1px solid #e2e8f0;
-      }
-      .fdl-sb-user-name {
-        font-size: 0.76rem;
-        font-weight: 500;
-        color: #94a3b8;
-        line-height: 1.25;
-        word-break: break-word;
-      }
-      /* Seletor de empresa — dropdown alinhado ao restante da sidebar */
-      div[data-testid="stSidebar"] [data-testid="stSelectbox"] { margin-top: 0.85rem; margin-bottom: 0.15rem; }
-      div[data-testid="stSidebar"] [data-testid="stSelectbox"] label p {
-        font-size: 0.68rem !important;
-        font-weight: 800 !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.1em !important;
-        color: #94a3b8 !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div,
-      div[data-testid="stSidebar"] [data-testid="stSelectbox"] div[data-baseweb="select"] {
-        transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {
-        border-radius: 8px !important;
-        border-color: #e5e7eb !important;
-        background: #ffffff !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"]:focus-within > div {
-        border-color: #93c5fd !important;
-        box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.45) !important;
-      }
-      .fdl-sb-system-modules-title {
-        font-size: 0.68rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.11em;
-        color: #9ca3af;
-        margin: 1rem 0 0.45rem 0.15rem;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] {
-        margin: 0 0 0.35rem 0 !important;
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] details {
-        border: none !important;
-        border-radius: 8px !important;
-        background: transparent !important;
-        box-shadow: none !important;
-        transition: background 0.2s ease !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] details:hover {
-        background: rgba(255, 255, 255, 0.45) !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] summary {
-        padding: 0.45rem 0.5rem !important;
-        font-weight: 600 !important;
-        font-size: 0.8125rem !important;
-        color: #374151 !important;
-        letter-spacing: 0.01em;
-        list-style: none;
-        cursor: pointer !important;
-        border-radius: 6px !important;
-        border: 1px solid #eceef2 !important;
-        background: rgba(255, 255, 255, 0.65) !important;
-        transition: background 0.2s ease, border-color 0.2s ease !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
-        background: #ffffff !important;
-        border-color: #e5e7eb !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] summary::-webkit-details-marker { display: none; }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] > div {
-        padding: 0.35rem 0.45rem 0.45rem 0.55rem !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] .stButton { margin-top: 0.2rem !important; }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button {
-        border-radius: 6px !important;
-        font-weight: 600 !important;
-        font-size: 0.8125rem !important;
-        text-align: left !important;
-        justify-content: flex-start !important;
-        white-space: nowrap !important;
-        line-height: 1.35 !important;
-        padding: 0.4rem 0.65rem !important;
-        min-height: 0 !important;
-        cursor: pointer !important;
-        transition: background 0.2s ease, border-color 0.2s ease !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="primary"] {
-        background: #eff6ff !important;
-        color: #1e3a8a !important;
-        border: 1px solid #93c5fd !important;
-        box-shadow: none !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="secondary"] {
-        background: transparent !important;
-        color: #374151 !important;
-        border: 1px solid transparent !important;
-        box-shadow: none !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="secondary"]:hover {
-        background: #f3f4f6 !important;
-        border-color: #e5e7eb !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="primary"]:hover {
-        background: #dbeafe !important;
-        border-color: #60a5fa !important;
-      }
-      .sb-nav-section-label {
-        font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em;
-        color: #94a3b8; margin: 0 0 0.5rem 0.15rem;
-      }
-
-      .sb-divider-soft { height: 1px; background: linear-gradient(90deg, transparent, #cbd5e1 12%, #cbd5e1 88%, transparent); margin: 0 0 1rem 0; border: 0; }
-
-      /* Nível 2 — módulo (indentado, guia vertical) */
-      div[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpander"] {
-        margin: 0.5rem 0 0 0.65rem !important;
-        padding: 0 !important;
-        border: none !important;
-        box-shadow: none !important;
-        background: transparent !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpander"] details {
-        border: none !important;
-        border-left: 2px solid #cbd5e1 !important;
-        border-radius: 0 !important;
-        padding-left: 0.5rem !important;
-        margin-left: 0.25rem !important;
-        background: transparent !important;
-        box-shadow: none !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpander"] summary {
-        padding: 0.5rem 0.55rem !important;
-        font-size: 0.82rem !important;
-        font-weight: 700 !important;
-        color: #334155 !important;
-        border-radius: 6px !important;
-      }
-      div[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpander"] summary:hover {
-        background: rgba(226,232,240,0.6) !important;
-      }
-
-      .sb-nav-tree { margin: 0.35rem 0 0.15rem 0; padding: 0.15rem 0 0.25rem 0.15rem; }
-      .sb-nav-item {
-        display: flex; align-items: center; gap: 0.45rem;
-        padding: 0.52rem 0.65rem 0.52rem 0.65rem; margin: 0.2rem 0 0 0.15rem;
-        border-radius: 8px; font-size: 0.84rem; font-weight: 500; color: #475569;
-        border: 1px solid transparent; position: relative; min-height: 2.25rem;
-        padding-left: 2.25rem !important; cursor: default;
-        transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
-      }
-      .sb-nav-item .sb-ico { position: absolute; left: 0.62rem; font-size: 1rem; line-height: 1; opacity: 0.92; }
-      .sb-nav-item .sb-nav-label { flex: 1; line-height: 1.35; }
-      .sb-nav-item:not(.sb-nav-item-active):not(.sb-nav-item-placeholder):hover {
-        background: rgba(241,245,249,0.95) !important;
-        border-color: #e2e8f0 !important;
-      }
-      .sb-nav-item-active {
-        background: #dbeafe !important;
-        color: #0c4a6e !important;
-        font-weight: 600 !important;
-        border: 1px solid #bfdbfe !important;
-        box-shadow: 0 1px 3px rgba(14, 165, 233, 0.1);
-      }
-      .sb-active-accent {
-        position: absolute; left: 0; top: 10%; bottom: 10%; width: 3px;
-        background: #0284c7;
-        border-radius: 0 3px 3px 0;
-        box-shadow: 0 0 0 1px rgba(2,132,199,0.25);
-      }
-      .sb-nav-item-placeholder {
-        opacity: 0.72; cursor: default !important;
-        border-style: dashed !important; border-color: #e2e8f0 !important;
-        background: rgba(248,250,252,0.8) !important;
-      }
-      .sb-nav-item-placeholder .sb-soon {
-        display: inline-block; margin-left: 0.35rem; font-size: 0.68rem; font-weight: 700;
-        text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8;
-      }
-
-      /* Botões da sidebar fora dos cards de módulo (rodapé, expander admin) */
-      div[data-testid="stSidebar"] div[data-testid="element-container"] .stButton > button[kind="tertiary"] {
-        background: transparent !important;
-        color: #64748b !important;
-        border: 1px solid #e2e8f0 !important;
-        font-weight: 600 !important;
-        min-height: unset !important;
-        white-space: normal !important;
-        padding: 0.65rem 1rem !important;
-        box-shadow: none !important;
-      }
-      div[data-testid="stSidebar"] div[data-testid="element-container"] .stButton > button[kind="tertiary"]:hover {
-        background: #f1f5f9 !important;
-        border-color: #cbd5e1 !important;
-        color: #0f172a !important;
-      }
-
-      .sb-sync-block { margin-top: 1.35rem; padding-top: 1.1rem; border-top: 1px solid #d1d9e6; }
-      .sb-sync-label {
-        font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin: 0 0 0.35rem 0;
-      }
-      .sb-sync-ts { font-size: 0.84rem; font-weight: 600; color: #475569; font-variant-numeric: tabular-nums; line-height: 1.35; }
-
-      .validacao-badges {
-        display: flex; flex-wrap: wrap; align-items: center; gap: 0.55rem 0.65rem;
-        margin: 0.35rem 0 0.85rem 0;
-      }
-      .badge-acao {
-        display: inline-flex; align-items: center; gap: 0.35rem;
-        padding: 0.42rem 0.85rem; border-radius: 999px;
-        font-size: 0.8rem; font-weight: 700; letter-spacing: 0.01em;
-        border: 1px solid transparent;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-      }
-      .badge-acao b { font-weight: 800; font-size: 0.92rem; }
-      .badge-ok { background: #dcfce7; color: #14532d; border-color: #4ade80; }
-      .badge-bling { background: #dbeafe; color: #1e3a8a; border-color: #60a5fa; }
-      .badge-analisar { background: #ffedd5; color: #9a3412; border-color: #fb923c; }
-      .badge-verificar { background: #f3e8ff; color: #581c87; border-color: #c084fc; }
-      .badge-faturamento { background: #ede9fe; color: #4c1d95; border-color: #a78bfa; }
-      .badge-revisar { background: #fee2e2; color: #991b1b; border-color: #f87171; }
-
-      .filtros-panel {
-        border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;
-        padding: 1rem 1.1rem 0.85rem 1.1rem; margin-bottom: 1.15rem;
-        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
-      }
-      .filtros-panel-title {
-        font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
-        color: #64748b; margin: 0 0 0.75rem 0;
-      }
-
-      /* Tabela conciliação: o st.dataframe atual usa Glide Data Grid (canvas) — o cabeçalho
-         real vem de theme.dataframeHeaderBackgroundColor em .streamlit/config.toml.
-         Regras abaixo sobem o cartão à volta do widget; células HTML stTable só em legacy. */
-      section.main div[data-testid="stDataFrame"] {
-        border-radius: 14px !important;
-        overflow: hidden !important;
-        border: 1px solid #d8e2ec !important;
-        box-shadow:
-          0 1px 2px rgba(15, 23, 42, 0.04),
-          0 8px 28px rgba(15, 23, 42, 0.07) !important;
-        background: #ffffff !important;
-      }
-      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] {
-        border-collapse: separate !important;
-        border-spacing: 0 !important;
-        font-size: 0.9rem !important;
-        font-variant-numeric: tabular-nums;
-      }
-      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table { width: 100%; }
-      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table thead tr th {
-        background: linear-gradient(165deg, #1e3a5f 0%, #0f172a 48%, #172554 100%) !important;
-        color: #f1f5f9 !important;
-        -webkit-text-fill-color: #f1f5f9 !important;
-        font-weight: 700 !important;
-        font-size: 0.76rem !important;
-        line-height: 1.25 !important;
-        text-transform: uppercase;
-        letter-spacing: 0.09em;
-        padding: 0.95rem 0.85rem !important;
-        border-bottom: none !important;
-        border-top: none !important;
-        border-left: 1px solid rgba(148, 163, 184, 0.12) !important;
-        border-right: none !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-      }
-      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table thead tr th:first-child {
-        border-left: none !important;
-        border-top-left-radius: 0;
-      }
-      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table thead tr th:last-child {
-        border-right: none !important;
-      }
-      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table thead tr {
-        box-shadow: 0 3px 0 #38bdf8, 0 8px 16px rgba(14, 165, 233, 0.12);
-      }
-      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table thead tr th * {
-        color: #f8fafc !important;
-        font-weight: 700 !important;
-      }
-      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table tbody tr:nth-child(even) {
-        background-color: #f8fafc !important;
-      }
-      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table tbody tr:nth-child(odd) {
-        background-color: #ffffff !important;
-      }
-      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table tbody tr:hover td {
-        background-color: #e0f2fe !important;
-        transition: background-color 0.12s ease;
-      }
-      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table tbody td {
-        padding: 0.65rem 0.8rem !important;
-        border-bottom: 1px solid #e8eef4 !important;
-        color: #1e293b;
-        vertical-align: middle;
-      }
-      section.main div[data-testid="stDataFrame"] [data-testid="stTable"] table tbody tr:last-child td {
-        border-bottom: none !important;
-      }
-    </style>
-    """,
-        unsafe_allow_html=True,
-    )
 
 @st.cache_data(show_spinner=True)
 def carregar_tabela_final_operacional_cache(
@@ -3108,32 +2274,7 @@ def _fmt_brl_ptbr_celula(x: object) -> str:
     return f"R$ {corpo}"
 
 
-_FRETE_UI_COL_SITUACAO = "Situação do Frete"
-_FRETE_UI_COL_DIFERENCA = "Diferença"
 _FRETE_UI_COL_N_VENDA = "N.º venda"
-
-
-def _parse_br_money_display(s: object) -> float:
-    """Interpreta célula pt-BR «R$ 1.234,56» ou «R$ -15,00» para float."""
-    if s is None:
-        return float("nan")
-    try:
-        if pd.isna(s):
-            return float("nan")
-    except TypeError:
-        pass
-    if isinstance(s, (int, float)) and not isinstance(s, bool):
-        return float(s)
-    raw = str(s).strip().replace("R$", "").replace(" ", "")
-    if not raw:
-        return float("nan")
-    neg = raw.startswith("-")
-    raw = raw.lstrip("-")
-    raw = raw.replace(".", "").replace(",", ".")
-    v = float(pd.to_numeric(raw, errors="coerce"))
-    if pd.isna(v):
-        return float("nan")
-    return -v if neg else v
 
 
 def _fmt_int_ptbr(n: int) -> str:
@@ -3141,69 +2282,6 @@ def _fmt_int_ptbr(n: int) -> str:
     return f"{int(n):,}".replace(",", ".")
 
 
-def _styler_frete_conciliacao_principal(df: pd.DataFrame) -> pd.io.formats.style.Styler:
-    """Cores por situação e por sinal da diferença (valores já formatados em texto)."""
-    sty = df.style.hide(axis="index")
-    sty = sty.set_table_styles(
-        [
-            {
-                "selector": "th",
-                "props": [
-                    ("font-size", "0.72rem"),
-                    ("font-weight", "600"),
-                    ("color", "#475569"),
-                    ("background-color", "#f1f5f9"),
-                    ("border-bottom", "2px solid #e2e8f0"),
-                    ("padding", "0.55rem 0.65rem"),
-                ],
-            },
-            {
-                "selector": "td",
-                "props": [
-                    ("font-size", "0.84rem"),
-                    ("padding", "0.5rem 0.65rem"),
-                    ("border-bottom", "1px solid #f1f5f9"),
-                ],
-            },
-        ],
-        overwrite=False,
-    )
-
-    def _sit_styles(col: pd.Series) -> list[str]:
-        out: list[str] = []
-        for v in col:
-            t = str(v).strip() if pd.notna(v) else ""
-            if t == "OK":
-                out.append("background-color:#ecfdf5;color:#047857;font-weight:600;")
-            elif t == FRETE_UI_ANALISADO_REPASSE_FRETE:
-                out.append("background-color:#fef9c3;color:#a16207;font-weight:600;")
-            elif t == FRETE_UI_ANALISADO_COBRADO_MAIOR:
-                out.append("background-color:#fee2e2;color:#b91c1c;font-weight:600;")
-            elif t == FRETE_UI_ANALISADO_COBRADO_MENOR:
-                out.append("background-color:#ffedd5;color:#c2410c;font-weight:600;")
-            else:
-                out.append("")
-        return out
-
-    def _diff_styles(col: pd.Series) -> list[str]:
-        out: list[str] = []
-        for v in col:
-            x = _parse_br_money_display(v)
-            if pd.isna(x):
-                out.append("color:#64748b;background-color:#fafafa;")
-            elif abs(x) < 1e-9:
-                out.append("color:#334155;background-color:#f8fafc;font-weight:500;")
-            elif x > 0:
-                out.append("background-color:#ecfdf5;color:#047857;font-weight:600;")
-            else:
-                out.append("background-color:#fef2f2;color:#b91c1c;font-weight:600;")
-        return out
-
-    if _FRETE_UI_COL_SITUACAO in df.columns:
-        sty = sty.apply(_sit_styles, subset=[_FRETE_UI_COL_SITUACAO], axis=0)
-    if _FRETE_UI_COL_DIFERENCA in df.columns:
-        sty = sty.apply(_diff_styles, subset=[_FRETE_UI_COL_DIFERENCA], axis=0)
-    return sty
 
 
 def _format_frete_anuncio_tabela_display(df: pd.DataFrame) -> pd.DataFrame:
@@ -3223,17 +2301,17 @@ def _format_frete_anuncio_tabela_display(df: pd.DataFrame) -> pd.DataFrame:
 
 # Texto exibido na coluna «Ação sugerida» da Fila operacional (UI apenas; export mantém valores canónicos).
 _REPASSE_ACAO_SUGERIDA_EXIBICAO: dict[str, str] = {
-    "Ok": "OK",
-    "Baixar no Bling": "Baixar no Bling",
-    "Analisar diferença": "Divergente",
-    "Verificar recebimento": "Em aberto",
-    "Verificar faturamento": "Em aberto",
-    "Revisar venda zerada": "Zerado",
+    "Ok": "✅ OK",
+    "Baixar no Bling": "⬇️ Baixar no Bling",
+    "Analisar diferença": "🔍 Analisar diferença",
+    "Verificar recebimento": "📥 Verificar recebimento",
+    "Verificar faturamento": "📄 Verificar faturamento",
+    "Revisar venda zerada": "⚠️ Revisar venda zerada",
 }
 
 
 def _repasse_format_situacao_exibicao(val: object) -> str:
-    """Rótulos curtos para «Situação» na grelha (UI; export permanece canónico)."""
+    """Prefixos visuais para «Situação» na grelha (UI; export permanece canónico)."""
     if val is None:
         return ""
     try:
@@ -3246,13 +2324,15 @@ def _repasse_format_situacao_exibicao(val: object) -> str:
         return ""
     low = s.lower()
     if "diverg" in low:
-        return "Divergente"
+        return f"🔍 {s}"
     if "atrasad" in low:
-        return "Divergente"
+        return f"🔴 {s}"
+    if "vencendo" in low and "hoje" in low:
+        return f"🟡 {s}"
     if "vencendo" in low:
-        return "Em aberto"
+        return f"🟡 {s}"
     if "em dia" in low or low == "em dia":
-        return "OK"
+        return f"✅ {s}"
     return s
 
 
@@ -3285,139 +2365,6 @@ def _dataframe_conciliacao_somente_grid(df: pd.DataFrame) -> pd.DataFrame:
     return g
 
 
-def _repasse_badge_cell_style(text: str) -> str:
-    """Estilo inline para células tipo badge (Situação / Ação na grelha)."""
-    t = str(text).strip()
-    tc = "#0f172a"
-    if t == "OK":
-        bg, tc = "#DCFCE7", "#166534"
-    elif t == "Baixar no Bling":
-        bg, tc = "#DBEAFE", "#1E40AF"
-    elif t == "Divergente":
-        bg, tc = "#FEE2E2", "#991B1B"
-    elif t == "Zerado":
-        bg, tc = "#F1F5F9", "#475569"
-    elif t == "Em aberto":
-        bg, tc = "#FEF9C3", "#854D0E"
-    else:
-        bg = "#F8FAFC"
-    return f"background-color: {bg}; color: {tc}; font-weight: 600; border-radius: 6px; text-align: center"
-
-
-def _repasse_grid_styler(df: pd.DataFrame, tabela_fonte: pd.DataFrame):
-    """
-    Datas pt-BR, valores monetários em negrito, zebra, hover, diferença por sinal e badges nas colunas de status/ação.
-    `tabela_fonte`: mesmo índice que `df`, com «Diferença» numérica para colorir a coluna formatada.
-    """
-    if df.empty:
-        return df
-    money_cols = [c for c in ("Valor da nota", "Valor a receber", "Valor pago", "Diferença") if c in df.columns]
-
-    def _fmt_emiss(x: object) -> str:
-        try:
-            if x is None or (isinstance(x, float) and math.isnan(x)):
-                return ""
-            if pd.isna(x):
-                return ""
-        except Exception:
-            pass
-        try:
-            return pd.Timestamp(x).strftime("%d/%m/%Y")
-        except Exception:
-            return str(x) if x is not None else ""
-
-    def _fmt_pag(x: object) -> str:
-        try:
-            if x is None or (isinstance(x, float) and math.isnan(x)):
-                return ""
-            if pd.isna(x):
-                return ""
-        except Exception:
-            pass
-        try:
-            return pd.Timestamp(x).strftime("%d/%m/%Y %H:%M")
-        except Exception:
-            return str(x) if x is not None else ""
-
-    fmt_map: dict[str, Callable[[object], str]] = {}
-    if "Data de emissão" in df.columns:
-        fmt_map["Data de emissão"] = _fmt_emiss
-    if "Data de pagamento" in df.columns:
-        fmt_map["Data de pagamento"] = _fmt_pag
-
-    diff_series = (
-        pd.to_numeric(tabela_fonte["Diferença"], errors="coerce")
-        if "Diferença" in tabela_fonte.columns
-        else pd.Series(float("nan"), index=df.index)
-    )
-    diff_series = diff_series.reindex(df.index)
-
-    def _style_diff(_col: pd.Series) -> list[str]:
-        out: list[str] = []
-        for i in _col.index:
-            v = diff_series.loc[i] if i in diff_series.index else float("nan")
-            try:
-                if pd.isna(v):
-                    out.append("text-align: right; font-weight: 700; font-variant-numeric: tabular-nums")
-                elif float(v) > 0:
-                    out.append(
-                        "color: #16A34A; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums"
-                    )
-                elif float(v) < 0:
-                    out.append(
-                        "color: #DC2626; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums"
-                    )
-                else:
-                    out.append(
-                        "color: #64748B; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums"
-                    )
-            except Exception:
-                out.append("text-align: right; font-weight: 700")
-        return out
-
-    def _style_situacao(_col: pd.Series) -> list[str]:
-        return [_repasse_badge_cell_style(str(x)) for x in _col]
-
-    def _style_acao(_col: pd.Series) -> list[str]:
-        return [_repasse_badge_cell_style(str(x)) for x in _col]
-
-    table_styles: list[dict[str, Any]] = [
-        {
-            "selector": "thead th",
-            "props": [
-                ("background-color", "#F1F5F9"),
-                ("color", "#0f172a"),
-                ("font-weight", "600"),
-                ("border-bottom", "1px solid #E2E8F0"),
-                ("padding", "10px 8px"),
-            ],
-        },
-        {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#F8FAFC")]},
-        {"selector": "tbody tr:hover", "props": [("background-color", "#EEF2FF")]},
-        {"selector": "tbody td", "props": [("padding", "8px"), ("border-bottom", "1px solid #F1F5F9")]},
-    ]
-
-    styler = df.style
-    if fmt_map:
-        styler = styler.format(fmt_map)
-    _mc = [c for c in money_cols if c != "Diferença"]
-    if _mc:
-        styler = styler.set_properties(
-            subset=_mc,
-            **{
-                "text-align": "right",
-                "font-weight": "700",
-                "font-variant-numeric": "tabular-nums",
-            },
-        )
-    if "Diferença" in df.columns:
-        styler = styler.apply(_style_diff, subset=["Diferença"], axis=0)
-    if "Situação" in df.columns:
-        styler = styler.apply(_style_situacao, subset=["Situação"], axis=0)
-    if "Ação sugerida" in df.columns:
-        styler = styler.apply(_style_acao, subset=["Ação sugerida"], axis=0)
-    styler = styler.set_table_styles(table_styles)
-    return styler
 
 
 def _column_config_conciliacao(
@@ -3555,29 +2502,15 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     Fase 1 — Faturamento: KPIs, filtros, tabela principal e export CSV (recorte filtrado).
     """
     if _FATURAMENTO_PAINEL_EM_CONSTRUCAO:
-        st.markdown(
-            """
-<style>
-.fdl-fat-soon-wrap {
-  min-height: 42vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 2.5rem 1rem;
-}
-.fdl-fat-soon-wrap h2 { margin: 0 0 0.75rem 0; font-size: 1.5rem; color: #0f172a; font-weight: 600; }
-.fdl-fat-soon-wrap p { margin: 0; max-width: 28rem; color: #64748b; font-size: 1rem; line-height: 1.55; }
-</style>
-<div class="fdl-fat-soon-wrap">
-  <h2>🚧 Módulo em construção</h2>
-  <p>Estamos preparando o painel de faturamento com os mesmos padrões de qualidade da conciliação.
-  Em breve você poderá acompanhar métricas e ações aqui.</p>
-</div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.write("")
+        c1, c2, c3 = st.columns([1, 4, 1])
+        with c2:
+            st.markdown("## 🚧 Módulo em construção")
+            st.caption(
+                "Estamos preparando o painel de faturamento com os mesmos padrões da conciliação. "
+                "Em breve você poderá acompanhar métricas e ações aqui."
+            )
+        st.write("")
         return
     _oid = str(org_id)
     if df.empty:
@@ -3818,44 +2751,6 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     )
 
 
-def _html_fdl_topbar(client_esc: str, org_esc: str) -> str:
-    """
-    Cabeçalho superior SaaS: logo + marca + cliente/empresa.
-    ``client_esc`` e ``org_esc`` devem vir de ``html.escape``.
-    """
-    _logo = """
-<svg class="fdl-logo-svg" width="44" height="44" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <defs><linearGradient id="fdlLogoGrad" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#0284c7"/>
-  </linearGradient></defs>
-  <rect width="40" height="40" rx="11" fill="url(#fdlLogoGrad)"/>
-  <path d="M9 28h5V16H9v12zm8 0h5V10h-5v18zm8-6h5v6h-5v-6zm8-8h5v14h-5V14z" fill="#fff" fill-opacity="0.95"/>
-</svg>"""
-    return f"""
-<div class="fdl-topbar">
-  <div class="fdl-topbar-left">
-    <div class="fdl-topbar-logo">{_logo}</div>
-    <div class="fdl-topbar-titles">
-      <p class="fdl-topbar-title">FDL Analytics</p>
-      <p class="fdl-topbar-tagline">Financial Intelligence</p>
-    </div>
-  </div>
-  <div class="fdl-topbar-right">
-    <div class="fdl-topbar-client">
-      <div class="fdl-topbar-client-block">
-        <span class="fdl-topbar-lbl">Cliente</span>
-        <span class="fdl-topbar-client-name">{client_esc}</span>
-      </div>
-      <div class="fdl-topbar-client-block fdl-topbar-block-org">
-        <span class="fdl-topbar-lbl">Empresa</span>
-        <span class="fdl-topbar-org-name">{org_esc}</span>
-      </div>
-    </div>
-  </div>
-</div>
-""".strip()
-
-
 def _render_kpi_card(
     label: str,
     value: str,
@@ -3864,19 +2759,9 @@ def _render_kpi_card(
     *,
     frete_variant: bool = False,
 ) -> None:
-    if _fdl_minimal_layout():
-        st.metric(label, value)
-        return
-    extra = " fdl-frete-kpi-card" if frete_variant else ""
-    st.markdown(
-        f"""
-        <div class="kpi-card {css_class}{extra}">
-          <div class="kpi-label"><span class="kpi-icon" aria-hidden="true">{icon}</span>{label}</div>
-          <div class="kpi-value">{html.escape(value)}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    _ = css_class, frete_variant  # compat. com assinatura antiga — UI só com componentes nativos
+    with st.container(border=True):
+        st.metric(f"{icon} {label}", value)
 
 
 def _frete_meta_for_render(load_info: dict[str, object]) -> dict[str, object]:
@@ -4393,53 +3278,23 @@ def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
 
 
 def _repasse_ui_validacao_kpi_saas(contagens: dict[str, int]) -> None:
-    """KPIs da base filtrada — cartões com cores semânticas (UI)."""
+    """KPIs da base filtrada — `st.metric` dentro de contentores com borda (UI nativa)."""
     ok = int(contagens.get("Ok", 0))
     bling = int(contagens.get("Baixar no Bling", 0))
     div = int(contagens.get("Analisar diferença", 0))
     zero = int(contagens.get("Zerado", 0))
     st.write("")
     c1, c2, c3, c4 = st.columns(4)
-    specs: list[tuple[Any, str, int, str, str]] = [
-        (c1, "OK", ok, "#16A34A", "Sem pendência operacional neste recorte"),
-        (c2, "Baixar no Bling", bling, "#2563EB", "Ação: baixa no Bling"),
-        (c3, "Divergente", div, "#DC2626", "Analisar diferença de valores"),
-        (c4, "Zerado", zero, "#64748B", "Revisar venda zerada"),
+    specs: list[tuple[Any, str, int, str]] = [
+        (c1, "✅ OK", ok, "Sem pendência operacional neste recorte."),
+        (c2, "⬇️ Baixar no Bling", bling, "Ação: baixa no Bling."),
+        (c3, "🔍 Divergências", div, "Analisar diferença de valores."),
+        (c4, "⚠️ Zerados", zero, "Revisar venda zerada."),
     ]
-    for col, title, val, color, hint in specs:
+    for col, label, val, hint in specs:
         with col:
             with st.container(border=True):
-                st.markdown(
-                    f"""
-<div style="padding:0.35rem 0.15rem 0.5rem 0.15rem;" title="{html.escape(hint)}">
-  <p style="margin:0 0 0.35rem 0;font-size:0.72rem;font-weight:600;color:{color};letter-spacing:0.02em;">{html.escape(title)}</p>
-  <p style="margin:0;font-size:2rem;font-weight:700;color:#0f172a;line-height:1.1;">{html.escape(_fmt_int_ptbr(val))}</p>
-  <p style="margin:0.35rem 0 0 0;font-size:0.75rem;color:#64748b;">registos</p>
-</div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-
-def _repasse_painel_css_inject() -> None:
-    """Estilos do painel Repasse (fundo da página, cartão de filtros, espaçamento)."""
-    st.markdown(
-        """
-<style>
-[data-testid="stAppViewContainer"] { background-color: #F8FAFC !important; }
-[data-testid="stAppViewContainer"] .block-container { padding-top: 1.75rem !important; padding-bottom: 2.5rem !important; }
-div[data-testid="stVerticalBlockBorderWrapper"]:has(#fdl-repasse-filtros-heading) {
-  background: #ffffff !important;
-  border: 1px solid #E5E7EB !important;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-  padding: 1.5rem !important;
-}
-.fdl-repasse-sec { margin: 1.75rem 0 0.75rem 0; }
-</style>
-        """,
-        unsafe_allow_html=True,
-    )
+                st.metric(label, _fmt_int_ptbr(val), help=hint)
 
 
 def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
@@ -4454,10 +3309,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         return
 
     with st.container(border=True):
-        st.markdown(
-            '<h5 id="fdl-repasse-filtros-heading" style="margin:0 0 0.35rem 0;font-size:1.05rem;font-weight:600;color:#0f172a;">Filtros operacionais</h5>',
-            unsafe_allow_html=True,
-        )
+        st.subheader("Filtros operacionais")
         st.caption("Refine por plataforma, ação, situação e intervalo de datas de pagamento.")
         st.write("")
         r1 = st.columns((1.15, 1.15, 1.15, 1.55))
@@ -4588,10 +3440,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
     tabela["Diferença"] = pd.to_numeric(tabela.get("Diferença"), errors="coerce")
 
-    st.markdown(
-        '<h3 class="fdl-repasse-sec" style="margin:0 0 0.35rem 0;font-size:1.2rem;font-weight:600;color:#0f172a;">Validação de ações</h3>',
-        unsafe_allow_html=True,
-    )
+    st.subheader("Validação de ações")
     st.caption("Contagens na **base já filtrada** — priorize divergências e revisões.")
     acoes_validacao = [
         "Ok",
@@ -4706,10 +3555,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.caption("Desative FDL_SAFE_MODE para voltar à UI completa.")
         return
 
-    st.markdown(
-        '<h3 class="fdl-repasse-sec" style="margin:0 0 0.35rem 0;font-size:1.2rem;font-weight:600;color:#0f172a;">Fila operacional</h3>',
-        unsafe_allow_html=True,
-    )
+    st.subheader("Fila operacional")
     st.caption("Analise o recorte na grelha; use a exportação para partilhar fora do sistema.")
     st.write("")
     st.write("")
@@ -4764,18 +3610,12 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     st.write("")
 
     tabela_grid = _dataframe_conciliacao_somente_grid(tabela_exibir)
-    _cfg_grid = None
+    _cfg_grid = (
+        _column_config_conciliacao(tabela_grid, moeda_como_texto=True)
+        if not tabela_grid.empty
+        else None
+    )
     _disp_grid: object = tabela_grid
-    if not _fdl_minimal_layout() and not tabela_grid.empty:
-        try:
-            _disp_grid = _repasse_grid_styler(tabela_grid, tabela_exibir)
-        except Exception:
-            _disp_grid = tabela_grid
-            _cfg_grid = _column_config_conciliacao(tabela_grid, moeda_como_texto=True)
-    elif not _fdl_minimal_layout() and tabela_grid.empty:
-        _cfg_grid = None
-    elif _fdl_minimal_layout() and not tabela_grid.empty:
-        _cfg_grid = _column_config_conciliacao(tabela_grid, moeda_como_texto=True)
 
     if tabela_exibir.empty:
         st.info(
@@ -4963,25 +3803,17 @@ if _bootstrap_debug_enabled():
                 st.caption(f"{_i}. {_line}")
 
 with st.sidebar:
-    st.markdown(_sidebar_saas_styles_markdown(), unsafe_allow_html=True)
-
-    _lc, _mc, _rc = st.columns([1, 2.8, 1])
-    with _mc:
+    st.write("")
+    _sp_l, _sp_c, _sp_r = st.columns([0.35, 3.3, 0.35])
+    with _sp_c:
         _logo_file = _REPO_APP_ROOT / "assets" / "fdl_analytics_logo.png"
         if _logo_file.is_file():
-            st.image(str(_logo_file), width=180)
+            st.image(str(_logo_file), width=240)
         else:
             st.caption("Coloque a logo em `assets/fdl_analytics_logo.png`.")
-    _nome_cliente_ui = html.escape(str(st.session_state.get("cliente", _app_ctx.display_name)))
-    st.markdown(
-        f"""
-<div class="fdl-sb-brand-block">
-  <p class="fdl-sb-brand-title">FDL Analytics</p>
-  <p class="fdl-sb-brand-client">Cliente: {_nome_cliente_ui}</p>
-</div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown("### FDL Analytics")
+    st.markdown(f"**Cliente:** {str(st.session_state.get('cliente', _app_ctx.display_name))}")
+    st.write("")
     st.divider()
 
     _empresas_usuario = list(st.session_state["empresas_permitidas"])
@@ -5008,7 +3840,7 @@ with st.sidebar:
                 st.rerun()
 
     _sb_view = st.session_state.get("op_financeiro_view", "repasse")
-    st.markdown('<p class="fdl-sb-nav-heading">Navegação</p>', unsafe_allow_html=True)
+    st.caption("NAVEGAÇÃO")
 
     _lbl_repasse = "Conciliação de Repasse"
     _lbl_frete = "Conciliação de Frete"
@@ -5048,14 +3880,9 @@ with st.sidebar:
     _ts_d = _ts_parts[0] if _ts_parts else "—"
     _ts_t = _ts_parts[1] if len(_ts_parts) > 1 else ""
     _ts_line = f"{_ts_d} • {_ts_t}" if _ts_t else _ts_d
-    st.markdown(
-        f'<p class="fdl-sb-footer-ts">Atualizado em<br/><span>{html.escape(_ts_line)}</span></p>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        f'<p class="fdl-sb-footer-ver">{html.escape(_sidebar_version_display())}</p>',
-        unsafe_allow_html=True,
-    )
+    st.caption("Atualizado em")
+    st.caption(_ts_line)
+    st.caption(_sidebar_version_display())
 
     if _admin_mode and _data_source_mode() == "upload_zip":
         _render_cloud_data_loader()
@@ -5130,37 +3957,9 @@ if _fv == "repasse":
     st.caption(
         f"{_app_ctx.display_name} · {_active_org.display_name} · Financeiro · Repasse"
     )
-    if _fdl_minimal_layout():
-        st.title("Conciliação de Repasse")
-        st.caption("Visão operacional de recebimentos e divergências.")
-    else:
-        st.markdown(
-            """
-<style>
-.fdl-repasse-hero h1 {
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  font-size: 2.1rem;
-  color: #0f172a;
-  margin: 0 0 0.35rem 0;
-  line-height: 1.2;
-}
-.fdl-repasse-hero .fdl-repasse-sub {
-  color: #64748b;
-  font-size: 1.05rem;
-  margin: 0 0 0.5rem 0;
-  line-height: 1.45;
-  max-width: 48rem;
-}
-</style>
-<div class="fdl-repasse-hero">
-  <h1>Conciliação de Repasse</h1>
-  <p class="fdl-repasse-sub">Visão operacional de recebimentos e divergências</p>
-</div>
-            """,
-            unsafe_allow_html=True,
-        )
-    _repasse_painel_css_inject()
+    st.title("Conciliação de Repasse")
+    st.caption("Visão operacional de recebimentos e divergências.")
+    st.write("")
     st.divider()
 elif _fv == "faturamento":
     st.caption(

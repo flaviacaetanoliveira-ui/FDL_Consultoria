@@ -1,7 +1,6 @@
 """UI para Conciliação de Frete (importada por app_operacional)."""
 from __future__ import annotations
 
-import html as html_lib
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
@@ -20,9 +19,15 @@ from operacional_frete import (
     FRETE_UI_N_VENDA,
     FRETE_UI_QTD_PRECO_ML,
     FRETE_UI_STATUS_CONC,
+    FRETE_UI_ANALISADO_COBRADO_MAIOR,
+    FRETE_UI_ANALISADO_COBRADO_MENOR,
     FRETE_UI_ANALISADO_REPASSE_FRETE,
     FRETE_UI_STATUS_SEM_FRETE_ML,
     FRETE_UI_TITULO_ANUNCIO,
+    FRETE_UI_VAL_ACAO_MAIOR,
+    FRETE_UI_VAL_ACAO_MENOR,
+    FRETE_UI_VAL_ACAO_OK,
+    FRETE_UI_VAL_ACAO_REPASSE,
     FRETE_UI_VAL_DIVERGENCIA,
     FRETE_UI_VALOR_FRETE_ANUNCIO,
     FRETE_UI_SITUACAO_FRETE,
@@ -35,6 +40,44 @@ from operacional_frete import (
     frete_series_normalize_sale_dt,
     stable_mtime_ns_for_frete_url,
 )
+
+
+def _frete_conciliacao_grid_com_icones(df: pd.DataFrame) -> pd.DataFrame:
+    """Prefixa ícones às colunas «Situação do Frete» e «Ação Recomendada» (só grelha; export usa `tbl_show`)."""
+    if df.empty:
+        return df
+    out = df.copy()
+    sc, ac = "Situação do Frete", "Ação Recomendada"
+    sit_map = {
+        "OK": "✅ OK",
+        FRETE_UI_ANALISADO_REPASSE_FRETE: f"🚚 {FRETE_UI_ANALISADO_REPASSE_FRETE}",
+        FRETE_UI_ANALISADO_COBRADO_MAIOR: f"⬆️ {FRETE_UI_ANALISADO_COBRADO_MAIOR}",
+        FRETE_UI_ANALISADO_COBRADO_MENOR: f"⬇️ {FRETE_UI_ANALISADO_COBRADO_MENOR}",
+    }
+    ac_map = {
+        FRETE_UI_VAL_ACAO_OK: f"✅ {FRETE_UI_VAL_ACAO_OK}",
+        FRETE_UI_VAL_ACAO_REPASSE: f"📥 {FRETE_UI_VAL_ACAO_REPASSE}",
+        FRETE_UI_VAL_ACAO_MAIOR: f"📞 {FRETE_UI_VAL_ACAO_MAIOR}",
+        FRETE_UI_VAL_ACAO_MENOR: f"🔍 {FRETE_UI_VAL_ACAO_MENOR}",
+    }
+
+    def _ms(x: object) -> object:
+        if pd.isna(x):
+            return x
+        vs = str(x).strip()
+        return sit_map.get(vs, x)
+
+    def _ma(x: object) -> object:
+        if pd.isna(x):
+            return x
+        vs = str(x).strip()
+        return ac_map.get(vs, x)
+
+    if sc in out.columns:
+        out[sc] = out[sc].map(_ms)
+    if ac in out.columns:
+        out[ac] = out[ac].map(_ma)
+    return out
 
 
 def _dataframe_frete_grid(
@@ -291,7 +334,7 @@ def _painel_frete_conteudo(
             {str(x).strip() for x in work["Estado"].dropna().unique().tolist() if str(x).strip()}
         )
 
-    st.markdown('<p class="filtros-panel-title">Filtros — Frete ML</p>', unsafe_allow_html=True)
+    st.subheader("Filtros — Frete ML")
     r1 = st.columns((1.2, 1.2, 1.6))
     with r1[0]:
         sel_est = multiselect_stable(f"frete_ms_estado_{_sig}", "Estado da venda", estados)
@@ -327,11 +370,9 @@ def _painel_frete_conteudo(
         "*Ex.: se hoje for 28/03/2026 → 27/02/2026 a 28/03/2026.* "
         "Ajuste as datas acima para outro período."
     )
-    st.markdown(
-        '<p class="fdl-frete-hint"><strong>Frete cobrado</strong> = valor absoluto de '
-        '<strong>Receita por envio + Tarifas de envio</strong> (sempre ≥ 0). '
-        "A coluna <strong>Custo do envio</strong> não entra no cálculo.</p>",
-        unsafe_allow_html=True,
+    st.caption(
+        "**Frete cobrado** = valor absoluto de **Receita por envio + Tarifas de envio** (sempre ≥ 0). "
+        "A coluna **Custo do envio** não entra no cálculo."
     )
 
     if data_fim < data_ini:
@@ -379,7 +420,7 @@ def _painel_frete_conteudo(
     )
     n_sem_ml = int(stc.eq(FRETE_UI_STATUS_SEM_FRETE_ML).sum()) if stc is not None else 0
 
-    st.markdown('<div class="section-title">Resumo do recorte</div>', unsafe_allow_html=True)
+    st.subheader("Resumo do recorte")
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         render_kpi_card("Vendas no recorte", f"{len(tbl_show):,}".replace(",", "."), "\u25c6", "kpi-total")
@@ -403,7 +444,7 @@ def _painel_frete_conteudo(
             if n_div and FRETE_UI_DIFERENCA in div.columns
             else 0.0
         )
-        st.markdown('<div class="section-title">Maior divergencia por anuncio</div>', unsafe_allow_html=True)
+        st.subheader("Maior divergência por anúncio")
         if n_div and FRETE_UI_ANUNCIO in div.columns and FRETE_UI_DIFERENCA in div.columns:
             dnum = div.copy()
             dnum["_ab"] = pd.to_numeric(dnum[FRETE_UI_DIFERENCA], errors="coerce").abs()
@@ -424,34 +465,25 @@ def _painel_frete_conteudo(
                         tbl_show[FRETE_UI_ANUNCIO].astype(str).eq(top_id), FRETE_UI_TITULO_ANUNCIO
                     ]
                     if len(sub):
-                        tit = html_lib.escape(str(sub.iloc[0])[:120])
-                extra = (
-                    f'<br /><span style="font-size:0.82rem;color:#57534e">{tit}</span>' if tit else ""
-                )
-                top_safe = html_lib.escape(top_id)
-                st.markdown(
-                    f"""
-                <div class="fdl-frete-spotlight">
-                  <p class="fdl-fs-title">Anuncio com maior impacto |diferenca|</p>
-                  <p class="fdl-fs-an">{top_safe}</p>
-                  <p class="fdl-fs-metrics">
-                    <strong>{top_nv}</strong> venda(s) · <strong>R$ {top_imp:,.2f}</strong> |Delta| acumulado
-                    {extra}
-                  </p>
-                  <p class="fdl-fs-metrics" style="margin-top:0.6rem;">
-                    Linhas em divergencia: <strong>{n_div}</strong> · |Delta| total: <strong>R$ {soma_abs:,.2f}</strong>
-                  </p>
-                </div>
-                """,
-                    unsafe_allow_html=True,
-                )
+                        tit = str(sub.iloc[0])[:120]
+                with st.container(border=True):
+                    st.caption("Anúncio com maior impacto |Δ|")
+                    st.markdown(f"**Identificador:** `{top_id}`")
+                    if tit:
+                        st.caption(tit)
+                    st.write(
+                        f"**{top_nv}** venda(s) · **R$ {top_imp:,.2f}** |Δ| acumulado no grupo"
+                    )
+                    st.caption(
+                        f"Linhas em divergência: **{n_div}** · |Δ| total: **R$ {soma_abs:,.2f}**"
+                    )
                 chart_df = grp.head(8).reset_index()
                 id_col = chart_df.columns[0]
                 chart_df = chart_df[[id_col, "impacto_r"]].rename(
                     columns={id_col: "Anuncio", "impacto_r": "Impacto"}
                 )
                 chart_df = chart_df.set_index("Anuncio")
-                st.markdown('<div class="section-title">Top anuncios</div>', unsafe_allow_html=True)
+                st.subheader("Top anúncios")
                 try:
                     st.bar_chart(chart_df)
                 except Exception:
@@ -459,12 +491,12 @@ def _painel_frete_conteudo(
         elif n_div == 0:
             st.success("Sem divergencias acima da tolerancia.")
     elif not meta.get("frete_tabular"):
-        st.markdown('<div class="section-title">Frete por anuncio</div>', unsafe_allow_html=True)
+        st.subheader("Frete por anúncio")
         st.info("Sem tabela MLB+preco reconhecida na pasta do cliente.")
 
-    st.markdown('<div class="section-title">Tabela</div>', unsafe_allow_html=True)
+    st.subheader("Tabela")
     t_grid = _dataframe_frete_grid(tbl_show, fmt_brl_ptbr_celula, col_referencia_como_texto)
-    t_main = dataframe_frete_conciliacao_principal(t_grid)
+    t_main = _frete_conciliacao_grid_com_icones(dataframe_frete_conciliacao_principal(t_grid))
     _h_df = min(520, 120 + 28 * min(len(t_main), 18))
     try:
         st.dataframe(

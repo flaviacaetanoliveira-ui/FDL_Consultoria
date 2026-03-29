@@ -3223,17 +3223,17 @@ def _format_frete_anuncio_tabela_display(df: pd.DataFrame) -> pd.DataFrame:
 
 # Texto exibido na coluna «Ação sugerida» da Fila operacional (UI apenas; export mantém valores canónicos).
 _REPASSE_ACAO_SUGERIDA_EXIBICAO: dict[str, str] = {
-    "Ok": "🟢 OK",
-    "Baixar no Bling": "🔵 Baixar no Bling",
-    "Analisar diferença": "🔴 Analisar diferença",
-    "Verificar recebimento": "🟡 Verificar recebimento",
-    "Verificar faturamento": "🟡 Verificar faturamento",
-    "Revisar venda zerada": "🟡 Revisar venda zerada",
+    "Ok": "OK",
+    "Baixar no Bling": "Baixar no Bling",
+    "Analisar diferença": "Divergente",
+    "Verificar recebimento": "Em aberto",
+    "Verificar faturamento": "Em aberto",
+    "Revisar venda zerada": "Zerado",
 }
 
 
 def _repasse_format_situacao_exibicao(val: object) -> str:
-    """Badge textual para «Situação» (UI; sem alterar dados de negócio)."""
+    """Rótulos curtos para «Situação» na grelha (UI; export permanece canónico)."""
     if val is None:
         return ""
     try:
@@ -3245,12 +3245,14 @@ def _repasse_format_situacao_exibicao(val: object) -> str:
     if s.lower() in {"nan", "none", "<na>", "nat"}:
         return ""
     low = s.lower()
+    if "diverg" in low:
+        return "Divergente"
     if "atrasad" in low:
-        return f"🔴 {s}"
-    if "vencendo" in low and "hoje" in low:
-        return f"🟡 {s}"
+        return "Divergente"
+    if "vencendo" in low:
+        return "Em aberto"
     if "em dia" in low or low == "em dia":
-        return f"🟢 {s}"
+        return "OK"
     return s
 
 
@@ -3283,8 +3285,30 @@ def _dataframe_conciliacao_somente_grid(df: pd.DataFrame) -> pd.DataFrame:
     return g
 
 
-def _repasse_grid_styler(df: pd.DataFrame):
-    """Datas pt-BR, alinhamento e destaque dos valores monetários (Pandas Styler)."""
+def _repasse_badge_cell_style(text: str) -> str:
+    """Estilo inline para células tipo badge (Situação / Ação na grelha)."""
+    t = str(text).strip()
+    tc = "#0f172a"
+    if t == "OK":
+        bg, tc = "#DCFCE7", "#166534"
+    elif t == "Baixar no Bling":
+        bg, tc = "#DBEAFE", "#1E40AF"
+    elif t == "Divergente":
+        bg, tc = "#FEE2E2", "#991B1B"
+    elif t == "Zerado":
+        bg, tc = "#F1F5F9", "#475569"
+    elif t == "Em aberto":
+        bg, tc = "#FEF9C3", "#854D0E"
+    else:
+        bg = "#F8FAFC"
+    return f"background-color: {bg}; color: {tc}; font-weight: 600; border-radius: 6px; text-align: center"
+
+
+def _repasse_grid_styler(df: pd.DataFrame, tabela_fonte: pd.DataFrame):
+    """
+    Datas pt-BR, valores monetários em negrito, zebra, hover, diferença por sinal e badges nas colunas de status/ação.
+    `tabela_fonte`: mesmo índice que `df`, com «Diferença» numérica para colorir a coluna formatada.
+    """
     if df.empty:
         return df
     money_cols = [c for c in ("Valor da nota", "Valor a receber", "Valor pago", "Diferença") if c in df.columns]
@@ -3321,18 +3345,78 @@ def _repasse_grid_styler(df: pd.DataFrame):
     if "Data de pagamento" in df.columns:
         fmt_map["Data de pagamento"] = _fmt_pag
 
+    diff_series = (
+        pd.to_numeric(tabela_fonte["Diferença"], errors="coerce")
+        if "Diferença" in tabela_fonte.columns
+        else pd.Series(float("nan"), index=df.index)
+    )
+    diff_series = diff_series.reindex(df.index)
+
+    def _style_diff(_col: pd.Series) -> list[str]:
+        out: list[str] = []
+        for i in _col.index:
+            v = diff_series.loc[i] if i in diff_series.index else float("nan")
+            try:
+                if pd.isna(v):
+                    out.append("text-align: right; font-weight: 700; font-variant-numeric: tabular-nums")
+                elif float(v) > 0:
+                    out.append(
+                        "color: #16A34A; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums"
+                    )
+                elif float(v) < 0:
+                    out.append(
+                        "color: #DC2626; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums"
+                    )
+                else:
+                    out.append(
+                        "color: #64748B; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums"
+                    )
+            except Exception:
+                out.append("text-align: right; font-weight: 700")
+        return out
+
+    def _style_situacao(_col: pd.Series) -> list[str]:
+        return [_repasse_badge_cell_style(str(x)) for x in _col]
+
+    def _style_acao(_col: pd.Series) -> list[str]:
+        return [_repasse_badge_cell_style(str(x)) for x in _col]
+
+    table_styles: list[dict[str, Any]] = [
+        {
+            "selector": "thead th",
+            "props": [
+                ("background-color", "#F1F5F9"),
+                ("color", "#0f172a"),
+                ("font-weight", "600"),
+                ("border-bottom", "1px solid #E2E8F0"),
+                ("padding", "10px 8px"),
+            ],
+        },
+        {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#F8FAFC")]},
+        {"selector": "tbody tr:hover", "props": [("background-color", "#EEF2FF")]},
+        {"selector": "tbody td", "props": [("padding", "8px"), ("border-bottom", "1px solid #F1F5F9")]},
+    ]
+
     styler = df.style
     if fmt_map:
         styler = styler.format(fmt_map)
-    if money_cols:
+    _mc = [c for c in money_cols if c != "Diferença"]
+    if _mc:
         styler = styler.set_properties(
-            subset=money_cols,
+            subset=_mc,
             **{
                 "text-align": "right",
-                "font-weight": "600",
+                "font-weight": "700",
                 "font-variant-numeric": "tabular-nums",
             },
         )
+    if "Diferença" in df.columns:
+        styler = styler.apply(_style_diff, subset=["Diferença"], axis=0)
+    if "Situação" in df.columns:
+        styler = styler.apply(_style_situacao, subset=["Situação"], axis=0)
+    if "Ação sugerida" in df.columns:
+        styler = styler.apply(_style_acao, subset=["Ação sugerida"], axis=0)
+    styler = styler.set_table_styles(table_styles)
     return styler
 
 
@@ -3471,8 +3555,29 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     Fase 1 — Faturamento: KPIs, filtros, tabela principal e export CSV (recorte filtrado).
     """
     if _FATURAMENTO_PAINEL_EM_CONSTRUCAO:
-        st.markdown("## 🚧 Módulo em construção")
-        st.info("Em breve você poderá acompanhar o faturamento completo aqui.")
+        st.markdown(
+            """
+<style>
+.fdl-fat-soon-wrap {
+  min-height: 42vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2.5rem 1rem;
+}
+.fdl-fat-soon-wrap h2 { margin: 0 0 0.75rem 0; font-size: 1.5rem; color: #0f172a; font-weight: 600; }
+.fdl-fat-soon-wrap p { margin: 0; max-width: 28rem; color: #64748b; font-size: 1rem; line-height: 1.55; }
+</style>
+<div class="fdl-fat-soon-wrap">
+  <h2>🚧 Módulo em construção</h2>
+  <p>Estamos preparando o painel de faturamento com os mesmos padrões de qualidade da conciliação.
+  Em breve você poderá acompanhar métricas e ações aqui.</p>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
         return
     _oid = str(org_id)
     if df.empty:
@@ -4292,27 +4397,49 @@ def _repasse_ui_validacao_kpi_saas(contagens: dict[str, int]) -> None:
     ok = int(contagens.get("Ok", 0))
     bling = int(contagens.get("Baixar no Bling", 0))
     div = int(contagens.get("Analisar diferença", 0))
-    rev = int(contagens.get("Revisão", 0))
+    zero = int(contagens.get("Zerado", 0))
     st.write("")
     c1, c2, c3, c4 = st.columns(4)
     specs: list[tuple[Any, str, int, str, str]] = [
-        (c1, "OK", ok, "#15803d", "Sem pendência operacional neste recorte"),
-        (c2, "Baixar no Bling", bling, "#1d4ed8", "Ação: baixa no Bling"),
-        (c3, "Divergência", div, "#b91c1c", "Analisar diferença de valores"),
-        (c4, "Revisão", rev, "#ca8a04", "Verificar recebimento, faturamento ou venda zerada"),
+        (c1, "OK", ok, "#16A34A", "Sem pendência operacional neste recorte"),
+        (c2, "Baixar no Bling", bling, "#2563EB", "Ação: baixa no Bling"),
+        (c3, "Divergente", div, "#DC2626", "Analisar diferença de valores"),
+        (c4, "Zerado", zero, "#64748B", "Revisar venda zerada"),
     ]
     for col, title, val, color, hint in specs:
         with col:
             with st.container(border=True):
                 st.markdown(
-                    f'<p style="margin:0 0 0.25rem 0;font-size:0.7rem;font-weight:600;color:{color};text-transform:uppercase;letter-spacing:0.04em;">{html.escape(title)}</p>',
+                    f"""
+<div style="padding:0.35rem 0.15rem 0.5rem 0.15rem;" title="{html.escape(hint)}">
+  <p style="margin:0 0 0.35rem 0;font-size:0.72rem;font-weight:600;color:{color};letter-spacing:0.02em;">{html.escape(title)}</p>
+  <p style="margin:0;font-size:2rem;font-weight:700;color:#0f172a;line-height:1.1;">{html.escape(_fmt_int_ptbr(val))}</p>
+  <p style="margin:0.35rem 0 0 0;font-size:0.75rem;color:#64748b;">registos</p>
+</div>
+                    """,
                     unsafe_allow_html=True,
                 )
-                st.metric(
-                    "Registos",
-                    _fmt_int_ptbr(val),
-                    help=hint,
-                )
+
+
+def _repasse_painel_css_inject() -> None:
+    """Estilos do painel Repasse (fundo da página, cartão de filtros, espaçamento)."""
+    st.markdown(
+        """
+<style>
+[data-testid="stAppViewContainer"] { background-color: #F8FAFC !important; }
+[data-testid="stAppViewContainer"] .block-container { padding-top: 1.75rem !important; padding-bottom: 2.5rem !important; }
+div[data-testid="stVerticalBlockBorderWrapper"]:has(#fdl-repasse-filtros-heading) {
+  background: #ffffff !important;
+  border: 1px solid #E5E7EB !important;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  padding: 1.5rem !important;
+}
+.fdl-repasse-sec { margin: 1.75rem 0 0.75rem 0; }
+</style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
@@ -4327,7 +4454,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         return
 
     with st.container(border=True):
-        st.markdown("##### Filtros operacionais")
+        st.markdown(
+            '<h5 id="fdl-repasse-filtros-heading" style="margin:0 0 0.35rem 0;font-size:1.05rem;font-weight:600;color:#0f172a;">Filtros operacionais</h5>',
+            unsafe_allow_html=True,
+        )
         st.caption("Refine por plataforma, ação, situação e intervalo de datas de pagamento.")
         st.write("")
         r1 = st.columns((1.15, 1.15, 1.15, 1.55))
@@ -4368,10 +4498,9 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 key="op_repasse_busca_txt",
             ).strip().lower()
         st.write("")
-        st.write("")
-        r2 = st.columns((1.15, 1.15, 2.3))
+        r2 = st.columns((1.15, 1.15))
         with r2[0]:
-            st.caption("Pagamento — início")
+            st.caption("Data início (pagamento)")
             data_pag_ini = st.date_input(
                 " ",
                 value=_d_min,
@@ -4381,7 +4510,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 label_visibility="collapsed",
             )
         with r2[1]:
-            st.caption("Pagamento — fim")
+            st.caption("Data fim (pagamento)")
             data_pag_fim = st.date_input(
                 " ",
                 value=_d_max,
@@ -4390,9 +4519,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 format="DD/MM/YYYY",
                 label_visibility="collapsed",
             )
-        with r2[2]:
-            st.caption("Período")
-            st.caption("Comparação por **dia civil** (meia-noite a meia-noite).")
+        st.caption("Comparação por **dia civil** (meia-noite a meia-noite).")
         if not has_dp_base:
             st.info(
                 "Nenhuma **data de pagamento** preenchida nesta base: o intervalo abaixo não filtra linhas "
@@ -4461,7 +4588,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
     tabela["Diferença"] = pd.to_numeric(tabela.get("Diferença"), errors="coerce")
 
-    st.markdown("### Validação de ações")
+    st.markdown(
+        '<h3 class="fdl-repasse-sec" style="margin:0 0 0.35rem 0;font-size:1.2rem;font-weight:600;color:#0f172a;">Validação de ações</h3>',
+        unsafe_allow_html=True,
+    )
     st.caption("Contagens na **base já filtrada** — priorize divergências e revisões.")
     acoes_validacao = [
         "Ok",
@@ -4469,8 +4599,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         "Analisar diferença",
     ]
     contagens_acao = {a: int(tabela["Ação sugerida operacional"].eq(a).sum()) for a in acoes_validacao}
-    _revisao_acoes = ("Revisar venda zerada", "Verificar recebimento", "Verificar faturamento")
-    contagens_acao["Revisão"] = int(tabela["Ação sugerida operacional"].isin(_revisao_acoes).sum())
+    contagens_acao["Zerado"] = int(tabela["Ação sugerida operacional"].eq("Revisar venda zerada").sum())
     _repasse_ui_validacao_kpi_saas(contagens_acao)
 
     st.write("")
@@ -4577,7 +4706,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.caption("Desative FDL_SAFE_MODE para voltar à UI completa.")
         return
 
-    st.markdown("### Fila operacional")
+    st.markdown(
+        '<h3 class="fdl-repasse-sec" style="margin:0 0 0.35rem 0;font-size:1.2rem;font-weight:600;color:#0f172a;">Fila operacional</h3>',
+        unsafe_allow_html=True,
+    )
     st.caption("Analise o recorte na grelha; use a exportação para partilhar fora do sistema.")
     st.write("")
     st.write("")
@@ -4636,7 +4768,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     _disp_grid: object = tabela_grid
     if not _fdl_minimal_layout() and not tabela_grid.empty:
         try:
-            _disp_grid = _repasse_grid_styler(tabela_grid)
+            _disp_grid = _repasse_grid_styler(tabela_grid, tabela_exibir)
         except Exception:
             _disp_grid = tabela_grid
             _cfg_grid = _column_config_conciliacao(tabela_grid, moeda_como_texto=True)
@@ -5000,9 +5132,7 @@ if _fv == "repasse":
     )
     if _fdl_minimal_layout():
         st.title("Conciliação de Repasse")
-        st.caption(
-            "Acompanhe valores recebidos, pendências e ações operacionais do período."
-        )
+        st.caption("Visão operacional de recebimentos e divergências.")
     else:
         st.markdown(
             """
@@ -5015,21 +5145,22 @@ if _fv == "repasse":
   margin: 0 0 0.35rem 0;
   line-height: 1.2;
 }
-.fdl-repasse-hero p {
+.fdl-repasse-hero .fdl-repasse-sub {
   color: #64748b;
-  font-size: 1rem;
-  margin: 0;
+  font-size: 1.05rem;
+  margin: 0 0 0.5rem 0;
   line-height: 1.45;
   max-width: 48rem;
 }
 </style>
 <div class="fdl-repasse-hero">
   <h1>Conciliação de Repasse</h1>
-  <p>Acompanhe valores recebidos, pendências e ações operacionais do período.</p>
+  <p class="fdl-repasse-sub">Visão operacional de recebimentos e divergências</p>
 </div>
             """,
             unsafe_allow_html=True,
         )
+    _repasse_painel_css_inject()
     st.divider()
 elif _fv == "faturamento":
     st.caption(

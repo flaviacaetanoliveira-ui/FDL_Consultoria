@@ -283,6 +283,29 @@ def _frete_stage_trace(etapa: int, titulo: str, detalhe: str) -> None:
         pass
 
 
+def _bootstrap_debug_enabled() -> bool:
+    """Rerun global: etapas visíveis (opt-in). Env/secrets: FDL_DEBUG_BOOTSTRAP=1."""
+    raw = os.environ.get("FDL_DEBUG_BOOTSTRAP", "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    try:
+        sec = st.secrets.get("FDL_DEBUG_BOOTSTRAP", False)
+        if isinstance(sec, bool):
+            return sec
+        return str(sec).strip().lower() in {"1", "true", "yes", "on"}
+    except Exception:
+        return False
+
+
+def _set_bootstrap_stage(stage: str) -> None:
+    try:
+        st.session_state["_fdl_bootstrap_stage"] = stage
+    except Exception:
+        pass
+
+
 def _repasse_consume_mode() -> str:
     """Repasse: live = pipeline; materialized = CSV/XLSX. Com FDL_STRICT_MATERIALIZED, sem fallback para live."""
     raw = os.environ.get("FDL_REPASSE_CONSUME_MODE", "").strip().lower()
@@ -1777,6 +1800,28 @@ def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
                 "repasse_materialized_error": str(exc).strip() or exc.__class__.__name__,
             }
         return tabela, info, ts
+
+
+def _repasse_load_cache_signature(org_id: str) -> str:
+    """Chave de cache do carregamento repasse: muda com org, revisão e caminhos de materialização."""
+    return "|".join(
+        [
+            str(org_id),
+            str(OPERACIONAL_CACHE_REVISION),
+            _repasse_consume_mode(),
+            str(_repasse_materialized_path_str()).strip(),
+            str(_repasse_materialized_url_str()).strip(),
+            _data_source_mode(),
+            str(_strict_materialized()),
+        ]
+    )
+
+
+@st.cache_data(show_spinner=False, ttl=900)
+def _load_repasse_dataframe_cached(load_signature: str) -> tuple[pd.DataFrame, dict[str, object], str]:
+    """Evita reler disco/rede a cada interação com filtros (rerun). `load_signature` isola org/config."""
+    _ = load_signature
+    return _load_data()
 
 
 st.markdown(
@@ -3630,11 +3675,13 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 _admin_mode = _is_admin_mode()
 
 _fv = st.session_state["op_financeiro_view"]
+_set_bootstrap_stage(f"rerun: vista={_fv}")
 frete_df = pd.DataFrame()
 frete_info: dict[str, object] = {}
 if _fv == "frete":
     # Ponto único de carga Frete (materializado → live); não carrega repasse/precomputed.
     try:
+        _set_bootstrap_stage("frete: a carregar _load_frete_data")
         with st.spinner("A carregar dados de Frete…"):
             frete_df, frete_info, ts_proc = _load_frete_data(_active_org.org_id)
         if _admin_mode:
@@ -3668,10 +3715,14 @@ if _fv == "frete":
 
     tabela_geral = pd.DataFrame()
     info = frete_info
+    _set_bootstrap_stage("frete: dados carregados")
 else:
     try:
+        _set_bootstrap_stage("repasse: a carregar _load_data (cache por org/config)")
         with st.spinner("A carregar dados (a ir buscar o ficheiro à nuvem, se aplicável)…"):
-            tabela_geral, info, ts_proc = _load_data()
+            tabela_geral, info, ts_proc = _load_repasse_dataframe_cached(
+                _repasse_load_cache_signature(_active_org.org_id)
+            )
             if _admin_mode:
                 if info.get("repasse_consume") == "live_fallback":
                     st.warning(
@@ -3722,12 +3773,19 @@ else:
     empresas = st.session_state["empresas_permitidas"]
     tabela_geral = tabela_geral[tabela_geral["empresa"].isin(empresas)].copy()
     info = {**info, "linhas": int(len(tabela_geral))}
+    _set_bootstrap_stage(f"repasse: após filtro empresa ({len(tabela_geral)} linhas)")
 
 try:
     _ts_raw = str(ts_proc).strip() if ts_proc is not None else ""
     _sb_ts_display = datetime.strptime(_ts_raw, "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M")
 except (ValueError, TypeError, OSError):
     _sb_ts_display = str(ts_proc) if ts_proc is not None else "—"
+
+if _bootstrap_debug_enabled():
+    with st.expander("Diagnóstico bootstrap (FDL_DEBUG_BOOTSTRAP=1)", expanded=False):
+        st.write("**Etapa:**", st.session_state.get("_fdl_bootstrap_stage", "—"))
+        st.write("**Vista ativa:**", _fv)
+        st.write("**Linhas tabela_geral (repasse):**", len(tabela_geral) if _fv == "repasse" else "— (vista frete)")
 
 with st.sidebar:
     _sb_dn_esc = html.escape(str(_app_ctx.display_name))
@@ -3838,31 +3896,39 @@ with st.sidebar:
     )
 
 if _fv == "repasse":
-    map_acao = {
-        "Ok": "Ok",
-        "Baixar no Bling": "Baixar no Bling",
-        "Analisar manualmente": "Analisar diferença",
-        "Verificar título no Bling": "Verificar recebimento",
-        "Revisar venda zerada": "Revisar venda zerada",
-        "Verificar faturamento": "Verificar faturamento",
-    }
-    tabela_geral["Ação sugerida operacional"] = (
-        tabela_geral["Ação sugerida"].map(map_acao).fillna(tabela_geral["Ação sugerida"])
-    )
-    tabela = tabela_geral.copy()
+    try:
+        _set_bootstrap_stage("repasse: a preparar base (map_acao / filtros negócio)")
+        map_acao = {
+            "Ok": "Ok",
+            "Baixar no Bling": "Baixar no Bling",
+            "Analisar manualmente": "Analisar diferença",
+            "Verificar título no Bling": "Verificar recebimento",
+            "Revisar venda zerada": "Revisar venda zerada",
+            "Verificar faturamento": "Verificar faturamento",
+        }
+        tabela_geral["Ação sugerida operacional"] = (
+            tabela_geral["Ação sugerida"].map(map_acao).fillna(tabela_geral["Ação sugerida"])
+        )
+        tabela = tabela_geral.copy()
 
-    # Base operacional exclusiva de extrato (liberações/pagamentos):
-    # somente linhas com Valor pago > 0.
-    tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
-    tabela = tabela[tabela["Valor pago"].fillna(0).gt(0)].copy()
+        # Base operacional exclusiva de extrato (liberações/pagamentos):
+        # somente linhas com Valor pago > 0.
+        tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
+        tabela = tabela[tabela["Valor pago"].fillna(0).gt(0)].copy()
 
-    # Exibição operacional focada em vendas:
-    # mantém somente linhas com N° de venda preenchido.
-    tabela["N° de venda"] = tabela["N° de venda"].fillna("").astype(str).str.strip()
-    tabela = tabela[tabela["N° de venda"].ne("")].copy()
+        # Exibição operacional focada em vendas:
+        # mantém somente linhas com N° de venda preenchido.
+        tabela["N° de venda"] = tabela["N° de venda"].fillna("").astype(str).str.strip()
+        tabela = tabela[tabela["N° de venda"].ne("")].copy()
 
-    # Base operacional antes dos filtros da UI (mesma regra de negócio de sempre).
-    tabela_operacional_base = tabela.copy()
+        # Base operacional antes dos filtros da UI (mesma regra de negócio de sempre).
+        tabela_operacional_base = tabela.copy()
+        _set_bootstrap_stage(f"repasse: base pronta ({len(tabela_operacional_base)} linhas)")
+    except Exception as exc:
+        _set_bootstrap_stage(f"repasse: ERRO na preparação da base — {exc.__class__.__name__}")
+        st.error("Erro ao preparar a base de **Conciliação de Repasse** (colunas ou dados incompatíveis).")
+        st.exception(exc)
+        tabela_operacional_base = pd.DataFrame()
 else:
     tabela_operacional_base = pd.DataFrame()
 
@@ -3913,15 +3979,13 @@ else:
 
 if _fv == "repasse":
     try:
+        _set_bootstrap_stage("repasse: a renderizar _painel_conciliacao_fragment (filtros UI)")
         _painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
+        _set_bootstrap_stage("repasse: painel concluído")
     except Exception as exc:
-        if _is_admin_mode():
-            st.error("Erro no carregamento do repasse")
-            st.exception(exc)
-        else:
-            st.warning("Dados indisponíveis no momento. Tente novamente em instantes.")
-            with st.expander("Detalhes para suporte", expanded=False):
-                st.code(str(exc), language="text")
+        _set_bootstrap_stage(f"repasse: ERRO no painel — {exc.__class__.__name__}")
+        st.error("Erro ao renderizar a **Conciliação de Repasse** (filtros ou tabela).")
+        st.exception(exc)
 else:
     try:
         _painel_frete_emergencial(_active_org.org_id, frete_df, frete_info, ts_proc)

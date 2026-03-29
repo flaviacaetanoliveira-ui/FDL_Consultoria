@@ -156,6 +156,7 @@ def build_conciliacao_com_notas(filtrar_notas_invalidas: bool = True) -> pd.Data
         out["Número da nota"] = pd.NA
         out["Valor da nota"] = pd.NA
         out["Status NF"] = "Sem nota"
+        out["Plataforma"] = "Não identificado"
         return out
 
     col_pedido = "Número do pedido multiloja"

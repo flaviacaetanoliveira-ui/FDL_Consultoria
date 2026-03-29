@@ -1,0 +1,42 @@
+{
+  "generated_at": "2026-03-29T13:18:38Z",
+  "source_signature": "d59d90d739e2350806caa75737dd7bb5",
+  "pipeline_revision": "phase1-v1",
+  "cliente": "cliente_2",
+  "empresa": "gama_home",
+  "modulo": "repasse",
+  "cliente_id": "cliente_2",
+  "empresa_id": "gama_home",
+  "cnpj": null,
+  "row_count": 143,
+  "columns": [
+    "N° de venda",
+    "ID do pedido",
+    "Total BRL",
+    "Número da nota",
+    "Numero_sem_parcela",
+    "Valor da nota",
+    "Plataforma",
+    "Situação",
+    "Ação sugerida",
+    "Valor a receber",
+    "Valor pago",
+    "Diferença",
+    "Data de pagamento",
+    "Data de emissão",
+    "empresa",
+    "cliente_id",
+    "empresa_id",
+    "cnpj"
+  ],
+  "source_mode": "local_folder",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home",
+  "loader_info": {
+    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home",
+    "linhas": 143,
+    "arquivos_contas_lidos": 4,
+    "col_situacao": "Situação",
+    "col_numero": "Número"
+  },
+  "app_mirror_csv": "dataset_repasse_app.csv"
+}

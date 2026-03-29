@@ -27,6 +27,12 @@ USUARIOS: dict[str, dict[str, str | list[str]]] = {
         "cliente": "Everton",
         "empresas": ["Antomóveis"],
     },
+    # Ambiente cliente 2 (deployment separado): secrets só para Gama Home; trocar e-mail/senha em produção.
+    "teste.gama@example.com": {
+        "senha": "123456",
+        "cliente": "Cliente 2",
+        "empresas": ["Gama Home"],
+    },
 }
 
 

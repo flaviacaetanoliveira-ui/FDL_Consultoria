@@ -42,7 +42,7 @@ def find_latest_file(folder: Path) -> Path:
 
     candidates: list[Path] = []
     for pattern in ("*.xlsx", "*.xls", "*.csv"):
-        candidates.extend(p for p in folder.glob(pattern) if p.is_file())
+        candidates.extend(p for p in folder.rglob(pattern) if p.is_file())
 
     if not candidates:
         raise FileNotFoundError(f"Nenhum arquivo CSV/Excel encontrado em: {folder}")
@@ -56,7 +56,7 @@ def list_liberacoes_files(folder: Path) -> list[Path]:
         raise FileNotFoundError(f"Pasta não encontrada: {folder}")
     candidates: list[Path] = []
     for pattern in ("*.xlsx", "*.xls", "*.csv"):
-        candidates.extend(p for p in folder.glob(pattern) if p.is_file())
+        candidates.extend(p for p in folder.rglob(pattern) if p.is_file())
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return candidates
 

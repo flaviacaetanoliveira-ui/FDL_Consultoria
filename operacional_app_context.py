@@ -61,6 +61,18 @@ _REGISTRO_EMPRESA: dict[str, AppOrganization] = {
             ),
         ),
     ),
+    "Gama Home": AppOrganization(
+        org_id="gama_home",
+        display_name="Gama Home",
+        module_ids=("financeiro",),
+        routes=(
+            ModuleRoute(
+                route_id="conciliacao-repasse",
+                label="Conciliação de Repasse",
+                page_module="app_operacional",
+            ),
+        ),
+    ),
 }
 
 

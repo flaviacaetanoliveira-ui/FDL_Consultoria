@@ -19,8 +19,11 @@ cliente_1/**/*.zip
 agendamento/config_local.bat
 agendamento/logs/
 
-# Produtos materializados (Fase 1) e relatórios de paridade locais
-data_products/
+# Snapshot de materialização versionado para Streamlit Cloud (repasse/frete em data_products/default/.../current/).
+# Regenerar localmente com: python run_materialize_financeiro.py --base-dir ... --modulo all
+# Outros segmentos de cliente local (não versionar):
+data_products/fdl_cli/
+# Paridade local opcional: processing/validation/reports/
 processing/validation/reports/
 
 # Logs do runner run_materialize_financeiro.py (máquina local / agendador)

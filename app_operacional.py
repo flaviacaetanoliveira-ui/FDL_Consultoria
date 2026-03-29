@@ -33,6 +33,7 @@ from etapa4b_integracao_contas_receber import BASE_DIR, carregar_tabela_final_op
 from operacional_app_context import (
     SESSION_ACTIVE_ORG_KEY,
     get_active_organization,
+    get_app_context,
     logout_operacional_user,
     nomes_permitidos_com_registro,
     organizacao_por_nome_cadastrado,
@@ -103,9 +104,53 @@ def _fdl_global_trace(msg: str) -> None:
         pass
 
 
+def _ui_single_empresa_mode() -> bool:
+    """
+    Deploy onde repasse/frete materializado vem de um único path (secrets), sem troca por org.
+    Com FDL_UI_SINGLE_EMPRESA ativo, o seletor de empresa não sugere mudança de dataset.
+    """
+    raw = os.environ.get("FDL_UI_SINGLE_EMPRESA", "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    try:
+        sec = st.secrets.get("FDL_UI_SINGLE_EMPRESA", False)
+        if isinstance(sec, bool):
+            return sec
+        return str(sec).strip().lower() in {"1", "true", "yes", "on"}
+    except Exception:
+        return False
+
+
+def _ui_single_empresa_nome_display() -> str:
+    """Nome exibido quando FDL_UI_SINGLE_EMPRESA está ligado (deve bater com _REGISTRO_EMPRESA)."""
+    env = os.environ.get("FDL_UI_SINGLE_EMPRESA_NAME", "").strip()
+    if env:
+        return env
+    try:
+        v = str(st.secrets.get("FDL_UI_SINGLE_EMPRESA_NAME", "Gama Home")).strip()
+        return v or "Gama Home"
+    except Exception:
+        return "Gama Home"
+
+
+def _apply_single_empresa_session_lock() -> None:
+    """Força active_org_id para a empresa do dataset fixo (alinhado ao path materializado)."""
+    if not _ui_single_empresa_mode():
+        return
+    nome = _ui_single_empresa_nome_display()
+    org = organizacao_por_nome_cadastrado(nome)
+    if not org:
+        return
+    st.session_state[SESSION_ACTIVE_ORG_KEY] = org.org_id
+
+
 _fdl_global_trace("01: início app_operacional (módulo reexecutado)")
 _app_ctx = require_app_user()
 _fdl_global_trace("02: após autenticação (require_app_user)")
+_apply_single_empresa_session_lock()
+_app_ctx = get_app_context()
 _active_org = get_active_organization(_app_ctx)
 
 if "op_financeiro_view" not in st.session_state:
@@ -3013,6 +3058,318 @@ def _multiselect_stable(key: str, label: str, options: list[str]) -> list[str]:
     return st.multiselect(label, opts, key=key, placeholder="Escolher…")
 
 
+def _faturamento_divergencia_tol() -> float:
+    try:
+        from processing.faturamento.config import DIVERGENCIA_VALOR_TOL
+
+        return float(DIVERGENCIA_VALOR_TOL)
+    except Exception:
+        return 0.01
+
+
+def _faturamento_resolve_produto_column(columns: list[str]) -> str | None:
+    for c in ("Produto", "Nome do produto", "Título", "Título do anúncio", "Nome"):
+        if c in columns:
+            return c
+    return None
+
+
+def _faturamento_compute_alert_bools(df: pd.DataFrame) -> pd.DataFrame:
+    """Colunas auxiliares _ab_* para KPIs, filtros e texto de alertas."""
+    out = df.copy()
+    pl, vt = "Preço de lista", "Valor total"
+    pln = pd.to_numeric(out[pl], errors="coerce") if pl in out.columns else pd.Series(float("nan"), index=out.index)
+    vtn = pd.to_numeric(out[vt], errors="coerce") if vt in out.columns else pd.Series(float("nan"), index=out.index)
+    tol = _faturamento_divergencia_tol()
+    out["_ab_pl_zero"] = pln.notna() & (pln == 0)
+    out["_ab_div"] = pln.notna() & vtn.notna() & ((pln - vtn).abs() > tol)
+    situ = (
+        out["Situação"].fillna("").astype(str).str.strip().str.casefold()
+        if "Situação" in out.columns
+        else pd.Series("", index=out.index, dtype=object)
+    )
+    nf = (
+        out["Existe Nota Fiscal gerada"].fillna("").astype(str).str.strip().str.casefold()
+        if "Existe Nota Fiscal gerada" in out.columns
+        else pd.Series("", index=out.index, dtype=object)
+    )
+    atendido = situ == "atendido"
+    sem_nf = nf.eq("não") | nf.eq("nao")
+    if "faturamento_consolidado" in out.columns:
+        fc = out["faturamento_consolidado"].fillna(False).astype(bool)
+    else:
+        fc = pd.Series(False, index=out.index)
+    out["_ab_sem_nf_np"] = atendido & sem_nf & ~fc
+    return out
+
+
+def _faturamento_alertas_text(s: pd.Series) -> str:
+    parts: list[str] = []
+    if bool(s.get("_ab_pl_zero")):
+        parts.append("Preço lista zero")
+    if bool(s.get("_ab_div")):
+        parts.append("Divergência preço x valor total")
+    if bool(s.get("_ab_sem_nf_np")):
+        parts.append("Sem NF não permitido")
+    return " · ".join(parts)
+
+
+def _faturamento_filter_keys(org_id: str) -> list[str]:
+    oid = str(org_id)
+    return [
+        f"fat_visao_{oid}",
+        f"fat_d_ini_{oid}",
+        f"fat_d_fim_{oid}",
+        f"fat_ms_plat_{oid}",
+        f"fat_ms_sit_{oid}",
+        f"fat_busca_{oid}",
+        f"fat_ms_alert_{oid}",
+    ]
+
+
+def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc: str, org_id: str) -> None:
+    """
+    Fase 1 — Faturamento: KPIs, filtros, tabela principal e export CSV (recorte filtrado).
+    """
+    _oid = str(org_id)
+    if df.empty:
+        st.info("Não há linhas de faturamento para exibir. Verifique a materialização ou os filtros de empresa.")
+        return
+
+    _req = (
+        "Preço de lista",
+        "Valor total",
+        "Resultado",
+        "Situação",
+        "Nome da plataforma",
+        "Código",
+        "Número do pedido",
+        "Número do pedido multiloja",
+        "Existe Nota Fiscal gerada",
+        "Número da nota",
+        "Custo de Frete",
+        "Taxa de Comissão",
+        "Custo do Produto",
+        "Imposto",
+        "Despesas Fixas",
+    )
+    missing = [c for c in _req if c not in df.columns]
+    if missing:
+        st.warning(
+            "Dataset de faturamento sem colunas esperadas pelo painel. "
+            f"Faltam: {', '.join(missing[:12])}{'…' if len(missing) > 12 else ''}."
+        )
+        return
+
+    work = _faturamento_compute_alert_bools(df)
+    for c in (
+        "faturamento_consolidado",
+        "faturamento_com_nf",
+        "faturamento_sem_nf",
+    ):
+        if c not in work.columns:
+            work[c] = False
+
+    pl_col, res_col = "Preço de lista", "Resultado"
+    pl_sum = float(pd.to_numeric(work[pl_col], errors="coerce").fillna(0).sum())
+    res_sum = float(pd.to_numeric(work[res_col], errors="coerce").fillna(0).sum())
+    margem_total = (res_sum / pl_sum) if pl_sum not in (0.0, -0.0) else float("nan")
+    n_cons = int(work["faturamento_consolidado"].fillna(False).astype(bool).sum()) if "faturamento_consolidado" in work.columns else 0
+    any_alert = work["_ab_pl_zero"] | work["_ab_div"] | work["_ab_sem_nf_np"]
+    n_alert = int(any_alert.sum())
+
+    k1, k2, k3, k4, k5 = st.columns(5)
+    with k1:
+        st.metric("Receita por Produtos", _fmt_brl_ptbr_celula(pl_sum))
+    with k2:
+        st.metric("Resultado Total", _fmt_brl_ptbr_celula(res_sum))
+    with k3:
+        if pl_sum == 0 or (isinstance(margem_total, float) and math.isnan(margem_total)):
+            st.metric("Margem Total %", "—")
+        else:
+            st.metric("Margem Total %", f"{margem_total * 100:.2f}%".replace(".", ","))
+    with k4:
+        st.metric("Itens Consolidados", _fmt_int_ptbr(n_cons))
+    with k5:
+        st.metric("Alertas Ativos", _fmt_int_ptbr(n_alert))
+
+    st.caption(
+        "Os indicadores acima referem-se a **todo** o dataset carregado; a tabela abaixo respeita os filtros."
+    )
+
+    has_data_col = "Data" in work.columns
+    d_series = pd.to_datetime(work["Data"], errors="coerce") if has_data_col else pd.Series(dtype="datetime64[ns]")
+    has_usable_dates = bool(has_data_col) and d_series.notna().any()
+    if has_usable_dates:
+        d_min = d_series.min().date()
+        d_max = d_series.max().date()
+    else:
+        d_min = d_max = datetime.now(_BR_TZ).date()
+
+    plats = sorted({str(x).strip() for x in work["Nome da plataforma"].dropna().unique() if str(x).strip()})
+    sits = sorted({str(x).strip() for x in work["Situação"].dropna().unique() if str(x).strip()})
+
+    _opt_alertas = (
+        "Preço lista zero",
+        "Divergência preço x valor total",
+        "Sem NF não permitido",
+    )
+
+    with st.expander("Filtros", expanded=True):
+        visao = st.selectbox(
+            "Visão",
+            ("Todos", "Consolidado", "Com NF", "Sem NF permitido"),
+            key=f"fat_visao_{_oid}",
+        )
+        r0 = st.columns((1.15, 1.15))
+        if has_usable_dates:
+            with r0[0]:
+                d_ini = st.date_input(
+                    "Período — início (Data)",
+                    value=d_min,
+                    min_value=d_min,
+                    max_value=d_max,
+                    format="DD/MM/YYYY",
+                    key=f"fat_d_ini_{_oid}",
+                )
+            with r0[1]:
+                d_fim = st.date_input(
+                    "Período — fim (Data)",
+                    value=d_max,
+                    min_value=d_min,
+                    max_value=d_max,
+                    format="DD/MM/YYYY",
+                    key=f"fat_d_fim_{_oid}",
+                )
+        elif has_data_col:
+            st.caption("A coluna **Data** existe mas não tem valores parseáveis — o filtro por período está desativado.")
+        r1 = st.columns((1.15, 1.15))
+        with r1[0]:
+            sel_plat = _multiselect_stable(f"fat_ms_plat_{_oid}", "Plataforma", plats)
+        with r1[1]:
+            sel_sit = _multiselect_stable(f"fat_ms_sit_{_oid}", "Situação do pedido", sits)
+        busca = st.text_input(
+            "Busca (pedido, multiloja, SKU, n.º da nota)",
+            key=f"fat_busca_{_oid}",
+            placeholder="Texto livre…",
+        ).strip().lower()
+        sel_alerts = st.multiselect(
+            "Alertas",
+            list(_opt_alertas),
+            key=f"fat_ms_alert_{_oid}",
+            placeholder="Nenhum filtro por alerta",
+        )
+        if st.button("Limpar filtros", key=f"fat_clear_{_oid}"):
+            for _k in _faturamento_filter_keys(_oid):
+                st.session_state.pop(_k, None)
+            st.rerun()
+
+    filt = work.copy()
+    if visao == "Consolidado":
+        filt = filt[filt["faturamento_consolidado"].fillna(False).astype(bool)]
+    elif visao == "Com NF":
+        filt = filt[filt["faturamento_com_nf"].fillna(False).astype(bool)]
+    elif visao == "Sem NF permitido":
+        filt = filt[filt["faturamento_sem_nf"].fillna(False).astype(bool)]
+
+    if has_usable_dates:
+        if d_fim < d_ini:
+            st.warning("A data final não pode ser anterior à inicial.")
+            d_fim = d_ini
+        d_cmp = pd.to_datetime(filt["Data"], errors="coerce")
+        dd = d_cmp.dt.normalize()
+        _ini_ts = pd.Timestamp(d_ini)
+        _fim_ts = pd.Timestamp(d_fim) + pd.Timedelta(days=1)
+        m_d = d_cmp.notna() & (dd >= _ini_ts) & (dd < _fim_ts)
+        filt = filt.loc[m_d].copy()
+
+    if sel_plat:
+        filt = filt[filt["Nome da plataforma"].isin(sel_plat)]
+    if sel_sit:
+        filt = filt[filt["Situação"].isin(sel_sit)]
+    if busca:
+        m_bus = pd.Series(False, index=filt.index)
+        for col in ("Número do pedido", "Número do pedido multiloja", "Código", "Número da nota"):
+            if col in filt.columns:
+                m_bus = m_bus | filt[col].fillna("").astype(str).str.lower().str.contains(busca, regex=False)
+        filt = filt.loc[m_bus].copy()
+
+    if sel_alerts:
+        m_a = pd.Series(False, index=filt.index)
+        if "Preço lista zero" in sel_alerts:
+            m_a = m_a | filt["_ab_pl_zero"]
+        if "Divergência preço x valor total" in sel_alerts:
+            m_a = m_a | filt["_ab_div"]
+        if "Sem NF não permitido" in sel_alerts:
+            m_a = m_a | filt["_ab_sem_nf_np"]
+        filt = filt.loc[m_a].copy()
+
+    filt = filt.sort_values(res_col, ascending=True, na_position="last")
+
+    prod_col = _faturamento_resolve_produto_column(list(filt.columns))
+    rpct = pd.to_numeric(filt["Resultado_Pct"], errors="coerce") if "Resultado_Pct" in filt.columns else pd.Series(float("nan"), index=filt.index)
+
+    disp = pd.DataFrame(
+        {
+            "Plataforma": filt["Nome da plataforma"],
+            "Situação do pedido": filt["Situação"],
+            "N.º do pedido": filt["Número do pedido"],
+            "N.º pedido multiloja": filt["Número do pedido multiloja"],
+            "SKU": filt["Código"],
+            "Produto": filt[prod_col].astype(str) if prod_col else pd.Series("", index=filt.index),
+            "NF emitida?": filt["Existe Nota Fiscal gerada"],
+            "N.º da nota": filt["Número da nota"],
+            "Receita por Produtos": pd.to_numeric(filt[pl_col], errors="coerce"),
+            "Valor total": pd.to_numeric(filt["Valor total"], errors="coerce"),
+            "Custo do produto": pd.to_numeric(filt["Custo do Produto"], errors="coerce"),
+            "Frete": pd.to_numeric(filt["Custo de Frete"], errors="coerce"),
+            "Comissão Plataforma": pd.to_numeric(filt["Taxa de Comissão"], errors="coerce"),
+            "Imposto": pd.to_numeric(filt["Imposto"], errors="coerce"),
+            "Despesas fixas": pd.to_numeric(filt["Despesas Fixas"], errors="coerce"),
+            "Resultado": pd.to_numeric(filt[res_col], errors="coerce"),
+            "Resultado %": rpct * 100.0,
+        }
+    )
+    disp["Alertas"] = filt.apply(_faturamento_alertas_text, axis=1)
+
+    _cfg: dict[str, NumberColumn | TextColumn] = {}
+    money_cols = (
+        "Receita por Produtos",
+        "Valor total",
+        "Custo do produto",
+        "Frete",
+        "Comissão Plataforma",
+        "Imposto",
+        "Despesas fixas",
+        "Resultado",
+    )
+    for c in money_cols:
+        if c in disp.columns:
+            _cfg[c] = NumberColumn(c, format="R$ %,.2f")
+    if "Resultado %" in disp.columns:
+        _cfg["Resultado %"] = NumberColumn("Resultado %", format="%.2f%%")
+    for c in ("Plataforma", "Situação do pedido", "N.º do pedido", "N.º pedido multiloja", "SKU", "Produto", "NF emitida?", "N.º da nota", "Alertas"):
+        if c in disp.columns:
+            _cfg[c] = TextColumn(c, width="medium" if c != "Alertas" else "large")
+
+    st.subheader("Tabela principal")
+    st.caption(f"{len(disp)} registos com os filtros atuais · ordenação: Resultado (ascendente).")
+    st.dataframe(
+        disp,
+        use_container_width=True,
+        hide_index=True,
+        height=520,
+        column_config=_cfg,
+    )
+    st.download_button(
+        "Exportar CSV (filtrado)",
+        disp.to_csv(index=False).encode("utf-8-sig"),
+        file_name="faturamento_filtrado.csv",
+        mime="text/csv",
+        key=f"fat_dl_csv_{_oid}",
+    )
+
+
 def _html_fdl_topbar(client_esc: str, org_esc: str) -> str:
     """
     Cabeçalho superior SaaS: logo + marca + cliente/empresa.
@@ -4125,23 +4482,28 @@ with st.sidebar:
     _nomes_nav = nomes_permitidos_com_registro(_empresas_usuario)
 
     if _nomes_nav:
-        _org_idx = 0
-        for i, n in enumerate(_nomes_nav):
-            _o = organizacao_por_nome_cadastrado(n)
-            if _o and _o.org_id == _app_ctx.active_org_id:
-                _org_idx = i
-                break
-        _sel_nome = st.selectbox(
-            "Empresa",
-            options=_nomes_nav,
-            index=_org_idx,
-            key="operacional_empresa_ativa_select",
-            label_visibility="visible",
-        )
-        _chosen_org = organizacao_por_nome_cadastrado(_sel_nome)
-        if _chosen_org and _chosen_org.org_id != _app_ctx.active_org_id:
-            st.session_state[SESSION_ACTIVE_ORG_KEY] = _chosen_org.org_id
-            st.rerun()
+        if _ui_single_empresa_mode():
+            _nome_ui = _ui_single_empresa_nome_display()
+            st.caption("Empresa")
+            st.markdown(f"**{_nome_ui}**")
+        else:
+            _org_idx = 0
+            for i, n in enumerate(_nomes_nav):
+                _o = organizacao_por_nome_cadastrado(n)
+                if _o and _o.org_id == _app_ctx.active_org_id:
+                    _org_idx = i
+                    break
+            _sel_nome = st.selectbox(
+                "Empresa",
+                options=_nomes_nav,
+                index=_org_idx,
+                key="operacional_empresa_ativa_select",
+                label_visibility="visible",
+            )
+            _chosen_org = organizacao_por_nome_cadastrado(_sel_nome)
+            if _chosen_org and _chosen_org.org_id != _app_ctx.active_org_id:
+                st.session_state[SESSION_ACTIVE_ORG_KEY] = _chosen_org.org_id
+                st.rerun()
 
     _sb_view = st.session_state.get("op_financeiro_view", "repasse")
     st.caption("Módulos")
@@ -4266,7 +4628,10 @@ elif _fv == "faturamento":
     )
     st.title("Faturamento")
     st.caption(
-        "Visualização completa em desenvolvimento — abaixo: verificação de carga do dataset materializado."
+        "Analise receita por item, custos, impostos e resultado; acompanhe itens consolidados e alertas de qualidade."
+    )
+    st.caption(
+        f"Último processamento: **{ts_proc}** · **{_fmt_int_ptbr(len(faturamento_df))}** linhas carregadas"
     )
     st.divider()
 else:
@@ -4289,14 +4654,14 @@ if _fv == "repasse":
         st.error("Erro ao renderizar a **Conciliação de Repasse** (filtros ou tabela).")
         st.exception(exc)
 elif _fv == "faturamento":
-    st.info(
-        f"Dataset de faturamento carregado: **{len(faturamento_df)}** linhas (após filtro por empresa). "
-        f"Última referência de ficheiro: `{ts_proc}`."
-    )
-    if not faturamento_df.empty:
-        st.dataframe(faturamento_df.head(20), use_container_width=True, height=320)
-    else:
-        st.caption("Sem linhas para exibir — confira avisos acima ou o caminho materializado.")
+    try:
+        _fdl_global_trace("faturamento: a renderizar _painel_faturamento")
+        _painel_faturamento(faturamento_df, faturamento_info, ts_proc, _active_org.org_id)
+        _fdl_global_trace("faturamento: painel concluído")
+    except Exception as exc:
+        _fdl_global_trace(f"faturamento: ERRO no painel — {exc.__class__.__name__}")
+        st.error("Erro ao renderizar o painel de **Faturamento**.")
+        st.exception(exc)
 elif _fv == "frete":
     try:
         _fdl_global_trace("frete: a renderizar _painel_frete_emergencial")

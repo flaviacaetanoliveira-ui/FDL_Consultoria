@@ -2926,13 +2926,10 @@ def _render_frete_operacional_ui(
                 )
             situacao_opts: list[str] = list(FRETE_SITUACAO_FRETE_VALORES_FILTRO)
         
-            with st.container():
-                if _fdl_minimal_layout():
-                    st.subheader("Filtros operacionais")
-                else:
-                    st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
+            with st.container(border=True):
+                st.subheader("Filtros operacionais")
+                st.write("")
                 r1 = st.columns((1.15, 1.15, 1.7))
-                r2 = st.columns((1.15, 1.15, 2.3))
                 with r1[0]:
                     sel_est = _multiselect_stable(f"op_frete_ms_est_{_sig}", "Estado da venda", estados)
                 with r1[1]:
@@ -2942,6 +2939,9 @@ def _render_frete_operacional_ui(
                 with r1[2]:
                     busca = st.text_input("Busca (venda ou # anúncio)", "", key=f"op_frete_busca_{_sig}")
                     busca = busca.strip().lower()
+                st.write("")
+                st.write("")
+                r2 = st.columns((1.15, 1.15, 2.3))
                 with r2[0]:
                     data_ini = st.date_input(
                         "Data da venda — início",
@@ -2961,10 +2961,9 @@ def _render_frete_operacional_ui(
                         key=f"op_frete_d_fim_{_sig}",
                     )
                 st.caption(
-                    "O intervalo restringe as linhas pela **data da venda** (comparado por dia). "
-                    "Por omissão: últimos 30 dias corridos até hoje."
+                    "Filtra por **data da venda** (comparação por dia). Por omissão: últimos 30 dias até hoje."
                 )
-        
+
             if data_fim < data_ini:
                 st.warning("A data final não pode ser anterior à data inicial. Ajuste o período.")
                 data_fim = data_ini
@@ -3014,8 +3013,8 @@ def _render_frete_operacional_ui(
             if _frete_debug_ui_enabled():
                 st.caption("Debug Frete: filtros aplicados — a seguir KPIs e tabelas.")
         
-            _va = html.escape(str(meta_frete.get("vendas_arquivo", "—")))
-            _ts_esc = html.escape(str(ts_proc))
+            _va = str(meta_frete.get("vendas_arquivo", "—"))
+            _ts_esc = str(ts_proc)
             _pl = "Todas"
             if estados and sel_est and len(sel_est) < len(estados):
                 _pl = ", ".join(sel_est[:2]) + ("..." if len(sel_est) > 2 else "")
@@ -3023,27 +3022,13 @@ def _render_frete_operacional_ui(
                 _pl = "Todas"
             elif not estados:
                 _pl = "—"
-            if _fdl_minimal_layout():
-                st.caption(
-                    f"Estado (filtro): {_pl} · Dados carregados: {_ts_esc} · "
-                    f"Venda: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')} · Fonte: {_va}"
-                )
-            else:
-                st.markdown(
-                    f"""
-                <p class="page-meta" style="margin-bottom:0.65rem;">
-                  <strong>Estado (filtro):</strong> {_pl}
-                  &nbsp;·&nbsp;
-                  <strong>Dados carregados:</strong> {_ts_esc}
-                  &nbsp;·&nbsp;
-                  <strong>Venda:</strong> {data_ini.strftime("%d/%m/%Y")} a {data_fim.strftime("%d/%m/%Y")}
-                  &nbsp;·&nbsp;
-                  <strong>Fonte:</strong> {_va}
-                </p>
-                """,
-                    unsafe_allow_html=True,
-                )
-        
+            st.divider()
+            st.caption(
+                f"Estado (filtro): **{_pl}** · Dados carregados: **{_ts_esc}** · "
+                f"Venda: **{data_ini.strftime('%d/%m/%Y')}** a **{data_fim.strftime('%d/%m/%Y')}** · "
+                f"Fonte: **{_va}**"
+            )
+
             _rec_key = f"op_frete_recebido_{_sig}"
             if _rec_key not in st.session_state:
                 st.session_state[_rec_key] = {}
@@ -3062,46 +3047,32 @@ def _render_frete_operacional_ui(
         kpi_ex = frete_kpis_executivos(tbl_show)
         tbl_cob_maior = frete_tabela_anuncios_cobrado_maior(tbl_show)
         tbl_repasse = frete_tabela_anuncios_repasse_frete(tbl_show, recebido_series)
-    
-        if _fdl_minimal_layout():
-            st.subheader("Indicadores executivos")
-        else:
-            st.markdown(
-                '<div class="fdl-frete-section-title fdl-frete-st-first">Indicadores executivos</div>',
-                unsafe_allow_html=True,
-            )
+
+        st.divider()
+        st.write("")
         ek1, ek2 = st.columns(2)
         with ek1:
-            _render_kpi_card(
-                "Cobrado a maior (valor a recuperar)",
-                _fmt_brl_ptbr_celula(kpi_ex["cobrado_maior"]),
-                "!",
-                "kpi-div",
-                frete_variant=True,
-            )
+            with st.container(border=True):
+                st.metric(
+                    "💸 Cobrado a maior (valor a recuperar)",
+                    _fmt_brl_ptbr_celula(kpi_ex["cobrado_maior"]),
+                )
         with ek2:
-            _render_kpi_card(
-                "Repasse de frete (valor a conferir)",
-                _fmt_brl_ptbr_celula(kpi_ex["repasse"]),
-                "◎",
-                "kpi-total",
-                frete_variant=True,
-            )
-    
+            with st.container(border=True):
+                st.metric(
+                    "🚚 Repasse de frete (valor total)",
+                    _fmt_brl_ptbr_celula(kpi_ex["repasse"]),
+                )
+
         if _is_admin and FRETE_UI_STATUS_CONC in tbl_show.columns:
             st.caption(
-                "Modo técnico: coluna **Status conciliação** existe nos dados exportados; "
-                "a priorização usa **Situação do Frete** (Cobrado a maior / Repasse)."
+                "Modo técnico: existe **Status conciliação** nos dados; a priorização segue **Situação do Frete**."
             )
-    
+
         _sem_anuncio = FRETE_UI_ANUNCIO not in tbl_show.columns
-        if _fdl_minimal_layout():
-            st.subheader("Anúncios com Cobrado a maior")
-        else:
-            st.markdown(
-                '<div class="fdl-frete-section-title">Anúncios com Cobrado a maior</div>',
-                unsafe_allow_html=True,
-            )
+        st.divider()
+        st.subheader("💸 Problemas de frete (cobrado a maior)")
+        st.caption("Anúncios onde o frete cobrado excede o esperado — prioridade para recuperação.")
         if _sem_anuncio:
             st.info("Inclua o **# do anúncio** no export de vendas para agregar por anúncio.")
         elif tbl_cob_maior.empty:
@@ -3114,14 +3085,10 @@ def _render_frete_operacional_ui(
                 hide_index=True,
                 height=_h1,
             )
-    
-        if _fdl_minimal_layout():
-            st.subheader("Anúncios com Repasse de frete")
-        else:
-            st.markdown(
-                '<div class="fdl-frete-section-title">Anúncios com Repasse de frete</div>',
-                unsafe_allow_html=True,
-            )
+
+        st.divider()
+        st.subheader("🚚 Controle de repasse de frete")
+        st.caption("Anúncios com repasse de frete a validar (inclui marcação «Recebido?» no detalhe).")
         if _sem_anuncio:
             pass
         elif tbl_repasse.empty:
@@ -3143,37 +3110,16 @@ def _render_frete_operacional_ui(
         _frete_stage_trace(4, "Exportação e detalhe", "início")
         for w in meta_frete.get("avisos") or []:
             st.info(w)
-    
-        if _fdl_minimal_layout():
-            st.subheader("Detalhe de vendas")
-            st.caption("Linhas filtradas para análise e exportação")
-        else:
-            st.markdown(
-                """
-            <div class="queue-head fdl-frete-queue-head">
-              <div>
-                <div class="queue-title">Detalhe de vendas</div>
-                <div class="queue-sub">Linhas filtradas para análise e exportação</div>
-              </div>
-            </div>
-            """,
-                unsafe_allow_html=True,
-            )
-    
-        btn1, btn2 = st.columns([1, 1])
+
+        st.divider()
+        st.subheader("📋 Detalhamento das vendas")
+        st.caption("Linhas filtradas — exporte o recorte ou ajuste «Recebido?» quando disponível.")
+        st.write("")
+
         t_export_view = dataframe_frete_conciliacao_principal(
             tbl_show, recebido=recebido_series, layout="executivo"
         )
         csv_bytes = t_export_view.to_csv(index=False).encode("utf-8-sig")
-        with btn1:
-            st.download_button(
-                "Exportar CSV",
-                data=csv_bytes,
-                file_name="conciliacao_frete_filtrada.csv",
-                mime="text/csv",
-                use_container_width=True,
-                key=f"op_frete_dl_csv_{_sig}",
-            )
         t_excel = dataframe_frete_conciliacao_principal(
             tbl_show, recebido=recebido_series, layout="executivo"
         )
@@ -3190,16 +3136,32 @@ def _render_frete_operacional_ui(
                         if cell.value is not None:
                             cell.number_format = oxl_number_formats.FORMAT_DATE_DDMMYY
         excel_buf.seek(0)
-        with btn2:
-            st.download_button(
-                "Exportar Excel",
-                data=excel_buf.getvalue(),
-                file_name="conciliacao_frete_filtrada.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-                key=f"op_frete_dl_xlsx_{_sig}",
-            )
-    
+        with st.container(border=True):
+            st.caption("Exportar recorte filtrado")
+            btn1, btn2 = st.columns([1, 1])
+            with btn1:
+                st.download_button(
+                    "Exportar CSV",
+                    data=csv_bytes,
+                    file_name="conciliacao_frete_filtrada.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    key=f"op_frete_dl_csv_{_sig}",
+                )
+            with btn2:
+                st.download_button(
+                    "Exportar Excel",
+                    data=excel_buf.getvalue(),
+                    file_name="conciliacao_frete_filtrada.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    key=f"op_frete_dl_xlsx_{_sig}",
+                )
+
+        st.write("")
+        st.write("")
+        st.write("")
+
         t_grid = _dataframe_frete_grid(tbl_show, _fmt_brl_ptbr_celula, _col_referencia_como_texto)
         t_main = dataframe_frete_conciliacao_principal(
             t_grid, recebido=recebido_series, layout="executivo"
@@ -3211,35 +3173,12 @@ def _render_frete_operacional_ui(
                 "**Nenhuma venda** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
             )
         else:
-            if _fdl_safe_mode() or _fdl_minimal_layout():
-                if _fdl_safe_mode():
-                    st.warning("**Modo seguro (FDL_SAFE_MODE)** — tabela sem Styler e sem editor «Recebido?».")
-                elif _fdl_minimal_layout():
-                    st.caption(
-                        "Layout mínimo (FDL_MINIMAL_LAYOUT): tabela sem Styler e sem editor «Recebido?». "
-                        "Defina FDL_MINIMAL_LAYOUT=0 para restaurar."
-                    )
-                st.dataframe(t_main, use_container_width=True, height=_h_df)
-            else:
-                if _frete_debug_ui_enabled():
-                    st.caption(
-                        "Debug Frete: antes da tabela principal (Styler pode falhar em alguns hosts; há fallback)."
-                    )
-                try:
-                    st.dataframe(
-                        _styler_frete_conciliacao_principal(t_main),
-                        use_container_width=True,
-                        height=_h_df,
-                    )
-                except Exception as exc:
-                    st.error(
-                        "A tabela principal não pôde ser exibida com formatação condicional (Styler). "
-                        "A mostrar os mesmos dados sem cores."
-                    )
-                    st.caption(str(exc))
-                    st.dataframe(t_main, use_container_width=True, height=_h_df)
+            if _fdl_safe_mode():
+                st.warning("**Modo seguro (FDL_SAFE_MODE)** — sem editor «Recebido?».")
+            st.dataframe(t_main, use_container_width=True, height=_h_df)
+            if not _fdl_safe_mode() and not _fdl_minimal_layout():
                 st.caption(
-                    "Ajuste **Recebido?** na tabela abaixo quando aplicável (linhas de repasse de frete)."
+                    "Ajuste **Recebido?** na grelha abaixo quando aplicável (repasse de frete)."
                 )
                 _recv = t_main[[_FRETE_UI_COL_N_VENDA, FRETE_UI_RECEBIDO]].copy()
                 _cfg_recv: dict[str, object] = {
@@ -3264,13 +3203,11 @@ def _render_frete_operacional_ui(
                     if vid:
                         rec_map[vid] = row[FRETE_UI_RECEBIDO] == FRETE_VAL_RECEBIDO_SIM
                 st.session_state[_rec_key] = rec_map
-        if _fdl_minimal_layout():
-            st.caption(f"Linhas filtradas: {len(t_main)}")
-        else:
-            st.markdown(
-                f'<p class="fdl-frete-meta-line">Linhas filtradas: <strong>{_fmt_int_ptbr(len(t_main))}</strong></p>',
-                unsafe_allow_html=True,
-            )
+            elif not _fdl_safe_mode() and _fdl_minimal_layout():
+                st.caption(
+                    "Editor «Recebido?» desativado com FDL_MINIMAL_LAYOUT. Defina FDL_MINIMAL_LAYOUT=0 para ativar."
+                )
+        st.caption(f"{len(t_main)} linhas no filtro atual.")
     
         if _is_admin and load_info.get("frete_consume") in ("live", "live_fallback"):
             st.caption(
@@ -3909,8 +3846,15 @@ if _bootstrap_debug_enabled():
                 st.caption(f"{_i}. {_line}")
 
 with st.sidebar:
-    st.caption("FDL Operacional")
-    st.write(_app_ctx.display_name)
+    _lc, _mc, _rc = st.columns([1, 2.4, 1])
+    with _mc:
+        _logo_file = _REPO_APP_ROOT / "assets" / "fdl_analytics_logo.png"
+        if _logo_file.is_file():
+            st.image(str(_logo_file), width=140)
+        else:
+            st.caption("Coloque a logo em `assets/fdl_analytics_logo.png`.")
+    st.subheader("FDL Analytics")
+    st.caption(_app_ctx.display_name)
     st.divider()
 
     _empresas_usuario = list(st.session_state["empresas_permitidas"])
@@ -4045,29 +3989,14 @@ if _fv == "repasse":
     )
     st.divider()
 else:
-    _h_cl = html.escape(str(_app_ctx.display_name))
-    _h_org = html.escape(str(_active_org.display_name))
-    if _fdl_minimal_layout():
-        st.caption(f"{_app_ctx.display_name} › {_active_org.display_name} › Financeiro › Conciliação de Frete")
-        st.title("Conciliação de Frete")
-        st.caption(
-            "Compare o frete cobrado pelo Mercado Livre no relatório de envios com o valor esperado "
-            "quando existir tabela de preço por anúncio — filtros e KPIs refletem o período selecionado."
-        )
-    else:
-        _hero_frete = dedent(
-            """
-        <h1>Conciliação de Frete</h1>
-        <p class="page-sub">
-          Compare o frete cobrado pelo Mercado Livre no relatório de envios com o valor esperado
-          quando existir tabela de preço por anúncio — filtros e KPIs refletem o período selecionado.
-        </p>
-        """
-        ).strip()
-        st.markdown(
-            _html_fdl_topbar(_h_cl, _h_org) + '<div class="page-hero">' + _hero_frete + "</div>",
-            unsafe_allow_html=True,
-        )
+    st.caption(
+        f"{_app_ctx.display_name} · {_active_org.display_name} · Financeiro · Frete"
+    )
+    st.title("Conciliação de Frete")
+    st.caption(
+        "Compare frete cobrado pelo ML com o esperado, priorize cobranças indevidas e repasses a conferir."
+    )
+    st.divider()
 
 if _fv == "repasse":
     try:

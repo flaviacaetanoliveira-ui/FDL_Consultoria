@@ -1,5 +1,9 @@
 # App operacional + pipeline de conciliação (Streamlit Community Cloud e local).
 # Versões com faixa para segurança de compatibilidade; ajuste se precisar reprodutibilidade exata.
+#
+# Streamlit Community Cloud: em «Advanced settings» do deploy, escolha Python 3.12 (ou 3.11).
+# Com Python 3.14 o pip pode tentar compilar pyarrow a partir do código (sem wheel) e falhar
+# (ex.: «cmake» não encontrado). pyarrow tem wheels oficiais para 3.11–3.13.
 
 pandas>=2.2.0,<3
 openpyxl>=3.1.0,<4

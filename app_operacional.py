@@ -3419,7 +3419,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.write("")
         r1 = st.columns((1.15, 1.15, 1.15, 1.55))
         dp_series_full = pd.to_datetime(base["Data de pagamento"], errors="coerce")
-        if dp_series_full.notna().any():
+        has_dp_base = bool(dp_series_full.notna().any())
+        if has_dp_base:
             _d_min: date = dp_series_full.min().date()
             _d_max: date = dp_series_full.max().date()
         else:
@@ -3467,6 +3468,11 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 format="DD/MM/YYYY",
             )
         st.caption("Filtra por **data de pagamento** (comparação por dia civil).")
+        if not has_dp_base:
+            st.info(
+                "Nenhuma **data de pagamento** preenchida nesta base: o intervalo abaixo não filtra linhas "
+                "(todas as vendas são listadas). Com datas na materialização, o filtro por período passa a valer."
+            )
 
     st.divider()
 
@@ -3490,11 +3496,14 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         tabela = tabela[m_busca]
     
     _dp_filt = pd.to_datetime(tabela["Data de pagamento"], errors="coerce")
-    _dd = _dp_filt.dt.normalize()
-    _ini_ts = pd.Timestamp(data_pag_ini)
-    _fim_ts = pd.Timestamp(data_pag_fim) + pd.Timedelta(days=1)
-    m_data = _dp_filt.notna() & (_dd >= _ini_ts) & (_dd < _fim_ts)
-    tabela = tabela.loc[m_data].copy()
+    # Sem nenhuma data parseável (ex.: CSV materializado com coluna vazia): não aplicar filtro por período,
+    # senão min=max=hoje em conjunto com .notna() elimina todas as linhas.
+    if _dp_filt.notna().any():
+        _dd = _dp_filt.dt.normalize()
+        _ini_ts = pd.Timestamp(data_pag_ini)
+        _fim_ts = pd.Timestamp(data_pag_fim) + pd.Timedelta(days=1)
+        m_data = _dp_filt.notna() & (_dd >= _ini_ts) & (_dd < _fim_ts)
+        tabela = tabela.loc[m_data].copy()
     tabela = _excluir_linhas_fora_conciliacao(tabela)
     
     if "Plataforma" in base.columns:
@@ -3509,9 +3518,13 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     else:
         plataforma_label = "Mercado Livre"
     
-    st.caption(
-        f"Plataforma (filtro): **{plataforma_label}** · Dados carregados: **{ts_proc}** · "
+    _pag_caption = (
         f"Pagamento: **{data_pag_ini.strftime('%d/%m/%Y')}** a **{data_pag_fim.strftime('%d/%m/%Y')}**"
+    )
+    if not has_dp_base:
+        _pag_caption += " — **filtro por data inativo** (sem datas na base)"
+    st.caption(
+        f"Plataforma (filtro): **{plataforma_label}** · Dados carregados: **{ts_proc}** · {_pag_caption}"
     )
 
     st.divider()

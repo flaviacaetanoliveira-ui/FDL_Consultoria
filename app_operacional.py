@@ -2775,6 +2775,10 @@ def _column_config_conciliacao(
         cfg["Data de emissão"] = DatetimeColumn("Data de emissão", format="DD/MM/YYYY", width="small")
     if "Data de pagamento" in df.columns:
         cfg["Data de pagamento"] = DatetimeColumn("Data de pagamento", format="DD/MM/YYYY HH:mm", width="medium")
+    if "Situação" in df.columns:
+        cfg["Situação"] = TextColumn("Situação", width="small")
+    if "Ação sugerida" in df.columns:
+        cfg["Ação sugerida"] = TextColumn("Ação sugerida", width="large")
     return cfg
 
 
@@ -3438,17 +3442,28 @@ def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
 
 
 def _repasse_ui_validacao_acoes_mini_cards(contagens: dict[str, int]) -> None:
-    """Apenas ações que exigem operação explícita: Ok + pendências principais (3 cards)."""
+    """Mini-cards só para contagens > 0; layout dinâmico (1 a 3 colunas)."""
     blocos: list[tuple[str, str]] = [
         ("Ok", "✅ OK"),
         ("Baixar no Bling", "⬇️ Baixar no Bling"),
         ("Analisar diferença", "🔍 Analisar diferença"),
     ]
-    cols = st.columns(3)
-    for col, (key, label) in zip(cols, blocos):
+    ativos = [(k, lbl) for k, lbl in blocos if contagens.get(k, 0) > 0]
+    if not ativos:
+        st.caption("Sem registos nestas categorias com o filtro atual.")
+        return
+    n = len(ativos)
+    if n == 1:
+        cols = st.columns(1)
+    elif n == 2:
+        cols = st.columns(2)
+    else:
+        cols = st.columns(3)
+    st.write("")
+    for col, (key, label) in zip(cols, ativos):
         with col:
             with st.container(border=True):
-                st.metric(label, value=int(contagens.get(key, 0)))
+                st.metric(label, value=int(contagens[key]))
 
 
 def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
@@ -3466,7 +3481,6 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.subheader("Filtros operacionais")
         st.write("")
         r1 = st.columns((1.15, 1.15, 1.15, 1.55))
-        r2 = st.columns((1.15, 1.15, 2.3))
         dp_series_full = pd.to_datetime(base["Data de pagamento"], errors="coerce")
         if dp_series_full.notna().any():
             _d_min: date = dp_series_full.min().date()
@@ -3496,6 +3510,9 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             sel_sit = _multiselect_stable("op_ms_sit", "Situação", sit)
         with r1[3]:
             busca = st.text_input("Busca (venda / pedido / nota)", "").strip().lower()
+        st.write("")
+        st.write("")
+        r2 = st.columns((1.15, 1.15, 2.3))
         with r2[0]:
             data_pag_ini = st.date_input(
                 "Data de pagamento — início",
@@ -3512,9 +3529,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 max_value=_d_max,
                 format="DD/MM/YYYY",
             )
-        st.caption(
-            "O intervalo de datas restringe as linhas pela **data de pagamento** do registro (comparado por dia)."
-        )
+        st.caption("Filtra por **data de pagamento** (comparação por dia civil).")
 
     st.divider()
 
@@ -3572,7 +3587,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     tabela["Diferença"] = pd.to_numeric(tabela.get("Diferença"), errors="coerce")
 
     st.subheader("Validação de ações")
-    st.caption("Base filtrada — foco nas contagens que orientam a operação (Ok e pendências principais).")
+    st.caption("Base filtrada — ações sugeridas para tratamento operacional.")
     acoes_validacao = [
         "Ok",
         "Baixar no Bling",
@@ -3581,7 +3596,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     contagens_acao = {a: int(tabela["Ação sugerida operacional"].eq(a).sum()) for a in acoes_validacao}
     _repasse_ui_validacao_acoes_mini_cards(contagens_acao)
 
-    st.caption(f"Última atualização dos dados: **{ts_proc}**")
+    st.write("")
+    st.caption(f"Dados carregados: **{ts_proc}**")
     st.divider()
     
     # Tabela operacional — Data de emissão: mesma coluna da tabela final, parse ISO (sem dayfirst).
@@ -3685,7 +3701,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         return
 
     st.subheader("Fila operacional")
-    st.caption("Casos prontos para tratamento — exporte a base filtrada ou analise na grelha.")
+    st.caption("Prioridade: análise na grelha; exporte quando precisar de partilhar o recorte.")
+    st.write("")
     st.write("")
     st.write("")
 
@@ -3707,7 +3724,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     pdf_bytes = _build_pdf_bytes(tabela_exibir)
 
     with st.container(border=True):
-        st.caption("Exportações")
+        st.caption("Exportar recorte filtrado")
         btn1, btn2, btn3 = st.columns([1, 1, 1])
         with btn1:
             st.download_button(
@@ -3734,6 +3751,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 use_container_width=True,
             )
 
+    st.write("")
     st.write("")
     st.write("")
 
@@ -3765,7 +3783,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             hide_index=True,
             column_config=_cfg_grid,
         )
-    st.caption(f"**{len(tabela_exibir)}** linhas no filtro atual.")
+    st.caption(f"{len(tabela_exibir)} linhas no filtro atual.")
 
 _admin_mode = _is_admin_mode()
 
@@ -3891,25 +3909,9 @@ if _bootstrap_debug_enabled():
                 st.caption(f"{_i}. {_line}")
 
 with st.sidebar:
-    _sb_dn_esc = html.escape(str(_app_ctx.display_name))
-    _sb_ini = html.escape(_sb_user_initials(_app_ctx.display_name))
-
-    if _fdl_minimal_layout():
-        st.subheader("FDL Operacional")
-        st.caption(f"{_app_ctx.display_name}")
-    else:
-        st.markdown(
-            f"""
-        <header class="fdl-sb-header" aria-label="Marca e utilizador">
-          <div class="fdl-sb-brand-logo-wrap">{_sidebar_brand_logo_html()}</div>
-          <div class="fdl-sb-user">
-            <div class="fdl-sb-avatar">{_sb_ini}</div>
-            <span class="fdl-sb-user-name">{_sb_dn_esc}</span>
-          </div>
-        </header>
-        """,
-            unsafe_allow_html=True,
-        )
+    st.caption("FDL Operacional")
+    st.write(_app_ctx.display_name)
+    st.divider()
 
     _empresas_usuario = list(st.session_state["empresas_permitidas"])
     _nomes_nav = nomes_permitidos_com_registro(_empresas_usuario)
@@ -3934,10 +3936,7 @@ with st.sidebar:
             st.rerun()
 
     _sb_view = st.session_state.get("op_financeiro_view", "repasse")
-    if _fdl_minimal_layout():
-        st.subheader("Módulos")
-    else:
-        st.markdown('<p class="fdl-sb-system-modules-title">Módulos</p>', unsafe_allow_html=True)
+    st.caption("Módulos")
 
     _lbl_repasse = "Conciliação de Repasse"
     _lbl_frete = "Conciliação de Frete"
@@ -3964,34 +3963,16 @@ with st.sidebar:
     with st.expander("🛒 Comercial", expanded=False):
         st.caption("Em breve")
 
-    if _fdl_minimal_layout():
-        st.caption("Última atualização")
-        st.write(_sb_ts_display)
-        st.caption("Versão")
-        st.write(str(BUILD_TAG))
-    else:
-        st.markdown(
-            f"""
-        <div class="sb-sync-block">
-          <div class="sb-sync-label">Última atualização</div>
-          <div class="sb-sync-ts">{html.escape(str(_sb_ts_display))}</div>
-          <div class="sb-sync-label" style="margin-top:0.65rem;">Versão</div>
-          <div class="sb-sync-ts">{html.escape(str(BUILD_TAG))}</div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
+    st.write("")
+    st.caption("Última atualização dos dados")
+    st.caption(_sb_ts_display)
+    st.caption("Versão")
+    st.caption(str(BUILD_TAG))
 
     if _admin_mode and _data_source_mode() == "upload_zip":
         _render_cloud_data_loader()
 
-    if _fdl_minimal_layout():
-        st.divider()
-    else:
-        st.markdown(
-            '<hr class="sb-divider-soft" style="margin:1.15rem 0 0.75rem 0;" />',
-            unsafe_allow_html=True,
-        )
+    st.divider()
 
     if _admin_mode and st.button(
         "🔄 Atualizar dados",
@@ -4054,44 +4035,18 @@ else:
     tabela_operacional_base = pd.DataFrame()
 
 _fv = st.session_state["op_financeiro_view"]
-_h_cl = html.escape(str(_app_ctx.display_name))
-_h_org = html.escape(str(_active_org.display_name))
 if _fv == "repasse":
-    if _fdl_minimal_layout():
-        st.caption(f"{_app_ctx.display_name} › {_active_org.display_name} › Financeiro › Conciliação de Repasse")
-        st.title("Conciliação de Repasse")
-        st.caption(
-            "Painel para acompanhar valores recebidos na plataforma, conferência com notas e fila de ações "
-            "sugeridas — sempre sobre a base já filtrada pelos critérios operacionais do módulo."
-        )
-    else:
-        # Sem indentação à esquerda nas linhas HTML: o Markdown do Streamlit trata 4+ espaços como bloco de código.
-        _hero_body = dedent(
-            f"""
-        <nav class="fdl-breadcrumb" aria-label="Localização no sistema">
-          <span class="fdl-bc-item">{_h_cl}</span>
-          <span class="fdl-bc-sep" aria-hidden="true">›</span>
-          <span class="fdl-bc-item">{_h_org}</span>
-          <span class="fdl-bc-sep" aria-hidden="true">›</span>
-          <span class="fdl-bc-item">Financeiro</span>
-          <span class="fdl-bc-sep" aria-hidden="true">›</span>
-          <span class="fdl-bc-item fdl-bc-current">Conciliação de Repasse</span>
-        </nav>
-        <h1>Conciliação de Repasse</h1>
-        <p class="page-sub">
-          Painel para acompanhar valores recebidos na plataforma, conferência com notas e fila de ações
-          sugeridas — sempre sobre a base já filtrada pelos critérios operacionais do módulo.
-        </p>
-        """
-        ).strip()
-        st.markdown(
-            _html_fdl_topbar(_h_cl, _h_org)
-            + '<div class="page-hero">'
-            + _hero_body
-            + "</div>",
-            unsafe_allow_html=True,
-        )
+    st.caption(
+        f"{_app_ctx.display_name} · {_active_org.display_name} · Financeiro · Repasse"
+    )
+    st.title("Conciliação de Repasse")
+    st.caption(
+        "Acompanhe valores recebidos, pendências e ações operacionais do período."
+    )
+    st.divider()
 else:
+    _h_cl = html.escape(str(_app_ctx.display_name))
+    _h_org = html.escape(str(_active_org.display_name))
     if _fdl_minimal_layout():
         st.caption(f"{_app_ctx.display_name} › {_active_org.display_name} › Financeiro › Conciliação de Frete")
         st.title("Conciliação de Frete")

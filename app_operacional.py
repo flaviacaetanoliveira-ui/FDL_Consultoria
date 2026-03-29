@@ -422,7 +422,9 @@ def _bootstrap_debug_enabled() -> bool:
 
 def _inject_fdl_professional_theme() -> None:
     """CSS global: reduz ruído de plataforma (menu, footer, toolbar/fork) — não é lógica de negócio."""
-    if st.session_state.get("_fdl_ui_theme_applied"):
+    if st.session_state.get("_fdl_ui_theme_applied") is True:
+        st.session_state.pop("_fdl_ui_theme_applied", None)
+    if st.session_state.get("_fdl_ui_theme_applied") == "v3":
         return
     st.markdown(
         """
@@ -438,8 +440,8 @@ def _inject_fdl_professional_theme() -> None:
                 max-width: 100%;
             }
             section[data-testid="stMain"] h2 {
-                margin-top: 0.75rem;
-                margin-bottom: 0.5rem;
+                margin-top: 0.45rem;
+                margin-bottom: 0.35rem;
                 color: #111827;
                 font-weight: 600;
                 letter-spacing: -0.015em;
@@ -452,19 +454,19 @@ def _inject_fdl_professional_theme() -> None:
                 font-weight: 600;
             }
             section[data-testid="stMain"] hr {
-                margin: 1.35rem 0 !important;
+                margin: 0.95rem 0 !important;
                 border: none;
                 border-top: 1px solid #e8ecf1;
             }
             .fdl-ui-gap-section {
                 display: block;
-                height: 0.85rem;
-                min-height: 0.85rem;
+                height: 0.55rem;
+                min-height: 0.55rem;
             }
             .fdl-ui-gap-section-lg {
                 display: block;
-                height: 1.15rem;
-                min-height: 1.15rem;
+                height: 0.75rem;
+                min-height: 0.75rem;
             }
             .fdl-financeiro-header {
                 margin: 0 0 0.5rem 0;
@@ -492,29 +494,30 @@ def _inject_fdl_professional_theme() -> None:
                 color: #4b5563;
                 line-height: 1.5;
             }
+            /* Cartão de métrica (Streamlit 1.35+: stMetricContainer envolve label + valor) */
             [data-testid="stMetricContainer"] {
-                border-radius: 0.5rem;
-                padding: 0.75rem 1rem 0.85rem 1rem;
-                min-height: 5.1rem;
-                background: linear-gradient(180deg, #fafbfc 0%, #f4f6f8 100%);
-                border: 1px solid #e2e8f0;
-                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
-                box-sizing: border-box;
+                border-radius: 0.5rem !important;
+                padding: 0.75rem 0.95rem 0.8rem 0.95rem !important;
+                min-height: 4.85rem;
+                background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%) !important;
+                border: 1px solid #cbd5e1 !important;
+                box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08) !important;
+                box-sizing: border-box !important;
             }
             /* Valor: Streamlit 1.35+ usa Markdown dentro de stMetricValue */
             [data-testid="stMetricValue"] [data-testid="stMarkdownContainer"] p {
                 font-weight: 700 !important;
-                font-size: 1.56rem !important;
-                letter-spacing: -0.035em !important;
-                line-height: 1.15 !important;
+                font-size: 1.62rem !important;
+                letter-spacing: -0.04em !important;
+                line-height: 1.12 !important;
                 color: #0f172a !important;
                 margin: 0 !important;
             }
             [data-testid="stMetricValue"] > div {
                 font-weight: 700 !important;
-                font-size: 1.56rem !important;
-                letter-spacing: -0.035em;
-                line-height: 1.15 !important;
+                font-size: 1.62rem !important;
+                letter-spacing: -0.04em;
+                line-height: 1.12 !important;
                 color: #0f172a !important;
             }
             [data-testid="stMetricLabel"] {
@@ -538,7 +541,7 @@ def _inject_fdl_professional_theme() -> None:
         """,
         unsafe_allow_html=True,
     )
-    st.session_state["_fdl_ui_theme_applied"] = True
+    st.session_state["_fdl_ui_theme_applied"] = "v3"
 
 
 def _fdl_ui_gap_section() -> None:
@@ -3145,12 +3148,12 @@ def _render_frete_operacional_ui(
         ek1, ek2 = st.columns(2)
         with ek1:
             st.metric(
-                "💸 Cobrado a maior (valor a recuperar)",
+                "Cobrado a maior (valor a recuperar)",
                 _fmt_brl_ptbr_celula(kpi_ex["cobrado_maior"]),
             )
         with ek2:
             st.metric(
-                "🚚 Repasse de frete (valor total)",
+                "Repasse de frete (valor total)",
                 _fmt_brl_ptbr_celula(kpi_ex["repasse"]),
             )
 
@@ -3507,13 +3510,12 @@ def _repasse_ui_validacao_kpi_saas(contagens: dict[str, int]) -> None:
     bling = int(contagens.get("Baixar no Bling", 0))
     div = int(contagens.get("Analisar diferença", 0))
     zero = int(contagens.get("Zerado", 0))
-    _fdl_ui_gap_section()
     c1, c2, c3, c4 = st.columns(4)
     specs: list[tuple[Any, str, int]] = [
-        (c1, "📊 OK", ok),
-        (c2, "💸 Baixar no Bling", bling),
-        (c3, "📊 Divergências", div),
-        (c4, "⚠️ Zerados", zero),
+        (c1, "OK", ok),
+        (c2, "Baixar no Bling", bling),
+        (c3, "Divergências", div),
+        (c4, "Zerados", zero),
     ]
     for col, label, val in specs:
         with col:
@@ -3667,7 +3669,6 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 
     st.subheader("📊 Resumo por ação")
     st.caption("Contagens sobre o recorte filtrado.")
-    _fdl_ui_gap_section()
     acoes_validacao = [
         "Ok",
         "Baixar no Bling",
@@ -3677,9 +3678,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     contagens_acao["Zerado"] = int(tabela["Ação sugerida operacional"].eq("Revisar venda zerada").sum())
     _repasse_ui_validacao_kpi_saas(contagens_acao)
 
-    _fdl_ui_gap_section_lg()
-    st.divider()
     _fdl_ui_gap_section()
+    st.divider()
 
     # Tabela operacional — Data de emissão: mesma coluna da tabela final, parse ISO (sem dayfirst).
     col_data_emissao = _resolve_col_data_emissao(list(tabela.columns))

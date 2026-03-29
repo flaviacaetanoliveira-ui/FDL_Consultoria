@@ -197,6 +197,51 @@ def _write_frete_app_mirror_csv(df: Any, path: Path) -> None:
             pass
 
 
+
+
+def _debug_repasse_pipeline_enabled() -> bool:
+    return os.environ.get("FDL_DEBUG_REPASSE_PIPELINE", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _emit_repasse_pipeline_debug(base_dir: Path, df_final: Any) -> dict[str, Any]:
+    """Métricas temporárias (FDL_DEBUG_REPASSE_PIPELINE=1): liberações, etapa3, integração, tabela final."""
+    import pandas as pd
+
+    from carregamento_bases import carregar_bases_consolidadas
+    from etapa3_conciliacao_vendas_liberacoes_validas import build_conciliacao_vendas_liberacoes_validas
+    from integracao_notas_pedidos import build_conciliacao_com_notas
+
+    _vt, lib_t, _, _ = carregar_bases_consolidadas(base_dir)
+    conc = build_conciliacao_vendas_liberacoes_validas(base_dir)
+    apos = build_conciliacao_com_notas()
+
+    def _count_dp(d: Any) -> int:
+        if getattr(d, "empty", True) or "Data de pagamento" not in d.columns:
+            return 0
+        s = pd.to_datetime(d["Data de pagamento"], errors="coerce")
+        n = int(s.notna().sum())
+        if n == 0:
+            raw = d["Data de pagamento"].astype(str).str.strip()
+            n = int((raw.ne("") & ~raw.str.lower().isin({"nan", "none", "nat"})).sum())
+        return n
+
+    vp = pd.to_numeric(conc.get("Valor pago"), errors="coerce")
+    matches = int((vp.fillna(0) > 0).sum()) if "Valor pago" in conc.columns else 0
+
+    out: dict[str, Any] = {
+        "liberacoes_tratadas_rows": int(len(lib_t)),
+        "etapa3_rows": int(len(conc)),
+        "etapa3_linhas_data_pagamento_preenchida": _count_dp(conc),
+        "etapa3_linhas_valor_pago_positivo": matches,
+        "apos_integracao_notas_rows": int(len(apos)),
+        "apos_integracao_linhas_data_pagamento_preenchida": _count_dp(apos),
+        "tabela_final_operacional_rows": int(len(df_final)),
+        "tabela_final_linhas_data_pagamento_preenchida": _count_dp(df_final),
+    }
+    for k, v in out.items():
+        print(f"[materialize][repasse-debug] {k}={v}", file=sys.stderr)
+    return out
+
 def _materialize_repasse(
     *,
     base_dir: Path,
@@ -209,6 +254,9 @@ def _materialize_repasse(
 
     cliente_id, empresa_id, cnpj = _resolve_identity(path_cliente, path_empresa)
     df, info = carregar_tabela_final_operacional(base_dir)
+    repasse_debug: dict[str, Any] | None = None
+    if _debug_repasse_pipeline_enabled():
+        repasse_debug = _emit_repasse_pipeline_debug(base_dir, df)
     sig = build_repasse_source_signature(base_dir)
     df_out = _enrich_identity_columns(df, cliente_id=cliente_id, empresa_id=empresa_id, cnpj=cnpj)
 
@@ -230,6 +278,8 @@ def _materialize_repasse(
         "loader_info": {k: (v if isinstance(v, (str, int, float, bool, type(None))) else str(v)) for k, v in info.items()},
         "app_mirror_csv": "dataset_repasse_app.csv",
     }
+    if repasse_debug:
+        meta["repasse_debug"] = repasse_debug
     _write_parquet(df_out, out_dir / "dataset.parquet")
     _write_repasse_app_mirror_csv(df, out_dir / "dataset_repasse_app.csv")
     _write_metadata(out_dir / "metadata.json", meta)

@@ -152,7 +152,10 @@ def build_conciliacao_com_notas(filtrar_notas_invalidas: bool = True) -> pd.Data
     if filtrar_notas_invalidas:
         notas = _filtrar_notas_validas(notas)
     if notas.empty:
-        out = base[["N° de venda", "ID do pedido", "Total BRL", "Valor pago"]].copy()
+        _cols = ["N° de venda", "ID do pedido", "Total BRL", "Valor pago"]
+        if "Data de pagamento" in base.columns:
+            _cols.append("Data de pagamento")
+        out = base[_cols].copy()
         out["Número da nota"] = pd.NA
         out["Valor da nota"] = pd.NA
         out["Status NF"] = "Sem nota"

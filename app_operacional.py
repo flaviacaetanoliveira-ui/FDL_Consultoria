@@ -335,6 +335,25 @@ def _fdl_safe_mode() -> bool:
         return False
 
 
+def _fdl_minimal_layout() -> bool:
+    """
+    Layout nativo Streamlit: sem CSS global injetado, sem HTML customizado nos painéis.
+    Omisso ou FDL_MINIMAL_LAYOUT=1 → ativo. Defina FDL_MINIMAL_LAYOUT=0 para restaurar o design.
+    """
+    raw = os.environ.get("FDL_MINIMAL_LAYOUT", "").strip().lower()
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    try:
+        sec = st.secrets.get("FDL_MINIMAL_LAYOUT", True)
+        if isinstance(sec, bool):
+            return sec
+        return str(sec).strip().lower() not in {"0", "false", "no", "off"}
+    except Exception:
+        return True
+
+
 def _repasse_consume_mode() -> str:
     """Repasse: live = pipeline; materialized = CSV/XLSX. Com FDL_STRICT_MATERIALIZED, sem fallback para live."""
     raw = os.environ.get("FDL_REPASSE_CONSUME_MODE", "").strip().lower()
@@ -1853,8 +1872,9 @@ def _load_repasse_dataframe_cached(load_signature: str) -> tuple[pd.DataFrame, d
     return _load_data()
 
 
-st.markdown(
-    """
+if not _fdl_minimal_layout():
+    st.markdown(
+        """
     <style>
       html, body, [class*="css"] {
         font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -2486,8 +2506,8 @@ st.markdown(
       }
     </style>
     """,
-    unsafe_allow_html=True,
-)
+        unsafe_allow_html=True,
+    )
 
 @st.cache_data(show_spinner=True)
 def carregar_tabela_final_operacional_cache(
@@ -2799,6 +2819,9 @@ def _render_kpi_card(
     *,
     frete_variant: bool = False,
 ) -> None:
+    if _fdl_minimal_layout():
+        st.metric(label, value)
+        return
     extra = " fdl-frete-kpi-card" if frete_variant else ""
     st.markdown(
         f"""
@@ -2873,7 +2896,10 @@ def _render_frete_operacional_ui(
             situacao_opts: list[str] = list(FRETE_SITUACAO_FRETE_VALORES_FILTRO)
         
             with st.container():
-                st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
+                if _fdl_minimal_layout():
+                    st.subheader("Filtros operacionais")
+                else:
+                    st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
                 r1 = st.columns((1.15, 1.15, 1.7))
                 r2 = st.columns((1.15, 1.15, 2.3))
                 with r1[0]:
@@ -2966,8 +2992,14 @@ def _render_frete_operacional_ui(
                 _pl = "Todas"
             elif not estados:
                 _pl = "—"
-            st.markdown(
-                f"""
+            if _fdl_minimal_layout():
+                st.caption(
+                    f"Estado (filtro): {_pl} · Dados carregados: {_ts_esc} · "
+                    f"Venda: {data_ini.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')} · Fonte: {_va}"
+                )
+            else:
+                st.markdown(
+                    f"""
                 <p class="page-meta" style="margin-bottom:0.65rem;">
                   <strong>Estado (filtro):</strong> {_pl}
                   &nbsp;·&nbsp;
@@ -2978,8 +3010,8 @@ def _render_frete_operacional_ui(
                   <strong>Fonte:</strong> {_va}
                 </p>
                 """,
-                unsafe_allow_html=True,
-            )
+                    unsafe_allow_html=True,
+                )
         
             _rec_key = f"op_frete_recebido_{_sig}"
             if _rec_key not in st.session_state:
@@ -3000,10 +3032,13 @@ def _render_frete_operacional_ui(
         tbl_cob_maior = frete_tabela_anuncios_cobrado_maior(tbl_show)
         tbl_repasse = frete_tabela_anuncios_repasse_frete(tbl_show, recebido_series)
     
-        st.markdown(
-            '<div class="fdl-frete-section-title fdl-frete-st-first">Indicadores executivos</div>',
-            unsafe_allow_html=True,
-        )
+        if _fdl_minimal_layout():
+            st.subheader("Indicadores executivos")
+        else:
+            st.markdown(
+                '<div class="fdl-frete-section-title fdl-frete-st-first">Indicadores executivos</div>',
+                unsafe_allow_html=True,
+            )
         ek1, ek2 = st.columns(2)
         with ek1:
             _render_kpi_card(
@@ -3029,10 +3064,13 @@ def _render_frete_operacional_ui(
             )
     
         _sem_anuncio = FRETE_UI_ANUNCIO not in tbl_show.columns
-        st.markdown(
-            '<div class="fdl-frete-section-title">Anúncios com Cobrado a maior</div>',
-            unsafe_allow_html=True,
-        )
+        if _fdl_minimal_layout():
+            st.subheader("Anúncios com Cobrado a maior")
+        else:
+            st.markdown(
+                '<div class="fdl-frete-section-title">Anúncios com Cobrado a maior</div>',
+                unsafe_allow_html=True,
+            )
         if _sem_anuncio:
             st.info("Inclua o **# do anúncio** no export de vendas para agregar por anúncio.")
         elif tbl_cob_maior.empty:
@@ -3046,10 +3084,13 @@ def _render_frete_operacional_ui(
                 height=_h1,
             )
     
-        st.markdown(
-            '<div class="fdl-frete-section-title">Anúncios com Repasse de frete</div>',
-            unsafe_allow_html=True,
-        )
+        if _fdl_minimal_layout():
+            st.subheader("Anúncios com Repasse de frete")
+        else:
+            st.markdown(
+                '<div class="fdl-frete-section-title">Anúncios com Repasse de frete</div>',
+                unsafe_allow_html=True,
+            )
         if _sem_anuncio:
             pass
         elif tbl_repasse.empty:
@@ -3072,8 +3113,12 @@ def _render_frete_operacional_ui(
         for w in meta_frete.get("avisos") or []:
             st.info(w)
     
-        st.markdown(
-            """
+        if _fdl_minimal_layout():
+            st.subheader("Detalhe de vendas")
+            st.caption("Linhas filtradas para análise e exportação")
+        else:
+            st.markdown(
+                """
             <div class="queue-head fdl-frete-queue-head">
               <div>
                 <div class="queue-title">Detalhe de vendas</div>
@@ -3081,8 +3126,8 @@ def _render_frete_operacional_ui(
               </div>
             </div>
             """,
-            unsafe_allow_html=True,
-        )
+                unsafe_allow_html=True,
+            )
     
         btn1, btn2 = st.columns([1, 1])
         t_export_view = dataframe_frete_conciliacao_principal(
@@ -3135,8 +3180,14 @@ def _render_frete_operacional_ui(
                 "**Nenhuma venda** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
             )
         else:
-            if _fdl_safe_mode():
-                st.warning("**Modo seguro (FDL_SAFE_MODE)** — tabela sem Styler e sem editor «Recebido?».")
+            if _fdl_safe_mode() or _fdl_minimal_layout():
+                if _fdl_safe_mode():
+                    st.warning("**Modo seguro (FDL_SAFE_MODE)** — tabela sem Styler e sem editor «Recebido?».")
+                elif _fdl_minimal_layout():
+                    st.caption(
+                        "Layout mínimo (FDL_MINIMAL_LAYOUT): tabela sem Styler e sem editor «Recebido?». "
+                        "Defina FDL_MINIMAL_LAYOUT=0 para restaurar."
+                    )
                 st.dataframe(t_main, use_container_width=True, height=_h_df)
             else:
                 if _frete_debug_ui_enabled():
@@ -3182,10 +3233,13 @@ def _render_frete_operacional_ui(
                     if vid:
                         rec_map[vid] = row[FRETE_UI_RECEBIDO] == FRETE_VAL_RECEBIDO_SIM
                 st.session_state[_rec_key] = rec_map
-        st.markdown(
-            f'<p class="fdl-frete-meta-line">Linhas filtradas: <strong>{_fmt_int_ptbr(len(t_main))}</strong></p>',
-            unsafe_allow_html=True,
-        )
+        if _fdl_minimal_layout():
+            st.caption(f"Linhas filtradas: {len(t_main)}")
+        else:
+            st.markdown(
+                f'<p class="fdl-frete-meta-line">Linhas filtradas: <strong>{_fmt_int_ptbr(len(t_main))}</strong></p>',
+                unsafe_allow_html=True,
+            )
     
         if _is_admin and load_info.get("frete_consume") in ("live", "live_fallback"):
             st.caption(
@@ -3368,7 +3422,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         return
 
     with st.container():
-        st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
+        if _fdl_minimal_layout():
+            st.subheader("Filtros operacionais")
+        else:
+            st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
         r1 = st.columns((1.15, 1.15, 1.15, 1.55))
         r2 = st.columns((1.15, 1.15, 2.3))
         dp_series_full = pd.to_datetime(base["Data de pagamento"], errors="coerce")
@@ -3459,8 +3516,14 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     else:
         plataforma_label = "Mercado Livre"
     
-    st.markdown(
-        f"""
+    if _fdl_minimal_layout():
+        st.caption(
+            f"Plataforma (filtro): {plataforma_label} · Dados carregados: {ts_proc} · "
+            f"Pagamento: {data_pag_ini.strftime('%d/%m/%Y')} a {data_pag_fim.strftime('%d/%m/%Y')}"
+        )
+    else:
+        st.markdown(
+            f"""
         <p class="page-meta" style="margin-bottom:1.1rem;">
           <strong>Plataforma (filtro):</strong> {plataforma_label}
           &nbsp;·&nbsp;
@@ -3469,8 +3532,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
           <strong>Pagamento:</strong> {data_pag_ini.strftime("%d/%m/%Y")} a {data_pag_fim.strftime("%d/%m/%Y")}
         </p>
         """,
-        unsafe_allow_html=True,
-    )
+            unsafe_allow_html=True,
+        )
     
     # Tipos numéricos para a base já filtrada (mesmo conjunto usado nos KPIs e na tabela)
     tabela["Valor da nota"] = pd.to_numeric(tabela["Valor da nota"], errors="coerce").fillna(0.0)
@@ -3480,7 +3543,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     tabela["Diferença"] = pd.to_numeric(tabela.get("Diferença"), errors="coerce")
     
     # KPIs — mesma lógica de sempre, sobre a base **após** os filtros operacionais
-    st.markdown('<div class="section-title">Fluxo financeiro do período</div>', unsafe_allow_html=True)
+    if _fdl_minimal_layout():
+        st.subheader("Fluxo financeiro do período")
+    else:
+        st.markdown('<div class="section-title">Fluxo financeiro do período</div>', unsafe_allow_html=True)
     data_pag_dt = pd.to_datetime(tabela.get("Data de pagamento"), errors="coerce")
     mask_recebido = data_pag_dt.notna() & tabela["Valor pago"].fillna(0).gt(0)
     mask_baixado = tabela["Ação sugerida operacional"].eq("Ok")
@@ -3492,10 +3558,11 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     kpi_recebido_nao_baixado = float(tabela.loc[mask_recebido_nao_baixado, "Valor pago"].sum())
     kpi_divergencia = float(tabela.loc[mask_divergencia, "Diferença"].abs().sum())
     kpi_em_aberto = float(tabela.loc[mask_em_aberto, "Valor a receber"].sum())
-    st.markdown(
-        f'<div class="money-hero"><b>Valor recebido no período:</b> R$ {kpi_valor_recebido:,.2f}</div>',
-        unsafe_allow_html=True,
-    )
+    if not _fdl_minimal_layout():
+        st.markdown(
+            f'<div class="money-hero"><b>Valor recebido no período:</b> R$ {kpi_valor_recebido:,.2f}</div>',
+            unsafe_allow_html=True,
+        )
     k1, k2, k3, k4, k5 = st.columns(5)
     with k1:
         _render_kpi_card(
@@ -3511,7 +3578,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         _render_kpi_card("Em aberto", f"R$ {kpi_em_aberto:,.2f}", "○", "kpi-pend")
     
     # Validação de consistência dos KPIs (base filtrada)
-    st.markdown('<div class="section-title">Validação de ações (base filtrada)</div>', unsafe_allow_html=True)
+    if _fdl_minimal_layout():
+        st.subheader("Validação de ações (base filtrada)")
+    else:
+        st.markdown('<div class="section-title">Validação de ações (base filtrada)</div>', unsafe_allow_html=True)
     acoes_validacao = [
         "Ok",
         "Baixar no Bling",
@@ -3521,8 +3591,23 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         "Revisar venda zerada",
     ]
     contagens_acao = {a: int(tabela["Ação sugerida operacional"].eq(a).sum()) for a in acoes_validacao}
-    st.markdown(
-        f"""
+    if _fdl_minimal_layout():
+        st.write(
+            " · ".join(
+                f"{k}: {contagens_acao[k]}"
+                for k in (
+                    "Ok",
+                    "Baixar no Bling",
+                    "Analisar diferença",
+                    "Verificar recebimento",
+                    "Verificar faturamento",
+                    "Revisar venda zerada",
+                )
+            )
+        )
+    else:
+        st.markdown(
+            f"""
         <div class="validacao-badges">
           <span class="badge-acao badge-ok">Ok <b>{contagens_acao["Ok"]}</b></span>
           <span class="badge-acao badge-bling">Baixar no Bling <b>{contagens_acao["Baixar no Bling"]}</b></span>
@@ -3532,8 +3617,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
           <span class="badge-acao badge-revisar">Revisar venda zerada <b>{contagens_acao["Revisar venda zerada"]}</b></span>
         </div>
         """,
-        unsafe_allow_html=True,
-    )
+            unsafe_allow_html=True,
+        )
     
     st.caption(f"Última visualização: **{ts_proc}**")
     
@@ -3636,8 +3721,12 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.caption("Desative FDL_SAFE_MODE para voltar à UI completa.")
         return
 
-    st.markdown(
-        """
+    if _fdl_minimal_layout():
+        st.subheader("Fila operacional")
+        st.caption("Casos prontos para tratamento")
+    else:
+        st.markdown(
+            """
         <div class="queue-head">
           <div>
             <div class="queue-title">Fila Operacional</div>
@@ -3645,8 +3734,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
           </div>
         </div>
         """,
-        unsafe_allow_html=True,
-    )
+            unsafe_allow_html=True,
+        )
     
     btn1, btn2, btn3 = st.columns([1, 1, 1])
     csv_bytes = tabela_exibir.to_csv(index=False).encode("utf-8-sig")
@@ -3692,11 +3781,13 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         )
 
     tabela_grid = _dataframe_conciliacao_somente_grid(tabela_exibir)
-    _cfg_grid = (
-        _column_config_conciliacao(tabela_grid, moeda_como_texto=True)
-        if not tabela_grid.empty
-        else None
-    )
+    _cfg_grid = None
+    if not _fdl_minimal_layout():
+        _cfg_grid = (
+            _column_config_conciliacao(tabela_grid, moeda_como_texto=True)
+            if not tabela_grid.empty
+            else None
+        )
 
     if tabela_exibir.empty:
         st.info(
@@ -3834,6 +3925,7 @@ if _bootstrap_debug_enabled():
         st.write("**Última etapa:**", st.session_state.get("_fdl_bootstrap_stage", "—"))
         st.write("**Vista ativa:**", _fv)
         st.write("**Modo seguro (FDL_SAFE_MODE):**", _fdl_safe_mode())
+        st.write("**Layout mínimo (FDL_MINIMAL_LAYOUT, omisso=on):**", _fdl_minimal_layout())
         st.write("**Linhas tabela_geral (repasse):**", len(tabela_geral) if _fv == "repasse" else "— (vista frete)")
         _lg = st.session_state.get("_fdl_bootstrap_log")
         if isinstance(_lg, list) and _lg:
@@ -3845,8 +3937,12 @@ with st.sidebar:
     _sb_dn_esc = html.escape(str(_app_ctx.display_name))
     _sb_ini = html.escape(_sb_user_initials(_app_ctx.display_name))
 
-    st.markdown(
-        f"""
+    if _fdl_minimal_layout():
+        st.subheader("FDL Operacional")
+        st.caption(f"{_app_ctx.display_name}")
+    else:
+        st.markdown(
+            f"""
         <header class="fdl-sb-header" aria-label="Marca e utilizador">
           <div class="fdl-sb-brand-logo-wrap">{_sidebar_brand_logo_html()}</div>
           <div class="fdl-sb-user">
@@ -3855,8 +3951,8 @@ with st.sidebar:
           </div>
         </header>
         """,
-        unsafe_allow_html=True,
-    )
+            unsafe_allow_html=True,
+        )
 
     _empresas_usuario = list(st.session_state["empresas_permitidas"])
     _nomes_nav = nomes_permitidos_com_registro(_empresas_usuario)
@@ -3881,7 +3977,10 @@ with st.sidebar:
             st.rerun()
 
     _sb_view = st.session_state.get("op_financeiro_view", "repasse")
-    st.markdown('<p class="fdl-sb-system-modules-title">Módulos</p>', unsafe_allow_html=True)
+    if _fdl_minimal_layout():
+        st.subheader("Módulos")
+    else:
+        st.markdown('<p class="fdl-sb-system-modules-title">Módulos</p>', unsafe_allow_html=True)
 
     _lbl_repasse = "Conciliação de Repasse"
     _lbl_frete = "Conciliação de Frete"
@@ -3908,8 +4007,14 @@ with st.sidebar:
     with st.expander("🛒 Comercial", expanded=False):
         st.caption("Em breve")
 
-    st.markdown(
-        f"""
+    if _fdl_minimal_layout():
+        st.caption("Última atualização")
+        st.write(_sb_ts_display)
+        st.caption("Versão")
+        st.write(str(BUILD_TAG))
+    else:
+        st.markdown(
+            f"""
         <div class="sb-sync-block">
           <div class="sb-sync-label">Última atualização</div>
           <div class="sb-sync-ts">{html.escape(str(_sb_ts_display))}</div>
@@ -3917,16 +4022,19 @@ with st.sidebar:
           <div class="sb-sync-ts">{html.escape(str(BUILD_TAG))}</div>
         </div>
         """,
-        unsafe_allow_html=True,
-    )
+            unsafe_allow_html=True,
+        )
 
     if _admin_mode and _data_source_mode() == "upload_zip":
         _render_cloud_data_loader()
 
-    st.markdown(
-        '<hr class="sb-divider-soft" style="margin:1.15rem 0 0.75rem 0;" />',
-        unsafe_allow_html=True,
-    )
+    if _fdl_minimal_layout():
+        st.divider()
+    else:
+        st.markdown(
+            '<hr class="sb-divider-soft" style="margin:1.15rem 0 0.75rem 0;" />',
+            unsafe_allow_html=True,
+        )
 
     if _admin_mode and st.button(
         "🔄 Atualizar dados",
@@ -3992,9 +4100,17 @@ _fv = st.session_state["op_financeiro_view"]
 _h_cl = html.escape(str(_app_ctx.display_name))
 _h_org = html.escape(str(_active_org.display_name))
 if _fv == "repasse":
-    # Sem indentação à esquerda nas linhas HTML: o Markdown do Streamlit trata 4+ espaços como bloco de código.
-    _hero_body = dedent(
-        f"""
+    if _fdl_minimal_layout():
+        st.caption(f"{_app_ctx.display_name} › {_active_org.display_name} › Financeiro › Conciliação de Repasse")
+        st.title("Conciliação de Repasse")
+        st.caption(
+            "Painel para acompanhar valores recebidos na plataforma, conferência com notas e fila de ações "
+            "sugeridas — sempre sobre a base já filtrada pelos critérios operacionais do módulo."
+        )
+    else:
+        # Sem indentação à esquerda nas linhas HTML: o Markdown do Streamlit trata 4+ espaços como bloco de código.
+        _hero_body = dedent(
+            f"""
         <nav class="fdl-breadcrumb" aria-label="Localização no sistema">
           <span class="fdl-bc-item">{_h_cl}</span>
           <span class="fdl-bc-sep" aria-hidden="true">›</span>
@@ -4010,28 +4126,36 @@ if _fv == "repasse":
           sugeridas — sempre sobre a base já filtrada pelos critérios operacionais do módulo.
         </p>
         """
-    ).strip()
-    st.markdown(
-        _html_fdl_topbar(_h_cl, _h_org)
-        + '<div class="page-hero">'
-        + _hero_body
-        + "</div>",
-        unsafe_allow_html=True,
-    )
+        ).strip()
+        st.markdown(
+            _html_fdl_topbar(_h_cl, _h_org)
+            + '<div class="page-hero">'
+            + _hero_body
+            + "</div>",
+            unsafe_allow_html=True,
+        )
 else:
-    _hero_frete = dedent(
-        """
+    if _fdl_minimal_layout():
+        st.caption(f"{_app_ctx.display_name} › {_active_org.display_name} › Financeiro › Conciliação de Frete")
+        st.title("Conciliação de Frete")
+        st.caption(
+            "Compare o frete cobrado pelo Mercado Livre no relatório de envios com o valor esperado "
+            "quando existir tabela de preço por anúncio — filtros e KPIs refletem o período selecionado."
+        )
+    else:
+        _hero_frete = dedent(
+            """
         <h1>Conciliação de Frete</h1>
         <p class="page-sub">
           Compare o frete cobrado pelo Mercado Livre no relatório de envios com o valor esperado
           quando existir tabela de preço por anúncio — filtros e KPIs refletem o período selecionado.
         </p>
         """
-    ).strip()
-    st.markdown(
-        _html_fdl_topbar(_h_cl, _h_org) + '<div class="page-hero">' + _hero_frete + "</div>",
-        unsafe_allow_html=True,
-    )
+        ).strip()
+        st.markdown(
+            _html_fdl_topbar(_h_cl, _h_org) + '<div class="page-hero">' + _hero_frete + "</div>",
+            unsafe_allow_html=True,
+        )
 
 if _fv == "repasse":
     try:

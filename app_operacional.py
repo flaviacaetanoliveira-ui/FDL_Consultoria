@@ -69,7 +69,11 @@ from operacional_frete import (
     stable_mtime_ns_for_frete_url,
     validate_frete_operacional_dataframe,
 )
-from operacional_frete_ui import _dataframe_frete_grid
+from operacional_frete_ui import (
+    _dataframe_frete_grid,
+    _frete_conciliacao_grid_com_icones,
+    frete_executivo_display_styled,
+)
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
 BUILD_TAG = "build-20260329-repasse-ui-saas"
@@ -226,6 +230,31 @@ _BROWSER_UA_CHROME = (
 )
 
 _BR_TZ = ZoneInfo("America/Sao_Paulo")
+
+
+def _safe_streamlit_date(value: object, fallback: date) -> date:
+    """Evita TypeError ao comparar None com date (`st.date_input` pode devolver None)."""
+    if value is None:
+        return fallback
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return fallback
+
+
+def _series_datetime_bounds_dates(series: pd.Series) -> tuple[date, date, bool]:
+    """
+    Min/max em dia civil a partir de coluna parseável como datetime.
+    Não chama .min().date() sobre série só NaT (evita NaT/erros em limites).
+    Devolve (d_min, d_max, tem_alguma_data_parseável).
+    """
+    t = pd.to_datetime(series, errors="coerce")
+    t = t[t.notna()]
+    if t.empty:
+        d = datetime.now(_BR_TZ).date()
+        return d, d, False
+    return t.min().date(), t.max().date(), True
 
 
 def _sb_user_initials(display_name: str) -> str:
@@ -387,6 +416,27 @@ def _bootstrap_debug_enabled() -> bool:
         return str(sec).strip().lower() in {"1", "true", "yes", "on"}
     except Exception:
         return False
+
+
+def _inject_fdl_professional_theme() -> None:
+    """CSS global: reduz ruído de plataforma (menu, footer, toolbar/fork) — não é lógica de negócio."""
+    if st.session_state.get("_fdl_ui_theme_applied"):
+        return
+    st.markdown(
+        """
+        <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            [data-testid="stToolbar"] {visibility: hidden !important; height: 0 !important; max-height: 0 !important;}
+            [data-testid="stDecoration"] {display: none;}
+            header[data-testid="stHeader"] {background: rgba(255,255,255,0);}
+            header a[href*="fork"] {display: none !important;}
+            div[data-testid="stToolbar"] {visibility: hidden !important;}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.session_state["_fdl_ui_theme_applied"] = True
 
 
 def _fdl_safe_mode() -> bool:
@@ -2552,40 +2602,13 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
             work[c] = False
 
     pl_col, res_col = "Preço de lista", "Resultado"
-    pl_sum = float(pd.to_numeric(work[pl_col], errors="coerce").fillna(0).sum())
-    res_sum = float(pd.to_numeric(work[res_col], errors="coerce").fillna(0).sum())
-    margem_total = (res_sum / pl_sum) if pl_sum not in (0.0, -0.0) else float("nan")
-    n_cons = int(work["faturamento_consolidado"].fillna(False).astype(bool).sum()) if "faturamento_consolidado" in work.columns else 0
-    any_alert = work["_ab_pl_zero"] | work["_ab_div"] | work["_ab_sem_nf_np"]
-    n_alert = int(any_alert.sum())
-
-    k1, k2, k3, k4, k5 = st.columns(5)
-    with k1:
-        st.metric("Receita por Produtos", _fmt_brl_ptbr_celula(pl_sum))
-    with k2:
-        st.metric("Resultado Total", _fmt_brl_ptbr_celula(res_sum))
-    with k3:
-        if pl_sum == 0 or (isinstance(margem_total, float) and math.isnan(margem_total)):
-            st.metric("Margem Total %", "—")
-        else:
-            st.metric("Margem Total %", f"{margem_total * 100:.2f}%".replace(".", ","))
-    with k4:
-        st.metric("Itens Consolidados", _fmt_int_ptbr(n_cons))
-    with k5:
-        st.metric("Alertas Ativos", _fmt_int_ptbr(n_alert))
-
-    st.caption(
-        "Os indicadores acima referem-se a **todo** o dataset carregado; a tabela abaixo respeita os filtros."
-    )
 
     has_data_col = "Data" in work.columns
-    d_series = pd.to_datetime(work["Data"], errors="coerce") if has_data_col else pd.Series(dtype="datetime64[ns]")
-    has_usable_dates = bool(has_data_col) and d_series.notna().any()
-    if has_usable_dates:
-        d_min = d_series.min().date()
-        d_max = d_series.max().date()
+    if has_data_col:
+        d_min, d_max, has_usable_dates = _series_datetime_bounds_dates(work["Data"])
     else:
         d_min = d_max = datetime.now(_BR_TZ).date()
+        has_usable_dates = False
 
     plats = sorted({str(x).strip() for x in work["Nome da plataforma"].dropna().unique() if str(x).strip()})
     sits = sorted({str(x).strip() for x in work["Situação"].dropna().unique() if str(x).strip()})
@@ -2645,6 +2668,10 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
                 st.session_state.pop(_k, None)
             st.rerun()
 
+    if has_usable_dates:
+        d_ini = _safe_streamlit_date(d_ini, d_min)
+        d_fim = _safe_streamlit_date(d_fim, d_max)
+
     filt = work.copy()
     if visao == "Consolidado":
         filt = filt[filt["faturamento_consolidado"].fillna(False).astype(bool)]
@@ -2686,6 +2713,32 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
         filt = filt.loc[m_a].copy()
 
     filt = filt.sort_values(res_col, ascending=True, na_position="last")
+
+    pl_sum = float(pd.to_numeric(filt[pl_col], errors="coerce").fillna(0).sum())
+    res_sum = float(pd.to_numeric(filt[res_col], errors="coerce").fillna(0).sum())
+    margem_total = (res_sum / pl_sum) if pl_sum not in (0.0, -0.0) else float("nan")
+    n_cons = int(filt["faturamento_consolidado"].fillna(False).astype(bool).sum()) if "faturamento_consolidado" in filt.columns else 0
+    any_alert = filt["_ab_pl_zero"] | filt["_ab_div"] | filt["_ab_sem_nf_np"]
+    n_alert = int(any_alert.sum())
+
+    fk1, fk2, fk3, fk4, fk5 = st.columns(5)
+    with fk1:
+        st.metric("Receita por Produtos", _fmt_brl_ptbr_celula(pl_sum))
+    with fk2:
+        st.metric("Resultado Total", _fmt_brl_ptbr_celula(res_sum))
+    with fk3:
+        if pl_sum == 0 or (isinstance(margem_total, float) and math.isnan(margem_total)):
+            st.metric("Margem Total %", "—")
+        else:
+            st.metric("Margem Total %", f"{margem_total * 100:.2f}%".replace(".", ","))
+    with fk4:
+        st.metric("Itens Consolidados", _fmt_int_ptbr(n_cons))
+    with fk5:
+        st.metric("Alertas Ativos", _fmt_int_ptbr(n_alert))
+
+    st.caption(
+        "Indicadores acima = **mesmo recorte** da tabela (período e filtros aplicados)."
+    )
 
     prod_col = _faturamento_resolve_produto_column(list(filt.columns))
     rpct = pd.to_numeric(filt["Resultado_Pct"], errors="coerce") if "Resultado_Pct" in filt.columns else pd.Series(float("nan"), index=filt.index)
@@ -2800,10 +2853,8 @@ def _render_frete_operacional_ui(
         
             if "_data_venda_dt" in work.columns:
                 dts = frete_series_normalize_sale_dt(work["_data_venda_dt"])
-                if dts.notna().any():
-                    d_min_data = dts.min().date()
-                    d_max_data = dts.max().date()
-                else:
+                d_min_data, d_max_data, have_dt = _series_datetime_bounds_dates(dts)
+                if not have_dt:
                     d_min_data = d_max_data = today
             else:
                 d_min_data = d_max_data = today
@@ -2862,6 +2913,9 @@ def _render_frete_operacional_ui(
                 st.caption(
                     "Filtra por **data da venda** (comparação por dia). Por omissão: últimos 30 dias até hoje."
                 )
+
+            data_ini = _safe_streamlit_date(data_ini, d_ini_val)
+            data_fim = _safe_streamlit_date(data_fim, d_fim_val)
 
             if data_fim < data_ini:
                 st.warning("A data final não pode ser anterior à data inicial. Ajuste o período.")
@@ -3065,6 +3119,8 @@ def _render_frete_operacional_ui(
         t_main = dataframe_frete_conciliacao_principal(
             t_grid, recebido=recebido_series, layout="executivo"
         )
+        t_main = _frete_conciliacao_grid_com_icones(t_main)
+        t_main_disp = frete_executivo_display_styled(t_main)
         _h_df = 550 if len(t_main) > 8 else 360
     
         if t_main.empty:
@@ -3074,7 +3130,11 @@ def _render_frete_operacional_ui(
         else:
             if _fdl_safe_mode():
                 st.warning("**Modo seguro (FDL_SAFE_MODE)** — sem editor «Recebido?».")
-            st.dataframe(t_main, use_container_width=True, height=_h_df)
+            st.dataframe(t_main_disp, use_container_width=True, height=_h_df)
+            st.caption(
+                "Legenda de cores: **verde** — OK · **vermelho** — divergência / cobrado a maior · "
+                "**âmbar** — atenção (ex.: repasse, cobrado a menor, sem frete na plataforma)."
+            )
             if not _fdl_safe_mode() and not _fdl_minimal_layout():
                 st.caption(
                     "Ajuste **Recebido?** na grelha abaixo quando aplicável (repasse de frete)."
@@ -3176,7 +3236,7 @@ def _painel_frete_emergencial(
                 st.caption(f"[frete-debug] {_line}")
 
     meta = _frete_meta_for_render(load_info)
-    if _frete_debug_ui_enabled():
+    if _frete_debug_ui_enabled() and _is_admin:
         try:
             with st.expander("Diagnóstico Frete (opt-in: FDL_DEBUG_FRETE_UI=1)", expanded=True):
                 st.write("### Etapa 1/4 — Dataset (carregado antes desta página)")
@@ -3208,7 +3268,17 @@ def _painel_frete_emergencial(
             st.error("Diagnóstico Frete (expander) falhou — o restante da página tenta continuar.")
             st.caption(str(exc))
     if df_frete.empty:
-        st.info("Não há linhas de frete para exibir. Verifique o export de vendas ML ou a materialização.")
+        if load_info.get("frete_consume") == "materialized":
+            st.info(
+                "Não há linhas no **frete materializado** (ficheiro com 0 linhas). "
+                "Regere `dataset_frete_app.csv` com `processing/materialize_cliente_5.ps1` a partir das pastas "
+                "Esquilo/Wood e publique os CSV atualizados no repositório (ou aloje o ficheiro e use URL nos Secrets)."
+            )
+        else:
+            st.info(
+                "Não há linhas de frete para exibir. Verifique o export de vendas ML (modo live) "
+                "ou a materialização (modo materializado)."
+            )
         return
     try:
         _render_frete_operacional_ui(org_id, df_frete, meta, ts_proc, load_info)
@@ -3314,12 +3384,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.write("")
         r1 = st.columns((1.15, 1.15, 1.15, 1.55))
         dp_series_full = pd.to_datetime(base["Data de pagamento"], errors="coerce")
-        has_dp_base = bool(dp_series_full.notna().any())
-        if has_dp_base:
-            _d_min: date = dp_series_full.min().date()
-            _d_max: date = dp_series_full.max().date()
-        else:
-            _d_min = _d_max = datetime.now(_BR_TZ).date()
+        _d_min, _d_max, has_dp_base = _series_datetime_bounds_dates(dp_series_full)
         plats = (
             sorted([x for x in base["Plataforma"].dropna().unique().tolist() if str(x).strip()])
             if "Plataforma" in base.columns
@@ -3371,6 +3436,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 format="DD/MM/YYYY",
                 label_visibility="collapsed",
             )
+        data_pag_ini = _safe_streamlit_date(data_pag_ini, _d_min)
+        data_pag_fim = _safe_streamlit_date(data_pag_fim, _d_max)
         st.caption("Comparação por **dia civil** (meia-noite a meia-noite).")
         if not has_dp_base:
             st.info(
@@ -3784,7 +3851,8 @@ except (ValueError, TypeError, OSError):
     _sb_ts_display = str(ts_proc) if ts_proc is not None else "—"
 
 _fdl_global_trace("04: antes da sidebar (dados carregados)")
-if _bootstrap_debug_enabled():
+_inject_fdl_professional_theme()
+if _bootstrap_debug_enabled() and _admin_mode:
     with st.expander("Diagnóstico bootstrap (FDL_DEBUG_BOOTSTRAP=1)", expanded=True):
         st.write("**Última etapa:**", st.session_state.get("_fdl_bootstrap_stage", "—"))
         st.write("**Vista ativa:**", _fv)
@@ -3808,11 +3876,21 @@ with st.sidebar:
     with _sp_c:
         _logo_file = _REPO_APP_ROOT / "assets" / "fdl_analytics_logo.png"
         if _logo_file.is_file():
-            st.image(str(_logo_file), width=240)
+            st.image(str(_logo_file), use_container_width=True)
         else:
             st.caption("Coloque a logo em `assets/fdl_analytics_logo.png`.")
-    st.markdown("### FDL Analytics")
-    st.markdown(f"**Cliente:** {str(st.session_state.get('cliente', _app_ctx.display_name))}")
+    st.markdown(
+        '<p style="margin:0.25rem 0 0.15rem 0;font-size:0.78rem;font-weight:600;letter-spacing:0.06em;'
+        'color:#6b7280;text-transform:uppercase;">FDL Analytics</p>',
+        unsafe_allow_html=True,
+    )
+    _cli_nome = html.escape(str(st.session_state.get("cliente", _app_ctx.display_name)))
+    st.markdown(
+        f'<div style="font-size:1.28rem;font-weight:700;line-height:1.25;color:#111827;'
+        f'padding:0.35rem 0 0.65rem 0;border-bottom:1px solid #e5e7eb;margin-bottom:0.6rem;">'
+        f"{_cli_nome}</div>",
+        unsafe_allow_html=True,
+    )
     st.write("")
     st.divider()
 
@@ -3882,7 +3960,8 @@ with st.sidebar:
     _ts_line = f"{_ts_d} • {_ts_t}" if _ts_t else _ts_d
     st.caption("Atualizado em")
     st.caption(_ts_line)
-    st.caption(_sidebar_version_display())
+    if _admin_mode:
+        st.caption(_sidebar_version_display())
 
     if _admin_mode and _data_source_mode() == "upload_zip":
         _render_cloud_data_loader()

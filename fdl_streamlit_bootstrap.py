@@ -14,6 +14,17 @@ import sys
 import streamlit as st
 
 
+def _bootstrap_admin_app() -> bool:
+    """Mesma regra que `app_operacional._is_admin_mode` — diagnóstico só para admin."""
+    raw = os.environ.get("FDL_APP_MODE", "").strip().lower()
+    if raw == "admin":
+        return True
+    try:
+        return str(st.secrets.get("FDL_APP_MODE", "")).strip().lower() == "admin"
+    except Exception:
+        return False
+
+
 def _bootstrap_debug_app() -> bool:
     raw = os.environ.get("FDL_DEBUG_BOOTSTRAP", "").strip().lower()
     if raw in {"1", "true", "yes", "on"}:
@@ -50,7 +61,7 @@ def run_operacional_app(
         st.caption(f"Última etapa: {st.session_state.get('_fdl_bootstrap_stage', '—')}")
         st.stop()
 
-    if _bootstrap_debug_app():
+    if _bootstrap_debug_app() and _bootstrap_admin_app():
         st.session_state["_fdl_bootstrap_stage"] = f"{entrypoint_label}: após reload(app_operacional)"
         with st.expander(f"FDL_DEBUG_BOOTSTRAP — saída ({entrypoint_label})", expanded=False):
             st.write("**Última etapa:**", st.session_state.get("_fdl_bootstrap_stage", "—"))

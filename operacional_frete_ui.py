@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import pandas as pd
 import streamlit as st
@@ -78,6 +78,41 @@ def _frete_conciliacao_grid_com_icones(df: pd.DataFrame) -> pd.DataFrame:
     if ac in out.columns:
         out[ac] = out[ac].map(_ma)
     return out
+
+
+def _cell_style_frete_status(val: object) -> str:
+    """Cores semânticas: OK → verde; divergência/cobrado a maior → vermelho; resto → amarelo (atenção)."""
+    if val is None:
+        return ""
+    try:
+        if pd.isna(val):
+            return ""
+    except TypeError:
+        pass
+    s = str(val).strip()
+    if not s:
+        return ""
+    if s == "OK" or s.startswith("✅"):
+        return "background-color: #e8f5e9; color: #1b5e20; font-weight: 600"
+    if FRETE_UI_VAL_DIVERGENCIA in s or "Diverg" in s or "Cobrado a maior" in s:
+        return "background-color: #ffebee; color: #b71c1c; font-weight: 600"
+    return "background-color: #fff8e1; color: #e65100; font-weight: 500"
+
+
+def frete_executivo_display_styled(df: pd.DataFrame) -> Any:
+    """
+    Grelha executiva com fundo semântico em «Situação do Frete» e «Status conciliação».
+    Devolve pandas Styler ou DataFrame se não houver colunas a estilizar.
+    """
+    if df.empty:
+        return df
+    cols = [c for c in ("Situação do Frete", FRETE_UI_STATUS_CONC) if c in df.columns]
+    if not cols:
+        return df
+    try:
+        return df.style.map(_cell_style_frete_status, subset=cols)
+    except AttributeError:
+        return df
 
 
 def _dataframe_frete_grid(

@@ -1,10 +1,13 @@
 # Materializa Cliente 5 (Flávio): Esquilo e Wood.
-# Origem esperada: <Cliente4Root>/Esquilo e <Cliente4Root>/Wood (ex.: .../Cliente_4/Esquilo).
+# Origem no OneDrive (exemplo): ...\Cursor\Flavio\Cliente_4\ com subpastas Esquilo e Wood.
+# O parâmetro -Cliente4Root deve apontar para essa pasta Cliente_4 (não para dentro de Esquilo/Wood).
+# Nota: a pasta de origem chama-se Cliente_4; no repositório e no Streamlit o slug do cliente é cliente_5
+# (Flávio = 5.º cliente) — data_products/cliente_5/{esquilo|wood}/...
 # Saída: data_products/cliente_5/{esquilo|wood}/{repasse|frete}/current/
 #
 # Uso:
-#   .\processing\materialize_cliente_5.ps1 -Cliente4Root "D:\dados\Cliente_4"
-#   .\processing\materialize_cliente_5.ps1 -Cliente4Root "D:\dados\Cliente_4" -PreflightOnly
+#   .\processing\materialize_cliente_5.ps1 -Cliente4Root "C:\Users\...\Flavio\Cliente_4"
+#   .\processing\materialize_cliente_5.ps1 -Cliente4Root "C:\Users\...\Flavio\Cliente_4" -PreflightOnly
 
 param(
     [Parameter(Mandatory = $true)]

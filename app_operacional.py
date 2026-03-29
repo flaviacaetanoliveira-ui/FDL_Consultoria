@@ -251,30 +251,36 @@ def _strict_materialized() -> bool:
 
 
 def _frete_debug_ui_enabled() -> bool:
-    """Diagnóstico visível na página Frete. Desative com FDL_DEBUG_FRETE_UI=0 (env ou secrets)."""
+    """Diagnóstico na página Frete — opt-in (env ou secrets). Omisso = desligado (não afeta repasse)."""
     raw = os.environ.get("FDL_DEBUG_FRETE_UI", "").strip().lower()
     if raw in {"1", "true", "yes", "on"}:
         return True
     if raw in {"0", "false", "no", "off"}:
         return False
     try:
-        sec = st.secrets.get("FDL_DEBUG_FRETE_UI", True)
+        sec = st.secrets.get("FDL_DEBUG_FRETE_UI", False)
         if isinstance(sec, bool):
             return sec
         return str(sec).strip().lower() in {"1", "true", "yes", "on"}
     except Exception:
-        return True
+        return False
 
 
 def _frete_stage_error(etapa: int, titulo: str, exc: BaseException) -> None:
     """Erro visível com número da etapa (1–4) para diagnóstico na Cloud."""
-    st.error(f"**Conciliação de Frete — falha na etapa {etapa}/4: {titulo}**")
-    st.exception(exc)
+    try:
+        st.error(f"**Conciliação de Frete — falha na etapa {etapa}/4: {titulo}**")
+        st.exception(exc)
+    except Exception:
+        pass
 
 
 def _frete_stage_trace(etapa: int, titulo: str, detalhe: str) -> None:
-    if _frete_debug_ui_enabled():
-        st.caption(f"Frete [etapa {etapa}/4 — {titulo}] {detalhe}")
+    try:
+        if _frete_debug_ui_enabled():
+            st.caption(f"Frete [etapa {etapa}/4 — {titulo}] {detalhe}")
+    except Exception:
+        pass
 
 
 def _repasse_consume_mode() -> str:
@@ -3172,29 +3178,36 @@ def _painel_frete_emergencial(
 
     meta = _frete_meta_for_render(load_info)
     if _frete_debug_ui_enabled():
-        with st.expander("Diagnóstico Frete (temporário — desative com FDL_DEBUG_FRETE_UI=0)", expanded=True):
-            st.write("### Etapa 1/4 — Dataset (carregado antes desta página)")
-            st.write("**Estado:**", "carregado" if not df_frete.empty else "DataFrame vazio")
-            st.write("**Linhas × colunas:**", df_frete.shape)
-            _cols = list(df_frete.columns)
-            st.write("**Nº de colunas:**", len(_cols))
-            st.write("**Colunas (início):**", _cols[:35])
-            if len(_cols) > 35:
-                st.caption(f"… e mais {len(_cols) - 35} colunas.")
-            _req_ui = {
-                FRETE_UI_N_VENDA: "N.º venda (filtros / Recebido?)",
-                FRETE_ML_COL: "Frete cobrado (ML)",
-                "Estado": "Estado da venda",
-                FRETE_UI_DIFERENCA: "KPIs e situação",
-            }
-            st.write("**Colunas esperadas pela UI:**")
-            for _k, _desc in _req_ui.items():
-                st.write(f"- `{_k}`: {'OK' if _k in _cols else 'AUSENTE'} — {_desc}")
-            st.write("**Fonte (consume):**", load_info.get("frete_consume"))
-            st.write("**frete_arquivo:**", load_info.get("frete_arquivo"))
-            st.write("**Alvo materializado (path/URL resolvido):**", load_info.get("frete_materialized_target"))
-            st.write("**Rótulo vendas (UI):**", meta.get("vendas_arquivo", load_info.get("vendas_arquivo")))
-            st.write("**Próximo passo:**", "etapas 2–4 dentro de `_render_frete_operacional_ui` (filtros → KPIs → export/detalle)")
+        try:
+            with st.expander("Diagnóstico Frete (opt-in: FDL_DEBUG_FRETE_UI=1)", expanded=True):
+                st.write("### Etapa 1/4 — Dataset (carregado antes desta página)")
+                st.write("**Estado:**", "carregado" if not df_frete.empty else "DataFrame vazio")
+                st.write("**Linhas × colunas:**", df_frete.shape)
+                _cols = list(df_frete.columns)
+                st.write("**Nº de colunas:**", len(_cols))
+                st.write("**Colunas (início):**", _cols[:35])
+                if len(_cols) > 35:
+                    st.caption(f"… e mais {len(_cols) - 35} colunas.")
+                _req_ui = {
+                    FRETE_UI_N_VENDA: "N.º venda (filtros / Recebido?)",
+                    FRETE_ML_COL: "Frete cobrado (ML)",
+                    "Estado": "Estado da venda",
+                    FRETE_UI_DIFERENCA: "KPIs e situação",
+                }
+                st.write("**Colunas esperadas pela UI:**")
+                for _k, _desc in _req_ui.items():
+                    st.write(f"- `{_k}`: {'OK' if _k in _cols else 'AUSENTE'} — {_desc}")
+                st.write("**Fonte (consume):**", load_info.get("frete_consume"))
+                st.write("**frete_arquivo:**", load_info.get("frete_arquivo"))
+                st.write("**Alvo materializado (path/URL resolvido):**", load_info.get("frete_materialized_target"))
+                st.write("**Rótulo vendas (UI):**", meta.get("vendas_arquivo", load_info.get("vendas_arquivo")))
+                st.write(
+                    "**Próximo passo:**",
+                    "etapas 2–4 em _render_frete_operacional_ui (filtros → KPIs → export/detalle)",
+                )
+        except Exception as exc:
+            st.error("Diagnóstico Frete (expander) falhou — o restante da página tenta continuar.")
+            st.caption(str(exc))
     if df_frete.empty:
         st.info("Não há linhas de frete para exibir. Verifique o export de vendas ML ou a materialização.")
         return
@@ -3711,9 +3724,10 @@ else:
     info = {**info, "linhas": int(len(tabela_geral))}
 
 try:
-    _sb_ts_display = datetime.strptime(ts_proc, "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M")
-except ValueError:
-    _sb_ts_display = ts_proc
+    _ts_raw = str(ts_proc).strip() if ts_proc is not None else ""
+    _sb_ts_display = datetime.strptime(_ts_raw, "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M")
+except (ValueError, TypeError, OSError):
+    _sb_ts_display = str(ts_proc) if ts_proc is not None else "—"
 
 with st.sidebar:
     _sb_dn_esc = html.escape(str(_app_ctx.display_name))

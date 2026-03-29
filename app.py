@@ -7,6 +7,10 @@ st.set_page_config(page_title="FDL Analytics — Financeiro", layout="wide")
 try:
     import app_operacional  # noqa: F401 — executa o painel operacional
 except Exception as exc:
-    st.error("Falha ao iniciar a aplicação. Se o erro persistir, verifique **Manage app → Logs** na Cloud.")
+    st.error(
+        "Falha ao iniciar a aplicação (import ou arranque do módulo operacional). "
+        "Verifique **Manage app → Logs** na Cloud."
+    )
     st.exception(exc)
+    st.stop()
 

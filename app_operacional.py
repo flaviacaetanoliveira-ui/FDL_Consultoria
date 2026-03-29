@@ -2719,14 +2719,41 @@ def _format_frete_anuncio_tabela_display(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+# Texto exibido na coluna «Ação sugerida» da Fila operacional (UI apenas; export mantém valores canónicos).
+_REPASSE_ACAO_SUGERIDA_EXIBICAO: dict[str, str] = {
+    "Ok": "✅ OK",
+    "Baixar no Bling": "⬇️ Baixar no Bling",
+    "Analisar diferença": "🔍 Analisar diferença",
+    "Verificar recebimento": "📥 Verificar recebimento",
+    "Verificar faturamento": "📄 Verificar faturamento",
+    "Revisar venda zerada": "⚠️ Revisar venda zerada",
+}
+
+
+def _repasse_format_acao_sugerida_exibicao(val: object) -> str:
+    if val is None:
+        return ""
+    try:
+        if pd.isna(val):
+            return ""
+    except TypeError:
+        pass
+    s = str(val).strip()
+    if s.lower() in {"nan", "none", "<na>", "nat"}:
+        return ""
+    return _REPASSE_ACAO_SUGERIDA_EXIBICAO.get(s, s)
+
+
 def _dataframe_conciliacao_somente_grid(df: pd.DataFrame) -> pd.DataFrame:
-    """Cópia para st.dataframe: valores monetários como texto pt-BR (export continua numérico)."""
+    """Cópia para st.dataframe: moeda em texto pt-BR e «Ação sugerida» com ícones (export continua canónico)."""
     if df.empty:
         return df
     g = df.copy()
     for c in ("Valor da nota", "Valor a receber", "Valor pago", "Diferença"):
         if c in g.columns:
             g[c] = g[c].map(_fmt_brl_ptbr_celula).astype(object)
+    if "Ação sugerida" in g.columns:
+        g["Ação sugerida"] = g["Ação sugerida"].map(_repasse_format_acao_sugerida_exibicao).astype(object)
     return g
 
 
@@ -3411,28 +3438,17 @@ def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
 
 
 def _repasse_ui_validacao_acoes_mini_cards(contagens: dict[str, int]) -> None:
-    """Contagens por ação em mini-cards (2×3), alinhamento com st.metric."""
-    blocos: list[tuple[str, str, str]] = [
-        ("Ok", "✅", "Ok"),
-        ("Baixar no Bling", "📥", "Baixar no Bling"),
-        ("Analisar diferença", "🔍", "Analisar diferença"),
-        ("Verificar recebimento", "📬", "Verificar recebimento"),
-        ("Verificar faturamento", "📄", "Verificar faturamento"),
-        ("Revisar venda zerada", "⚠️", "Revisar venda zerada"),
+    """Apenas ações que exigem operação explícita: Ok + pendências principais (3 cards)."""
+    blocos: list[tuple[str, str]] = [
+        ("Ok", "✅ OK"),
+        ("Baixar no Bling", "⬇️ Baixar no Bling"),
+        ("Analisar diferença", "🔍 Analisar diferença"),
     ]
-    r1 = st.columns(3)
-    for i in range(3):
-        key, emoji, short = blocos[i]
-        with r1[i]:
+    cols = st.columns(3)
+    for col, (key, label) in zip(cols, blocos):
+        with col:
             with st.container(border=True):
-                st.metric(f"{emoji} {short}", value=int(contagens.get(key, 0)))
-    st.write("")
-    r2 = st.columns(3)
-    for i in range(3, 6):
-        key, emoji, short = blocos[i]
-        with r2[i - 3]:
-            with st.container(border=True):
-                st.metric(f"{emoji} {short}", value=int(contagens.get(key, 0)))
+                st.metric(label, value=int(contagens.get(key, 0)))
 
 
 def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
@@ -3556,14 +3572,11 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     tabela["Diferença"] = pd.to_numeric(tabela.get("Diferença"), errors="coerce")
 
     st.subheader("Validação de ações")
-    st.caption("Base filtrada — contagem por tipo de ação sugerida.")
+    st.caption("Base filtrada — foco nas contagens que orientam a operação (Ok e pendências principais).")
     acoes_validacao = [
         "Ok",
         "Baixar no Bling",
         "Analisar diferença",
-        "Verificar recebimento",
-        "Verificar faturamento",
-        "Revisar venda zerada",
     ]
     contagens_acao = {a: int(tabela["Ação sugerida operacional"].eq(a).sum()) for a in acoes_validacao}
     _repasse_ui_validacao_acoes_mini_cards(contagens_acao)
@@ -3662,8 +3675,9 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             "sem `column_config` na tabela (apenas `st.dataframe` simples)."
         )
         st.metric("Linhas (filtro atual)", len(tabela_exibir))
+        _grid_safe = _dataframe_conciliacao_somente_grid(tabela_exibir)
         st.dataframe(
-            tabela_exibir,
+            _grid_safe,
             use_container_width=True,
             height=min(560, 140 + max(18 * min(len(tabela_exibir), 80), 120)),
         )

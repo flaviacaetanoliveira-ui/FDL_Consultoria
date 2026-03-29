@@ -3410,6 +3410,47 @@ def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
     return pd.to_datetime(s, errors="coerce")
 
 
+def _repasse_ui_kpi_cards_row(
+    kpi_valor_recebido: float,
+    kpi_baixado: float,
+    kpi_recebido_nao_baixado: float,
+    kpi_divergencia: float,
+    kpi_em_aberto: float,
+) -> None:
+    """KPIs em cards nativos (st.container border + st.metric), sem HTML."""
+    specs: list[tuple[str, str, str]] = [
+        ("◆", "Valor recebido no período", f"R$ {kpi_valor_recebido:,.2f}"),
+        ("✓", "Baixado no Bling", f"R$ {kpi_baixado:,.2f}"),
+        ("◇", "Recebido e não baixado", f"R$ {kpi_recebido_nao_baixado:,.2f}"),
+        ("!", "Divergência de valores", f"R$ {kpi_divergencia:,.2f}"),
+        ("○", "Em aberto", f"R$ {kpi_em_aberto:,.2f}"),
+    ]
+    cols = st.columns(5)
+    for col, (emoji, title, val) in zip(cols, specs):
+        with col:
+            with st.container(border=True):
+                st.metric(f"{emoji} {title}", val)
+
+
+def _repasse_ui_validacao_acoes_mini_cards(contagens: dict[str, int]) -> None:
+    """Contagens por ação em mini-cards (2×3), só componentes nativos."""
+    blocos: list[tuple[str, str, str]] = [
+        ("Ok", "✅", "Ok"),
+        ("Baixar no Bling", "📥", "Baixar no Bling"),
+        ("Analisar diferença", "🔍", "Analisar diferença"),
+        ("Verificar recebimento", "📬", "Verificar recebimento"),
+        ("Verificar faturamento", "📄", "Verificar faturamento"),
+        ("Revisar venda zerada", "⚠️", "Revisar venda zerada"),
+    ]
+    r1, r2 = st.columns(3), st.columns(3)
+    for i, (key, emoji, short) in enumerate(blocos):
+        col = r1[i] if i < 3 else r2[i - 3]
+        with col:
+            with st.container(border=True):
+                st.caption(f"{emoji} {short}")
+                st.markdown(f"### {contagens.get(key, 0)}")
+
+
 def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     """
     Filtros + KPIs + tabela de repasse.
@@ -3421,11 +3462,9 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.warning("Base de repasse indisponível para esta visualização.")
         return
 
-    with st.container():
-        if _fdl_minimal_layout():
-            st.subheader("Filtros operacionais")
-        else:
-            st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.subheader("Filtros operacionais")
+        st.write("")
         r1 = st.columns((1.15, 1.15, 1.15, 1.55))
         r2 = st.columns((1.15, 1.15, 2.3))
         dp_series_full = pd.to_datetime(base["Data de pagamento"], errors="coerce")
@@ -3476,7 +3515,9 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.caption(
             "O intervalo de datas restringe as linhas pela **data de pagamento** do registro (comparado por dia)."
         )
-    
+
+    st.divider()
+
     if data_pag_fim < data_pag_ini:
         st.warning("A data final não pode ser anterior à data inicial. Ajuste o período.")
         data_pag_fim = data_pag_ini
@@ -3516,25 +3557,13 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     else:
         plataforma_label = "Mercado Livre"
     
-    if _fdl_minimal_layout():
-        st.caption(
-            f"Plataforma (filtro): {plataforma_label} · Dados carregados: {ts_proc} · "
-            f"Pagamento: {data_pag_ini.strftime('%d/%m/%Y')} a {data_pag_fim.strftime('%d/%m/%Y')}"
-        )
-    else:
-        st.markdown(
-            f"""
-        <p class="page-meta" style="margin-bottom:1.1rem;">
-          <strong>Plataforma (filtro):</strong> {plataforma_label}
-          &nbsp;·&nbsp;
-          <strong>Dados carregados:</strong> {ts_proc}
-          &nbsp;·&nbsp;
-          <strong>Pagamento:</strong> {data_pag_ini.strftime("%d/%m/%Y")} a {data_pag_fim.strftime("%d/%m/%Y")}
-        </p>
-        """,
-            unsafe_allow_html=True,
-        )
-    
+    st.caption(
+        f"Plataforma (filtro): **{plataforma_label}** · Dados carregados: **{ts_proc}** · "
+        f"Pagamento: **{data_pag_ini.strftime('%d/%m/%Y')}** a **{data_pag_fim.strftime('%d/%m/%Y')}**"
+    )
+
+    st.divider()
+
     # Tipos numéricos para a base já filtrada (mesmo conjunto usado nos KPIs e na tabela)
     tabela["Valor da nota"] = pd.to_numeric(tabela["Valor da nota"], errors="coerce").fillna(0.0)
     tabela["Total BRL"] = pd.to_numeric(tabela.get("Total BRL"), errors="coerce")
@@ -3543,10 +3572,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     tabela["Diferença"] = pd.to_numeric(tabela.get("Diferença"), errors="coerce")
     
     # KPIs — mesma lógica de sempre, sobre a base **após** os filtros operacionais
-    if _fdl_minimal_layout():
-        st.subheader("Fluxo financeiro do período")
-    else:
-        st.markdown('<div class="section-title">Fluxo financeiro do período</div>', unsafe_allow_html=True)
+    st.subheader("Fluxo financeiro do período")
     data_pag_dt = pd.to_datetime(tabela.get("Data de pagamento"), errors="coerce")
     mask_recebido = data_pag_dt.notna() & tabela["Valor pago"].fillna(0).gt(0)
     mask_baixado = tabela["Ação sugerida operacional"].eq("Ok")
@@ -3558,30 +3584,18 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     kpi_recebido_nao_baixado = float(tabela.loc[mask_recebido_nao_baixado, "Valor pago"].sum())
     kpi_divergencia = float(tabela.loc[mask_divergencia, "Diferença"].abs().sum())
     kpi_em_aberto = float(tabela.loc[mask_em_aberto, "Valor a receber"].sum())
-    if not _fdl_minimal_layout():
-        st.markdown(
-            f'<div class="money-hero"><b>Valor recebido no período:</b> R$ {kpi_valor_recebido:,.2f}</div>',
-            unsafe_allow_html=True,
-        )
-    k1, k2, k3, k4, k5 = st.columns(5)
-    with k1:
-        _render_kpi_card(
-            "Valor recebido no período", f"R$ {kpi_valor_recebido:,.2f}", "◆", "kpi-total"
-        )
-    with k2:
-        _render_kpi_card("Baixado no Bling", f"R$ {kpi_baixado:,.2f}", "✓", "kpi-ok")
-    with k3:
-        _render_kpi_card("Recebido e não baixado", f"R$ {kpi_recebido_nao_baixado:,.2f}", "◇", "kpi-acao")
-    with k4:
-        _render_kpi_card("Divergência de valores", f"R$ {kpi_divergencia:,.2f}", "!", "kpi-div")
-    with k5:
-        _render_kpi_card("Em aberto", f"R$ {kpi_em_aberto:,.2f}", "○", "kpi-pend")
-    
+    _repasse_ui_kpi_cards_row(
+        kpi_valor_recebido,
+        kpi_baixado,
+        kpi_recebido_nao_baixado,
+        kpi_divergencia,
+        kpi_em_aberto,
+    )
+
+    st.divider()
+
     # Validação de consistência dos KPIs (base filtrada)
-    if _fdl_minimal_layout():
-        st.subheader("Validação de ações (base filtrada)")
-    else:
-        st.markdown('<div class="section-title">Validação de ações (base filtrada)</div>', unsafe_allow_html=True)
+    st.subheader("Validação de ações (base filtrada)")
     acoes_validacao = [
         "Ok",
         "Baixar no Bling",
@@ -3591,36 +3605,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         "Revisar venda zerada",
     ]
     contagens_acao = {a: int(tabela["Ação sugerida operacional"].eq(a).sum()) for a in acoes_validacao}
-    if _fdl_minimal_layout():
-        st.write(
-            " · ".join(
-                f"{k}: {contagens_acao[k]}"
-                for k in (
-                    "Ok",
-                    "Baixar no Bling",
-                    "Analisar diferença",
-                    "Verificar recebimento",
-                    "Verificar faturamento",
-                    "Revisar venda zerada",
-                )
-            )
-        )
-    else:
-        st.markdown(
-            f"""
-        <div class="validacao-badges">
-          <span class="badge-acao badge-ok">Ok <b>{contagens_acao["Ok"]}</b></span>
-          <span class="badge-acao badge-bling">Baixar no Bling <b>{contagens_acao["Baixar no Bling"]}</b></span>
-          <span class="badge-acao badge-analisar">Analisar diferença <b>{contagens_acao["Analisar diferença"]}</b></span>
-          <span class="badge-acao badge-verificar">Verificar recebimento <b>{contagens_acao["Verificar recebimento"]}</b></span>
-          <span class="badge-acao badge-faturamento">Verificar faturamento <b>{contagens_acao["Verificar faturamento"]}</b></span>
-          <span class="badge-acao badge-revisar">Revisar venda zerada <b>{contagens_acao["Revisar venda zerada"]}</b></span>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-    
+    _repasse_ui_validacao_acoes_mini_cards(contagens_acao)
+
     st.caption(f"Última visualização: **{ts_proc}**")
+    st.divider()
     
     # Tabela operacional — Data de emissão: mesma coluna da tabela final, parse ISO (sem dayfirst).
     col_data_emissao = _resolve_col_data_emissao(list(tabela.columns))
@@ -3721,22 +3709,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.caption("Desative FDL_SAFE_MODE para voltar à UI completa.")
         return
 
-    if _fdl_minimal_layout():
-        st.subheader("Fila operacional")
-        st.caption("Casos prontos para tratamento")
-    else:
-        st.markdown(
-            """
-        <div class="queue-head">
-          <div>
-            <div class="queue-title">Fila Operacional</div>
-            <div class="queue-sub">Casos prontos para tratamento</div>
-          </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-    
+    st.subheader("Fila operacional")
+    st.caption("Casos prontos para tratamento — exporte ou analise na grelha abaixo.")
+    st.divider()
+
     btn1, btn2, btn3 = st.columns([1, 1, 1])
     csv_bytes = tabela_exibir.to_csv(index=False).encode("utf-8-sig")
     with btn1:

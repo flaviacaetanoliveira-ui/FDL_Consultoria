@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-29T16:09:14Z",
+  "generated_at": "2026-03-29T15:44:06Z",
   "source_signature": "d59d90d739e2350806caa75737dd7bb5",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
@@ -44,18 +44,9 @@
     "etapa3_rows": 229,
     "etapa3_linhas_data_pagamento_preenchida": 143,
     "etapa3_linhas_valor_pago_positivo": 130,
-    "notas_saida_linhas_carregadas": 2166,
-    "notas_saida_vazio": false,
-    "contas_receber_arquivos": 4,
-    "contas_receber_linhas_carregadas": 1729,
     "apos_integracao_notas_rows": 143,
     "apos_integracao_linhas_data_pagamento_preenchida": 143,
-    "apos_integracao_merge_notas_linhas_numero_nota_preenchida": 134,
-    "apos_integracao_linhas_data_emissao_preenchida": 134,
     "tabela_final_operacional_rows": 143,
-    "tabela_final_linhas_data_pagamento_preenchida": 143,
-    "tabela_final_linhas_numero_nota_preenchida": 134,
-    "tabela_final_linhas_data_emissao_preenchida": 134,
-    "tabela_final_linhas_situacao_preenchida": 134
+    "tabela_final_linhas_data_pagamento_preenchida": 143
   }
 }

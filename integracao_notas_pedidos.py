@@ -56,7 +56,7 @@ def _read_notas(path: Path) -> pd.DataFrame:
 def _carregar_notas_saida() -> pd.DataFrame:
     files = []
     for ptn in ("*.csv", "*.xlsx", "*.xls"):
-        files.extend(p for p in PASTA_NOTAS.glob(ptn) if p.is_file())
+        files.extend(p for p in PASTA_NOTAS.rglob(ptn) if p.is_file())
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
 
     partes = []

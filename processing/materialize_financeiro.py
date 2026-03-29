@@ -10,6 +10,9 @@ Uso típico (PowerShell):
 
 IDs opcionais (metadados e colunas no dataset):
   FDL_CLIENTE_ID, FDL_EMPRESA_ID, FDL_CNPJ
+
+Debug repasse (stderr + metadata repasse_debug):
+  FDL_DEBUG_REPASSE_PIPELINE=1 — liberações, etapa3, notas_saida/contas_receber, merges, colunas finais.
 """
 from __future__ import annotations
 
@@ -204,16 +207,13 @@ def _debug_repasse_pipeline_enabled() -> bool:
 
 
 def _emit_repasse_pipeline_debug(base_dir: Path, df_final: Any) -> dict[str, Any]:
-    """Métricas temporárias (FDL_DEBUG_REPASSE_PIPELINE=1): liberações, etapa3, integração, tabela final."""
+    """Métricas temporárias (FDL_DEBUG_REPASSE_PIPELINE=1): liberações, etapa3, integração notas/contas, tabela final."""
     import pandas as pd
 
     from carregamento_bases import carregar_bases_consolidadas
     from etapa3_conciliacao_vendas_liberacoes_validas import build_conciliacao_vendas_liberacoes_validas
-    from integracao_notas_pedidos import build_conciliacao_com_notas
-
-    _vt, lib_t, _, _ = carregar_bases_consolidadas(base_dir)
-    conc = build_conciliacao_vendas_liberacoes_validas(base_dir)
-    apos = build_conciliacao_com_notas()
+    from etapa4b_integracao_contas_receber import _read_contas
+    from integracao_notas_pedidos import _carregar_notas_saida, build_conciliacao_com_notas
 
     def _count_dp(d: Any) -> int:
         if getattr(d, "empty", True) or "Data de pagamento" not in d.columns:
@@ -225,18 +225,64 @@ def _emit_repasse_pipeline_debug(base_dir: Path, df_final: Any) -> dict[str, Any
             n = int((raw.ne("") & ~raw.str.lower().isin({"nan", "none", "nat"})).sum())
         return n
 
+    def _count_nonempty_col(d: Any, col: str) -> int:
+        if getattr(d, "empty", True) or col not in d.columns:
+            return 0
+        s = d[col].fillna("").astype(str).str.strip()
+        return int(((s.ne("")) & (~s.str.lower().isin({"nan", "none", "nat"}))).sum())
+
+    def _count_data_emissao(d: Any) -> int:
+        if getattr(d, "empty", True) or "Data de emissão" not in d.columns:
+            return 0
+        s = pd.to_datetime(d["Data de emissão"], errors="coerce")
+        n = int(s.notna().sum())
+        if n == 0:
+            return _count_nonempty_col(d, "Data de emissão")
+        return n
+
+    _vt, lib_t, _, _ = carregar_bases_consolidadas(base_dir)
+    conc = build_conciliacao_vendas_liberacoes_validas(base_dir)
+    apos = build_conciliacao_com_notas()
+
+    notas_df = _carregar_notas_saida()
+    notas_rows = int(len(notas_df))
+    notas_saida_vazio = bool(notas_df.empty)
+
+    pasta_contas = base_dir / "contas_receber"
+    files_contas: list[Path] = []
+    for ptn in ("*.csv", "*.xlsx", "*.xls"):
+        files_contas.extend(p for p in pasta_contas.glob(ptn) if p.is_file())
+    files_contas.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    partes_contas = []
+    for f in files_contas:
+        partes_contas.append(_read_contas(f).dropna(axis=1, how="all").copy())
+    contas_df = pd.concat(partes_contas, ignore_index=True) if partes_contas else pd.DataFrame()
+    contas_files = len(files_contas)
+    contas_rows = int(len(contas_df))
+
     vp = pd.to_numeric(conc.get("Valor pago"), errors="coerce")
     matches = int((vp.fillna(0) > 0).sum()) if "Valor pago" in conc.columns else 0
+
+    merge_notas_matches = _count_nonempty_col(apos, "Número da nota")
 
     out: dict[str, Any] = {
         "liberacoes_tratadas_rows": int(len(lib_t)),
         "etapa3_rows": int(len(conc)),
         "etapa3_linhas_data_pagamento_preenchida": _count_dp(conc),
         "etapa3_linhas_valor_pago_positivo": matches,
+        "notas_saida_linhas_carregadas": notas_rows,
+        "notas_saida_vazio": notas_saida_vazio,
+        "contas_receber_arquivos": contas_files,
+        "contas_receber_linhas_carregadas": contas_rows,
         "apos_integracao_notas_rows": int(len(apos)),
         "apos_integracao_linhas_data_pagamento_preenchida": _count_dp(apos),
+        "apos_integracao_merge_notas_linhas_numero_nota_preenchida": merge_notas_matches,
+        "apos_integracao_linhas_data_emissao_preenchida": _count_data_emissao(apos),
         "tabela_final_operacional_rows": int(len(df_final)),
         "tabela_final_linhas_data_pagamento_preenchida": _count_dp(df_final),
+        "tabela_final_linhas_numero_nota_preenchida": _count_nonempty_col(df_final, "Número da nota"),
+        "tabela_final_linhas_data_emissao_preenchida": _count_data_emissao(df_final),
+        "tabela_final_linhas_situacao_preenchida": _count_nonempty_col(df_final, "Situação"),
     }
     for k, v in out.items():
         print(f"[materialize][repasse-debug] {k}={v}", file=sys.stderr)

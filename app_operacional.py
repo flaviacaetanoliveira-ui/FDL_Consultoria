@@ -2565,12 +2565,17 @@ def _col_referencia_como_texto(s: pd.Series) -> pd.Series:
 def _excluir_linhas_fora_conciliacao(df: pd.DataFrame) -> pd.DataFrame:
     """
     Remove linhas sem nota fiscal e taxas ML residuais (ex.: 3,62 / 3,54) típicas de encargos sem NF.
+
+    Se **nenhuma** linha tiver número de nota preenchido (ex.: materialização sem pasta notas_saida),
+    não elimina o conjunto inteiro — o cliente ainda precisa da fila operacional por venda/pedido.
     """
     if df.empty:
         return df
     out = df
     if "Número da nota" in out.columns:
-        out = out.loc[_serie_numero_nota_valida(out["Número da nota"])].copy()
+        mask_nf = _serie_numero_nota_valida(out["Número da nota"])
+        if mask_nf.any():
+            out = out.loc[mask_nf].copy()
     if out.empty or "Total BRL" not in out.columns:
         return out
     tb = pd.to_numeric(out["Total BRL"], errors="coerce")

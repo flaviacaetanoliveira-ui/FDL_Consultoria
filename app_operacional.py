@@ -74,6 +74,193 @@ from operacional_frete_ui import _dataframe_frete_grid
 _REPO_APP_ROOT = Path(__file__).resolve().parent
 BUILD_TAG = "build-20260329-repasse-ui-saas"
 
+
+def _sidebar_version_display() -> str:
+    """Rótulo curto para a sidebar (ex.: v20260329)."""
+    for tok in BUILD_TAG.replace("build-", "").split("-"):
+        if len(tok) == 8 and tok.isdigit():
+            return f"v{tok}"
+    return "v—"
+
+
+def _sidebar_saas_styles_markdown() -> str:
+    """CSS da sidebar — paleta SaaS (UI apenas)."""
+    return """
+<style>
+  section[data-testid="stSidebar"] {
+    background: #F8FAFC !important;
+    border-right: 1px solid #E5E7EB !important;
+  }
+  section[data-testid="stSidebar"] > div {
+    background: #F8FAFC !important;
+  }
+  section[data-testid="stSidebar"] .block-container {
+    padding-top: 1.1rem !important;
+    padding-bottom: 1.75rem !important;
+  }
+  .fdl-sb-brand-block {
+    margin: 0.35rem 0 0.85rem 0;
+    padding: 0 0.15rem;
+  }
+  .fdl-sb-brand-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: #0f172a;
+    line-height: 1.2;
+    margin: 0;
+  }
+  .fdl-sb-brand-client {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #64748b;
+    margin: 0.35rem 0 0 0;
+    line-height: 1.35;
+  }
+  .fdl-sb-nav-heading {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin: 0.85rem 0 0.45rem 0.2rem;
+  }
+  .fdl-sb-footer-ts {
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: #94a3b8;
+    line-height: 1.45;
+    margin: 1.1rem 0 0.15rem 0;
+    padding: 0 0.15rem;
+  }
+  .fdl-sb-footer-ts span {
+    color: #64748b;
+    font-weight: 500;
+  }
+  .fdl-sb-footer-ver {
+    font-size: 0.62rem !important;
+    color: #cbd5e1 !important;
+    margin-top: 0.15rem !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"]:has([data-testid="stSelectbox"]) {
+    background: #ffffff !important;
+    border: 1px solid #E5E7EB !important;
+    border-radius: 10px !important;
+    padding: 0.7rem 0.8rem 0.85rem 0.8rem !important;
+    margin: 0.25rem 0 0.65rem 0 !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stSelectbox"] label p {
+    font-size: 0.78rem !important;
+    font-weight: 600 !important;
+    color: #475569 !important;
+    text-transform: none !important;
+    letter-spacing: 0.01em !important;
+    margin-bottom: 0.35rem !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {
+    border-radius: 8px !important;
+    border-color: #E5E7EB !important;
+    background: #ffffff !important;
+    min-height: 2.65rem !important;
+    font-size: 0.92rem !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"]:focus-within > div {
+    border-color: #2563EB !important;
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25) !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] {
+    margin: 0 0 0.4rem 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] details {
+    border: 1px solid #E5E7EB !important;
+    border-radius: 10px !important;
+    background: #ffffff !important;
+    overflow: hidden;
+    transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] details:hover {
+    background: #EFF6FF !important;
+    border-color: #BFDBFE !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] details[open] {
+    border-color: #93C5FD !important;
+    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
+  }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] details[open] > summary {
+    background: #EFF6FF !important;
+    border-bottom: 1px solid #E5E7EB !important;
+    color: #1e40af !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] summary {
+    padding: 0.55rem 0.65rem !important;
+    font-weight: 600 !important;
+    font-size: 0.875rem !important;
+    color: #334155 !important;
+    list-style: none;
+    cursor: pointer !important;
+    border: none !important;
+    background: #ffffff !important;
+    transition: background 0.18s ease !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
+    background: #EFF6FF !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] summary::-webkit-details-marker { display: none; }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] [data-testid="stExpanderDetails"] > div {
+    padding: 0.45rem 0.5rem 0.55rem 0.65rem !important;
+    background: #FAFBFC !important;
+    border-top: 1px solid #f1f5f9 !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] .stButton { margin-top: 0.25rem !important; }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button {
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-size: 0.8125rem !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    padding: 0.45rem 0.7rem 0.45rem 0.85rem !important;
+    margin-left: 0.35rem !important;
+    border-left: 2px solid transparent !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="primary"] {
+    background: #EFF6FF !important;
+    color: #2563EB !important;
+    border: 1px solid #BFDBFE !important;
+    border-left: 3px solid #2563EB !important;
+    box-shadow: none !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="secondary"] {
+    background: #ffffff !important;
+    color: #475569 !important;
+    border: 1px solid transparent !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="secondary"]:hover {
+    background: #F8FAFC !important;
+    border-color: #E5E7EB !important;
+  }
+  section[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button[kind="primary"]:hover {
+    background: #DBEAFE !important;
+    border-color: #60A5FA !important;
+  }
+  section[data-testid="stSidebar"] button[kind="secondary"] {
+    border: 1px solid #E5E7EB !important;
+    background: #ffffff !important;
+    color: #64748b !important;
+    font-weight: 500 !important;
+    box-shadow: none !important;
+  }
+  section[data-testid="stSidebar"] button[kind="secondary"]:hover {
+    background: #F8FAFC !important;
+    border-color: #CBD5E1 !important;
+    color: #475569 !important;
+  }
+</style>
+"""
+
 _SB_LOGO_MINI_SVG = """
 <svg class="fdl-sb-logo-mini" width="38" height="38" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <defs><linearGradient id="fdlSbLogoGrad" x1="0" y1="0" x2="1" y2="1">
@@ -4644,6 +4831,8 @@ if _bootstrap_debug_enabled():
                 st.caption(f"{_i}. {_line}")
 
 with st.sidebar:
+    st.markdown(_sidebar_saas_styles_markdown(), unsafe_allow_html=True)
+
     _lc, _mc, _rc = st.columns([1, 2.8, 1])
     with _mc:
         _logo_file = _REPO_APP_ROOT / "assets" / "fdl_analytics_logo.png"
@@ -4651,39 +4840,50 @@ with st.sidebar:
             st.image(str(_logo_file), width=180)
         else:
             st.caption("Coloque a logo em `assets/fdl_analytics_logo.png`.")
-    st.caption(_app_ctx.display_name)
+    _nome_cliente_ui = html.escape(str(st.session_state.get("cliente", _app_ctx.display_name)))
+    st.markdown(
+        f"""
+<div class="fdl-sb-brand-block">
+  <p class="fdl-sb-brand-title">FDL Analytics</p>
+  <p class="fdl-sb-brand-client">Cliente: {_nome_cliente_ui}</p>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.divider()
 
     _empresas_usuario = list(st.session_state["empresas_permitidas"])
     _nomes_nav = nomes_permitidos_com_registro(_empresas_usuario)
 
     if _nomes_nav:
-        _org_idx = 0
-        for i, n in enumerate(_nomes_nav):
-            _o = organizacao_por_nome_cadastrado(n)
-            if _o and _o.org_id == _app_ctx.active_org_id:
-                _org_idx = i
-                break
-        _sel_nome = st.selectbox(
-            "Empresa",
-            options=_nomes_nav,
-            index=_org_idx,
-            key="operacional_empresa_ativa_select",
-            label_visibility="visible",
-        )
-        _chosen_org = organizacao_por_nome_cadastrado(_sel_nome)
-        if _chosen_org and _chosen_org.org_id != _app_ctx.active_org_id:
-            st.session_state[SESSION_ACTIVE_ORG_KEY] = _chosen_org.org_id
-            st.rerun()
+        with st.container(border=True):
+            _org_idx = 0
+            for i, n in enumerate(_nomes_nav):
+                _o = organizacao_por_nome_cadastrado(n)
+                if _o and _o.org_id == _app_ctx.active_org_id:
+                    _org_idx = i
+                    break
+            _sel_nome = st.selectbox(
+                "Empresa",
+                options=_nomes_nav,
+                index=_org_idx,
+                key="operacional_empresa_ativa_select",
+                label_visibility="visible",
+            )
+            _chosen_org = organizacao_por_nome_cadastrado(_sel_nome)
+            if _chosen_org and _chosen_org.org_id != _app_ctx.active_org_id:
+                st.session_state[SESSION_ACTIVE_ORG_KEY] = _chosen_org.org_id
+                st.rerun()
 
     _sb_view = st.session_state.get("op_financeiro_view", "repasse")
-    st.caption("Módulos")
+    st.markdown('<p class="fdl-sb-nav-heading">Navegação</p>', unsafe_allow_html=True)
 
     _lbl_repasse = "Conciliação de Repasse"
     _lbl_frete = "Conciliação de Frete"
     _lbl_faturamento = "Faturamento"
+    _exp_financeiro = _sb_view in ("repasse", "frete", "faturamento")
 
-    with st.expander("💰 Financeiro", expanded=True):
+    with st.expander("💰 Financeiro", expanded=_exp_financeiro):
         st.button(
             _lbl_repasse,
             key="fdl_mod_repasse",
@@ -4712,11 +4912,18 @@ with st.sidebar:
     with st.expander("🛒 Comercial", expanded=False):
         st.caption("Em breve")
 
-    st.write("")
-    st.caption("Última atualização dos dados")
-    st.caption(_sb_ts_display)
-    st.caption("Versão")
-    st.caption(str(BUILD_TAG))
+    _ts_parts = str(_sb_ts_display).strip().split(None, 1)
+    _ts_d = _ts_parts[0] if _ts_parts else "—"
+    _ts_t = _ts_parts[1] if len(_ts_parts) > 1 else ""
+    _ts_line = f"{_ts_d} • {_ts_t}" if _ts_t else _ts_d
+    st.markdown(
+        f'<p class="fdl-sb-footer-ts">Atualizado em<br/><span>{html.escape(_ts_line)}</span></p>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<p class="fdl-sb-footer-ver">{html.escape(_sidebar_version_display())}</p>',
+        unsafe_allow_html=True,
+    )
 
     if _admin_mode and _data_source_mode() == "upload_zip":
         _render_cloud_data_loader()
@@ -4728,6 +4935,7 @@ with st.sidebar:
         use_container_width=True,
         help="Limpa caches e recarrega (releitura dos artefatos); não executa materialização.",
         key="fdl_sb_admin_refresh",
+        type="primary",
     ):
         st.cache_data.clear()
         for _k in list(st.session_state.keys()):
@@ -4735,14 +4943,16 @@ with st.sidebar:
                 st.session_state.pop(_k, None)
         st.rerun()
 
-    st.button(
-        "Sair",
-        use_container_width=True,
-        help="Encerra a sessão neste navegador.",
-        type="tertiary",
-        key="fdl_sb_logout",
-        on_click=_sb_logout_click,
-    )
+    _lo1, _lo2, _lo3 = st.columns([1, 2.2, 1])
+    with _lo2:
+        st.button(
+            "Sair",
+            use_container_width=True,
+            help="Encerra a sessão neste navegador.",
+            type="secondary",
+            key="fdl_sb_logout",
+            on_click=_sb_logout_click,
+        )
 
 _fdl_global_trace("05: após sidebar — antes do hero / painel principal")
 

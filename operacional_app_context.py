@@ -117,6 +117,23 @@ _REGISTRO_EMPRESA: dict[str, AppOrganization] = {
             ),
         ),
     ),
+    "Móveis EAP": AppOrganization(
+        org_id="moveis_eap",
+        display_name="Móveis EAP",
+        module_ids=("financeiro",),
+        routes=(
+            ModuleRoute(
+                route_id="conciliacao-repasse",
+                label="Conciliação de Repasse",
+                page_module="app_operacional",
+            ),
+            ModuleRoute(
+                route_id="faturamento",
+                label="Faturamento",
+                page_module="app_operacional",
+            ),
+        ),
+    ),
     "Empresa 3": AppOrganization(
         org_id="empresa_3",
         display_name="Empresa 3",

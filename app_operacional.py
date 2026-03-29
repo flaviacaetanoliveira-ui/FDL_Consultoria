@@ -14,6 +14,7 @@ from pathlib import Path
 import shutil
 import time
 import unicodedata
+from typing import Any, Callable
 from textwrap import dedent
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse, urljoin
 from urllib.error import HTTPError, URLError
@@ -71,7 +72,7 @@ from operacional_frete import (
 from operacional_frete_ui import _dataframe_frete_grid
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
-BUILD_TAG = "build-20260329-multiempresa-data-products"
+BUILD_TAG = "build-20260329-repasse-ui-saas"
 
 _SB_LOGO_MINI_SVG = """
 <svg class="fdl-sb-logo-mini" width="38" height="38" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -3035,13 +3036,35 @@ def _format_frete_anuncio_tabela_display(df: pd.DataFrame) -> pd.DataFrame:
 
 # Texto exibido na coluna «Ação sugerida» da Fila operacional (UI apenas; export mantém valores canónicos).
 _REPASSE_ACAO_SUGERIDA_EXIBICAO: dict[str, str] = {
-    "Ok": "✅ OK",
-    "Baixar no Bling": "⬇️ Baixar no Bling",
-    "Analisar diferença": "🔍 Analisar diferença",
-    "Verificar recebimento": "📥 Verificar recebimento",
-    "Verificar faturamento": "📄 Verificar faturamento",
-    "Revisar venda zerada": "⚠️ Revisar venda zerada",
+    "Ok": "🟢 OK",
+    "Baixar no Bling": "🔵 Baixar no Bling",
+    "Analisar diferença": "🔴 Analisar diferença",
+    "Verificar recebimento": "🟡 Verificar recebimento",
+    "Verificar faturamento": "🟡 Verificar faturamento",
+    "Revisar venda zerada": "🟡 Revisar venda zerada",
 }
+
+
+def _repasse_format_situacao_exibicao(val: object) -> str:
+    """Badge textual para «Situação» (UI; sem alterar dados de negócio)."""
+    if val is None:
+        return ""
+    try:
+        if pd.isna(val):
+            return ""
+    except TypeError:
+        pass
+    s = str(val).strip()
+    if s.lower() in {"nan", "none", "<na>", "nat"}:
+        return ""
+    low = s.lower()
+    if "atrasad" in low:
+        return f"🔴 {s}"
+    if "vencendo" in low and "hoje" in low:
+        return f"🟡 {s}"
+    if "em dia" in low or low == "em dia":
+        return f"🟢 {s}"
+    return s
 
 
 def _repasse_format_acao_sugerida_exibicao(val: object) -> str:
@@ -3068,7 +3091,62 @@ def _dataframe_conciliacao_somente_grid(df: pd.DataFrame) -> pd.DataFrame:
             g[c] = g[c].map(_fmt_brl_ptbr_celula).astype(object)
     if "Ação sugerida" in g.columns:
         g["Ação sugerida"] = g["Ação sugerida"].map(_repasse_format_acao_sugerida_exibicao).astype(object)
+    if "Situação" in g.columns:
+        g["Situação"] = g["Situação"].map(_repasse_format_situacao_exibicao).astype(object)
     return g
+
+
+def _repasse_grid_styler(df: pd.DataFrame):
+    """Datas pt-BR, alinhamento e destaque dos valores monetários (Pandas Styler)."""
+    if df.empty:
+        return df
+    money_cols = [c for c in ("Valor da nota", "Valor a receber", "Valor pago", "Diferença") if c in df.columns]
+
+    def _fmt_emiss(x: object) -> str:
+        try:
+            if x is None or (isinstance(x, float) and math.isnan(x)):
+                return ""
+            if pd.isna(x):
+                return ""
+        except Exception:
+            pass
+        try:
+            return pd.Timestamp(x).strftime("%d/%m/%Y")
+        except Exception:
+            return str(x) if x is not None else ""
+
+    def _fmt_pag(x: object) -> str:
+        try:
+            if x is None or (isinstance(x, float) and math.isnan(x)):
+                return ""
+            if pd.isna(x):
+                return ""
+        except Exception:
+            pass
+        try:
+            return pd.Timestamp(x).strftime("%d/%m/%Y %H:%M")
+        except Exception:
+            return str(x) if x is not None else ""
+
+    fmt_map: dict[str, Callable[[object], str]] = {}
+    if "Data de emissão" in df.columns:
+        fmt_map["Data de emissão"] = _fmt_emiss
+    if "Data de pagamento" in df.columns:
+        fmt_map["Data de pagamento"] = _fmt_pag
+
+    styler = df.style
+    if fmt_map:
+        styler = styler.format(fmt_map)
+    if money_cols:
+        styler = styler.set_properties(
+            subset=money_cols,
+            **{
+                "text-align": "right",
+                "font-weight": "600",
+                "font-variant-numeric": "tabular-nums",
+            },
+        )
+    return styler
 
 
 def _column_config_conciliacao(
@@ -3090,13 +3168,15 @@ def _column_config_conciliacao(
     if "Data de pagamento" in df.columns:
         cfg["Data de pagamento"] = DatetimeColumn("Data de pagamento", format="DD/MM/YYYY HH:mm", width="medium")
     if "Situação" in df.columns:
-        cfg["Situação"] = TextColumn("Situação", width="small")
+        cfg["Situação"] = TextColumn("Situação", width="medium")
     if "Ação sugerida" in df.columns:
         cfg["Ação sugerida"] = TextColumn("Ação sugerida", width="large")
     return cfg
 
 
-def _multiselect_stable(key: str, label: str, options: list[str]) -> list[str]:
+def _multiselect_stable(
+    key: str, label: str, options: list[str], *, compact_label: bool = False
+) -> list[str]:
     """
     Evita `default=` com listas recém-ordenadas a cada rerun (perdia estado / ecrã em branco).
     Estado inicial vazio: o cliente abre a seta e escolhe; vazio = sem filtro nessa dimensão.
@@ -3115,6 +3195,15 @@ def _multiselect_stable(key: str, label: str, options: list[str]) -> list[str]:
             st.session_state[key] = []
         else:
             st.session_state[key] = [x for x in prev if x in opts]
+    if compact_label:
+        st.caption(label)
+        return st.multiselect(
+            " ",
+            opts,
+            key=key,
+            placeholder="Todos",
+            label_visibility="collapsed",
+        )
     return st.multiselect(label, opts, key=key, placeholder="Escolher…")
 
 
@@ -3187,10 +3276,17 @@ def _faturamento_filter_keys(org_id: str) -> list[str]:
     ]
 
 
+_FATURAMENTO_PAINEL_EM_CONSTRUCAO = True
+
+
 def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc: str, org_id: str) -> None:
     """
     Fase 1 — Faturamento: KPIs, filtros, tabela principal e export CSV (recorte filtrado).
     """
+    if _FATURAMENTO_PAINEL_EM_CONSTRUCAO:
+        st.markdown("## 🚧 Módulo em construção")
+        st.info("Em breve você poderá acompanhar o faturamento completo aqui.")
+        return
     _oid = str(org_id)
     if df.empty:
         st.info("Não há linhas de faturamento para exibir. Verifique a materialização ou os filtros de empresa.")
@@ -4004,29 +4100,32 @@ def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
     return pd.to_datetime(s, errors="coerce")
 
 
-def _repasse_ui_validacao_acoes_mini_cards(contagens: dict[str, int]) -> None:
-    """Mini-cards só para contagens > 0; layout dinâmico (1 a 3 colunas)."""
-    blocos: list[tuple[str, str]] = [
-        ("Ok", "✅ OK"),
-        ("Baixar no Bling", "⬇️ Baixar no Bling"),
-        ("Analisar diferença", "🔍 Analisar diferença"),
-    ]
-    ativos = [(k, lbl) for k, lbl in blocos if contagens.get(k, 0) > 0]
-    if not ativos:
-        st.caption("Sem registos nestas categorias com o filtro atual.")
-        return
-    n = len(ativos)
-    if n == 1:
-        cols = st.columns(1)
-    elif n == 2:
-        cols = st.columns(2)
-    else:
-        cols = st.columns(3)
+def _repasse_ui_validacao_kpi_saas(contagens: dict[str, int]) -> None:
+    """KPIs da base filtrada — cartões com cores semânticas (UI)."""
+    ok = int(contagens.get("Ok", 0))
+    bling = int(contagens.get("Baixar no Bling", 0))
+    div = int(contagens.get("Analisar diferença", 0))
+    rev = int(contagens.get("Revisão", 0))
     st.write("")
-    for col, (key, label) in zip(cols, ativos):
+    c1, c2, c3, c4 = st.columns(4)
+    specs: list[tuple[Any, str, int, str, str]] = [
+        (c1, "OK", ok, "#15803d", "Sem pendência operacional neste recorte"),
+        (c2, "Baixar no Bling", bling, "#1d4ed8", "Ação: baixa no Bling"),
+        (c3, "Divergência", div, "#b91c1c", "Analisar diferença de valores"),
+        (c4, "Revisão", rev, "#ca8a04", "Verificar recebimento, faturamento ou venda zerada"),
+    ]
+    for col, title, val, color, hint in specs:
         with col:
             with st.container(border=True):
-                st.metric(label, value=int(contagens[key]))
+                st.markdown(
+                    f'<p style="margin:0 0 0.25rem 0;font-size:0.7rem;font-weight:600;color:{color};text-transform:uppercase;letter-spacing:0.04em;">{html.escape(title)}</p>',
+                    unsafe_allow_html=True,
+                )
+                st.metric(
+                    "Registos",
+                    _fmt_int_ptbr(val),
+                    help=hint,
+                )
 
 
 def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
@@ -4041,7 +4140,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         return
 
     with st.container(border=True):
-        st.subheader("Filtros operacionais")
+        st.markdown("##### Filtros operacionais")
+        st.caption("Refine por plataforma, ação, situação e intervalo de datas de pagamento.")
         st.write("")
         r1 = st.columns((1.15, 1.15, 1.15, 1.55))
         dp_series_full = pd.to_datetime(base["Data de pagamento"], errors="coerce")
@@ -4067,33 +4167,45 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             [x for x in base["Situação"].dropna().unique().tolist() if str(x).strip()]
         )
         with r1[0]:
-            sel_plat = _multiselect_stable("op_ms_plat", "Plataforma", plats)
+            sel_plat = _multiselect_stable("op_ms_plat", "Plataforma", plats, compact_label=True)
         with r1[1]:
-            sel_acao = _multiselect_stable("op_ms_acao", "Ação sugerida", acoes)
+            sel_acao = _multiselect_stable("op_ms_acao", "Ação sugerida", acoes, compact_label=True)
         with r1[2]:
-            sel_sit = _multiselect_stable("op_ms_sit", "Situação", sit)
+            sel_sit = _multiselect_stable("op_ms_sit", "Situação", sit, compact_label=True)
         with r1[3]:
-            busca = st.text_input("Busca (venda / pedido / nota)", "").strip().lower()
+            st.caption("Busca")
+            busca = st.text_input(
+                " ",
+                placeholder="Venda, pedido ou nota…",
+                label_visibility="collapsed",
+                key="op_repasse_busca_txt",
+            ).strip().lower()
         st.write("")
         st.write("")
         r2 = st.columns((1.15, 1.15, 2.3))
         with r2[0]:
+            st.caption("Pagamento — início")
             data_pag_ini = st.date_input(
-                "Data de pagamento — início",
+                " ",
                 value=_d_min,
                 min_value=_d_min,
                 max_value=_d_max,
                 format="DD/MM/YYYY",
+                label_visibility="collapsed",
             )
         with r2[1]:
+            st.caption("Pagamento — fim")
             data_pag_fim = st.date_input(
-                "Data de pagamento — fim",
+                " ",
                 value=_d_max,
                 min_value=_d_min,
                 max_value=_d_max,
                 format="DD/MM/YYYY",
+                label_visibility="collapsed",
             )
-        st.caption("Filtra por **data de pagamento** (comparação por dia civil).")
+        with r2[2]:
+            st.caption("Período")
+            st.caption("Comparação por **dia civil** (meia-noite a meia-noite).")
         if not has_dp_base:
             st.info(
                 "Nenhuma **data de pagamento** preenchida nesta base: o intervalo abaixo não filtra linhas "
@@ -4162,15 +4274,17 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
     tabela["Diferença"] = pd.to_numeric(tabela.get("Diferença"), errors="coerce")
 
-    st.subheader("Validação de ações")
-    st.caption("Base filtrada — ações sugeridas para tratamento operacional.")
+    st.markdown("### Validação de ações")
+    st.caption("Contagens na **base já filtrada** — priorize divergências e revisões.")
     acoes_validacao = [
         "Ok",
         "Baixar no Bling",
         "Analisar diferença",
     ]
     contagens_acao = {a: int(tabela["Ação sugerida operacional"].eq(a).sum()) for a in acoes_validacao}
-    _repasse_ui_validacao_acoes_mini_cards(contagens_acao)
+    _revisao_acoes = ("Revisar venda zerada", "Verificar recebimento", "Verificar faturamento")
+    contagens_acao["Revisão"] = int(tabela["Ação sugerida operacional"].isin(_revisao_acoes).sum())
+    _repasse_ui_validacao_kpi_saas(contagens_acao)
 
     st.write("")
     st.caption(f"Dados carregados: **{ts_proc}**")
@@ -4276,9 +4390,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.caption("Desative FDL_SAFE_MODE para voltar à UI completa.")
         return
 
-    st.subheader("Fila operacional")
-    st.caption("Prioridade: análise na grelha; exporte quando precisar de partilhar o recorte.")
-    st.write("")
+    st.markdown("### Fila operacional")
+    st.caption("Analise o recorte na grelha; use a exportação para partilhar fora do sistema.")
     st.write("")
     st.write("")
 
@@ -4333,19 +4446,24 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 
     tabela_grid = _dataframe_conciliacao_somente_grid(tabela_exibir)
     _cfg_grid = None
-    if not _fdl_minimal_layout():
-        _cfg_grid = (
-            _column_config_conciliacao(tabela_grid, moeda_como_texto=True)
-            if not tabela_grid.empty
-            else None
-        )
+    _disp_grid: object = tabela_grid
+    if not _fdl_minimal_layout() and not tabela_grid.empty:
+        try:
+            _disp_grid = _repasse_grid_styler(tabela_grid)
+        except Exception:
+            _disp_grid = tabela_grid
+            _cfg_grid = _column_config_conciliacao(tabela_grid, moeda_como_texto=True)
+    elif not _fdl_minimal_layout() and tabela_grid.empty:
+        _cfg_grid = None
+    elif _fdl_minimal_layout() and not tabela_grid.empty:
+        _cfg_grid = _column_config_conciliacao(tabela_grid, moeda_como_texto=True)
 
     if tabela_exibir.empty:
         st.info(
             "**Nenhum registo** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
         )
         st.dataframe(
-            tabela_grid,
+            _disp_grid,
             use_container_width=True,
             height=160,
             hide_index=True,
@@ -4353,7 +4471,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         )
     else:
         st.dataframe(
-            tabela_grid,
+            _disp_grid,
             use_container_width=True,
             height=550,
             hide_index=True,
@@ -4670,21 +4788,42 @@ if _fv == "repasse":
     st.caption(
         f"{_app_ctx.display_name} · {_active_org.display_name} · Financeiro · Repasse"
     )
-    st.title("Conciliação de Repasse")
-    st.caption(
-        "Acompanhe valores recebidos, pendências e ações operacionais do período."
-    )
+    if _fdl_minimal_layout():
+        st.title("Conciliação de Repasse")
+        st.caption(
+            "Acompanhe valores recebidos, pendências e ações operacionais do período."
+        )
+    else:
+        st.markdown(
+            """
+<style>
+.fdl-repasse-hero h1 {
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-size: 2.1rem;
+  color: #0f172a;
+  margin: 0 0 0.35rem 0;
+  line-height: 1.2;
+}
+.fdl-repasse-hero p {
+  color: #64748b;
+  font-size: 1rem;
+  margin: 0;
+  line-height: 1.45;
+  max-width: 48rem;
+}
+</style>
+<div class="fdl-repasse-hero">
+  <h1>Conciliação de Repasse</h1>
+  <p>Acompanhe valores recebidos, pendências e ações operacionais do período.</p>
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
     st.divider()
 elif _fv == "faturamento":
     st.caption(
         f"{_app_ctx.display_name} · {_active_org.display_name} · Financeiro · Faturamento"
-    )
-    st.title("Faturamento")
-    st.caption(
-        "Analise receita por item, custos, impostos e resultado; acompanhe itens consolidados e alertas de qualidade."
-    )
-    st.caption(
-        f"Último processamento: **{ts_proc}** · **{_fmt_int_ptbr(len(faturamento_df))}** linhas carregadas"
     )
     st.divider()
 else:

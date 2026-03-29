@@ -266,6 +266,17 @@ def _frete_debug_ui_enabled() -> bool:
         return True
 
 
+def _frete_stage_error(etapa: int, titulo: str, exc: BaseException) -> None:
+    """Erro visível com número da etapa (1–4) para diagnóstico na Cloud."""
+    st.error(f"**Conciliação de Frete — falha na etapa {etapa}/4: {titulo}**")
+    st.exception(exc)
+
+
+def _frete_stage_trace(etapa: int, titulo: str, detalhe: str) -> None:
+    if _frete_debug_ui_enabled():
+        st.caption(f"Frete [etapa {etapa}/4 — {titulo}] {detalhe}")
+
+
 def _repasse_consume_mode() -> str:
     """Repasse: live = pipeline; materialized = CSV/XLSX. Com FDL_STRICT_MATERIALIZED, sem fallback para live."""
     raw = os.environ.get("FDL_REPASSE_CONSUME_MODE", "").strip().lower()
@@ -2746,346 +2757,362 @@ def _render_frete_operacional_ui(
     """Filtros + contexto + KPIs + tabela + export (alinhado ao painel de repasse)."""
     _is_admin = _is_admin_mode()
     _sig = _frete_org_widget_suffix(org_id)
-    work = df_frete.copy()
-    today = datetime.now(_BR_TZ).date()
-    default_ini = today - timedelta(days=29)
-    default_fim = today
-
-    if "_data_venda_dt" in work.columns:
-        dts = frete_series_normalize_sale_dt(work["_data_venda_dt"])
-        if dts.notna().any():
-            d_min_data = dts.min().date()
-            d_max_data = dts.max().date()
-        else:
-            d_min_data = d_max_data = today
-    else:
-        d_min_data = d_max_data = today
-
-    picker_min = min(d_min_data, default_ini)
-    picker_max = max(d_max_data, default_fim, today)
-    if picker_max < picker_min:
-        picker_min, picker_max = picker_max, picker_min
-
-    d_ini_val = max(picker_min, min(default_ini, picker_max))
-    d_fim_val = max(picker_min, min(default_fim, picker_max))
-    if d_ini_val > d_fim_val:
-        d_ini_val = d_fim_val
-
-    estados: list[str] = []
-    if "Estado" in work.columns:
-        estados = sorted(
-            {str(x).strip() for x in work["Estado"].dropna().unique().tolist() if str(x).strip()}
-        )
-    situacao_opts: list[str] = list(FRETE_SITUACAO_FRETE_VALORES_FILTRO)
-
-    with st.container():
-        st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
-        r1 = st.columns((1.15, 1.15, 1.7))
-        r2 = st.columns((1.15, 1.15, 2.3))
-        with r1[0]:
-            sel_est = _multiselect_stable(f"op_frete_ms_est_{_sig}", "Estado da venda", estados)
-        with r1[1]:
-            sel_sit = _multiselect_stable(
-                f"op_frete_ms_situacao_{_sig}", FRETE_UI_SITUACAO_FRETE, situacao_opts
-            )
-        with r1[2]:
-            busca = st.text_input("Busca (venda ou # anúncio)", "", key=f"op_frete_busca_{_sig}")
-            busca = busca.strip().lower()
-        with r2[0]:
-            data_ini = st.date_input(
-                "Data da venda — início",
-                value=d_ini_val,
-                min_value=picker_min,
-                max_value=picker_max,
-                format="DD/MM/YYYY",
-                key=f"op_frete_d_ini_{_sig}",
-            )
-        with r2[1]:
-            data_fim = st.date_input(
-                "Data da venda — fim",
-                value=d_fim_val,
-                min_value=picker_min,
-                max_value=picker_max,
-                format="DD/MM/YYYY",
-                key=f"op_frete_d_fim_{_sig}",
-            )
-        st.caption(
-            "O intervalo restringe as linhas pela **data da venda** (comparado por dia). "
-            "Por omissão: últimos 30 dias corridos até hoje."
-        )
-
-    if data_fim < data_ini:
-        st.warning("A data final não pode ser anterior à data inicial. Ajuste o período.")
-        data_fim = data_ini
-
-    tbl = work
-    if sel_est and "Estado" in tbl.columns:
-        tbl = tbl[tbl["Estado"].isin(sel_est)]
-    if sel_sit:
-        sit_tbl = compute_frete_situacao_frete_column(tbl)
-        tbl = tbl.loc[sit_tbl.isin(sel_sit)]
-    if busca:
-        m = (
-            tbl[FRETE_UI_N_VENDA].fillna("").astype(str).str.lower().str.contains(busca, regex=False)
-            if FRETE_UI_N_VENDA in tbl.columns
-            else pd.Series(False, index=tbl.index)
-        )
-        if FRETE_UI_ANUNCIO in tbl.columns:
-            m = m | tbl[FRETE_UI_ANUNCIO].fillna("").astype(str).str.lower().str.contains(
-                busca, regex=False
-            )
-        tbl = tbl.loc[m]
-
-    if "_data_venda_dt" in tbl.columns:
-        dd = frete_series_normalize_sale_dt(tbl["_data_venda_dt"])
-        if dd.notna().any():
-            ini = pd.Timestamp(data_ini)
-            fim = pd.Timestamp(data_fim) + pd.Timedelta(days=1)
-            tbl = tbl.loc[dd.notna() & (dd >= ini) & (dd < fim)]
-
-    tbl_show = tbl[[c for c in tbl.columns if not str(c).startswith("_")]].copy()
-    if "data_venda" not in tbl_show.columns and "_data_venda_dt" in tbl.columns:
-        tbl_show["data_venda"] = tbl["_data_venda_dt"]
-    if FRETE_UI_CLASSIFICACAO in tbl_show.columns:
-        tbl_show = tbl_show.drop(columns=[FRETE_UI_CLASSIFICACAO])
-
-    _miss_req = [c for c in (FRETE_UI_N_VENDA, FRETE_UI_DIFERENCA) if c not in tbl_show.columns]
-    if _miss_req:
-        st.error(
-            "Colunas obrigatórias ausentes para a Conciliação de Frete: "
-            + ", ".join(repr(c) for c in _miss_req)
-            + ". Verifique o CSV materializado (dataset_frete_app.csv) ou o export ML."
-        )
-        if _frete_debug_ui_enabled():
-            st.json({"colunas_presentes": list(tbl_show.columns)[:120]})
-        return
-
-    if _frete_debug_ui_enabled():
-        st.caption("Debug Frete: filtros aplicados — a seguir KPIs e tabelas.")
-
-    _va = html.escape(str(meta_frete.get("vendas_arquivo", "—")))
-    _ts_esc = html.escape(str(ts_proc))
-    _pl = "Todas"
-    if estados and sel_est and len(sel_est) < len(estados):
-        _pl = ", ".join(sel_est[:2]) + ("..." if len(sel_est) > 2 else "")
-    elif estados and not sel_est:
-        _pl = "Todas"
-    elif not estados:
-        _pl = "—"
-    st.markdown(
-        f"""
-        <p class="page-meta" style="margin-bottom:0.65rem;">
-          <strong>Estado (filtro):</strong> {_pl}
-          &nbsp;·&nbsp;
-          <strong>Dados carregados:</strong> {_ts_esc}
-          &nbsp;·&nbsp;
-          <strong>Venda:</strong> {data_ini.strftime("%d/%m/%Y")} a {data_fim.strftime("%d/%m/%Y")}
-          &nbsp;·&nbsp;
-          <strong>Fonte:</strong> {_va}
-        </p>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    _rec_key = f"op_frete_recebido_{_sig}"
-    if _rec_key not in st.session_state:
-        st.session_state[_rec_key] = {}
-    rec_map: dict[str, bool] = st.session_state[_rec_key]
-
-    nv_s = tbl_show[FRETE_UI_N_VENDA].map(lambda x: str(x).strip() if pd.notna(x) else "")
-    recebido_series = nv_s.map(lambda x: FRETE_VAL_RECEBIDO_SIM if rec_map.get(x) else FRETE_VAL_RECEBIDO_NAO)
-    recebido_series.index = tbl_show.index
 
     try:
-        kpi_ex = frete_kpis_executivos(tbl_show)
+            _frete_stage_trace(2, "Filtros", "início")
+            work = df_frete.copy()
+            today = datetime.now(_BR_TZ).date()
+            default_ini = today - timedelta(days=29)
+            default_fim = today
+        
+            if "_data_venda_dt" in work.columns:
+                dts = frete_series_normalize_sale_dt(work["_data_venda_dt"])
+                if dts.notna().any():
+                    d_min_data = dts.min().date()
+                    d_max_data = dts.max().date()
+                else:
+                    d_min_data = d_max_data = today
+            else:
+                d_min_data = d_max_data = today
+        
+            picker_min = min(d_min_data, default_ini)
+            picker_max = max(d_max_data, default_fim, today)
+            if picker_max < picker_min:
+                picker_min, picker_max = picker_max, picker_min
+        
+            d_ini_val = max(picker_min, min(default_ini, picker_max))
+            d_fim_val = max(picker_min, min(default_fim, picker_max))
+            if d_ini_val > d_fim_val:
+                d_ini_val = d_fim_val
+        
+            estados: list[str] = []
+            if "Estado" in work.columns:
+                estados = sorted(
+                    {str(x).strip() for x in work["Estado"].dropna().unique().tolist() if str(x).strip()}
+                )
+            situacao_opts: list[str] = list(FRETE_SITUACAO_FRETE_VALORES_FILTRO)
+        
+            with st.container():
+                st.markdown('<p class="filtros-panel-title">Filtros operacionais</p>', unsafe_allow_html=True)
+                r1 = st.columns((1.15, 1.15, 1.7))
+                r2 = st.columns((1.15, 1.15, 2.3))
+                with r1[0]:
+                    sel_est = _multiselect_stable(f"op_frete_ms_est_{_sig}", "Estado da venda", estados)
+                with r1[1]:
+                    sel_sit = _multiselect_stable(
+                        f"op_frete_ms_situacao_{_sig}", FRETE_UI_SITUACAO_FRETE, situacao_opts
+                    )
+                with r1[2]:
+                    busca = st.text_input("Busca (venda ou # anúncio)", "", key=f"op_frete_busca_{_sig}")
+                    busca = busca.strip().lower()
+                with r2[0]:
+                    data_ini = st.date_input(
+                        "Data da venda — início",
+                        value=d_ini_val,
+                        min_value=picker_min,
+                        max_value=picker_max,
+                        format="DD/MM/YYYY",
+                        key=f"op_frete_d_ini_{_sig}",
+                    )
+                with r2[1]:
+                    data_fim = st.date_input(
+                        "Data da venda — fim",
+                        value=d_fim_val,
+                        min_value=picker_min,
+                        max_value=picker_max,
+                        format="DD/MM/YYYY",
+                        key=f"op_frete_d_fim_{_sig}",
+                    )
+                st.caption(
+                    "O intervalo restringe as linhas pela **data da venda** (comparado por dia). "
+                    "Por omissão: últimos 30 dias corridos até hoje."
+                )
+        
+            if data_fim < data_ini:
+                st.warning("A data final não pode ser anterior à data inicial. Ajuste o período.")
+                data_fim = data_ini
+        
+            tbl = work
+            if sel_est and "Estado" in tbl.columns:
+                tbl = tbl[tbl["Estado"].isin(sel_est)]
+            if sel_sit:
+                sit_tbl = compute_frete_situacao_frete_column(tbl)
+                tbl = tbl.loc[sit_tbl.isin(sel_sit)]
+            if busca:
+                m = (
+                    tbl[FRETE_UI_N_VENDA].fillna("").astype(str).str.lower().str.contains(busca, regex=False)
+                    if FRETE_UI_N_VENDA in tbl.columns
+                    else pd.Series(False, index=tbl.index)
+                )
+                if FRETE_UI_ANUNCIO in tbl.columns:
+                    m = m | tbl[FRETE_UI_ANUNCIO].fillna("").astype(str).str.lower().str.contains(
+                        busca, regex=False
+                    )
+                tbl = tbl.loc[m]
+        
+            if "_data_venda_dt" in tbl.columns:
+                dd = frete_series_normalize_sale_dt(tbl["_data_venda_dt"])
+                if dd.notna().any():
+                    ini = pd.Timestamp(data_ini)
+                    fim = pd.Timestamp(data_fim) + pd.Timedelta(days=1)
+                    tbl = tbl.loc[dd.notna() & (dd >= ini) & (dd < fim)]
+        
+            tbl_show = tbl[[c for c in tbl.columns if not str(c).startswith("_")]].copy()
+            if "data_venda" not in tbl_show.columns and "_data_venda_dt" in tbl.columns:
+                tbl_show["data_venda"] = tbl["_data_venda_dt"]
+            if FRETE_UI_CLASSIFICACAO in tbl_show.columns:
+                tbl_show = tbl_show.drop(columns=[FRETE_UI_CLASSIFICACAO])
+        
+            _miss_req = [c for c in (FRETE_UI_N_VENDA, FRETE_UI_DIFERENCA) if c not in tbl_show.columns]
+            if _miss_req:
+                st.error(
+                    "Colunas obrigatórias ausentes para a Conciliação de Frete: "
+                    + ", ".join(repr(c) for c in _miss_req)
+                    + ". Verifique o CSV materializado (dataset_frete_app.csv) ou o export ML."
+                )
+                if _frete_debug_ui_enabled():
+                    st.json({"colunas_presentes": list(tbl_show.columns)[:120]})
+                return
+        
+            if _frete_debug_ui_enabled():
+                st.caption("Debug Frete: filtros aplicados — a seguir KPIs e tabelas.")
+        
+            _va = html.escape(str(meta_frete.get("vendas_arquivo", "—")))
+            _ts_esc = html.escape(str(ts_proc))
+            _pl = "Todas"
+            if estados and sel_est and len(sel_est) < len(estados):
+                _pl = ", ".join(sel_est[:2]) + ("..." if len(sel_est) > 2 else "")
+            elif estados and not sel_est:
+                _pl = "Todas"
+            elif not estados:
+                _pl = "—"
+            st.markdown(
+                f"""
+                <p class="page-meta" style="margin-bottom:0.65rem;">
+                  <strong>Estado (filtro):</strong> {_pl}
+                  &nbsp;·&nbsp;
+                  <strong>Dados carregados:</strong> {_ts_esc}
+                  &nbsp;·&nbsp;
+                  <strong>Venda:</strong> {data_ini.strftime("%d/%m/%Y")} a {data_fim.strftime("%d/%m/%Y")}
+                  &nbsp;·&nbsp;
+                  <strong>Fonte:</strong> {_va}
+                </p>
+                """,
+                unsafe_allow_html=True,
+            )
+        
+            _rec_key = f"op_frete_recebido_{_sig}"
+            if _rec_key not in st.session_state:
+                st.session_state[_rec_key] = {}
+            rec_map: dict[str, bool] = st.session_state[_rec_key]
+        
+            nv_s = tbl_show[FRETE_UI_N_VENDA].map(lambda x: str(x).strip() if pd.notna(x) else "")
+            recebido_series = nv_s.map(lambda x: FRETE_VAL_RECEBIDO_SIM if rec_map.get(x) else FRETE_VAL_RECEBIDO_NAO)
+            recebido_series.index = tbl_show.index
+            _frete_stage_trace(2, "Filtros", f"concluída — {len(tbl_show)} linhas após filtros")
     except Exception as exc:
-        st.error("Erro ao calcular os indicadores executivos de frete (dados ou colunas incompatíveis).")
-        st.exception(exc)
+        _frete_stage_error(2, "Filtros e preparação da tabela filtrada", exc)
         return
-    tbl_cob_maior = frete_tabela_anuncios_cobrado_maior(tbl_show)
-    tbl_repasse = frete_tabela_anuncios_repasse_frete(tbl_show, recebido_series)
 
-    st.markdown(
-        '<div class="fdl-frete-section-title fdl-frete-st-first">Indicadores executivos</div>',
-        unsafe_allow_html=True,
-    )
-    ek1, ek2 = st.columns(2)
-    with ek1:
-        _render_kpi_card(
-            "Cobrado a maior (valor a recuperar)",
-            _fmt_brl_ptbr_celula(kpi_ex["cobrado_maior"]),
-            "!",
-            "kpi-div",
-            frete_variant=True,
+    try:
+        _frete_stage_trace(3, "KPIs e anúncios", "início")
+        kpi_ex = frete_kpis_executivos(tbl_show)
+        tbl_cob_maior = frete_tabela_anuncios_cobrado_maior(tbl_show)
+        tbl_repasse = frete_tabela_anuncios_repasse_frete(tbl_show, recebido_series)
+    
+        st.markdown(
+            '<div class="fdl-frete-section-title fdl-frete-st-first">Indicadores executivos</div>',
+            unsafe_allow_html=True,
         )
-    with ek2:
-        _render_kpi_card(
-            "Repasse de frete (valor a conferir)",
-            _fmt_brl_ptbr_celula(kpi_ex["repasse"]),
-            "◎",
-            "kpi-total",
-            frete_variant=True,
-        )
-
-    if _is_admin and FRETE_UI_STATUS_CONC in tbl_show.columns:
-        st.caption(
-            "Modo técnico: coluna **Status conciliação** existe nos dados exportados; "
-            "a priorização usa **Situação do Frete** (Cobrado a maior / Repasse)."
-        )
-
-    _sem_anuncio = FRETE_UI_ANUNCIO not in tbl_show.columns
-    st.markdown(
-        '<div class="fdl-frete-section-title">Anúncios com Cobrado a maior</div>',
-        unsafe_allow_html=True,
-    )
-    if _sem_anuncio:
-        st.info("Inclua o **# do anúncio** no export de vendas para agregar por anúncio.")
-    elif tbl_cob_maior.empty:
-        st.info("Nenhum anúncio com **Cobrado a maior** nos filtros atuais.")
-    else:
-        _h1 = min(420, 120 + 36 * max(len(tbl_cob_maior), 1))
-        st.dataframe(
-            _format_frete_anuncio_tabela_display(tbl_cob_maior),
-            use_container_width=True,
-            hide_index=True,
-            height=_h1,
-        )
-
-    st.markdown(
-        '<div class="fdl-frete-section-title">Anúncios com Repasse de frete</div>',
-        unsafe_allow_html=True,
-    )
-    if _sem_anuncio:
-        pass
-    elif tbl_repasse.empty:
-        st.info("Nenhum anúncio com **Repasse de frete** nos filtros atuais.")
-    else:
-        _h2 = min(420, 120 + 36 * max(len(tbl_repasse), 1))
-        st.dataframe(
-            _format_frete_anuncio_tabela_display(tbl_repasse),
-            use_container_width=True,
-            hide_index=True,
-            height=_h2,
-        )
-
-    for w in meta_frete.get("avisos") or []:
-        st.info(w)
-
-    st.markdown(
-        """
-        <div class="queue-head fdl-frete-queue-head">
-          <div>
-            <div class="queue-title">Detalhe de vendas</div>
-            <div class="queue-sub">Linhas filtradas para análise e exportação</div>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    btn1, btn2 = st.columns([1, 1])
-    t_export_view = dataframe_frete_conciliacao_principal(
-        tbl_show, recebido=recebido_series, layout="executivo"
-    )
-    csv_bytes = t_export_view.to_csv(index=False).encode("utf-8-sig")
-    with btn1:
-        st.download_button(
-            "Exportar CSV",
-            data=csv_bytes,
-            file_name="conciliacao_frete_filtrada.csv",
-            mime="text/csv",
-            use_container_width=True,
-            key=f"op_frete_dl_csv_{_sig}",
-        )
-    t_excel = dataframe_frete_conciliacao_principal(
-        tbl_show, recebido=recebido_series, layout="executivo"
-    )
-    excel_buf = BytesIO()
-    with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
-        t_excel.to_excel(writer, index=False, sheet_name="Frete")
-        ws = writer.sheets["Frete"]
-        header_row = [cell.value for cell in ws[1]]
-        for c_data in ("Data da venda",):
-            if c_data in header_row:
-                col_idx = header_row.index(c_data) + 1
-                for row_idx in range(2, ws.max_row + 1):
-                    cell = ws.cell(row=row_idx, column=col_idx)
-                    if cell.value is not None:
-                        cell.number_format = oxl_number_formats.FORMAT_DATE_DDMMYY
-    excel_buf.seek(0)
-    with btn2:
-        st.download_button(
-            "Exportar Excel",
-            data=excel_buf.getvalue(),
-            file_name="conciliacao_frete_filtrada.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-            key=f"op_frete_dl_xlsx_{_sig}",
-        )
-
-    t_grid = _dataframe_frete_grid(tbl_show, _fmt_brl_ptbr_celula, _col_referencia_como_texto)
-    t_main = dataframe_frete_conciliacao_principal(
-        t_grid, recebido=recebido_series, layout="executivo"
-    )
-    _h_df = 550 if len(t_main) > 8 else 360
-
-    if t_main.empty:
-        st.info(
-            "**Nenhuma venda** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
-        )
-    else:
-        if _frete_debug_ui_enabled():
+        ek1, ek2 = st.columns(2)
+        with ek1:
+            _render_kpi_card(
+                "Cobrado a maior (valor a recuperar)",
+                _fmt_brl_ptbr_celula(kpi_ex["cobrado_maior"]),
+                "!",
+                "kpi-div",
+                frete_variant=True,
+            )
+        with ek2:
+            _render_kpi_card(
+                "Repasse de frete (valor a conferir)",
+                _fmt_brl_ptbr_celula(kpi_ex["repasse"]),
+                "◎",
+                "kpi-total",
+                frete_variant=True,
+            )
+    
+        if _is_admin and FRETE_UI_STATUS_CONC in tbl_show.columns:
             st.caption(
-                "Debug Frete: antes da tabela principal (Styler pode falhar em alguns hosts; há fallback)."
+                "Modo técnico: coluna **Status conciliação** existe nos dados exportados; "
+                "a priorização usa **Situação do Frete** (Cobrado a maior / Repasse)."
             )
-        try:
+    
+        _sem_anuncio = FRETE_UI_ANUNCIO not in tbl_show.columns
+        st.markdown(
+            '<div class="fdl-frete-section-title">Anúncios com Cobrado a maior</div>',
+            unsafe_allow_html=True,
+        )
+        if _sem_anuncio:
+            st.info("Inclua o **# do anúncio** no export de vendas para agregar por anúncio.")
+        elif tbl_cob_maior.empty:
+            st.info("Nenhum anúncio com **Cobrado a maior** nos filtros atuais.")
+        else:
+            _h1 = min(420, 120 + 36 * max(len(tbl_cob_maior), 1))
             st.dataframe(
-                _styler_frete_conciliacao_principal(t_main),
+                _format_frete_anuncio_tabela_display(tbl_cob_maior),
                 use_container_width=True,
-                height=_h_df,
+                hide_index=True,
+                height=_h1,
             )
-        except Exception as exc:
-            st.error(
-                "A tabela principal não pôde ser exibida com formatação condicional (Styler). "
-                "A mostrar os mesmos dados sem cores."
+    
+        st.markdown(
+            '<div class="fdl-frete-section-title">Anúncios com Repasse de frete</div>',
+            unsafe_allow_html=True,
+        )
+        if _sem_anuncio:
+            pass
+        elif tbl_repasse.empty:
+            st.info("Nenhum anúncio com **Repasse de frete** nos filtros atuais.")
+        else:
+            _h2 = min(420, 120 + 36 * max(len(tbl_repasse), 1))
+            st.dataframe(
+                _format_frete_anuncio_tabela_display(tbl_repasse),
+                use_container_width=True,
+                hide_index=True,
+                height=_h2,
             )
-            st.caption(str(exc))
-            st.dataframe(t_main, use_container_width=True, height=_h_df)
-        st.caption(
-            "Ajuste **Recebido?** na tabela abaixo quando aplicável (linhas de repasse de frete)."
+    
+        _frete_stage_trace(3, "KPIs e anúncios", "concluída")
+    except Exception as exc:
+        _frete_stage_error(3, "Indicadores executivos e tabelas por anúncio", exc)
+        return
+    try:
+        _frete_stage_trace(4, "Exportação e detalhe", "início")
+        for w in meta_frete.get("avisos") or []:
+            st.info(w)
+    
+        st.markdown(
+            """
+            <div class="queue-head fdl-frete-queue-head">
+              <div>
+                <div class="queue-title">Detalhe de vendas</div>
+                <div class="queue-sub">Linhas filtradas para análise e exportação</div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-        _recv = t_main[[_FRETE_UI_COL_N_VENDA, FRETE_UI_RECEBIDO]].copy()
-        _cfg_recv: dict[str, object] = {
-            _FRETE_UI_COL_N_VENDA: TextColumn(_FRETE_UI_COL_N_VENDA, width="medium"),
-            FRETE_UI_RECEBIDO: SelectboxColumn(
-                FRETE_UI_RECEBIDO,
-                options=[FRETE_VAL_RECEBIDO_SIM, FRETE_VAL_RECEBIDO_NAO],
-                required=True,
-            ),
-        }
-        edited_recv = st.data_editor(
-            _recv,
-            column_config=_cfg_recv,
-            disabled=[_FRETE_UI_COL_N_VENDA],
-            use_container_width=True,
-            hide_index=True,
-            num_rows="fixed",
-            key=f"op_frete_editor_{_sig}",
+    
+        btn1, btn2 = st.columns([1, 1])
+        t_export_view = dataframe_frete_conciliacao_principal(
+            tbl_show, recebido=recebido_series, layout="executivo"
         )
-        for _, row in edited_recv.iterrows():
-            vid = str(row[_FRETE_UI_COL_N_VENDA]).strip() if pd.notna(row.get(_FRETE_UI_COL_N_VENDA)) else ""
-            if vid:
-                rec_map[vid] = row[FRETE_UI_RECEBIDO] == FRETE_VAL_RECEBIDO_SIM
-        st.session_state[_rec_key] = rec_map
-    st.markdown(
-        f'<p class="fdl-frete-meta-line">Linhas filtradas: <strong>{_fmt_int_ptbr(len(t_main))}</strong></p>',
-        unsafe_allow_html=True,
-    )
-
-    if _is_admin and load_info.get("frete_consume") in ("live", "live_fallback"):
-        st.caption(
-            "Modo técnico: **live** — dados calculados diretamente das fontes; materializado indisponível ou falhou."
+        csv_bytes = t_export_view.to_csv(index=False).encode("utf-8-sig")
+        with btn1:
+            st.download_button(
+                "Exportar CSV",
+                data=csv_bytes,
+                file_name="conciliacao_frete_filtrada.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key=f"op_frete_dl_csv_{_sig}",
+            )
+        t_excel = dataframe_frete_conciliacao_principal(
+            tbl_show, recebido=recebido_series, layout="executivo"
         )
+        excel_buf = BytesIO()
+        with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
+            t_excel.to_excel(writer, index=False, sheet_name="Frete")
+            ws = writer.sheets["Frete"]
+            header_row = [cell.value for cell in ws[1]]
+            for c_data in ("Data da venda",):
+                if c_data in header_row:
+                    col_idx = header_row.index(c_data) + 1
+                    for row_idx in range(2, ws.max_row + 1):
+                        cell = ws.cell(row=row_idx, column=col_idx)
+                        if cell.value is not None:
+                            cell.number_format = oxl_number_formats.FORMAT_DATE_DDMMYY
+        excel_buf.seek(0)
+        with btn2:
+            st.download_button(
+                "Exportar Excel",
+                data=excel_buf.getvalue(),
+                file_name="conciliacao_frete_filtrada.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key=f"op_frete_dl_xlsx_{_sig}",
+            )
+    
+        t_grid = _dataframe_frete_grid(tbl_show, _fmt_brl_ptbr_celula, _col_referencia_como_texto)
+        t_main = dataframe_frete_conciliacao_principal(
+            t_grid, recebido=recebido_series, layout="executivo"
+        )
+        _h_df = 550 if len(t_main) > 8 else 360
+    
+        if t_main.empty:
+            st.info(
+                "**Nenhuma venda** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
+            )
+        else:
+            if _frete_debug_ui_enabled():
+                st.caption(
+                    "Debug Frete: antes da tabela principal (Styler pode falhar em alguns hosts; há fallback)."
+                )
+            try:
+                st.dataframe(
+                    _styler_frete_conciliacao_principal(t_main),
+                    use_container_width=True,
+                    height=_h_df,
+                )
+            except Exception as exc:
+                st.error(
+                    "A tabela principal não pôde ser exibida com formatação condicional (Styler). "
+                    "A mostrar os mesmos dados sem cores."
+                )
+                st.caption(str(exc))
+                st.dataframe(t_main, use_container_width=True, height=_h_df)
+            st.caption(
+                "Ajuste **Recebido?** na tabela abaixo quando aplicável (linhas de repasse de frete)."
+            )
+            _recv = t_main[[_FRETE_UI_COL_N_VENDA, FRETE_UI_RECEBIDO]].copy()
+            _cfg_recv: dict[str, object] = {
+                _FRETE_UI_COL_N_VENDA: TextColumn(_FRETE_UI_COL_N_VENDA, width="medium"),
+                FRETE_UI_RECEBIDO: SelectboxColumn(
+                    FRETE_UI_RECEBIDO,
+                    options=[FRETE_VAL_RECEBIDO_SIM, FRETE_VAL_RECEBIDO_NAO],
+                    required=True,
+                ),
+            }
+            edited_recv = st.data_editor(
+                _recv,
+                column_config=_cfg_recv,
+                disabled=[_FRETE_UI_COL_N_VENDA],
+                use_container_width=True,
+                hide_index=True,
+                num_rows="fixed",
+                key=f"op_frete_editor_{_sig}",
+            )
+            for _, row in edited_recv.iterrows():
+                vid = str(row[_FRETE_UI_COL_N_VENDA]).strip() if pd.notna(row.get(_FRETE_UI_COL_N_VENDA)) else ""
+                if vid:
+                    rec_map[vid] = row[FRETE_UI_RECEBIDO] == FRETE_VAL_RECEBIDO_SIM
+            st.session_state[_rec_key] = rec_map
+        st.markdown(
+            f'<p class="fdl-frete-meta-line">Linhas filtradas: <strong>{_fmt_int_ptbr(len(t_main))}</strong></p>',
+            unsafe_allow_html=True,
+        )
+    
+        if _is_admin and load_info.get("frete_consume") in ("live", "live_fallback"):
+            st.caption(
+                "Modo técnico: **live** — dados calculados diretamente das fontes; materializado indisponível ou falhou."
+            )
+    
+    
+        _frete_stage_trace(4, "Exportação e detalhe", "concluída")
+    except Exception as exc:
+        _frete_stage_error(4, "Exportação, detalhe de vendas, tabela principal e editor", exc)
+        return
 
 
 def _painel_frete_emergencial(
@@ -3146,7 +3173,8 @@ def _painel_frete_emergencial(
     meta = _frete_meta_for_render(load_info)
     if _frete_debug_ui_enabled():
         with st.expander("Diagnóstico Frete (temporário — desative com FDL_DEBUG_FRETE_UI=0)", expanded=True):
-            st.write("**Dataset no painel:**", "carregado" if not df_frete.empty else "DataFrame vazio")
+            st.write("### Etapa 1/4 — Dataset (carregado antes desta página)")
+            st.write("**Estado:**", "carregado" if not df_frete.empty else "DataFrame vazio")
             st.write("**Linhas × colunas:**", df_frete.shape)
             _cols = list(df_frete.columns)
             st.write("**Nº de colunas:**", len(_cols))
@@ -3162,9 +3190,11 @@ def _painel_frete_emergencial(
             st.write("**Colunas esperadas pela UI:**")
             for _k, _desc in _req_ui.items():
                 st.write(f"- `{_k}`: {'OK' if _k in _cols else 'AUSENTE'} — {_desc}")
-            st.write("**frete_consume:**", load_info.get("frete_consume"))
+            st.write("**Fonte (consume):**", load_info.get("frete_consume"))
             st.write("**frete_arquivo:**", load_info.get("frete_arquivo"))
-            st.write("**Último passo antes do render:**", "chamando _render_frete_operacional_ui")
+            st.write("**Alvo materializado (path/URL resolvido):**", load_info.get("frete_materialized_target"))
+            st.write("**Rótulo vendas (UI):**", meta.get("vendas_arquivo", load_info.get("vendas_arquivo")))
+            st.write("**Próximo passo:**", "etapas 2–4 dentro de `_render_frete_operacional_ui` (filtros → KPIs → export/detalle)")
     if df_frete.empty:
         st.info("Não há linhas de frete para exibir. Verifique o export de vendas ML ou a materialização.")
         return

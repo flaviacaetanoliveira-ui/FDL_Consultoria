@@ -434,9 +434,12 @@ def _inject_fdl_professional_theme() -> None:
             header[data-testid="stHeader"] {background: rgba(255,255,255,0);}
             header a[href*="fork"] {display: none !important;}
             div[data-testid="stToolbar"] {visibility: hidden !important;}
+            section[data-testid="stMain"] {
+                max-width: 100%;
+            }
             section[data-testid="stMain"] h2 {
-                margin-top: 0.35rem;
-                margin-bottom: 0.45rem;
+                margin-top: 0.75rem;
+                margin-bottom: 0.5rem;
                 color: #111827;
                 font-weight: 600;
                 letter-spacing: -0.015em;
@@ -449,7 +452,9 @@ def _inject_fdl_professional_theme() -> None:
                 font-weight: 600;
             }
             section[data-testid="stMain"] hr {
-                margin: 1.15rem 0 !important;
+                margin: 1.35rem 0 !important;
+                border: none;
+                border-top: 1px solid #e8ecf1;
             }
             .fdl-ui-gap-section {
                 display: block;
@@ -489,26 +494,27 @@ def _inject_fdl_professional_theme() -> None:
             }
             [data-testid="stMetricContainer"] {
                 border-radius: 0.5rem;
-                padding: 0.7rem 0.9rem 0.8rem 0.9rem;
-                min-height: 5rem;
-                background: rgba(249, 250, 251, 0.96);
-                border: 1px solid rgba(226, 232, 240, 0.98);
+                padding: 0.75rem 1rem 0.85rem 1rem;
+                min-height: 5.1rem;
+                background: linear-gradient(180deg, #fafbfc 0%, #f4f6f8 100%);
+                border: 1px solid #e2e8f0;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
                 box-sizing: border-box;
             }
             /* Valor: Streamlit 1.35+ usa Markdown dentro de stMetricValue */
             [data-testid="stMetricValue"] [data-testid="stMarkdownContainer"] p {
                 font-weight: 700 !important;
-                font-size: 1.48rem !important;
-                letter-spacing: -0.03em !important;
-                line-height: 1.18 !important;
+                font-size: 1.56rem !important;
+                letter-spacing: -0.035em !important;
+                line-height: 1.15 !important;
                 color: #0f172a !important;
                 margin: 0 !important;
             }
             [data-testid="stMetricValue"] > div {
                 font-weight: 700 !important;
-                font-size: 1.48rem !important;
-                letter-spacing: -0.03em;
-                line-height: 1.18 !important;
+                font-size: 1.56rem !important;
+                letter-spacing: -0.035em;
+                line-height: 1.15 !important;
                 color: #0f172a !important;
             }
             [data-testid="stMetricLabel"] {
@@ -517,14 +523,16 @@ def _inject_fdl_professional_theme() -> None:
             }
             [data-testid="stMetricLabel"] label,
             [data-testid="stMetricLabel"] p {
-                font-size: 0.8rem !important;
+                font-size: 0.78rem !important;
                 font-weight: 500 !important;
-                color: #5c6570 !important;
-                line-height: 1.35 !important;
-                letter-spacing: 0.01em;
+                color: #64748b !important;
+                line-height: 1.3 !important;
+                letter-spacing: 0.02em;
             }
             div[data-testid="stVerticalBlockBorderWrapper"] {
                 border-radius: 0.5rem;
+                border-color: #e2e8f0 !important;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
             }
         </style>
         """,
@@ -3499,17 +3507,17 @@ def _repasse_ui_validacao_kpi_saas(contagens: dict[str, int]) -> None:
     bling = int(contagens.get("Baixar no Bling", 0))
     div = int(contagens.get("Analisar diferença", 0))
     zero = int(contagens.get("Zerado", 0))
-    st.write("")
+    _fdl_ui_gap_section()
     c1, c2, c3, c4 = st.columns(4)
-    specs: list[tuple[Any, str, int, str]] = [
-        (c1, "📊 OK", ok, "Sem pendência operacional neste recorte."),
-        (c2, "💸 Baixar no Bling", bling, "Ação: baixa no Bling."),
-        (c3, "📊 Divergências", div, "Analisar diferença de valores."),
-        (c4, "⚠️ Zerados", zero, "Revisar venda zerada."),
+    specs: list[tuple[Any, str, int]] = [
+        (c1, "📊 OK", ok),
+        (c2, "💸 Baixar no Bling", bling),
+        (c3, "📊 Divergências", div),
+        (c4, "⚠️ Zerados", zero),
     ]
-    for col, label, val, hint in specs:
+    for col, label, val in specs:
         with col:
-            st.metric(label, _fmt_int_ptbr(val), help=hint)
+            st.metric(label, _fmt_int_ptbr(val))
 
 
 def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:

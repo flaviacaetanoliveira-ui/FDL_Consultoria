@@ -3850,10 +3850,9 @@ with st.sidebar:
     with _mc:
         _logo_file = _REPO_APP_ROOT / "assets" / "fdl_analytics_logo.png"
         if _logo_file.is_file():
-            st.image(str(_logo_file), width=140)
+            st.image(str(_logo_file), width=168)
         else:
             st.caption("Coloque a logo em `assets/fdl_analytics_logo.png`.")
-    st.subheader("FDL Analytics")
     st.caption(_app_ctx.display_name)
     st.divider()
 

@@ -350,7 +350,9 @@ def _data_source_mode() -> str:
         return "onedrive"
 
 
-_STRICT_MATERIALIZED_USER_MSG = "Base não encontrada. Execute o processo de materialização."
+_STRICT_MATERIALIZED_USER_MSG = (
+    "Base de dados não disponível. Contacte o administrador ou tente mais tarde."
+)
 
 
 def _strict_materialized() -> bool:
@@ -432,11 +434,132 @@ def _inject_fdl_professional_theme() -> None:
             header[data-testid="stHeader"] {background: rgba(255,255,255,0);}
             header a[href*="fork"] {display: none !important;}
             div[data-testid="stToolbar"] {visibility: hidden !important;}
+            section[data-testid="stMain"] h2 {
+                margin-top: 0.35rem;
+                margin-bottom: 0.45rem;
+                color: #111827;
+                font-weight: 600;
+                letter-spacing: -0.015em;
+                line-height: 1.25;
+            }
+            section[data-testid="stMain"] h3 {
+                margin-top: 0.5rem;
+                margin-bottom: 0.35rem;
+                color: #1f2937;
+                font-weight: 600;
+            }
+            section[data-testid="stMain"] hr {
+                margin: 1.15rem 0 !important;
+            }
+            .fdl-ui-gap-section {
+                display: block;
+                height: 0.85rem;
+                min-height: 0.85rem;
+            }
+            .fdl-ui-gap-section-lg {
+                display: block;
+                height: 1.15rem;
+                min-height: 1.15rem;
+            }
+            .fdl-financeiro-header {
+                margin: 0 0 0.5rem 0;
+                padding: 0 0 0.15rem 0;
+            }
+            .fdl-financeiro-header .fdl-header-kicker {
+                margin: 0 0 0.2rem 0;
+                font-size: 0.78rem;
+                font-weight: 600;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: #6b7280;
+            }
+            .fdl-financeiro-header .fdl-header-title {
+                margin: 0 0 0.35rem 0;
+                font-size: 1.65rem;
+                font-weight: 700;
+                letter-spacing: -0.02em;
+                line-height: 1.2;
+                color: #111827;
+            }
+            .fdl-financeiro-header .fdl-header-sub {
+                margin: 0;
+                font-size: 0.95rem;
+                color: #4b5563;
+                line-height: 1.5;
+            }
+            [data-testid="stMetricContainer"] {
+                border-radius: 0.5rem;
+                padding: 0.7rem 0.9rem 0.8rem 0.9rem;
+                min-height: 5rem;
+                background: rgba(249, 250, 251, 0.96);
+                border: 1px solid rgba(226, 232, 240, 0.98);
+                box-sizing: border-box;
+            }
+            /* Valor: Streamlit 1.35+ usa Markdown dentro de stMetricValue */
+            [data-testid="stMetricValue"] [data-testid="stMarkdownContainer"] p {
+                font-weight: 700 !important;
+                font-size: 1.48rem !important;
+                letter-spacing: -0.03em !important;
+                line-height: 1.18 !important;
+                color: #0f172a !important;
+                margin: 0 !important;
+            }
+            [data-testid="stMetricValue"] > div {
+                font-weight: 700 !important;
+                font-size: 1.48rem !important;
+                letter-spacing: -0.03em;
+                line-height: 1.18 !important;
+                color: #0f172a !important;
+            }
+            [data-testid="stMetricLabel"] {
+                opacity: 1 !important;
+                margin-bottom: 0.35rem !important;
+            }
+            [data-testid="stMetricLabel"] label,
+            [data-testid="stMetricLabel"] p {
+                font-size: 0.8rem !important;
+                font-weight: 500 !important;
+                color: #5c6570 !important;
+                line-height: 1.35 !important;
+                letter-spacing: 0.01em;
+            }
+            div[data-testid="stVerticalBlockBorderWrapper"] {
+                border-radius: 0.5rem;
+            }
         </style>
         """,
         unsafe_allow_html=True,
     )
     st.session_state["_fdl_ui_theme_applied"] = True
+
+
+def _fdl_ui_gap_section() -> None:
+    """Espaço vertical consistente entre blocos (apenas UI)."""
+    st.markdown('<div class="fdl-ui-gap-section" aria-hidden="true"></div>', unsafe_allow_html=True)
+
+
+def _fdl_ui_gap_section_lg() -> None:
+    st.markdown('<div class="fdl-ui-gap-section-lg" aria-hidden="true"></div>', unsafe_allow_html=True)
+
+
+def _render_financeiro_header(*, segment: str, title: str, subtitle: str = "") -> None:
+    """Topo unificado: evita repetir o nome do cliente (já na barra lateral)."""
+    esc_seg = html.escape(segment)
+    esc_title = html.escape(title)
+    esc_sub = html.escape((subtitle or "").strip())
+    sub_html = ""
+    if esc_sub:
+        sub_html = f'<p class="fdl-header-sub">{esc_sub}</p>'
+    st.markdown(
+        f'<div class="fdl-financeiro-header">'
+        f'<p class="fdl-header-kicker">Financeiro · {esc_seg}</p>'
+        f'<h1 class="fdl-header-title">{esc_title}</h1>'
+        f"{sub_html}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    _fdl_ui_gap_section()
+    st.divider()
 
 
 def _fdl_safe_mode() -> bool:
@@ -1004,8 +1127,7 @@ def _load_frete_data_strict_materialized_only(
             }
         except Exception as exc:
             raise ValueError(
-                f"{_STRICT_MATERIALIZED_USER_MSG} Frete: não foi possível ler o dataset materializado. "
-                f"Detalhe: {exc}"
+                f"{_STRICT_MATERIALIZED_USER_MSG} Não foi possível concluir o carregamento dos dados de frete."
             ) from exc
 
     df_mat = normalize_frete_status_conc_display(df_mat)
@@ -1179,9 +1301,8 @@ def _load_frete_data(org_id: str) -> tuple[pd.DataFrame, dict[str, object], str]
                 and not _derive_frete_materialized_path_from_repasse()
             ):
                 info_fb["frete_mat_note"] = (
-                    "Frete: **FDL_FRETE_CONSUME_MODE=materialized** sem **FDL_FRETE_MATERIALIZED_PATH** / "
-                    "**FDL_FRETE_MATERIALIZED_URL** e sem **dataset_frete_app.csv** ao lado do repasse em "
-                    "`.../repasse/current/` — fluxo **live** em uso."
+                    "Frete: modo **ficheiro consolidado** ativo, mas não há caminho dedicado nem ficheiro ao lado do repasse "
+                    "(`.../repasse/current/` → `.../frete/current/`) — em uso **fonte em tempo real**."
                 )
             return df_frete, info_fb, ts_live
         except Exception:
@@ -1263,9 +1384,8 @@ def _load_frete_data(org_id: str) -> tuple[pd.DataFrame, dict[str, object], str]
         and not _derive_frete_materialized_path_from_repasse()
     ):
         info_out["frete_mat_note"] = (
-            "Frete: **FDL_FRETE_CONSUME_MODE=materialized** sem **FDL_FRETE_MATERIALIZED_PATH** / "
-            "**FDL_FRETE_MATERIALIZED_URL** e sem **dataset_frete_app.csv** ao lado do repasse em "
-            "`.../repasse/current/` — fluxo **live** em uso."
+            "Frete: modo **ficheiro consolidado** ativo, mas não há caminho dedicado nem ficheiro ao lado do repasse "
+            "(`.../repasse/current/` → `.../frete/current/`) — em uso **fonte em tempo real**."
         )
     return df_frete, info_out, ts_live
 
@@ -2152,8 +2272,8 @@ def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
                 **info,
                 "repasse_consume": "live",
                 "repasse_materialized_note": (
-                    "FDL_REPASSE_CONSUME_MODE=materialized mas FDL_REPASSE_MATERIALIZED_PATH e "
-                    "FDL_REPASSE_MATERIALIZED_URL estão vazios — utilizado fluxo live (FDL_DATA_SOURCE)."
+                    "Repasse em modo **ficheiro consolidado**, mas os caminhos dedicados estão vazios — "
+                    "em uso **fonte em tempo real** (configuração FDL_DATA_SOURCE)."
                 ),
             }
         return tabela, info, ts
@@ -2184,8 +2304,7 @@ def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
     except Exception as exc:
         if _strict_materialized():
             raise ValueError(
-                f"{_STRICT_MATERIALIZED_USER_MSG} Repasse: não foi possível ler o ficheiro materializado. "
-                f"Detalhe: {exc}"
+                f"{_STRICT_MATERIALIZED_USER_MSG} Não foi possível concluir o carregamento do repasse."
             ) from exc
         tabela, info, ts = _load_data_live()
         if _is_admin_mode():
@@ -2552,19 +2671,15 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     Fase 1 — Faturamento: KPIs, filtros, tabela principal e export CSV (recorte filtrado).
     """
     if _FATURAMENTO_PAINEL_EM_CONSTRUCAO:
-        st.write("")
-        c1, c2, c3 = st.columns([1, 4, 1])
-        with c2:
-            st.markdown("## 🚧 Módulo em construção")
-            st.caption(
-                "Estamos preparando o painel de faturamento com os mesmos padrões da conciliação. "
-                "Em breve você poderá acompanhar métricas e ações aqui."
+        with st.container(border=True):
+            st.caption("Módulo")
+            st.info(
+                "Em preparação. Em breve, as mesmas funções de análise e exportação da conciliação."
             )
-        st.write("")
         return
     _oid = str(org_id)
     if df.empty:
-        st.info("Não há linhas de faturamento para exibir. Verifique a materialização ou os filtros de empresa.")
+        st.info("Sem dados para este recorte. Verifique a empresa ou contacte o suporte.")
         return
 
     _req = (
@@ -2586,10 +2701,16 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     )
     missing = [c for c in _req if c not in df.columns]
     if missing:
-        st.warning(
-            "Dataset de faturamento sem colunas esperadas pelo painel. "
-            f"Faltam: {', '.join(missing[:12])}{'…' if len(missing) > 12 else ''}."
-        )
+        if _is_admin_mode():
+            st.warning(
+                "Dados de faturamento sem colunas esperadas pelo painel. "
+                f"Faltam: {', '.join(missing[:12])}{'…' if len(missing) > 12 else ''}."
+            )
+        else:
+            st.warning(
+                "Não foi possível apresentar o faturamento com a estrutura esperada. "
+                "Contacte o administrador."
+            )
         return
 
     work = _faturamento_compute_alert_bools(df)
@@ -2619,7 +2740,10 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
         "Sem NF não permitido",
     )
 
-    with st.expander("Filtros", expanded=True):
+    with st.container(border=True):
+        st.subheader("Filtros")
+        st.caption("Período, visão, critérios e busca para refinar o recorte.")
+        _fdl_ui_gap_section()
         visao = st.selectbox(
             "Visão",
             ("Todos", "Consolidado", "Com NF", "Sem NF permitido"),
@@ -2672,6 +2796,8 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
         d_ini = _safe_streamlit_date(d_ini, d_min)
         d_fim = _safe_streamlit_date(d_fim, d_max)
 
+    _fdl_ui_gap_section()
+
     filt = work.copy()
     if visao == "Consolidado":
         filt = filt[filt["faturamento_consolidado"].fillna(False).astype(bool)]
@@ -2721,6 +2847,9 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     any_alert = filt["_ab_pl_zero"] | filt["_ab_div"] | filt["_ab_sem_nf_np"]
     n_alert = int(any_alert.sum())
 
+    st.subheader("📊 Indicadores")
+    st.caption("Valores sobre o recorte filtrado.")
+    _fdl_ui_gap_section()
     fk1, fk2, fk3, fk4, fk5 = st.columns(5)
     with fk1:
         st.metric("Receita por Produtos", _fmt_brl_ptbr_celula(pl_sum))
@@ -2736,9 +2865,7 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     with fk5:
         st.metric("Alertas Ativos", _fmt_int_ptbr(n_alert))
 
-    st.caption(
-        "Indicadores acima = **mesmo recorte** da tabela (período e filtros aplicados)."
-    )
+    st.caption("O mesmo recorte aplica-se à tabela seguinte.")
 
     prod_col = _faturamento_resolve_produto_column(list(filt.columns))
     rpct = pd.to_numeric(filt["Resultado_Pct"], errors="coerce") if "Resultado_Pct" in filt.columns else pd.Series(float("nan"), index=filt.index)
@@ -2877,20 +3004,13 @@ def _render_frete_operacional_ui(
             situacao_opts: list[str] = list(FRETE_SITUACAO_FRETE_VALORES_FILTRO)
         
             with st.container(border=True):
-                st.subheader("Filtros operacionais")
+                st.subheader("Filtros")
+                st.caption("Período, critérios e busca para refinar o recorte.")
                 st.write("")
-                r1 = st.columns((1.15, 1.15, 1.7))
-                with r1[0]:
-                    sel_est = _multiselect_stable(f"op_frete_ms_est_{_sig}", "Estado da venda", estados)
-                with r1[1]:
-                    sel_sit = _multiselect_stable(
-                        f"op_frete_ms_situacao_{_sig}", FRETE_UI_SITUACAO_FRETE, situacao_opts
-                    )
-                with r1[2]:
-                    busca = st.text_input("Busca (venda ou # anúncio)", "", key=f"op_frete_busca_{_sig}")
-                    busca = busca.strip().lower()
-                st.write("")
-                st.write("")
+                st.markdown("**Período** · data da venda")
+                st.caption(
+                    "Comparação por dia civil. Por omissão: últimos 30 dias até hoje."
+                )
                 r2 = st.columns((1.15, 1.15, 2.3))
                 with r2[0]:
                     data_ini = st.date_input(
@@ -2910,9 +3030,18 @@ def _render_frete_operacional_ui(
                         format="DD/MM/YYYY",
                         key=f"op_frete_d_fim_{_sig}",
                     )
-                st.caption(
-                    "Filtra por **data da venda** (comparação por dia). Por omissão: últimos 30 dias até hoje."
-                )
+                st.write("")
+                st.markdown("**Critérios**")
+                r1 = st.columns((1.15, 1.15, 1.7))
+                with r1[0]:
+                    sel_est = _multiselect_stable(f"op_frete_ms_est_{_sig}", "Estado da venda", estados)
+                with r1[1]:
+                    sel_sit = _multiselect_stable(
+                        f"op_frete_ms_situacao_{_sig}", FRETE_UI_SITUACAO_FRETE, situacao_opts
+                    )
+                with r1[2]:
+                    busca = st.text_input("Busca (venda ou # anúncio)", "", key=f"op_frete_busca_{_sig}")
+                    busca = busca.strip().lower()
 
             data_ini = _safe_streamlit_date(data_ini, d_ini_val)
             data_fim = _safe_streamlit_date(data_fim, d_fim_val)
@@ -2975,10 +3104,10 @@ def _render_frete_operacional_ui(
                 _pl = "Todas"
             elif not estados:
                 _pl = "—"
-            st.divider()
+            _fdl_ui_gap_section_lg()
             st.caption(
-                f"Estado (filtro): **{_pl}** · Dados carregados: **{_ts_esc}** · "
-                f"Venda: **{data_ini.strftime('%d/%m/%Y')}** a **{data_fim.strftime('%d/%m/%Y')}** · "
+                f"Estado (filtro): **{_pl}** · Atualizado: **{_ts_esc}** · "
+                f"Venda: **{data_ini.strftime('%d/%m/%Y')}**–**{data_fim.strftime('%d/%m/%Y')}** · "
                 f"Fonte: **{_va}**"
             )
 
@@ -3001,21 +3130,21 @@ def _render_frete_operacional_ui(
         tbl_cob_maior = frete_tabela_anuncios_cobrado_maior(tbl_show)
         tbl_repasse = frete_tabela_anuncios_repasse_frete(tbl_show, recebido_series)
 
-        st.divider()
-        st.write("")
+        _fdl_ui_gap_section_lg()
+        st.subheader("📊 Indicadores")
+        st.caption("Valores sobre o recorte filtrado.")
+        _fdl_ui_gap_section()
         ek1, ek2 = st.columns(2)
         with ek1:
-            with st.container(border=True):
-                st.metric(
-                    "💸 Cobrado a maior (valor a recuperar)",
-                    _fmt_brl_ptbr_celula(kpi_ex["cobrado_maior"]),
-                )
+            st.metric(
+                "💸 Cobrado a maior (valor a recuperar)",
+                _fmt_brl_ptbr_celula(kpi_ex["cobrado_maior"]),
+            )
         with ek2:
-            with st.container(border=True):
-                st.metric(
-                    "🚚 Repasse de frete (valor total)",
-                    _fmt_brl_ptbr_celula(kpi_ex["repasse"]),
-                )
+            st.metric(
+                "🚚 Repasse de frete (valor total)",
+                _fmt_brl_ptbr_celula(kpi_ex["repasse"]),
+            )
 
         if _is_admin and FRETE_UI_STATUS_CONC in tbl_show.columns:
             st.caption(
@@ -3024,12 +3153,13 @@ def _render_frete_operacional_ui(
 
         _sem_anuncio = FRETE_UI_ANUNCIO not in tbl_show.columns
         st.divider()
+        _fdl_ui_gap_section()
         st.subheader("💸 Problemas de frete (cobrado a maior)")
         st.caption("Anúncios onde o frete cobrado excede o esperado — prioridade para recuperação.")
         if _sem_anuncio:
             st.info("Inclua o **# do anúncio** no export de vendas para agregar por anúncio.")
         elif tbl_cob_maior.empty:
-            st.info("Nenhum anúncio com **Cobrado a maior** nos filtros atuais.")
+            st.info("Sem anúncios com cobrança a maior neste recorte. Ajuste período ou critérios.")
         else:
             _h1 = min(420, 120 + 36 * max(len(tbl_cob_maior), 1))
             st.dataframe(
@@ -3040,12 +3170,13 @@ def _render_frete_operacional_ui(
             )
 
         st.divider()
+        _fdl_ui_gap_section()
         st.subheader("🚚 Controle de repasse de frete")
         st.caption("Anúncios com repasse de frete a validar (inclui marcação «Recebido?» no detalhe).")
         if _sem_anuncio:
             pass
         elif tbl_repasse.empty:
-            st.info("Nenhum anúncio com **Repasse de frete** nos filtros atuais.")
+            st.info("Sem repasse de frete a validar neste recorte. Ajuste período ou critérios.")
         else:
             _h2 = min(420, 120 + 36 * max(len(tbl_repasse), 1))
             st.dataframe(
@@ -3065,9 +3196,10 @@ def _render_frete_operacional_ui(
             st.info(w)
 
         st.divider()
+        _fdl_ui_gap_section()
         st.subheader("📋 Detalhamento das vendas")
         st.caption("Linhas filtradas — exporte o recorte ou ajuste «Recebido?» quando disponível.")
-        st.write("")
+        _fdl_ui_gap_section()
 
         t_export_view = dataframe_frete_conciliacao_principal(
             tbl_show, recebido=recebido_series, layout="executivo"
@@ -3170,7 +3302,7 @@ def _render_frete_operacional_ui(
     
         if _is_admin and load_info.get("frete_consume") in ("live", "live_fallback"):
             st.caption(
-                "Modo técnico: **live** — dados calculados diretamente das fontes; materializado indisponível ou falhou."
+                "Modo técnico: **tempo real** — dados calculados diretamente das fontes; ficheiro consolidado indisponível ou falhou."
             )
     
     
@@ -3195,11 +3327,17 @@ def _painel_frete_emergencial(
         return
 
     if load_info.get("frete_no_vendas_source"):
-        st.warning(
-            "Sem fonte de vendas ML para Frete. Defina **FDL_FRETE_VENDAS_URL** nos Secrets (Cloud) "
-            "ou coloque ficheiros .xlsx/.csv em **Vendas - Mercado Livre** sob **FDL_BASE_DIR**."
-        )
-        st.caption(str(BASE_DIR))
+        if _is_admin:
+            st.warning(
+                "Sem fonte de vendas ML para Frete. Defina **FDL_FRETE_VENDAS_URL** nos Secrets (Cloud) "
+                "ou coloque ficheiros .xlsx/.csv em **Vendas - Mercado Livre** sob **FDL_BASE_DIR**."
+            )
+            st.caption(str(BASE_DIR))
+        else:
+            st.warning(
+                "Não foi possível localizar o ficheiro de vendas do Mercado Livre para esta conciliação. "
+                "Contacte o administrador."
+            )
         return
 
     if load_info.get("frete_placeholder_vendas_url"):
@@ -3220,8 +3358,11 @@ def _painel_frete_emergencial(
         return
 
     if load_info.get("frete_vendas_from_url"):
-        st.success("**FDL_FRETE_VENDAS_URL** detetado — a base foi descarregada a partir do SharePoint.")
-    elif load_info.get("frete_fonte_local_path"):
+        if _is_admin:
+            st.success("**FDL_FRETE_VENDAS_URL** detetado — a base foi descarregada a partir do SharePoint.")
+        else:
+            st.success("Dados de vendas carregados a partir da nuvem.")
+    elif load_info.get("frete_fonte_local_path") and _is_admin:
         st.caption(f"Fonte local: `{load_info['frete_fonte_local_path']}`")
 
     if _is_admin and load_info.get("frete_mat_from_repasse_sibling"):
@@ -3269,16 +3410,21 @@ def _painel_frete_emergencial(
             st.caption(str(exc))
     if df_frete.empty:
         if load_info.get("frete_consume") == "materialized":
-            st.info(
-                "Não há linhas no **frete materializado** (ficheiro com 0 linhas). "
-                "Regere `dataset_frete_app.csv` com `processing/materialize_cliente_5.ps1` a partir das pastas "
-                "Esquilo/Wood e publique os CSV atualizados no repositório (ou aloje o ficheiro e use URL nos Secrets)."
-            )
-        else:
+            if _is_admin:
+                st.info(
+                    "Não há linhas no **frete materializado** (ficheiro com 0 linhas). "
+                    "Regere `dataset_frete_app.csv` com `processing/materialize_cliente_5.ps1` a partir das pastas "
+                    "Esquilo/Wood e publique os CSV atualizados no repositório (ou aloje o ficheiro e use URL nos Secrets)."
+                )
+            else:
+                st.info("Sem registos de frete para este recorte. Contacte o suporte se precisar de ajuda.")
+        elif _is_admin:
             st.info(
                 "Não há linhas de frete para exibir. Verifique o export de vendas ML (modo live) "
-                "ou a materialização (modo materializado)."
+                "ou o ficheiro consolidado (modo materializado)."
             )
+        else:
+            st.info("Sem registos de frete para exibir. Tente mais tarde ou contacte o suporte.")
         return
     try:
         _render_frete_operacional_ui(org_id, df_frete, meta, ts_proc, load_info)
@@ -3356,15 +3502,14 @@ def _repasse_ui_validacao_kpi_saas(contagens: dict[str, int]) -> None:
     st.write("")
     c1, c2, c3, c4 = st.columns(4)
     specs: list[tuple[Any, str, int, str]] = [
-        (c1, "✅ OK", ok, "Sem pendência operacional neste recorte."),
-        (c2, "⬇️ Baixar no Bling", bling, "Ação: baixa no Bling."),
-        (c3, "🔍 Divergências", div, "Analisar diferença de valores."),
+        (c1, "📊 OK", ok, "Sem pendência operacional neste recorte."),
+        (c2, "💸 Baixar no Bling", bling, "Ação: baixa no Bling."),
+        (c3, "📊 Divergências", div, "Analisar diferença de valores."),
         (c4, "⚠️ Zerados", zero, "Revisar venda zerada."),
     ]
     for col, label, val, hint in specs:
         with col:
-            with st.container(border=True):
-                st.metric(label, _fmt_int_ptbr(val), help=hint)
+            st.metric(label, _fmt_int_ptbr(val), help=hint)
 
 
 def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
@@ -3375,14 +3520,13 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     podia mostrar ecrã em branco (desincronização da árvore de widgets entre vistas).
     """
     if base.empty or "Data de pagamento" not in base.columns:
-        st.warning("Base de repasse indisponível para esta visualização.")
+        st.warning("Sem dados de repasse para esta vista. Contacte o suporte se o problema continuar.")
         return
 
     with st.container(border=True):
-        st.subheader("Filtros operacionais")
-        st.caption("Refine por plataforma, ação, situação e intervalo de datas de pagamento.")
+        st.subheader("Filtros")
+        st.caption("Período, critérios e busca para refinar o recorte.")
         st.write("")
-        r1 = st.columns((1.15, 1.15, 1.15, 1.55))
         dp_series_full = pd.to_datetime(base["Data de pagamento"], errors="coerce")
         _d_min, _d_max, has_dp_base = _series_datetime_bounds_dates(dp_series_full)
         plats = (
@@ -3400,24 +3544,11 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         sit = sorted(
             [x for x in base["Situação"].dropna().unique().tolist() if str(x).strip()]
         )
-        with r1[0]:
-            sel_plat = _multiselect_stable("op_ms_plat", "Plataforma", plats, compact_label=True)
-        with r1[1]:
-            sel_acao = _multiselect_stable("op_ms_acao", "Ação sugerida", acoes, compact_label=True)
-        with r1[2]:
-            sel_sit = _multiselect_stable("op_ms_sit", "Situação", sit, compact_label=True)
-        with r1[3]:
-            st.caption("Busca")
-            busca = st.text_input(
-                " ",
-                placeholder="Venda, pedido ou nota…",
-                label_visibility="collapsed",
-                key="op_repasse_busca_txt",
-            ).strip().lower()
-        st.write("")
+        st.markdown("**Período** · data de pagamento")
+        st.caption("Comparação por dia civil (meia-noite a meia-noite).")
         r2 = st.columns((1.15, 1.15))
         with r2[0]:
-            st.caption("Data início (pagamento)")
+            st.caption("Início")
             data_pag_ini = st.date_input(
                 " ",
                 value=_d_min,
@@ -3425,9 +3556,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 max_value=_d_max,
                 format="DD/MM/YYYY",
                 label_visibility="collapsed",
+                key="op_repasse_d_pag_ini",
             )
         with r2[1]:
-            st.caption("Data fim (pagamento)")
+            st.caption("Fim")
             data_pag_fim = st.date_input(
                 " ",
                 value=_d_max,
@@ -3435,17 +3567,35 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 max_value=_d_max,
                 format="DD/MM/YYYY",
                 label_visibility="collapsed",
+                key="op_repasse_d_pag_fim",
             )
         data_pag_ini = _safe_streamlit_date(data_pag_ini, _d_min)
         data_pag_fim = _safe_streamlit_date(data_pag_fim, _d_max)
-        st.caption("Comparação por **dia civil** (meia-noite a meia-noite).")
+        st.write("")
+        st.markdown("**Critérios**")
+        r1 = st.columns((1.15, 1.15, 1.15))
+        with r1[0]:
+            sel_plat = _multiselect_stable("op_ms_plat", "Plataforma", plats, compact_label=True)
+        with r1[1]:
+            sel_acao = _multiselect_stable("op_ms_acao", "Ação sugerida", acoes, compact_label=True)
+        with r1[2]:
+            sel_sit = _multiselect_stable("op_ms_sit", "Situação", sit, compact_label=True)
+        st.write("")
+        st.markdown("**Busca**")
+        busca = st.text_input(
+            "Texto (venda, pedido ou nota)",
+            placeholder="Venda, pedido ou nota…",
+            label_visibility="collapsed",
+            key="op_repasse_busca_txt",
+        ).strip().lower()
         if not has_dp_base:
             st.info(
-                "Nenhuma **data de pagamento** preenchida nesta base: o intervalo abaixo não filtra linhas "
-                "(todas as vendas são listadas). Com datas na materialização, o filtro por período passa a valer."
+                "Sem datas de pagamento na base: o período não filtra linhas (todas as vendas aparecem). "
+                "Com datas preenchidas, o filtro por período passa a aplicar-se."
             )
 
     st.divider()
+    _fdl_ui_gap_section()
 
     if data_pag_fim < data_pag_ini:
         st.warning("A data final não pode ser anterior à data inicial. Ajuste o período.")
@@ -3495,7 +3645,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     if not has_dp_base:
         _pag_caption += " — **filtro por data inativo** (sem datas na base)"
     st.caption(
-        f"Plataforma (filtro): **{plataforma_label}** · Dados carregados: **{ts_proc}** · {_pag_caption}"
+        f"Plataforma: **{plataforma_label}** · Atualizado: **{ts_proc}** · {_pag_caption}"
     )
 
     st.divider()
@@ -3507,8 +3657,9 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
     tabela["Diferença"] = pd.to_numeric(tabela.get("Diferença"), errors="coerce")
 
-    st.subheader("Validação de ações")
-    st.caption("Contagens na **base já filtrada** — priorize divergências e revisões.")
+    st.subheader("📊 Resumo por ação")
+    st.caption("Contagens sobre o recorte filtrado.")
+    _fdl_ui_gap_section()
     acoes_validacao = [
         "Ok",
         "Baixar no Bling",
@@ -3518,10 +3669,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     contagens_acao["Zerado"] = int(tabela["Ação sugerida operacional"].eq("Revisar venda zerada").sum())
     _repasse_ui_validacao_kpi_saas(contagens_acao)
 
-    st.write("")
-    st.caption(f"Dados carregados: **{ts_proc}**")
+    _fdl_ui_gap_section_lg()
     st.divider()
-    
+    _fdl_ui_gap_section()
+
     # Tabela operacional — Data de emissão: mesma coluna da tabela final, parse ISO (sem dayfirst).
     col_data_emissao = _resolve_col_data_emissao(list(tabela.columns))
     exibir_cols = [
@@ -3542,7 +3693,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     
     exibir_cols = [c for c in exibir_cols if c in tabela.columns]
     if not exibir_cols:
-        st.warning("Sem colunas para exibir na base filtrada.")
+        st.warning("Não foi possível apresentar a tabela com o recorte atual.")
         tabela_exibir = pd.DataFrame()
     else:
         tabela_exibir = tabela[exibir_cols].copy()
@@ -3622,10 +3773,9 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.caption("Desative FDL_SAFE_MODE para voltar à UI completa.")
         return
 
-    st.subheader("Fila operacional")
-    st.caption("Analise o recorte na grelha; use a exportação para partilhar fora do sistema.")
-    st.write("")
-    st.write("")
+    st.subheader("📋 Fila operacional")
+    st.caption("Analise o recorte na grelha; exporte para partilhar fora do sistema.")
+    _fdl_ui_gap_section()
 
     csv_bytes = tabela_exibir.to_csv(index=False).encode("utf-8-sig")
     tabela_excel = tabela_exibir.copy()
@@ -3672,9 +3822,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 use_container_width=True,
             )
 
-    st.write("")
-    st.write("")
-    st.write("")
+    _fdl_ui_gap_section_lg()
 
     tabela_grid = _dataframe_conciliacao_somente_grid(tabela_exibir)
     _cfg_grid = (
@@ -3686,7 +3834,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 
     if tabela_exibir.empty:
         st.info(
-            "**Nenhum registo** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
+            "Nenhum registo corresponde aos filtros. Alargue o período, limpe a busca ou ajuste os critérios."
         )
         st.dataframe(
             _disp_grid,
@@ -3722,13 +3870,13 @@ if _fv == "frete":
         if _admin_mode:
             if frete_info.get("frete_consume") == "live_fallback":
                 st.warning(
-                    "Frete: tentativa de carregar **materializado** falhou — em uso **fluxo live** (fallback)."
+                    "Frete: ficheiro consolidado indisponível ou com erro — em uso **fonte em tempo real** (fallback)."
                 )
                 st.caption(f"Path/URL tentado: `{frete_info.get('frete_materialized_target', '')}`")
                 st.caption(f"Erro: {frete_info.get('frete_materialized_error', '')}")
             elif frete_info.get("frete_consume") == "materialized":
                 _t_disp = str(frete_info.get("frete_materialized_target", ""))[:500]
-                st.caption(f"Frete: dados **materializados** (`{_t_disp}`).")
+                st.caption(f"Frete: ficheiro consolidado (`{_t_disp}`).")
             elif frete_info.get("frete_mat_note"):
                 st.info(str(frete_info["frete_mat_note"]))
     except Exception as exc:
@@ -3760,20 +3908,29 @@ elif _fv == "faturamento":
     fc = str(faturamento_info.get("faturamento_consume", "")).strip()
     if fc == "materialized" and _admin_mode:
         _t_disp = str(faturamento_info.get("faturamento_materialized_target", ""))[:500]
-        st.caption(f"Faturamento: dados **materializados** (`{_t_disp}`).")
+        st.caption(f"Faturamento: ficheiro consolidado (`{_t_disp}`).")
     elif fc == "missing_config":
-        st.warning(
-            str(faturamento_info.get("faturamento_note", "Dataset de faturamento não configurado ou não encontrado."))
-        )
-    elif fc == "error":
-        st.warning(
-            "Não foi possível carregar o dataset de **Faturamento** materializado. "
-            f"{faturamento_info.get('faturamento_materialized_error', '')}"
-        )
         if _admin_mode:
+            st.warning(
+                str(
+                    faturamento_info.get(
+                        "faturamento_note",
+                        "Dados de faturamento não configurados ou não encontrados.",
+                    )
+                )
+            )
+        else:
+            st.warning("Dados de faturamento não disponíveis. Contacte o administrador.")
+    elif fc == "error":
+        st.warning("Não foi possível carregar os dados de **Faturamento**.")
+        if _admin_mode:
+            st.caption(str(faturamento_info.get("faturamento_materialized_error", "")))
             st.caption(f"Alvo: `{faturamento_info.get('faturamento_materialized_target', '')}`")
     elif fc == "unsupported":
-        st.warning(str(faturamento_info.get("faturamento_note", "Modo de consumo não suportado.")))
+        if _admin_mode:
+            st.warning(str(faturamento_info.get("faturamento_note", "Modo de consumo não suportado.")))
+        else:
+            st.warning("Esta vista não está disponível na configuração atual. Contacte o administrador.")
 
     if not faturamento_df.empty and "empresa" not in faturamento_df.columns:
         faturamento_df = faturamento_df.copy()
@@ -3796,7 +3953,7 @@ else:
             if _admin_mode:
                 if info.get("repasse_consume") == "live_fallback":
                     st.warning(
-                        "Repasse: tentativa de carregar **materializado** falhou — em uso **fluxo live** (fallback)."
+                        "Repasse: ficheiro consolidado indisponível ou com erro — em uso **fonte em tempo real** (fallback)."
                     )
                     st.caption(f"Path/URL tentado: `{info.get('repasse_materialized_target', '')}`")
                     st.caption(f"Erro: {info.get('repasse_materialized_error', '')}")
@@ -3804,7 +3961,7 @@ else:
                     st.info(str(info["repasse_materialized_note"]))
                 elif info.get("repasse_consume") == "materialized":
                     st.caption(
-                        f"Repasse: dados **materializados** (`{info.get('repasse_materialized_target', '')}`)."
+                        f"Repasse: ficheiro consolidado (`{info.get('repasse_materialized_target', '')}`)."
                     )
     except Exception as exc:
         if _strict_materialized() and isinstance(exc, ValueError):
@@ -3823,7 +3980,8 @@ else:
                 st.code(err_text, language="text")
         od_url = _onedrive_public_url()
         if (
-            _data_source_mode() in {"onedrive", "filesystem"}
+            _admin_mode
+            and _data_source_mode() in {"onedrive", "filesystem"}
             and od_url
             and ":f:/" in od_url.lower()
         ):
@@ -3875,15 +4033,15 @@ with st.sidebar:
     _sp_l, _sp_c, _sp_r = st.columns([0.35, 3.3, 0.35])
     with _sp_c:
         _logo_file = _REPO_APP_ROOT / "assets" / "fdl_analytics_logo.png"
-        if _logo_file.is_file():
+        _has_logo = _logo_file.is_file()
+        if _has_logo:
             st.image(str(_logo_file), use_container_width=True)
         else:
-            st.caption("Coloque a logo em `assets/fdl_analytics_logo.png`.")
-    st.markdown(
-        '<p style="margin:0.25rem 0 0.15rem 0;font-size:0.78rem;font-weight:600;letter-spacing:0.06em;'
-        'color:#6b7280;text-transform:uppercase;">FDL Analytics</p>',
-        unsafe_allow_html=True,
-    )
+            st.markdown(
+                '<p style="margin:0.4rem 0 0.35rem 0;font-size:1.05rem;font-weight:700;'
+                'letter-spacing:-0.02em;color:#111827;">FDL Analytics</p>',
+                unsafe_allow_html=True,
+            )
     _cli_nome = html.escape(str(st.session_state.get("cliente", _app_ctx.display_name)))
     st.markdown(
         f'<div style="font-size:1.28rem;font-weight:700;line-height:1.25;color:#111827;'
@@ -3918,14 +4076,14 @@ with st.sidebar:
                 st.rerun()
 
     _sb_view = st.session_state.get("op_financeiro_view", "repasse")
-    st.caption("NAVEGAÇÃO")
+    st.caption("Módulos")
 
     _lbl_repasse = "Conciliação de Repasse"
     _lbl_frete = "Conciliação de Frete"
     _lbl_faturamento = "Faturamento"
-    _exp_financeiro = _sb_view in ("repasse", "frete", "faturamento")
 
-    with st.expander("💰 Financeiro", expanded=_exp_financeiro):
+    with st.container(border=True):
+        st.caption("Financeiro")
         st.button(
             _lbl_repasse,
             key="fdl_mod_repasse",
@@ -3948,12 +4106,6 @@ with st.sidebar:
             on_click=_sb_nav_set_faturamento,
         )
 
-    with st.expander("📦 Estoque", expanded=False):
-        st.caption("Em breve")
-
-    with st.expander("🛒 Comercial", expanded=False):
-        st.caption("Em breve")
-
     _ts_parts = str(_sb_ts_display).strip().split(None, 1)
     _ts_d = _ts_parts[0] if _ts_parts else "—"
     _ts_t = _ts_parts[1] if len(_ts_parts) > 1 else ""
@@ -3969,9 +4121,9 @@ with st.sidebar:
     st.divider()
 
     if _admin_mode and st.button(
-        "🔄 Atualizar dados",
+        "Atualizar dados",
         use_container_width=True,
-        help="Limpa caches e recarrega (releitura dos artefatos); não executa materialização.",
+        help="Limpa caches e recarrega os dados a partir da fonte configurada.",
         key="fdl_sb_admin_refresh",
         type="primary",
     ):
@@ -4033,27 +4185,23 @@ else:
 
 _fv = st.session_state["op_financeiro_view"]
 if _fv == "repasse":
-    st.caption(
-        f"{_app_ctx.display_name} · {_active_org.display_name} · Financeiro · Repasse"
+    _render_financeiro_header(
+        segment="Repasse",
+        title="Conciliação de Repasse",
+        subtitle="Recebimentos, notas e divergências numa única vista.",
     )
-    st.title("Conciliação de Repasse")
-    st.caption("Visão operacional de recebimentos e divergências.")
-    st.write("")
-    st.divider()
 elif _fv == "faturamento":
-    st.caption(
-        f"{_app_ctx.display_name} · {_active_org.display_name} · Financeiro · Faturamento"
+    _render_financeiro_header(
+        segment="Faturamento",
+        title="Faturamento",
+        subtitle="Pedidos e notas fiscais consolidados.",
     )
-    st.divider()
 else:
-    st.caption(
-        f"{_app_ctx.display_name} · {_active_org.display_name} · Financeiro · Frete"
+    _render_financeiro_header(
+        segment="Frete",
+        title="Conciliação de Frete",
+        subtitle="Frete cobrado na plataforma face ao valor esperado por anúncio.",
     )
-    st.title("Conciliação de Frete")
-    st.caption(
-        "Compare frete cobrado pelo ML com o esperado, priorize cobranças indevidas e repasses a conferir."
-    )
-    st.divider()
 
 if _fv == "repasse":
     try:

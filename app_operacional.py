@@ -3410,30 +3410,8 @@ def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
     return pd.to_datetime(s, errors="coerce")
 
 
-def _repasse_ui_kpi_cards_row(
-    kpi_valor_recebido: float,
-    kpi_baixado: float,
-    kpi_recebido_nao_baixado: float,
-    kpi_divergencia: float,
-    kpi_em_aberto: float,
-) -> None:
-    """KPIs em cards nativos (st.container border + st.metric), sem HTML."""
-    specs: list[tuple[str, str, str]] = [
-        ("◆", "Valor recebido no período", f"R$ {kpi_valor_recebido:,.2f}"),
-        ("✓", "Baixado no Bling", f"R$ {kpi_baixado:,.2f}"),
-        ("◇", "Recebido e não baixado", f"R$ {kpi_recebido_nao_baixado:,.2f}"),
-        ("!", "Divergência de valores", f"R$ {kpi_divergencia:,.2f}"),
-        ("○", "Em aberto", f"R$ {kpi_em_aberto:,.2f}"),
-    ]
-    cols = st.columns(5)
-    for col, (emoji, title, val) in zip(cols, specs):
-        with col:
-            with st.container(border=True):
-                st.metric(f"{emoji} {title}", val)
-
-
 def _repasse_ui_validacao_acoes_mini_cards(contagens: dict[str, int]) -> None:
-    """Contagens por ação em mini-cards (2×3), só componentes nativos."""
+    """Contagens por ação em mini-cards (2×3), alinhamento com st.metric."""
     blocos: list[tuple[str, str, str]] = [
         ("Ok", "✅", "Ok"),
         ("Baixar no Bling", "📥", "Baixar no Bling"),
@@ -3442,18 +3420,24 @@ def _repasse_ui_validacao_acoes_mini_cards(contagens: dict[str, int]) -> None:
         ("Verificar faturamento", "📄", "Verificar faturamento"),
         ("Revisar venda zerada", "⚠️", "Revisar venda zerada"),
     ]
-    r1, r2 = st.columns(3), st.columns(3)
-    for i, (key, emoji, short) in enumerate(blocos):
-        col = r1[i] if i < 3 else r2[i - 3]
-        with col:
+    r1 = st.columns(3)
+    for i in range(3):
+        key, emoji, short = blocos[i]
+        with r1[i]:
             with st.container(border=True):
-                st.caption(f"{emoji} {short}")
-                st.markdown(f"### {contagens.get(key, 0)}")
+                st.metric(f"{emoji} {short}", value=int(contagens.get(key, 0)))
+    st.write("")
+    r2 = st.columns(3)
+    for i in range(3, 6):
+        key, emoji, short = blocos[i]
+        with r2[i - 3]:
+            with st.container(border=True):
+                st.metric(f"{emoji} {short}", value=int(contagens.get(key, 0)))
 
 
 def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     """
-    Filtros + KPIs + tabela de repasse.
+    Filtros + validação de ações + fila/tabela de repasse.
 
     Não usar @st.fragment aqui: ao mudar para «Frete», o fragment deixava de ser invocado e o Streamlit
     podia mostrar ecrã em branco (desincronização da árvore de widgets entre vistas).
@@ -3564,38 +3548,15 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 
     st.divider()
 
-    # Tipos numéricos para a base já filtrada (mesmo conjunto usado nos KPIs e na tabela)
+    # Tipos numéricos para a base já filtrada (tabela e totais nas colunas)
     tabela["Valor da nota"] = pd.to_numeric(tabela["Valor da nota"], errors="coerce").fillna(0.0)
     tabela["Total BRL"] = pd.to_numeric(tabela.get("Total BRL"), errors="coerce")
     tabela["Valor a receber"] = pd.to_numeric(tabela.get("Valor a receber"), errors="coerce")
     tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
     tabela["Diferença"] = pd.to_numeric(tabela.get("Diferença"), errors="coerce")
-    
-    # KPIs — mesma lógica de sempre, sobre a base **após** os filtros operacionais
-    st.subheader("Fluxo financeiro do período")
-    data_pag_dt = pd.to_datetime(tabela.get("Data de pagamento"), errors="coerce")
-    mask_recebido = data_pag_dt.notna() & tabela["Valor pago"].fillna(0).gt(0)
-    mask_baixado = tabela["Ação sugerida operacional"].eq("Ok")
-    mask_recebido_nao_baixado = tabela["Ação sugerida operacional"].eq("Baixar no Bling")
-    mask_divergencia = tabela["Diferença"].abs().gt(0.01)
-    mask_em_aberto = tabela["Valor pago"].fillna(0).le(0)
-    kpi_valor_recebido = float(tabela.loc[mask_recebido, "Valor pago"].sum())
-    kpi_baixado = float(tabela.loc[mask_baixado, "Valor pago"].sum())
-    kpi_recebido_nao_baixado = float(tabela.loc[mask_recebido_nao_baixado, "Valor pago"].sum())
-    kpi_divergencia = float(tabela.loc[mask_divergencia, "Diferença"].abs().sum())
-    kpi_em_aberto = float(tabela.loc[mask_em_aberto, "Valor a receber"].sum())
-    _repasse_ui_kpi_cards_row(
-        kpi_valor_recebido,
-        kpi_baixado,
-        kpi_recebido_nao_baixado,
-        kpi_divergencia,
-        kpi_em_aberto,
-    )
 
-    st.divider()
-
-    # Validação de consistência dos KPIs (base filtrada)
-    st.subheader("Validação de ações (base filtrada)")
+    st.subheader("Validação de ações")
+    st.caption("Base filtrada — contagem por tipo de ação sugerida.")
     acoes_validacao = [
         "Ok",
         "Baixar no Bling",
@@ -3607,7 +3568,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     contagens_acao = {a: int(tabela["Ação sugerida operacional"].eq(a).sum()) for a in acoes_validacao}
     _repasse_ui_validacao_acoes_mini_cards(contagens_acao)
 
-    st.caption(f"Última visualização: **{ts_proc}**")
+    st.caption(f"Última atualização dos dados: **{ts_proc}**")
     st.divider()
     
     # Tabela operacional — Data de emissão: mesma coluna da tabela final, parse ISO (sem dayfirst).
@@ -3710,22 +3671,12 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         return
 
     st.subheader("Fila operacional")
-    st.caption("Casos prontos para tratamento — exporte ou analise na grelha abaixo.")
-    st.divider()
+    st.caption("Casos prontos para tratamento — exporte a base filtrada ou analise na grelha.")
+    st.write("")
+    st.write("")
 
-    btn1, btn2, btn3 = st.columns([1, 1, 1])
     csv_bytes = tabela_exibir.to_csv(index=False).encode("utf-8-sig")
-    with btn1:
-        st.download_button(
-            "Exportar CSV",
-            data=csv_bytes,
-            file_name="conciliacao_operacional_filtrada.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
-    # Exportação Excel: datas já são datetime (mesmo critério da tela); só formato de célula.
     tabela_excel = tabela_exibir.copy()
-    
     excel_buf = BytesIO()
     with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
         tabela_excel.to_excel(writer, index=False, sheet_name="Conciliação")
@@ -3739,22 +3690,38 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                     if cell.value is not None:
                         cell.number_format = oxl_number_formats.FORMAT_DATE_DDMMYY
     excel_buf.seek(0)
-    with btn2:
-        st.download_button(
-            "⭐ Exportar Excel",
-            data=excel_buf.getvalue(),
-            file_name="conciliacao_operacional_filtrada.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
-    with btn3:
-        st.download_button(
-            "Exportar PDF",
-            data=_build_pdf_bytes(tabela_exibir),
-            file_name="conciliacao_operacional_filtrada.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
+    pdf_bytes = _build_pdf_bytes(tabela_exibir)
+
+    with st.container(border=True):
+        st.caption("Exportações")
+        btn1, btn2, btn3 = st.columns([1, 1, 1])
+        with btn1:
+            st.download_button(
+                "Exportar CSV",
+                data=csv_bytes,
+                file_name="conciliacao_operacional_filtrada.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        with btn2:
+            st.download_button(
+                "Exportar Excel",
+                data=excel_buf.getvalue(),
+                file_name="conciliacao_operacional_filtrada.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+        with btn3:
+            st.download_button(
+                "Exportar PDF",
+                data=pdf_bytes,
+                file_name="conciliacao_operacional_filtrada.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+
+    st.write("")
+    st.write("")
 
     tabela_grid = _dataframe_conciliacao_somente_grid(tabela_exibir)
     _cfg_grid = None
@@ -3784,7 +3751,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             hide_index=True,
             column_config=_cfg_grid,
         )
-    st.write(f"Linhas filtradas: **{len(tabela_exibir)}**")
+    st.caption(f"**{len(tabela_exibir)}** linhas no filtro atual.")
 
 _admin_mode = _is_admin_mode()
 

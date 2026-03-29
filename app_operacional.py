@@ -3846,11 +3846,11 @@ if _bootstrap_debug_enabled():
                 st.caption(f"{_i}. {_line}")
 
 with st.sidebar:
-    _lc, _mc, _rc = st.columns([1, 2.4, 1])
+    _lc, _mc, _rc = st.columns([1, 2.8, 1])
     with _mc:
         _logo_file = _REPO_APP_ROOT / "assets" / "fdl_analytics_logo.png"
         if _logo_file.is_file():
-            st.image(str(_logo_file), width=168)
+            st.image(str(_logo_file), width=180)
         else:
             st.caption("Coloque a logo em `assets/fdl_analytics_logo.png`.")
     st.caption(_app_ctx.display_name)

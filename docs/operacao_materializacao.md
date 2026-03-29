@@ -7,6 +7,8 @@
 3. **Saída:** `data_products\<cliente>\<empresa>\<modulo>\current\` com `dataset*.parquet`, CSV espelho e `metadata.json`.
 4. **Streamlit:** em modo materializado, lê apenas os ficheiros finais em `current/` (sem recomputar o pipeline).
 
+**Repasse (pipeline, variáveis, consumo no app):** ver [modulo_repasse_estrutura.md](modulo_repasse_estrutura.md).
+
 ## Lock
 
 `processing\materialize_financeiro.py` adquire um lock em `agendamento\locks\materialize_financeiro.lock`. Se existir e tiver menos de 2 h, a segunda execução falha com código `2`. Locks mais velhos são removidos (órfãos).

@@ -110,7 +110,7 @@ _active_org = get_active_organization(_app_ctx)
 
 if "op_financeiro_view" not in st.session_state:
     st.session_state["op_financeiro_view"] = "repasse"
-elif st.session_state["op_financeiro_view"] not in ("repasse", "frete"):
+elif st.session_state["op_financeiro_view"] not in ("repasse", "frete", "faturamento"):
     st.session_state["op_financeiro_view"] = "repasse"
 
 _fdl_global_trace("03: após definir vista financeiro (session_state)")
@@ -178,6 +178,10 @@ def _sb_nav_set_repasse() -> None:
 
 def _sb_nav_set_frete() -> None:
     st.session_state["op_financeiro_view"] = "frete"
+
+
+def _sb_nav_set_faturamento() -> None:
+    st.session_state["op_financeiro_view"] = "faturamento"
 
 
 def _sb_logout_click() -> None:
@@ -419,6 +423,206 @@ def _frete_materialized_url_str() -> str:
         return str(st.secrets.get("FDL_FRETE_MATERIALIZED_URL", "")).strip()
     except Exception:
         return ""
+
+
+def _faturamento_consume_mode() -> str:
+    """Faturamento: nesta fase só materialized é suportado; default materialized."""
+    raw = os.environ.get("FDL_FATURAMENTO_CONSUME_MODE", "").strip().lower()
+    if raw in {"materialized", "live"}:
+        return raw
+    try:
+        s = str(st.secrets.get("FDL_FATURAMENTO_CONSUME_MODE", "")).strip().lower()
+        if s in {"materialized", "live"}:
+            return s
+    except Exception:
+        pass
+    return "materialized"
+
+
+def _faturamento_materialized_path_str() -> str:
+    raw = os.environ.get("FDL_FATURAMENTO_MATERIALIZED_PATH", "").strip()
+    if raw:
+        return raw
+    try:
+        return str(st.secrets.get("FDL_FATURAMENTO_MATERIALIZED_PATH", "")).strip()
+    except Exception:
+        return ""
+
+
+def _faturamento_materialized_url_str() -> str:
+    raw = os.environ.get("FDL_FATURAMENTO_MATERIALIZED_URL", "").strip()
+    if raw:
+        return raw
+    try:
+        return str(st.secrets.get("FDL_FATURAMENTO_MATERIALIZED_URL", "")).strip()
+    except Exception:
+        return ""
+
+
+def _derive_faturamento_materialized_from_repasse_anchor(anchor: str) -> str:
+    """
+    Se o repasse/precomputed apontar para .../<cliente>/<empresa>/repasse/current/dataset_repasse_app.csv,
+    tenta o irmão .../<empresa>/faturamento/current/dataset_faturamento_app.csv e, se faltar, dataset.parquet.
+    """
+    if not (anchor or "").strip():
+        return ""
+    path = Path(anchor.strip()).expanduser()
+    if not path.is_absolute():
+        path = (_REPO_APP_ROOT / path).resolve()
+    if not path.is_file():
+        return ""
+    if path.parent.name != "current" or path.parent.parent.name != "repasse":
+        return ""
+    # materialize_financeiro: .../<cliente>/<empresa>/repasse/current/ e .../<empresa>/faturamento/current/ (irmãos)
+    empresa_dir = path.parent.parent.parent
+    base = empresa_dir / "faturamento" / "current"
+    csv_c = base / "dataset_faturamento_app.csv"
+    if csv_c.is_file():
+        return str(csv_c.resolve())
+    pq = base / "dataset.parquet"
+    if pq.is_file():
+        return str(pq.resolve())
+    return ""
+
+
+def _faturamento_materialized_targets() -> tuple[str, str]:
+    """Path/URL explícitos; se vazios, derivado do CSV do repasse (mesmo layout data_products)."""
+    mp = _faturamento_materialized_path_str()
+    mu = _faturamento_materialized_url_str()
+    if mp or mu:
+        return mp, mu
+    for anchor in (_repasse_materialized_path_str(), _precomputed_path_str()):
+        d = _derive_faturamento_materialized_from_repasse_anchor(anchor)
+        if d:
+            return d, ""
+    return "", ""
+
+
+def _load_faturamento_file_from_disk(path: Path) -> pd.DataFrame:
+    if not path.is_file():
+        raise FileNotFoundError(f"Ficheiro de faturamento não encontrado: {path}")
+    suf = path.suffix.lower()
+    if suf == ".csv":
+        return pd.read_csv(path, sep=None, engine="python", encoding="utf-8-sig")
+    if suf == ".parquet":
+        return pd.read_parquet(path, engine="pyarrow")
+    if suf in {".xlsx", ".xls"}:
+        return pd.read_excel(path, engine="openpyxl")
+    raise ValueError(f"Formato não suportado para faturamento materializado: {path.name!r}")
+
+
+def _load_faturamento_materialized_dataframe(path_s: str, url_s: str) -> pd.DataFrame:
+    if path_s:
+        path = Path(path_s).expanduser()
+        if not path.is_absolute():
+            path = (_REPO_APP_ROOT / path).resolve()
+        return _load_faturamento_file_from_disk(path)
+    errs: list[str] = []
+    for dl_url, hdr in _precomputed_download_attempts(url_s.strip()):
+        try:
+            payload, filename, _lm = _download_file_bytes(
+                dl_url,
+                extra_headers=hdr or None,
+                timeout=PRECOMPUTED_HTTP_TIMEOUT,
+                http_retries=1,
+            )
+            return _dataframe_from_frete_materialized_bytes(payload, filename)
+        except Exception as exc:  # noqa: BLE001
+            hint = dl_url if len(dl_url) < 100 else dl_url[:97] + "..."
+            errs.append(f"{hint} → {exc}")
+    raise ValueError(
+        "Não foi possível ler o faturamento materializado a partir do URL. "
+        + " | ".join(errs[:5])
+        + (" …" if len(errs) > 5 else "")
+    )
+
+
+def _faturamento_ts_for_path(path: Path) -> str:
+    try:
+        return _ts_br_from_mtime_ns(int(path.stat().st_mtime_ns))
+    except OSError:
+        return _now_ts_br_str()
+
+
+def _load_faturamento_data() -> tuple[pd.DataFrame, dict[str, object], str]:
+    """
+    Carrega apenas dataset materializado (CSV/XLSX/Parquet em path ou URL).
+    Sem pipeline live nesta fase.
+    """
+    if _faturamento_consume_mode() != "materialized":
+        return (
+            pd.DataFrame(),
+            {
+                "faturamento_consume": "unsupported",
+                "faturamento_note": "Nesta fase só está disponível FDL_FATURAMENTO_CONSUME_MODE=materialized.",
+            },
+            _now_ts_br_str(),
+        )
+
+    path_s, url_s = _faturamento_materialized_targets()
+    if not path_s and not url_s:
+        return (
+            pd.DataFrame(),
+            {
+                "faturamento_consume": "missing_config",
+                "faturamento_note": (
+                    "Defina FDL_FATURAMENTO_MATERIALIZED_PATH ou URL, ou coloque o dataset em "
+                    ".../faturamento/current/ alinhado ao repasse materializado."
+                ),
+            },
+            _now_ts_br_str(),
+        )
+
+    target = (path_s or url_s)[:500]
+    try:
+        df = _load_faturamento_materialized_dataframe(path_s, url_s)
+        ts = _now_ts_br_str()
+        if path_s:
+            p = Path(path_s).expanduser()
+            if not p.is_absolute():
+                p = (_REPO_APP_ROOT / p).resolve()
+            if p.is_file():
+                ts = _faturamento_ts_for_path(p)
+        return (
+            df,
+            {
+                "faturamento_consume": "materialized",
+                "faturamento_materialized_target": target,
+                "linhas": int(len(df)),
+            },
+            ts,
+        )
+    except Exception as exc:
+        return (
+            pd.DataFrame(),
+            {
+                "faturamento_consume": "error",
+                "faturamento_materialized_error": str(exc).strip() or exc.__class__.__name__,
+                "faturamento_materialized_target": target,
+            },
+            _now_ts_br_str(),
+        )
+
+
+def _faturamento_load_cache_signature(org_id: str) -> str:
+    return "|".join(
+        [
+            str(org_id),
+            str(OPERACIONAL_CACHE_REVISION),
+            _faturamento_consume_mode(),
+            str(_faturamento_materialized_path_str()).strip(),
+            str(_faturamento_materialized_url_str()).strip(),
+            str(_repasse_materialized_path_str()).strip(),
+            str(_precomputed_path_str()).strip(),
+            str(_strict_materialized()),
+        ]
+    )
+
+
+@st.cache_data(show_spinner=False, ttl=900)
+def _load_faturamento_dataframe_cached(load_signature: str) -> tuple[pd.DataFrame, dict[str, object], str]:
+    _ = load_signature
+    return _load_faturamento_data()
 
 
 def _derive_frete_materialized_path_from_repasse_anchor(anchor: str) -> str:
@@ -3746,6 +3950,8 @@ _fv = st.session_state["op_financeiro_view"]
 _fdl_global_trace(f"rerun: vista={_fv}")
 frete_df = pd.DataFrame()
 frete_info: dict[str, object] = {}
+faturamento_df = pd.DataFrame()
+faturamento_info: dict[str, object] = {}
 if _fv == "frete":
     # Ponto único de carga Frete (materializado → live); não carrega repasse/precomputed.
     try:
@@ -3784,6 +3990,42 @@ if _fv == "frete":
     tabela_geral = pd.DataFrame()
     info = frete_info
     _fdl_global_trace("frete: dados carregados")
+elif _fv == "faturamento":
+    _fdl_global_trace("faturamento: a carregar _load_faturamento_dataframe_cached")
+    with st.spinner("A carregar dados de Faturamento…"):
+        faturamento_df, faturamento_info, ts_proc = _load_faturamento_dataframe_cached(
+            _faturamento_load_cache_signature(_active_org.org_id)
+        )
+    fc = str(faturamento_info.get("faturamento_consume", "")).strip()
+    if fc == "materialized" and _admin_mode:
+        _t_disp = str(faturamento_info.get("faturamento_materialized_target", ""))[:500]
+        st.caption(f"Faturamento: dados **materializados** (`{_t_disp}`).")
+    elif fc == "missing_config":
+        st.warning(
+            str(faturamento_info.get("faturamento_note", "Dataset de faturamento não configurado ou não encontrado."))
+        )
+    elif fc == "error":
+        st.warning(
+            "Não foi possível carregar o dataset de **Faturamento** materializado. "
+            f"{faturamento_info.get('faturamento_materialized_error', '')}"
+        )
+        if _admin_mode:
+            st.caption(f"Alvo: `{faturamento_info.get('faturamento_materialized_target', '')}`")
+    elif fc == "unsupported":
+        st.warning(str(faturamento_info.get("faturamento_note", "Modo de consumo não suportado.")))
+
+    if not faturamento_df.empty and "empresa" not in faturamento_df.columns:
+        faturamento_df = faturamento_df.copy()
+        faturamento_df["empresa"] = DATASET_EMPRESA
+
+    empresas = st.session_state["empresas_permitidas"]
+    if not faturamento_df.empty:
+        faturamento_df = faturamento_df[faturamento_df["empresa"].isin(empresas)].copy()
+
+    faturamento_info = {**faturamento_info, "linhas": int(len(faturamento_df))}
+    tabela_geral = pd.DataFrame()
+    info = faturamento_info
+    _fdl_global_trace(f"faturamento: após filtro empresa ({len(faturamento_df)} linhas)")
 else:
     try:
         _fdl_global_trace("repasse: a carregar _load_data (cache por org/config)")
@@ -3856,7 +4098,12 @@ if _bootstrap_debug_enabled():
         st.write("**Vista ativa:**", _fv)
         st.write("**Modo seguro (FDL_SAFE_MODE):**", _fdl_safe_mode())
         st.write("**Layout mínimo (FDL_MINIMAL_LAYOUT, omisso=on):**", _fdl_minimal_layout())
-        st.write("**Linhas tabela_geral (repasse):**", len(tabela_geral) if _fv == "repasse" else "— (vista frete)")
+        _n_linhas_dbg = (
+            len(tabela_geral)
+            if _fv == "repasse"
+            else (len(faturamento_df) if _fv == "faturamento" else "— (vista frete)")
+        )
+        st.write("**Linhas tabela_geral (repasse) / faturamento_df:**", _n_linhas_dbg)
         _lg = st.session_state.get("_fdl_bootstrap_log")
         if isinstance(_lg, list) and _lg:
             st.write("**Log de etapas (esta execução):**")
@@ -3901,6 +4148,7 @@ with st.sidebar:
 
     _lbl_repasse = "Conciliação de Repasse"
     _lbl_frete = "Conciliação de Frete"
+    _lbl_faturamento = "Faturamento"
 
     with st.expander("💰 Financeiro", expanded=True):
         st.button(
@@ -3916,6 +4164,13 @@ with st.sidebar:
             use_container_width=True,
             type="primary" if _sb_view == "frete" else "secondary",
             on_click=_sb_nav_set_frete,
+        )
+        st.button(
+            _lbl_faturamento,
+            key="fdl_mod_faturamento",
+            use_container_width=True,
+            type="primary" if _sb_view == "faturamento" else "secondary",
+            on_click=_sb_nav_set_faturamento,
         )
 
     with st.expander("📦 Estoque", expanded=False):
@@ -4005,6 +4260,15 @@ if _fv == "repasse":
         "Acompanhe valores recebidos, pendências e ações operacionais do período."
     )
     st.divider()
+elif _fv == "faturamento":
+    st.caption(
+        f"{_app_ctx.display_name} · {_active_org.display_name} · Financeiro · Faturamento"
+    )
+    st.title("Faturamento")
+    st.caption(
+        "Visualização completa em desenvolvimento — abaixo: verificação de carga do dataset materializado."
+    )
+    st.divider()
 else:
     st.caption(
         f"{_app_ctx.display_name} · {_active_org.display_name} · Financeiro · Frete"
@@ -4024,7 +4288,16 @@ if _fv == "repasse":
         _fdl_global_trace(f"repasse: ERRO no painel — {exc.__class__.__name__}")
         st.error("Erro ao renderizar a **Conciliação de Repasse** (filtros ou tabela).")
         st.exception(exc)
-else:
+elif _fv == "faturamento":
+    st.info(
+        f"Dataset de faturamento carregado: **{len(faturamento_df)}** linhas (após filtro por empresa). "
+        f"Última referência de ficheiro: `{ts_proc}`."
+    )
+    if not faturamento_df.empty:
+        st.dataframe(faturamento_df.head(20), use_container_width=True, height=320)
+    else:
+        st.caption("Sem linhas para exibir — confira avisos acima ou o caminho materializado.")
+elif _fv == "frete":
     try:
         _fdl_global_trace("frete: a renderizar _painel_frete_emergencial")
         _painel_frete_emergencial(_active_org.org_id, frete_df, frete_info, ts_proc)

@@ -59,6 +59,11 @@ _REGISTRO_EMPRESA: dict[str, AppOrganization] = {
                 label="Conciliação de Repasse",
                 page_module="app_operacional",
             ),
+            ModuleRoute(
+                route_id="faturamento",
+                label="Faturamento",
+                page_module="app_operacional",
+            ),
         ),
     ),
     "Gama Home": AppOrganization(
@@ -69,6 +74,28 @@ _REGISTRO_EMPRESA: dict[str, AppOrganization] = {
             ModuleRoute(
                 route_id="conciliacao-repasse",
                 label="Conciliação de Repasse",
+                page_module="app_operacional",
+            ),
+            ModuleRoute(
+                route_id="faturamento",
+                label="Faturamento",
+                page_module="app_operacional",
+            ),
+        ),
+    ),
+    "Mega Fácil": AppOrganization(
+        org_id="mega_facil",
+        display_name="Mega Fácil",
+        module_ids=("financeiro",),
+        routes=(
+            ModuleRoute(
+                route_id="conciliacao-repasse",
+                label="Conciliação de Repasse",
+                page_module="app_operacional",
+            ),
+            ModuleRoute(
+                route_id="faturamento",
+                label="Faturamento",
                 page_module="app_operacional",
             ),
         ),

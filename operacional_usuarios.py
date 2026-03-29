@@ -95,8 +95,8 @@ USUARIOS: dict[str, dict[str, Any]] = {
     },
     "megafacilmoveis@gmail.com": {
         "senha_pbkdf2": _GAMA_PBKDF2,
-        "cliente": "Gama Home",
-        "empresas": ["Gama Home"],
+        "cliente": "Cliente 2",
+        "empresas": ["Gama Home", "Mega Fácil"],
     },
 }
 

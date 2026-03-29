@@ -87,13 +87,33 @@ try:
 except Exception:
     pass  # já definido por app.py no primeiro arranque
 
+
+def _fdl_global_trace(msg: str) -> None:
+    """Marca etapa do rerun (FDL_DEBUG_BOOTSTRAP). Deve existir antes do restante do módulo."""
+    try:
+        st.session_state["_fdl_bootstrap_stage"] = msg
+        log = st.session_state.setdefault("_fdl_bootstrap_log", [])
+        if not isinstance(log, list):
+            log = []
+            st.session_state["_fdl_bootstrap_log"] = log
+        log.append(msg)
+        if len(log) > 48:
+            del log[:24]
+    except Exception:
+        pass
+
+
+_fdl_global_trace("01: início app_operacional (módulo reexecutado)")
 _app_ctx = require_app_user()
+_fdl_global_trace("02: após autenticação (require_app_user)")
 _active_org = get_active_organization(_app_ctx)
 
 if "op_financeiro_view" not in st.session_state:
     st.session_state["op_financeiro_view"] = "repasse"
 elif st.session_state["op_financeiro_view"] not in ("repasse", "frete"):
     st.session_state["op_financeiro_view"] = "repasse"
+
+_fdl_global_trace("03: após definir vista financeiro (session_state)")
 
 # Alinhado a PIPELINE_DATA_REVISION (liberações / Valor pago). Subir junto quando mudar o fluxo.
 OPERACIONAL_CACHE_REVISION = PIPELINE_DATA_REVISION
@@ -299,11 +319,20 @@ def _bootstrap_debug_enabled() -> bool:
         return False
 
 
-def _set_bootstrap_stage(stage: str) -> None:
+def _fdl_safe_mode() -> bool:
+    """UI mínima: sem Styler, sem data_editor pesado, menos HTML (FDL_SAFE_MODE=1)."""
+    raw = os.environ.get("FDL_SAFE_MODE", "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
     try:
-        st.session_state["_fdl_bootstrap_stage"] = stage
+        sec = st.secrets.get("FDL_SAFE_MODE", False)
+        if isinstance(sec, bool):
+            return sec
+        return str(sec).strip().lower() in {"1", "true", "yes", "on"}
     except Exception:
-        pass
+        return False
 
 
 def _repasse_consume_mode() -> str:
@@ -3106,49 +3135,53 @@ def _render_frete_operacional_ui(
                 "**Nenhuma venda** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
             )
         else:
-            if _frete_debug_ui_enabled():
-                st.caption(
-                    "Debug Frete: antes da tabela principal (Styler pode falhar em alguns hosts; há fallback)."
-                )
-            try:
-                st.dataframe(
-                    _styler_frete_conciliacao_principal(t_main),
-                    use_container_width=True,
-                    height=_h_df,
-                )
-            except Exception as exc:
-                st.error(
-                    "A tabela principal não pôde ser exibida com formatação condicional (Styler). "
-                    "A mostrar os mesmos dados sem cores."
-                )
-                st.caption(str(exc))
+            if _fdl_safe_mode():
+                st.warning("**Modo seguro (FDL_SAFE_MODE)** — tabela sem Styler e sem editor «Recebido?».")
                 st.dataframe(t_main, use_container_width=True, height=_h_df)
-            st.caption(
-                "Ajuste **Recebido?** na tabela abaixo quando aplicável (linhas de repasse de frete)."
-            )
-            _recv = t_main[[_FRETE_UI_COL_N_VENDA, FRETE_UI_RECEBIDO]].copy()
-            _cfg_recv: dict[str, object] = {
-                _FRETE_UI_COL_N_VENDA: TextColumn(_FRETE_UI_COL_N_VENDA, width="medium"),
-                FRETE_UI_RECEBIDO: SelectboxColumn(
-                    FRETE_UI_RECEBIDO,
-                    options=[FRETE_VAL_RECEBIDO_SIM, FRETE_VAL_RECEBIDO_NAO],
-                    required=True,
-                ),
-            }
-            edited_recv = st.data_editor(
-                _recv,
-                column_config=_cfg_recv,
-                disabled=[_FRETE_UI_COL_N_VENDA],
-                use_container_width=True,
-                hide_index=True,
-                num_rows="fixed",
-                key=f"op_frete_editor_{_sig}",
-            )
-            for _, row in edited_recv.iterrows():
-                vid = str(row[_FRETE_UI_COL_N_VENDA]).strip() if pd.notna(row.get(_FRETE_UI_COL_N_VENDA)) else ""
-                if vid:
-                    rec_map[vid] = row[FRETE_UI_RECEBIDO] == FRETE_VAL_RECEBIDO_SIM
-            st.session_state[_rec_key] = rec_map
+            else:
+                if _frete_debug_ui_enabled():
+                    st.caption(
+                        "Debug Frete: antes da tabela principal (Styler pode falhar em alguns hosts; há fallback)."
+                    )
+                try:
+                    st.dataframe(
+                        _styler_frete_conciliacao_principal(t_main),
+                        use_container_width=True,
+                        height=_h_df,
+                    )
+                except Exception as exc:
+                    st.error(
+                        "A tabela principal não pôde ser exibida com formatação condicional (Styler). "
+                        "A mostrar os mesmos dados sem cores."
+                    )
+                    st.caption(str(exc))
+                    st.dataframe(t_main, use_container_width=True, height=_h_df)
+                st.caption(
+                    "Ajuste **Recebido?** na tabela abaixo quando aplicável (linhas de repasse de frete)."
+                )
+                _recv = t_main[[_FRETE_UI_COL_N_VENDA, FRETE_UI_RECEBIDO]].copy()
+                _cfg_recv: dict[str, object] = {
+                    _FRETE_UI_COL_N_VENDA: TextColumn(_FRETE_UI_COL_N_VENDA, width="medium"),
+                    FRETE_UI_RECEBIDO: SelectboxColumn(
+                        FRETE_UI_RECEBIDO,
+                        options=[FRETE_VAL_RECEBIDO_SIM, FRETE_VAL_RECEBIDO_NAO],
+                        required=True,
+                    ),
+                }
+                edited_recv = st.data_editor(
+                    _recv,
+                    column_config=_cfg_recv,
+                    disabled=[_FRETE_UI_COL_N_VENDA],
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="fixed",
+                    key=f"op_frete_editor_{_sig}",
+                )
+                for _, row in edited_recv.iterrows():
+                    vid = str(row[_FRETE_UI_COL_N_VENDA]).strip() if pd.notna(row.get(_FRETE_UI_COL_N_VENDA)) else ""
+                    if vid:
+                        rec_map[vid] = row[FRETE_UI_RECEBIDO] == FRETE_VAL_RECEBIDO_SIM
+                st.session_state[_rec_key] = rec_map
         st.markdown(
             f'<p class="fdl-frete-meta-line">Linhas filtradas: <strong>{_fmt_int_ptbr(len(t_main))}</strong></p>',
             unsafe_allow_html=True,
@@ -3589,6 +3622,20 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                         _obj.append(str(x))
                 tabela_exibir[_ref] = pd.Series(_obj, dtype=object, index=tabela_exibir.index)
     
+    if _fdl_safe_mode():
+        st.warning(
+            "**Modo seguro (FDL_SAFE_MODE=1)** — sem fila HTML, sem exports Excel/PDF, "
+            "sem `column_config` na tabela (apenas `st.dataframe` simples)."
+        )
+        st.metric("Linhas (filtro atual)", len(tabela_exibir))
+        st.dataframe(
+            tabela_exibir,
+            use_container_width=True,
+            height=min(560, 140 + max(18 * min(len(tabela_exibir), 80), 120)),
+        )
+        st.caption("Desative FDL_SAFE_MODE para voltar à UI completa.")
+        return
+
     st.markdown(
         """
         <div class="queue-head">
@@ -3675,13 +3722,13 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 _admin_mode = _is_admin_mode()
 
 _fv = st.session_state["op_financeiro_view"]
-_set_bootstrap_stage(f"rerun: vista={_fv}")
+_fdl_global_trace(f"rerun: vista={_fv}")
 frete_df = pd.DataFrame()
 frete_info: dict[str, object] = {}
 if _fv == "frete":
     # Ponto único de carga Frete (materializado → live); não carrega repasse/precomputed.
     try:
-        _set_bootstrap_stage("frete: a carregar _load_frete_data")
+        _fdl_global_trace("frete: a carregar _load_frete_data")
         with st.spinner("A carregar dados de Frete…"):
             frete_df, frete_info, ts_proc = _load_frete_data(_active_org.org_id)
         if _admin_mode:
@@ -3715,10 +3762,10 @@ if _fv == "frete":
 
     tabela_geral = pd.DataFrame()
     info = frete_info
-    _set_bootstrap_stage("frete: dados carregados")
+    _fdl_global_trace("frete: dados carregados")
 else:
     try:
-        _set_bootstrap_stage("repasse: a carregar _load_data (cache por org/config)")
+        _fdl_global_trace("repasse: a carregar _load_data (cache por org/config)")
         with st.spinner("A carregar dados (a ir buscar o ficheiro à nuvem, se aplicável)…"):
             tabela_geral, info, ts_proc = _load_repasse_dataframe_cached(
                 _repasse_load_cache_signature(_active_org.org_id)
@@ -3773,7 +3820,7 @@ else:
     empresas = st.session_state["empresas_permitidas"]
     tabela_geral = tabela_geral[tabela_geral["empresa"].isin(empresas)].copy()
     info = {**info, "linhas": int(len(tabela_geral))}
-    _set_bootstrap_stage(f"repasse: após filtro empresa ({len(tabela_geral)} linhas)")
+    _fdl_global_trace(f"repasse: após filtro empresa ({len(tabela_geral)} linhas)")
 
 try:
     _ts_raw = str(ts_proc).strip() if ts_proc is not None else ""
@@ -3781,11 +3828,18 @@ try:
 except (ValueError, TypeError, OSError):
     _sb_ts_display = str(ts_proc) if ts_proc is not None else "—"
 
+_fdl_global_trace("04: antes da sidebar (dados carregados)")
 if _bootstrap_debug_enabled():
-    with st.expander("Diagnóstico bootstrap (FDL_DEBUG_BOOTSTRAP=1)", expanded=False):
-        st.write("**Etapa:**", st.session_state.get("_fdl_bootstrap_stage", "—"))
+    with st.expander("Diagnóstico bootstrap (FDL_DEBUG_BOOTSTRAP=1)", expanded=True):
+        st.write("**Última etapa:**", st.session_state.get("_fdl_bootstrap_stage", "—"))
         st.write("**Vista ativa:**", _fv)
+        st.write("**Modo seguro (FDL_SAFE_MODE):**", _fdl_safe_mode())
         st.write("**Linhas tabela_geral (repasse):**", len(tabela_geral) if _fv == "repasse" else "— (vista frete)")
+        _lg = st.session_state.get("_fdl_bootstrap_log")
+        if isinstance(_lg, list) and _lg:
+            st.write("**Log de etapas (esta execução):**")
+            for _i, _line in enumerate(_lg, 1):
+                st.caption(f"{_i}. {_line}")
 
 with st.sidebar:
     _sb_dn_esc = html.escape(str(_app_ctx.display_name))
@@ -3895,9 +3949,11 @@ with st.sidebar:
         on_click=_sb_logout_click,
     )
 
+_fdl_global_trace("05: após sidebar — antes do hero / painel principal")
+
 if _fv == "repasse":
     try:
-        _set_bootstrap_stage("repasse: a preparar base (map_acao / filtros negócio)")
+        _fdl_global_trace("repasse: a preparar base (map_acao / filtros negócio)")
         map_acao = {
             "Ok": "Ok",
             "Baixar no Bling": "Baixar no Bling",
@@ -3923,9 +3979,9 @@ if _fv == "repasse":
 
         # Base operacional antes dos filtros da UI (mesma regra de negócio de sempre).
         tabela_operacional_base = tabela.copy()
-        _set_bootstrap_stage(f"repasse: base pronta ({len(tabela_operacional_base)} linhas)")
+        _fdl_global_trace(f"repasse: base pronta ({len(tabela_operacional_base)} linhas)")
     except Exception as exc:
-        _set_bootstrap_stage(f"repasse: ERRO na preparação da base — {exc.__class__.__name__}")
+        _fdl_global_trace(f"repasse: ERRO na preparação da base — {exc.__class__.__name__}")
         st.error("Erro ao preparar a base de **Conciliação de Repasse** (colunas ou dados incompatíveis).")
         st.exception(exc)
         tabela_operacional_base = pd.DataFrame()
@@ -3979,17 +4035,22 @@ else:
 
 if _fv == "repasse":
     try:
-        _set_bootstrap_stage("repasse: a renderizar _painel_conciliacao_fragment (filtros UI)")
+        _fdl_global_trace("repasse: a renderizar _painel_conciliacao_fragment (filtros UI)")
         _painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
-        _set_bootstrap_stage("repasse: painel concluído")
+        _fdl_global_trace("repasse: painel concluído")
     except Exception as exc:
-        _set_bootstrap_stage(f"repasse: ERRO no painel — {exc.__class__.__name__}")
+        _fdl_global_trace(f"repasse: ERRO no painel — {exc.__class__.__name__}")
         st.error("Erro ao renderizar a **Conciliação de Repasse** (filtros ou tabela).")
         st.exception(exc)
 else:
     try:
+        _fdl_global_trace("frete: a renderizar _painel_frete_emergencial")
         _painel_frete_emergencial(_active_org.org_id, frete_df, frete_info, ts_proc)
+        _fdl_global_trace("frete: painel concluído")
     except Exception as exc:
+        _fdl_global_trace(f"frete: ERRO no painel — {exc.__class__.__name__}")
         st.error("Não foi possível carregar o painel de Frete.")
         st.exception(exc)
+
+_fdl_global_trace("99: fim do script app_operacional")
 

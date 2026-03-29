@@ -250,6 +250,22 @@ def _strict_materialized() -> bool:
         return False
 
 
+def _frete_debug_ui_enabled() -> bool:
+    """Diagnóstico visível na página Frete. Desative com FDL_DEBUG_FRETE_UI=0 (env ou secrets)."""
+    raw = os.environ.get("FDL_DEBUG_FRETE_UI", "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    try:
+        sec = st.secrets.get("FDL_DEBUG_FRETE_UI", True)
+        if isinstance(sec, bool):
+            return sec
+        return str(sec).strip().lower() in {"1", "true", "yes", "on"}
+    except Exception:
+        return True
+
+
 def _repasse_consume_mode() -> str:
     """Repasse: live = pipeline; materialized = CSV/XLSX. Com FDL_STRICT_MATERIALIZED, sem fallback para live."""
     raw = os.environ.get("FDL_REPASSE_CONSUME_MODE", "").strip().lower()
@@ -2833,6 +2849,20 @@ def _render_frete_operacional_ui(
     if FRETE_UI_CLASSIFICACAO in tbl_show.columns:
         tbl_show = tbl_show.drop(columns=[FRETE_UI_CLASSIFICACAO])
 
+    _miss_req = [c for c in (FRETE_UI_N_VENDA, FRETE_UI_DIFERENCA) if c not in tbl_show.columns]
+    if _miss_req:
+        st.error(
+            "Colunas obrigatórias ausentes para a Conciliação de Frete: "
+            + ", ".join(repr(c) for c in _miss_req)
+            + ". Verifique o CSV materializado (dataset_frete_app.csv) ou o export ML."
+        )
+        if _frete_debug_ui_enabled():
+            st.json({"colunas_presentes": list(tbl_show.columns)[:120]})
+        return
+
+    if _frete_debug_ui_enabled():
+        st.caption("Debug Frete: filtros aplicados — a seguir KPIs e tabelas.")
+
     _va = html.escape(str(meta_frete.get("vendas_arquivo", "—")))
     _ts_esc = html.escape(str(ts_proc))
     _pl = "Todas"
@@ -2866,7 +2896,12 @@ def _render_frete_operacional_ui(
     recebido_series = nv_s.map(lambda x: FRETE_VAL_RECEBIDO_SIM if rec_map.get(x) else FRETE_VAL_RECEBIDO_NAO)
     recebido_series.index = tbl_show.index
 
-    kpi_ex = frete_kpis_executivos(tbl_show)
+    try:
+        kpi_ex = frete_kpis_executivos(tbl_show)
+    except Exception as exc:
+        st.error("Erro ao calcular os indicadores executivos de frete (dados ou colunas incompatíveis).")
+        st.exception(exc)
+        return
     tbl_cob_maior = frete_tabela_anuncios_cobrado_maior(tbl_show)
     tbl_repasse = frete_tabela_anuncios_repasse_frete(tbl_show, recebido_series)
 
@@ -2999,11 +3034,23 @@ def _render_frete_operacional_ui(
             "**Nenhuma venda** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
         )
     else:
-        st.dataframe(
-            _styler_frete_conciliacao_principal(t_main),
-            use_container_width=True,
-            height=_h_df,
-        )
+        if _frete_debug_ui_enabled():
+            st.caption(
+                "Debug Frete: antes da tabela principal (Styler pode falhar em alguns hosts; há fallback)."
+            )
+        try:
+            st.dataframe(
+                _styler_frete_conciliacao_principal(t_main),
+                use_container_width=True,
+                height=_h_df,
+            )
+        except Exception as exc:
+            st.error(
+                "A tabela principal não pôde ser exibida com formatação condicional (Styler). "
+                "A mostrar os mesmos dados sem cores."
+            )
+            st.caption(str(exc))
+            st.dataframe(t_main, use_container_width=True, height=_h_df)
         st.caption(
             "Ajuste **Recebido?** na tabela abaixo quando aplicável (linhas de repasse de frete)."
         )
@@ -3097,10 +3144,35 @@ def _painel_frete_emergencial(
                 st.caption(f"[frete-debug] {_line}")
 
     meta = _frete_meta_for_render(load_info)
+    if _frete_debug_ui_enabled():
+        with st.expander("Diagnóstico Frete (temporário — desative com FDL_DEBUG_FRETE_UI=0)", expanded=True):
+            st.write("**Dataset no painel:**", "carregado" if not df_frete.empty else "DataFrame vazio")
+            st.write("**Linhas × colunas:**", df_frete.shape)
+            _cols = list(df_frete.columns)
+            st.write("**Nº de colunas:**", len(_cols))
+            st.write("**Colunas (início):**", _cols[:35])
+            if len(_cols) > 35:
+                st.caption(f"… e mais {len(_cols) - 35} colunas.")
+            _req_ui = {
+                FRETE_UI_N_VENDA: "N.º venda (filtros / Recebido?)",
+                FRETE_ML_COL: "Frete cobrado (ML)",
+                "Estado": "Estado da venda",
+                FRETE_UI_DIFERENCA: "KPIs e situação",
+            }
+            st.write("**Colunas esperadas pela UI:**")
+            for _k, _desc in _req_ui.items():
+                st.write(f"- `{_k}`: {'OK' if _k in _cols else 'AUSENTE'} — {_desc}")
+            st.write("**frete_consume:**", load_info.get("frete_consume"))
+            st.write("**frete_arquivo:**", load_info.get("frete_arquivo"))
+            st.write("**Último passo antes do render:**", "chamando _render_frete_operacional_ui")
     if df_frete.empty:
         st.info("Não há linhas de frete para exibir. Verifique o export de vendas ML ou a materialização.")
         return
-    _render_frete_operacional_ui(org_id, df_frete, meta, ts_proc, load_info)
+    try:
+        _render_frete_operacional_ui(org_id, df_frete, meta, ts_proc, load_info)
+    except Exception as exc:
+        st.error("Erro ao renderizar a Conciliação de Frete (detalhe abaixo).")
+        st.exception(exc)
 
 
 def _build_pdf_bytes(df: pd.DataFrame) -> bytes:

@@ -263,7 +263,7 @@ def dataframe_frete_conciliacao_principal(
 def frete_impacto_financeiro_por_situacao(df: pd.DataFrame) -> dict[str, float]:
     """Soma |Diferença| (R$) por situação operacional (três categorias de impacto)."""
     sit = compute_frete_situacao_frete_column(df)
-    d = pd.to_numeric(df[FRETE_UI_DIFERENCA], errors="coerce").fillna(0.0)
+    d = pd.to_numeric(df.get(FRETE_UI_DIFERENCA), errors="coerce").fillna(0.0)
     ad = d.abs()
     return {
         "repasse": float(ad[sit.eq(FRETE_UI_ANALISADO_REPASSE_FRETE)].sum()),
@@ -364,7 +364,7 @@ def frete_tabela_anuncios_repasse_frete(df: pd.DataFrame, recebido: pd.Series) -
 def frete_repasse_nao_conferido_rs(df: pd.DataFrame, recebido: pd.Series) -> float:
     """Soma |Δ| em linhas «Repasse de frete» com Recebido ≠ Sim."""
     sit = compute_frete_situacao_frete_column(df)
-    d = pd.to_numeric(df[FRETE_UI_DIFERENCA], errors="coerce").fillna(0.0)
+    d = pd.to_numeric(df.get(FRETE_UI_DIFERENCA), errors="coerce").fillna(0.0)
     r = recebido.reindex(df.index).astype(str).str.strip()
     m = sit.eq(FRETE_UI_ANALISADO_REPASSE_FRETE) & ~r.eq(FRETE_VAL_RECEBIDO_SIM)
     return float(d.abs()[m].sum())

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-29T18:20:48Z",
-  "source_signature": "b7e245695d86dca33d74978291984234",
+  "generated_at": "2026-03-30T09:39:03Z",
+  "source_signature": "2ad49dc21a67e130d569b38fe9fcfabf",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "moveis_eap",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "moveis_eap",
   "cnpj": null,
-  "row_count": 883,
+  "row_count": 909,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -94,7 +94,7 @@
     "vendas_arquivo": "Moveis EAP - Vendas ML 2026.xlsx",
     "frete_arquivo": "Moveis EAP - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 883,
+    "linhas": 909,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

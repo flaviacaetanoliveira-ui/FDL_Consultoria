@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-29T21:34:04Z",
+  "generated_at": "2026-03-30T09:34:29Z",
   "source_signature": "e81a4bae7dbb85c2048fd148f51ae316",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_5",
@@ -38,24 +38,5 @@
     "col_situacao": "Situação",
     "col_numero": "Número"
   },
-  "app_mirror_csv": "dataset_repasse_app.csv",
-  "repasse_debug": {
-    "liberacoes_tratadas_rows": 39747,
-    "etapa3_rows": 3410,
-    "etapa3_linhas_data_pagamento_preenchida": 0,
-    "etapa3_linhas_valor_pago_positivo": 0,
-    "notas_saida_linhas_carregadas": 10115,
-    "notas_saida_vazio": false,
-    "contas_receber_arquivos": 3,
-    "contas_receber_linhas_carregadas": 3627,
-    "apos_integracao_notas_rows": 0,
-    "apos_integracao_linhas_data_pagamento_preenchida": 0,
-    "apos_integracao_merge_notas_linhas_numero_nota_preenchida": 0,
-    "apos_integracao_linhas_data_emissao_preenchida": 0,
-    "tabela_final_operacional_rows": 0,
-    "tabela_final_linhas_data_pagamento_preenchida": 0,
-    "tabela_final_linhas_numero_nota_preenchida": 0,
-    "tabela_final_linhas_data_emissao_preenchida": 0,
-    "tabela_final_linhas_situacao_preenchida": 0
-  }
+  "app_mirror_csv": "dataset_repasse_app.csv"
 }

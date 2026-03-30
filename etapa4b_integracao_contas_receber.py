@@ -114,21 +114,39 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
     contas = pd.concat(partes, ignore_index=True) if partes else pd.DataFrame()
 
     if contas.empty:
-        out = base[["N° de venda", "ID do pedido", "Número da nota", "Valor da nota"]].copy()
+        out = base.copy()
         out["Plataforma"] = base.get("Plataforma", "Não identificado")
         out["Numero_sem_parcela"] = _numero_sem_parcela(out["Número da nota"])
         out["Situação"] = ""
+        out["Valor a receber"] = pd.to_numeric(out.get("Total BRL"), errors="coerce")
+        out["Valor pago"] = pd.to_numeric(out.get("Valor pago"), errors="coerce")
+        out["Diferença"] = out["Valor a receber"] - out["Valor pago"]
+        if "Data de pagamento" not in out.columns:
+            out["Data de pagamento"] = pd.NA
+        if "Data de emissão" in out.columns:
+            out["Data de emissão"] = pd.to_datetime(out["Data de emissão"], errors="coerce")
+            out["Data de emissão"] = out["Data de emissão"].dt.strftime("%Y-%m-%d").fillna("")
+        else:
+            out["Data de emissão"] = ""
+        out["Data de pagamento"] = pd.to_datetime(out["Data de pagamento"], errors="coerce")
+        out["Data de pagamento"] = out["Data de pagamento"].dt.strftime("%Y-%m-%d %H:%M:%S").fillna("")
         out["Ação sugerida"] = out.apply(_classificar_acao, axis=1)
         final = out[
             [
                 "N° de venda",
                 "ID do pedido",
+                "Total BRL",
                 "Número da nota",
                 "Numero_sem_parcela",
                 "Valor da nota",
                 "Plataforma",
                 "Situação",
                 "Ação sugerida",
+                "Valor a receber",
+                "Valor pago",
+                "Diferença",
+                "Data de pagamento",
+                "Data de emissão",
             ]
         ].copy()
         final["empresa"] = DATASET_EMPRESA

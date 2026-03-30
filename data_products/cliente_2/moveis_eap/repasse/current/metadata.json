@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-29T18:20:46Z",
-  "source_signature": "15da75fa47e3d62a1e693addafe85952",
+  "generated_at": "2026-03-30T10:03:55Z",
+  "source_signature": "3ceac79c6fb5ab5c8e171a10a63f0938",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "moveis_eap",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "moveis_eap",
   "cnpj": null,
-  "row_count": 5875,
+  "row_count": 1622,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -33,29 +33,10 @@
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP",
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP",
-    "linhas": 5875,
-    "arquivos_contas_lidos": 15,
-    "col_situacao": "Situação",
-    "col_numero": "Número"
+    "linhas": 1622,
+    "arquivos_contas_lidos": 0,
+    "col_situacao": "",
+    "col_numero": ""
   },
-  "app_mirror_csv": "dataset_repasse_app.csv",
-  "repasse_debug": {
-    "liberacoes_tratadas_rows": 10865,
-    "etapa3_rows": 6117,
-    "etapa3_linhas_data_pagamento_preenchida": 5875,
-    "etapa3_linhas_valor_pago_positivo": 5570,
-    "notas_saida_linhas_carregadas": 18259,
-    "notas_saida_vazio": false,
-    "contas_receber_arquivos": 15,
-    "contas_receber_linhas_carregadas": 16899,
-    "apos_integracao_notas_rows": 5875,
-    "apos_integracao_linhas_data_pagamento_preenchida": 5875,
-    "apos_integracao_merge_notas_linhas_numero_nota_preenchida": 5646,
-    "apos_integracao_linhas_data_emissao_preenchida": 5646,
-    "tabela_final_operacional_rows": 5875,
-    "tabela_final_linhas_data_pagamento_preenchida": 5875,
-    "tabela_final_linhas_numero_nota_preenchida": 5646,
-    "tabela_final_linhas_data_emissao_preenchida": 5646,
-    "tabela_final_linhas_situacao_preenchida": 5592
-  }
+  "app_mirror_csv": "dataset_repasse_app.csv"
 }

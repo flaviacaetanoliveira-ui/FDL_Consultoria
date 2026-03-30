@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-29T17:47:24Z",
-  "source_signature": "4aef1551a8ecd9f50cd63731d42aff1e",
+  "generated_at": "2026-03-30T10:03:39Z",
+  "source_signature": "2193433a8c2a630480991dcc5e03c7d4",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_facil",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_facil",
   "cnpj": null,
-  "row_count": 16997,
+  "row_count": 18010,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -33,29 +33,10 @@
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil",
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil",
-    "linhas": 16997,
-    "arquivos_contas_lidos": 7,
-    "col_situacao": "Situação",
-    "col_numero": "Número"
+    "linhas": 18010,
+    "arquivos_contas_lidos": 0,
+    "col_situacao": "",
+    "col_numero": ""
   },
-  "app_mirror_csv": "dataset_repasse_app.csv",
-  "repasse_debug": {
-    "liberacoes_tratadas_rows": 35245,
-    "etapa3_rows": 17147,
-    "etapa3_linhas_data_pagamento_preenchida": 16997,
-    "etapa3_linhas_valor_pago_positivo": 15931,
-    "notas_saida_linhas_carregadas": 36181,
-    "notas_saida_vazio": false,
-    "contas_receber_arquivos": 7,
-    "contas_receber_linhas_carregadas": 9604,
-    "apos_integracao_notas_rows": 16997,
-    "apos_integracao_linhas_data_pagamento_preenchida": 16997,
-    "apos_integracao_merge_notas_linhas_numero_nota_preenchida": 16171,
-    "apos_integracao_linhas_data_emissao_preenchida": 16171,
-    "tabela_final_operacional_rows": 16997,
-    "tabela_final_linhas_data_pagamento_preenchida": 16997,
-    "tabela_final_linhas_numero_nota_preenchida": 16171,
-    "tabela_final_linhas_data_emissao_preenchida": 16171,
-    "tabela_final_linhas_situacao_preenchida": 1934
-  }
+  "app_mirror_csv": "dataset_repasse_app.csv"
 }

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-29T16:09:14Z",
-  "source_signature": "d59d90d739e2350806caa75737dd7bb5",
+  "generated_at": "2026-03-30T10:03:13Z",
+  "source_signature": "e17107c18f05a1f961e3c133f1c7b17f",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "gama_home",
@@ -34,28 +34,9 @@
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home",
     "linhas": 143,
-    "arquivos_contas_lidos": 4,
-    "col_situacao": "Situação",
-    "col_numero": "Número"
+    "arquivos_contas_lidos": 0,
+    "col_situacao": "",
+    "col_numero": ""
   },
-  "app_mirror_csv": "dataset_repasse_app.csv",
-  "repasse_debug": {
-    "liberacoes_tratadas_rows": 574,
-    "etapa3_rows": 229,
-    "etapa3_linhas_data_pagamento_preenchida": 143,
-    "etapa3_linhas_valor_pago_positivo": 130,
-    "notas_saida_linhas_carregadas": 2166,
-    "notas_saida_vazio": false,
-    "contas_receber_arquivos": 4,
-    "contas_receber_linhas_carregadas": 1729,
-    "apos_integracao_notas_rows": 143,
-    "apos_integracao_linhas_data_pagamento_preenchida": 143,
-    "apos_integracao_merge_notas_linhas_numero_nota_preenchida": 134,
-    "apos_integracao_linhas_data_emissao_preenchida": 134,
-    "tabela_final_operacional_rows": 143,
-    "tabela_final_linhas_data_pagamento_preenchida": 143,
-    "tabela_final_linhas_numero_nota_preenchida": 134,
-    "tabela_final_linhas_data_emissao_preenchida": 134,
-    "tabela_final_linhas_situacao_preenchida": 134
-  }
+  "app_mirror_csv": "dataset_repasse_app.csv"
 }

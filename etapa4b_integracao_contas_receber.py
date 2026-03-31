@@ -11,6 +11,7 @@ import pandas as pd
 
 from integracao_notas_pedidos import BASE_DIR, build_conciliacao_com_notas
 from operacional_data_config import DATASET_EMPRESA
+from etapa3_conciliacao_vendas_liberacoes_validas import build_conciliacao_vendas_liberacoes_validas
 
 
 def _pasta_contas(base_dir: str | Path) -> Path:
@@ -178,6 +179,67 @@ def _classificar_acao(row: pd.Series) -> str:
     return "Baixado" if sem_bling else "Baixar no Bling"
 
 
+def _repasse_vendas_liberacoes_only() -> bool:
+    """
+    Cliente sem Bling/notas/contas: monta repasse só com vendas x liberações (etapa3).
+    """
+    return os.environ.get("FDL_REPASSE_VENDAS_LIBERACOES_ONLY", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _build_final_from_vendas_liberacoes(root: Path) -> tuple[pd.DataFrame, dict[str, object]]:
+    """
+    Tabela final no layout do app sem dependências de notas/contas.
+    """
+    base = build_conciliacao_vendas_liberacoes_validas(root).copy()
+    out = pd.DataFrame(index=base.index)
+    out["N° de venda"] = _norm(base.get("N° de venda", pd.Series("", index=base.index)))
+    out["ID do pedido"] = ""
+    out["Total BRL"] = pd.to_numeric(base.get("Total BRL"), errors="coerce")
+    out["Número da nota"] = ""
+    out["Numero_sem_parcela"] = ""
+    out["Valor da nota"] = pd.NA
+    out["Plataforma"] = "Mercado Livre"
+    out["Situação"] = ""
+    out["Valor a receber"] = pd.to_numeric(base.get("Total BRL"), errors="coerce")
+    out["Valor pago"] = pd.to_numeric(base.get("Valor pago"), errors="coerce")
+    out["Diferença"] = out["Valor a receber"] - out["Valor pago"]
+    out["Data de pagamento"] = pd.to_datetime(base.get("Data de pagamento"), errors="coerce")
+    out["Data de pagamento"] = out["Data de pagamento"].dt.strftime("%Y-%m-%d %H:%M:%S").fillna("")
+    out["Data de emissão"] = ""
+    out["Ação sugerida"] = out.apply(_classificar_acao, axis=1)
+    final = out[
+        [
+            "N° de venda",
+            "ID do pedido",
+            "Total BRL",
+            "Número da nota",
+            "Numero_sem_parcela",
+            "Valor da nota",
+            "Plataforma",
+            "Situação",
+            "Ação sugerida",
+            "Valor a receber",
+            "Valor pago",
+            "Diferença",
+            "Data de pagamento",
+            "Data de emissão",
+        ]
+    ].copy()
+    final["empresa"] = DATASET_EMPRESA
+    return final, {
+        "base_dir": str(root),
+        "linhas": int(len(final)),
+        "arquivos_contas_lidos": 0,
+        "col_situacao": "",
+        "col_numero": "",
+    }
+
+
 def _numero_sem_parcela(series: pd.Series) -> pd.Series:
     s = _norm(series)
     s = s.str.replace(r"/.*$", "", regex=True)  # remove sufixo de parcela
@@ -206,6 +268,8 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
     - **contas_receber** serve só para enriquecer **Situação** do título (ex.: Bling), via cruzamento por NF.
     """
     root = Path(base_dir).resolve()
+    if _repasse_vendas_liberacoes_only():
+        return _build_final_from_vendas_liberacoes(root)
     base = build_conciliacao_com_notas(filtrar_notas_invalidas=True, base_dir=root).copy()
     base["Número da nota"] = _norm(base["Número da nota"])
 

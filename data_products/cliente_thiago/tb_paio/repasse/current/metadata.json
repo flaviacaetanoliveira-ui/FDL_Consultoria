@@ -1,0 +1,42 @@
+{
+  "generated_at": "2026-03-31T06:51:41Z",
+  "source_signature": "087617b23a3c53c4571be12a4c4ed9d4",
+  "pipeline_revision": "phase1-v1",
+  "cliente": "cliente_thiago",
+  "empresa": "tb_paio",
+  "modulo": "repasse",
+  "cliente_id": "cliente_thiago",
+  "empresa_id": "tb_paio",
+  "cnpj": null,
+  "row_count": 13145,
+  "columns": [
+    "N° de venda",
+    "ID do pedido",
+    "Total BRL",
+    "Número da nota",
+    "Numero_sem_parcela",
+    "Valor da nota",
+    "Plataforma",
+    "Situação",
+    "Ação sugerida",
+    "Valor a receber",
+    "Valor pago",
+    "Diferença",
+    "Data de pagamento",
+    "Data de emissão",
+    "empresa",
+    "cliente_id",
+    "empresa_id",
+    "cnpj"
+  ],
+  "source_mode": "local_folder",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
+  "loader_info": {
+    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
+    "linhas": 13145,
+    "arquivos_contas_lidos": 0,
+    "col_situacao": "",
+    "col_numero": ""
+  },
+  "app_mirror_csv": "dataset_repasse_app.csv"
+}

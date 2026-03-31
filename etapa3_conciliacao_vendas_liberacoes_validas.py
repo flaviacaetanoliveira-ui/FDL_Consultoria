@@ -67,34 +67,82 @@ def _build_conciliacao_shopee(base_dir: str | Path) -> pd.DataFrame:
         return pd.DataFrame()
 
     vendas_parts: list[pd.DataFrame] = []
-    for path in list_sales_files(pasta_vendas):
+    for file_rank, path in enumerate(list_sales_files(pasta_vendas)):
         raw = read_sales_file(path)
         col_pedido = _find_col(raw, {"ID do pedido", "Order ID"})
-        col_total = _find_col(
+        if not col_pedido:
+            continue
+
+        s_subtotal = parse_brl_number(raw[_find_col(raw, {"Subtotal do produto"})]) if _find_col(raw, {"Subtotal do produto"}) else pd.Series(pd.NA, index=raw.index)
+        s_frete_comp = parse_brl_number(raw[_find_col(raw, {"Taxa de envio pagas pelo comprador", "Taxa de frete paga pelo comprador"})]) if _find_col(raw, {"Taxa de envio pagas pelo comprador", "Taxa de frete paga pelo comprador"}) else pd.Series(pd.NA, index=raw.index)
+        s_desc_frete = parse_brl_number(raw[_find_col(raw, {"Desconto de Frete Aproximado", "Desconto de frete pela Shopee"})]) if _find_col(raw, {"Desconto de Frete Aproximado", "Desconto de frete pela Shopee"}) else pd.Series(pd.NA, index=raw.index)
+        s_taxa_trans = parse_brl_number(raw[_find_col(raw, {"Taxa de transação"})]) if _find_col(raw, {"Taxa de transação"}) else pd.Series(pd.NA, index=raw.index)
+        s_taxa_com = parse_brl_number(raw[_find_col(raw, {"Taxa de comissão líquida", "Net Commission Fee"})]) if _find_col(raw, {"Taxa de comissão líquida", "Net Commission Fee"}) else pd.Series(pd.NA, index=raw.index)
+        s_taxa_serv = parse_brl_number(raw[_find_col(raw, {"Taxa de serviço líquida", "Service Fee"})]) if _find_col(raw, {"Taxa de serviço líquida", "Service Fee"}) else pd.Series(pd.NA, index=raw.index)
+        s_aj_acao = parse_brl_number(raw[_find_col(raw, {"Ajuste por participação em ação comercial"})]) if _find_col(raw, {"Ajuste por participação em ação comercial"}) else pd.Series(0.0, index=raw.index)
+
+        col_total_fallback = _find_col(
             raw,
             {
+                "Total global",
+                "Valor Total",
                 "Quantia total lançada (R$)",
                 "Quantia total lancada (R$)",
                 "Seller Amount",
                 "Net Credit Amount",
-                "Total global",
-                "Valor Total",
             },
         )
-        if not col_pedido or not col_total:
-            continue
-        part = pd.DataFrame()
+        s_fallback = (
+            parse_brl_number(raw[col_total_fallback])
+            if col_total_fallback
+            else pd.Series(pd.NA, index=raw.index)
+        )
+        s_valor_total = (
+            parse_brl_number(raw[_find_col(raw, {"Valor Total"})])
+            if _find_col(raw, {"Valor Total"})
+            else pd.Series(pd.NA, index=raw.index)
+        )
+        s_total_global = (
+            parse_brl_number(raw[_find_col(raw, {"Total global"})])
+            if _find_col(raw, {"Total global"})
+            else pd.Series(pd.NA, index=raw.index)
+        )
+
+        # Candidato líquido conservador: subtotal - taxas/ajustes (encargos costumam vir positivos no export).
+        s_fees = (
+            s_taxa_trans.fillna(0)
+            + s_taxa_com.fillna(0)
+            + s_taxa_serv.fillna(0)
+            + s_aj_acao.fillna(0)
+        )
+        s_formula = s_subtotal.fillna(s_valor_total).fillna(s_total_global) - s_fees
+
+        # Escolhe o menor candidato disponível para evitar sobrestimar «Valor a receber».
+        s_expected = pd.concat([s_formula, s_subtotal, s_total_global, s_valor_total, s_fallback], axis=1).min(
+            axis=1, skipna=True
+        )
+
+        part = pd.DataFrame(index=raw.index)
         part["N° de venda"] = raw[col_pedido].fillna("").astype(str).str.strip()
-        part["Total BRL"] = parse_brl_number(raw[col_total])
-        part = part[part["N° de venda"].ne("")].copy()
+        part["Total BRL"] = s_expected
+        part = part[part["N° de venda"].ne("") & part["Total BRL"].notna()].copy()
+        if part.empty:
+            continue
+        # Um pedido pode aparecer em múltiplas linhas (itens). Mantém 1 valor por pedido no ficheiro.
+        part = part.groupby("N° de venda", as_index=False)["Total BRL"].max()
+        part["_file_rank"] = file_rank
         vendas_parts.append(part)
     if not vendas_parts:
         return pd.DataFrame()
-    vendas = pd.concat(vendas_parts, ignore_index=True)
-    vendas = vendas.groupby("N° de venda", as_index=False)["Total BRL"].sum(min_count=1)
+    vendas = pd.concat(vendas_parts, ignore_index=True).sort_values(
+        ["N° de venda", "_file_rank"], kind="stable"
+    )
+    # Ficheiros mais novos primeiro: evita duplicar pedidos em exports sobrepostos.
+    vendas = vendas.drop_duplicates(subset=["N° de venda"], keep="first")
+    vendas = vendas.drop(columns=["_file_rank"], errors="ignore")
 
     lib_parts: list[pd.DataFrame] = []
-    for path in list_liberacoes_files(pasta_lib):
+    for file_rank, path in enumerate(list_liberacoes_files(pasta_lib)):
         raw = read_input_file(path)
         col_pedido = _find_col(
             raw,
@@ -128,13 +176,22 @@ def _build_conciliacao_shopee(base_dir: str | Path) -> pd.DataFrame:
         )
         part["Valor pago"] = parse_brl_number(raw[col_valor])
         part = part[part["N° de venda"].ne("")].copy()
+        if part.empty:
+            continue
+        # Consolida por pedido no ficheiro (pode haver múltiplos lançamentos por pedido).
+        part = part.groupby("N° de venda", as_index=False).agg(
+            {"Data de pagamento": "min", "Valor pago": "sum"}
+        )
+        part["_file_rank"] = file_rank
         lib_parts.append(part)
     if not lib_parts:
         return pd.DataFrame()
-    liberacoes = pd.concat(lib_parts, ignore_index=True)
-    liberacoes = liberacoes.groupby("N° de venda", as_index=False).agg(
-        {"Data de pagamento": "min", "Valor pago": "sum"}
+    liberacoes = pd.concat(lib_parts, ignore_index=True).sort_values(
+        ["N° de venda", "_file_rank"], kind="stable"
     )
+    # Evita duplicar pedidos quando há extratos anuais + mensais com sobreposição.
+    liberacoes = liberacoes.drop_duplicates(subset=["N° de venda"], keep="first")
+    liberacoes = liberacoes.drop(columns=["_file_rank"], errors="ignore")
 
     c = vendas.merge(liberacoes, how="left", on="N° de venda")
     c["Valor pago"] = pd.to_numeric(c["Valor pago"], errors="coerce").round(2)

@@ -144,14 +144,31 @@ def build_conciliacao_com_notas(
     conc["N° de venda"] = _norm(conc["N° de venda"])
     de_para["N° de venda"] = _norm(de_para["N° de venda"])
     de_para["ID do pedido"] = _norm(de_para["ID do pedido"])
-
-    # Etapa VENDAS -> LIBERAÇÕES: N° de venda recebe ID do pedido via de/para vindo de liberações.
-    conc = conc.merge(de_para[["N° de venda", "ID do pedido"]], how="left", on="N° de venda")
-    conc["ID do pedido"] = _norm(conc["ID do pedido"])
-    base = conc[conc["ID do pedido"].ne("")].copy()
-    # Garante que o pedido exista de fato no universo de liberações/pagamentos.
     pagamentos_por_pedido["ID do pedido"] = _norm(pagamentos_por_pedido["ID do pedido"])
-    base = base[base["ID do pedido"].isin(set(pagamentos_por_pedido["ID do pedido"]))].copy()
+
+    plataforma = (
+        conc.get("Plataforma", pd.Series("Mercado Livre", index=conc.index))
+        .fillna("Mercado Livre")
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
+    conc_ml = conc[plataforma.ne("shopee")].copy()
+    conc_shopee = conc[plataforma.eq("shopee")].copy()
+
+    # Fluxo original (ML): N° de venda -> ID do pedido (de/para) e valida no universo de pagamentos.
+    conc_ml = conc_ml.merge(de_para[["N° de venda", "ID do pedido"]], how="left", on="N° de venda")
+    conc_ml["ID do pedido"] = _norm(conc_ml["ID do pedido"])
+    base_ml = conc_ml[conc_ml["ID do pedido"].ne("")].copy()
+    base_ml = base_ml[base_ml["ID do pedido"].isin(set(pagamentos_por_pedido["ID do pedido"]))].copy()
+
+    # Shopee: mantém linhas mesmo sem de/para ML; usa ID do pedido da própria plataforma.
+    if not conc_shopee.empty:
+        conc_shopee["ID do pedido"] = _norm(conc_shopee.get("ID do pedido", pd.Series("", index=conc_shopee.index)))
+        conc_shopee.loc[conc_shopee["ID do pedido"].eq(""), "ID do pedido"] = conc_shopee["N° de venda"]
+        base = pd.concat([base_ml, conc_shopee], ignore_index=True)
+    else:
+        base = base_ml
 
     notas = _carregar_notas_saida(root)
     if filtrar_notas_invalidas:
@@ -160,11 +177,16 @@ def build_conciliacao_com_notas(
         _cols = ["N° de venda", "ID do pedido", "Total BRL", "Valor pago"]
         if "Data de pagamento" in base.columns:
             _cols.append("Data de pagamento")
+        if "Plataforma" in base.columns:
+            _cols.append("Plataforma")
         out = base[_cols].copy()
         out["Número da nota"] = pd.NA
         out["Valor da nota"] = pd.NA
         out["Status NF"] = "Sem nota"
-        out["Plataforma"] = "Não identificado"
+        if "Plataforma" not in out.columns:
+            out["Plataforma"] = "Não identificado"
+        else:
+            out["Plataforma"] = out["Plataforma"].fillna("Não identificado").astype(str)
         return out
 
     col_pedido = "Número do pedido multiloja"
@@ -205,6 +227,12 @@ def build_conciliacao_com_notas(
     )
 
     out = base.merge(agg, how="left", left_on="ID do pedido", right_on=col_pedido)
+    if "Plataforma_x" in out.columns or "Plataforma_y" in out.columns:
+        px = out["Plataforma_x"] if "Plataforma_x" in out.columns else pd.Series(pd.NA, index=out.index)
+        py = out["Plataforma_y"] if "Plataforma_y" in out.columns else pd.Series(pd.NA, index=out.index)
+        py_ok = py.notna() & py.astype(str).str.strip().ne("")
+        out["Plataforma"] = py.where(py_ok, px)
+        out = out.drop(columns=["Plataforma_x", "Plataforma_y"], errors="ignore")
     keep_cols = [
         "N° de venda",
         "ID do pedido",

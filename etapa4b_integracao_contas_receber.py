@@ -203,7 +203,11 @@ def _build_final_from_vendas_liberacoes(root: Path) -> tuple[pd.DataFrame, dict[
     out["Número da nota"] = ""
     out["Numero_sem_parcela"] = ""
     out["Valor da nota"] = pd.NA
-    out["Plataforma"] = "Mercado Livre"
+    out["Plataforma"] = (
+        base.get("Plataforma", pd.Series("Mercado Livre", index=base.index))
+        .fillna("Mercado Livre")
+        .astype(str)
+    )
     out["Situação"] = ""
     out["Valor a receber"] = pd.to_numeric(base.get("Total BRL"), errors="coerce")
     out["Valor pago"] = pd.to_numeric(base.get("Valor pago"), errors="coerce")

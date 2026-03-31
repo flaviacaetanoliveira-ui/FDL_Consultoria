@@ -216,6 +216,24 @@ def _repasse_sem_bling() -> bool:
         return False
 
 
+def _repasse_vendas_liberacoes_only() -> bool:
+    """
+    Cenário específico (ex.: Thiago): repasse sem notas/contas, só vendas x liberações.
+    """
+    raw = os.environ.get("FDL_REPASSE_VENDAS_LIBERACOES_ONLY", "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    try:
+        sec = st.secrets.get("FDL_REPASSE_VENDAS_LIBERACOES_ONLY", False)
+        if isinstance(sec, bool):
+            return sec
+        return str(sec).strip().lower() in {"1", "true", "yes", "on"}
+    except Exception:
+        return False
+
+
 def _filtrar_df_col_empresa_por_contexto(df: pd.DataFrame) -> pd.DataFrame:
     """
     Em modo fixed/live, restringe às empresas permitidas ou, em cenários multi-empresa no mesmo ficheiro,
@@ -3575,6 +3593,23 @@ def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
 
 def _repasse_ui_validacao_kpi_saas(contagens: dict[str, int]) -> None:
     """KPIs da base filtrada — `st.metric` dentro de contentores com borda (UI nativa)."""
+    if _repasse_vendas_liberacoes_only():
+        baixado = int(contagens.get("Baixado", 0))
+        diverg = int(contagens.get("Analisar diferença", 0))
+        sem_pag = int(contagens.get("Verificar recebimento", 0))
+        zero = int(contagens.get("Zerado", 0))
+        c1, c2, c3, c4 = st.columns(4)
+        specs: list[tuple[Any, str, int]] = [
+            (c1, "Baixado", baixado),
+            (c2, "Divergências", diverg),
+            (c3, "Sem pagamento", sem_pag),
+            (c4, "Zerados", zero),
+        ]
+        for col, label, val in specs:
+            with col:
+                st.metric(label, _fmt_int_ptbr(val))
+        return
+
     ok = int(contagens.get("Ok", 0))
     bling = int(contagens.get("Baixado", 0)) if _repasse_sem_bling() else int(contagens.get("Baixar no Bling", 0))
     div = int(contagens.get("Analisar diferença", 0))
@@ -3739,7 +3774,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 
     st.subheader("📊 Resumo por ação")
     st.caption("Contagens sobre o recorte filtrado.")
-    acoes_validacao = ["Ok", "Baixado" if _repasse_sem_bling() else "Baixar no Bling", "Analisar diferença"]
+    if _repasse_vendas_liberacoes_only():
+        acoes_validacao = ["Baixado", "Analisar diferença", "Verificar recebimento"]
+    else:
+        acoes_validacao = ["Ok", "Baixado" if _repasse_sem_bling() else "Baixar no Bling", "Analisar diferença"]
     contagens_acao = {a: int(tabela["Ação sugerida operacional"].eq(a).sum()) for a in acoes_validacao}
     contagens_acao["Zerado"] = int(tabela["Ação sugerida operacional"].eq("Revisar venda zerada").sum())
     _repasse_ui_validacao_kpi_saas(contagens_acao)
@@ -3749,17 +3787,28 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 
     # Tabela operacional — Data de emissão: mesma coluna da tabela final, parse ISO (sem dayfirst).
     col_data_emissao = _resolve_col_data_emissao(list(tabela.columns))
-    exibir_cols = [
-        "N° de venda",
-        "ID do pedido",
-        "Total BRL",
-        "Número da nota",
-        "Valor da nota",
-        "Valor a receber",
-        "Diferença",
-        "Situação",
-        "Ação sugerida operacional",
-    ]
+    if _repasse_vendas_liberacoes_only():
+        exibir_cols = [
+            "N° de venda",
+            "Total BRL",
+            "Valor a receber",
+            "Valor pago",
+            "Diferença",
+            "Ação sugerida operacional",
+            "Plataforma",
+        ]
+    else:
+        exibir_cols = [
+            "N° de venda",
+            "ID do pedido",
+            "Total BRL",
+            "Número da nota",
+            "Valor da nota",
+            "Valor a receber",
+            "Diferença",
+            "Situação",
+            "Ação sugerida operacional",
+        ]
     if "Data de pagamento" in tabela.columns:
         exibir_cols.append("Data de pagamento")
     if "Valor pago" in tabela.columns:

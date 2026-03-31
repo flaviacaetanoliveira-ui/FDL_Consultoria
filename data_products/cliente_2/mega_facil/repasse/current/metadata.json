@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T09:33:09Z",
-  "source_signature": "718138cb2584c2822a10a3c184058fda",
+  "generated_at": "2026-03-31T09:40:27Z",
+  "source_signature": "980224a7ac9eddd1b235be3e59ceb5af",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_facil",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_facil",
   "cnpj": null,
-  "row_count": 18191,
+  "row_count": 24200,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -33,7 +33,7 @@
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil",
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil",
-    "linhas": 18191,
+    "linhas": 24200,
     "arquivos_contas_lidos": 24,
     "col_situacao": "Situação",
     "col_numero": "Número"

@@ -56,6 +56,18 @@ def _first_existing(base: Path, candidates: tuple[str, ...]) -> Path | None:
     return None
 
 
+def _find_subdir_by_tokens(base: Path, required_tokens: tuple[str, ...]) -> Path | None:
+    if not base.exists():
+        return None
+    for p in base.iterdir():
+        if not p.is_dir():
+            continue
+        n = _normalize_name(p.name)
+        if all(tok in n for tok in required_tokens):
+            return p
+    return None
+
+
 def _read_amazon_repo_file(path: Path) -> pd.DataFrame:
     """
     Repositório Amazon tem cabeçalho real após linhas descritivas.
@@ -232,12 +244,14 @@ def _build_conciliacao_amazon(base_dir: str | Path) -> pd.DataFrame:
 
 def _build_conciliacao_shopee(base_dir: str | Path) -> pd.DataFrame:
     root = Path(base_dir)
-    pasta_vendas = _first_existing(root, ("Vendas_Shopee", "Vendas Shopee"))
+    pasta_vendas = _first_existing(root, ("Vendas_Shopee", "Vendas Shopee")) or _find_subdir_by_tokens(
+        root, ("vendas", "shopee")
+    )
     pasta_lib = _first_existing(
         root,
         ("Liberações_Shopee", "Liberacoes_Shopee", "Liberações Shopee", "Liberacoes Shopee"),
-    )
-    if pasta_vendas is None or pasta_lib is None:
+    ) or _find_subdir_by_tokens(root, ("libera", "shopee"))
+    if pasta_vendas is None:
         return pd.DataFrame()
 
     vendas_parts: list[pd.DataFrame] = []
@@ -316,7 +330,8 @@ def _build_conciliacao_shopee(base_dir: str | Path) -> pd.DataFrame:
     vendas = vendas.drop(columns=["_file_rank"], errors="ignore")
 
     lib_parts: list[pd.DataFrame] = []
-    for file_rank, path in enumerate(list_liberacoes_files(pasta_lib)):
+    lib_files = list_liberacoes_files(pasta_lib) if pasta_lib is not None else []
+    for file_rank, path in enumerate(lib_files):
         raw = read_input_file(path)
         col_pedido = _find_col(
             raw,
@@ -359,7 +374,27 @@ def _build_conciliacao_shopee(base_dir: str | Path) -> pd.DataFrame:
         part["_file_rank"] = file_rank
         lib_parts.append(part)
     if not lib_parts:
-        return pd.DataFrame()
+        c = vendas.copy()
+        c["Valor pago"] = pd.NA
+        c["Data de pagamento"] = pd.NaT
+        c["Tem pagamento"] = "Não"
+        c["Diferença"] = pd.NA
+        c["Status financeiro"] = "Sem pagamento"
+        c["Chave usada"] = "ID do pedido"
+        c["Plataforma"] = "Shopee"
+        return c[
+            [
+                "N° de venda",
+                "Total BRL",
+                "Valor pago",
+                "Data de pagamento",
+                "Chave usada",
+                "Tem pagamento",
+                "Diferença",
+                "Status financeiro",
+                "Plataforma",
+            ]
+        ].copy()
     liberacoes = pd.concat(lib_parts, ignore_index=True).sort_values(
         ["N° de venda", "_file_rank"], kind="stable"
     )

@@ -149,7 +149,7 @@ def _column_config_frete(df: pd.DataFrame) -> dict[str, TextColumn]:
         cl = str(c).lower()
         if c in (FRETE_UI_N_VENDA, FRETE_UI_ANUNCIO, "Número do anúncio", "Data da venda", "N.º venda"):
             cfg[c] = TextColumn(str(c), width="medium")
-        elif c in ("Estado", FRETE_UI_SITUACAO_FRETE):
+        elif c in ("Estado", "Estado da venda", FRETE_UI_SITUACAO_FRETE):
             cfg[c] = TextColumn(str(c), width="small")
         elif c == FRETE_UI_ACAO_RECOMENDADA:
             cfg[c] = TextColumn(str(c), width="medium")

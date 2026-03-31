@@ -325,6 +325,7 @@ def dataframe_frete_conciliacao_principal(
         order: list[tuple[str, str]] = [
             ("data_venda", "Data da venda"),
             (FRETE_UI_N_VENDA, "N.º venda"),
+            ("Estado", "Estado da venda"),
             (FRETE_UI_ANUNCIO, "Número do anúncio"),
             (FRETE_UI_FRETE_ESPERADO, "Frete esperado"),
             (FRETE_ML_COL, "Frete cobrado"),
@@ -336,6 +337,7 @@ def dataframe_frete_conciliacao_principal(
         order = [
             ("data_venda", "Data da venda"),
             (FRETE_UI_N_VENDA, "N.º venda"),
+            ("Estado", "Estado da venda"),
             (FRETE_UI_ANUNCIO, "Número do anúncio"),
             (FRETE_UI_VALOR_FRETE_ANUNCIO, "Valor frete por anúncio"),
             ("Unidades", "Quantidade"),

@@ -2976,7 +2976,7 @@ def _faturamento_filter_keys(org_id: str) -> list[str]:
     ]
 
 
-_FATURAMENTO_PAINEL_EM_CONSTRUCAO = True
+_FATURAMENTO_PAINEL_EM_CONSTRUCAO = False
 
 
 def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc: str, org_id: str) -> None:

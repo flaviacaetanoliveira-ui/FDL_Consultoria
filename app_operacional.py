@@ -3567,6 +3567,13 @@ def _first_series(df: pd.DataFrame, col: str) -> pd.Series:
     return obj
 
 
+def _drop_duplicate_columns_keep_first(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove colunas com nome duplicado, preservando a primeira ocorrência."""
+    if df.empty:
+        return df
+    return df.loc[:, ~df.columns.duplicated()].copy()
+
+
 def _repasse_ui_validacao_kpi_saas(contagens: dict[str, int]) -> None:
     """KPIs da base filtrada — `st.metric` dentro de contentores com borda (UI nativa)."""
     if _repasse_vendas_liberacoes_only():
@@ -3801,6 +3808,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         tabela_exibir = pd.DataFrame()
     else:
         tabela_exibir = tabela[exibir_cols].copy()
+        tabela_exibir = _drop_duplicate_columns_keep_first(tabela_exibir)
         if "Valor da nota" in tabela_exibir.columns:
             tabela_exibir["Valor da nota"] = pd.to_numeric(
                 _first_series(tabela_exibir, "Valor da nota"), errors="coerce"
@@ -3847,6 +3855,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 "Ação sugerida operacional": "Ação sugerida",
             }
         )
+        tabela_exibir = _drop_duplicate_columns_keep_first(tabela_exibir)
         tabela_exibir = tabela_exibir.drop(columns=["Total BRL"], errors="ignore")
         _ordem_final = [
             "Número da venda",

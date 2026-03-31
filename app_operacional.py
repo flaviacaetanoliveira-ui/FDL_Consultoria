@@ -3791,10 +3791,30 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         tabela_exibir = pd.DataFrame()
     else:
         tabela_exibir = tabela[exibir_cols].copy()
-        tabela_exibir["Valor da nota"] = pd.to_numeric(tabela_exibir["Valor da nota"], errors="coerce")
-        tabela_exibir["Valor a receber"] = pd.to_numeric(tabela_exibir["Valor a receber"], errors="coerce")
-        tabela_exibir["Valor pago"] = pd.to_numeric(tabela_exibir.get("Valor pago"), errors="coerce")
-        tabela_exibir["Diferença"] = pd.to_numeric(tabela_exibir["Diferença"], errors="coerce")
+        if "Valor da nota" in tabela_exibir.columns:
+            tabela_exibir["Valor da nota"] = pd.to_numeric(
+                tabela_exibir["Valor da nota"], errors="coerce"
+            )
+        else:
+            tabela_exibir["Valor da nota"] = 0.0
+        if "Valor a receber" in tabela_exibir.columns:
+            tabela_exibir["Valor a receber"] = pd.to_numeric(
+                tabela_exibir["Valor a receber"], errors="coerce"
+            )
+        else:
+            tabela_exibir["Valor a receber"] = 0.0
+        if "Valor pago" in tabela_exibir.columns:
+            tabela_exibir["Valor pago"] = pd.to_numeric(
+                tabela_exibir["Valor pago"], errors="coerce"
+            )
+        else:
+            tabela_exibir["Valor pago"] = 0.0
+        if "Diferença" in tabela_exibir.columns:
+            tabela_exibir["Diferença"] = pd.to_numeric(
+                tabela_exibir["Diferença"], errors="coerce"
+            )
+        else:
+            tabela_exibir["Diferença"] = 0.0
         if col_data_emissao:
             tabela_exibir["Data de emissão"] = _parse_data_emissao_final(
                 tabela.loc[tabela_exibir.index, col_data_emissao]

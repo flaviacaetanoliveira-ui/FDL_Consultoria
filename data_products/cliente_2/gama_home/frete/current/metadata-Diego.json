@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-03-31T20:06:02Z",
-  "source_signature": "bbb6cbcf41b74432b62d11f0c042accd",
+  "generated_at": "2026-03-31T20:05:00Z",
+  "source_signature": "d73652c03d481e2aa0717eb3cf43e888",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
-  "empresa": "mega_star",
+  "empresa": "gama_home",
   "modulo": "frete",
   "cliente_id": "cliente_2",
-  "empresa_id": "mega_star",
+  "empresa_id": "gama_home",
   "cnpj": null,
-  "row_count": 1004,
+  "row_count": 281,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -30,6 +30,7 @@
     "Venda por publicidade",
     "SKU",
     "# de anúncio",
+    "Canal de venda",
     "Título do anúncio",
     "Variação",
     "preco_unit_anuncio_produto",
@@ -82,19 +83,19 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
-  "org_id": "mega_star",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home",
+  "org_id": "gama_home",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Vendas_ML\\2026\\Mega Star - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Mega Star - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Vendas_ML\\2026\\Gama Home - Vendas ML 2026.xlsx",
+    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Gama Home - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
-    "vendas_arquivo": "Mega Star - Vendas ML 2026.xlsx",
-    "frete_arquivo": "Mega Star - Frete por Anúncio 06032026.xlsx",
+    "vendas_arquivo": "Gama Home - Vendas ML 2026.xlsx",
+    "frete_arquivo": "Gama Home - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 1004,
+    "linhas": 281,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

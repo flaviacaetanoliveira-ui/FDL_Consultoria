@@ -3352,50 +3352,59 @@ def _render_frete_operacional_ui(
                 "**Nenhuma venda** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
             )
         else:
+            _cfg_main: dict[str, object] = dict(_column_config_frete(t_main))
+            if FRETE_UI_RECEBIDO in t_main.columns:
+                _cfg_main[FRETE_UI_RECEBIDO] = SelectboxColumn(
+                    FRETE_UI_RECEBIDO,
+                    options=[FRETE_VAL_RECEBIDO_SIM, FRETE_VAL_RECEBIDO_NAO],
+                    required=True,
+                )
             if _fdl_safe_mode():
-                st.warning("**Modo seguro (FDL_SAFE_MODE)** — sem editor «Recebido?».")
-            st.dataframe(
-                t_main,
-                column_config=_column_config_frete(t_main),
-                use_container_width=True,
-                hide_index=True,
-                height=_h_df,
-            )
+                st.warning("**Modo seguro (FDL_SAFE_MODE)** — coluna «Recebido?» apenas para leitura.")
+                st.dataframe(
+                    t_main,
+                    column_config=_cfg_main,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=_h_df,
+                )
+            elif _fdl_minimal_layout():
+                st.dataframe(
+                    t_main,
+                    column_config=_cfg_main,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=_h_df,
+                )
+                st.caption(
+                    "Editor «Recebido?» desativado com FDL_MINIMAL_LAYOUT. Defina FDL_MINIMAL_LAYOUT=0 para ativar."
+                )
+            else:
+                edited_main = st.data_editor(
+                    t_main,
+                    column_config=_cfg_main,
+                    disabled=[c for c in t_main.columns if c != FRETE_UI_RECEBIDO],
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="fixed",
+                    height=_h_df,
+                    key=f"op_frete_editor_main_{_sig}",
+                )
+                for _, row in edited_main.iterrows():
+                    vid = (
+                        str(row[_FRETE_UI_COL_N_VENDA]).strip()
+                        if pd.notna(row.get(_FRETE_UI_COL_N_VENDA))
+                        else ""
+                    )
+                    if vid:
+                        rec_map[vid] = row.get(FRETE_UI_RECEBIDO) == FRETE_VAL_RECEBIDO_SIM
+                st.session_state[_rec_key] = rec_map
             st.caption(
                 "Use o ícone **olho** na barra da tabela para mostrar ou ocultar colunas. "
                 "Em **Situação do Frete**, os ícones indicam o estado (ex.: ✅ OK, ⬆️ cobrado a maior, 🚚 repasse)."
             )
             if not _fdl_safe_mode() and not _fdl_minimal_layout():
-                st.caption(
-                    "Ajuste **Recebido?** na grelha abaixo quando aplicável (repasse de frete)."
-                )
-                _recv = t_main[[_FRETE_UI_COL_N_VENDA, FRETE_UI_RECEBIDO]].copy()
-                _cfg_recv: dict[str, object] = {
-                    _FRETE_UI_COL_N_VENDA: TextColumn(_FRETE_UI_COL_N_VENDA, width="medium"),
-                    FRETE_UI_RECEBIDO: SelectboxColumn(
-                        FRETE_UI_RECEBIDO,
-                        options=[FRETE_VAL_RECEBIDO_SIM, FRETE_VAL_RECEBIDO_NAO],
-                        required=True,
-                    ),
-                }
-                edited_recv = st.data_editor(
-                    _recv,
-                    column_config=_cfg_recv,
-                    disabled=[_FRETE_UI_COL_N_VENDA],
-                    use_container_width=True,
-                    hide_index=True,
-                    num_rows="fixed",
-                    key=f"op_frete_editor_{_sig}",
-                )
-                for _, row in edited_recv.iterrows():
-                    vid = str(row[_FRETE_UI_COL_N_VENDA]).strip() if pd.notna(row.get(_FRETE_UI_COL_N_VENDA)) else ""
-                    if vid:
-                        rec_map[vid] = row[FRETE_UI_RECEBIDO] == FRETE_VAL_RECEBIDO_SIM
-                st.session_state[_rec_key] = rec_map
-            elif not _fdl_safe_mode() and _fdl_minimal_layout():
-                st.caption(
-                    "Editor «Recebido?» desativado com FDL_MINIMAL_LAYOUT. Defina FDL_MINIMAL_LAYOUT=0 para ativar."
-                )
+                st.caption("Pode editar **Recebido?** diretamente na tabela acima.")
         st.caption(f"{len(t_main)} linhas no filtro atual.")
     
         if _is_admin and load_info.get("frete_consume") in ("live", "live_fallback"):

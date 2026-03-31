@@ -27,7 +27,7 @@
 - **custo_xlsx:** ficheiro único partilhado; path relativo a `cliente_root` ou absoluto.
 - **empresas[]:** cada entrada com `org_id`, `empresa`, `pedidos_dir` (relativo a `cliente_root`); `permite_faturamento_sem_nf` opcional por empresa (override do default global).
 - **coluna_base_imposto:** string ou lista ordenada de candidatos (usa a primeira coluna existente no CSV).
-- O pipeline: lê custo uma vez, pedidos por empresa, join por SKU, audita custo (SKU sem correspondência / duplicado na tabela), concatena, aplica cálculos v2 (`Receita_Bruta`, `Custo_Produto_Total`, etc.), flags NF.
+- O pipeline: lê custo uma vez, pedidos por empresa, join por **chave SKU normalizada** (texto, trim, sufixo `.0` tipo Excel, remoção de zeros à esquerda em códigos só numéricos). O valor original do pedido mantém-se na coluna **`Código`**; a chave usada no join aparece como **`SKU_Normalizado`**. Em seguida: auditar custo (SKU sem correspondência / duplicado na tabela), concatenar, aplicar cálculos v2 (`Receita_Bruta`, `Custo_Produto_Total`, etc.), flags NF.
 
 Exemplo: [faturamento_params.example.json](faturamento_params.example.json).
 

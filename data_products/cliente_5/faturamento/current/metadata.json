@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-31T21:48:20Z",
+  "generated_at": "2026-03-31T23:00:20Z",
   "pipeline_revision": "faturamento-v2",
   "cliente": "cliente_5",
   "empresa": "_multi",
@@ -37,6 +37,7 @@
     "org_id",
     "cliente_slug",
     "pedidos_arquivo",
+    "SKU_Normalizado",
     "Custo_Unitario",
     "Status_Custo",
     "Flag_SKU_Sem_Custo",
@@ -93,7 +94,7 @@
     "custo_col_sku_index": 3,
     "custo_col_preco_index": 4
   },
-  "data_processamento": "2026-03-31T21:48:20Z",
+  "data_processamento": "2026-03-31T23:00:20Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,
@@ -123,7 +124,7 @@
     }
   ],
   "status_custo_counts": {
-    "SKU_SEM_CORRESPONDENCIA": 2813,
-    "CUSTO_OK": 16
+    "CUSTO_OK": 2748,
+    "SKU_SEM_CORRESPONDENCIA": 81
   }
 }

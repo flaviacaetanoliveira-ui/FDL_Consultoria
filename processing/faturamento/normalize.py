@@ -7,8 +7,45 @@ import numpy as np
 import pandas as pd
 
 
+def normalize_sku_join_key_scalar(raw: object) -> str:
+    """
+    Chave canónica para join pedidos ↔ custo e auditoria.
+
+    1. texto; 2. trim; 3. remover sufixo ``.0`` típico de export Excel/float;
+    4. remover zeros à esquerda em cadeias só numéricas (``03160`` → ``3160``).
+    Identificadores alfanuméricos (ex.: ``SKU-A``) mantêm-se após trim / ``.0``.
+    """
+    if raw is None:
+        return ""
+    try:
+        if isinstance(raw, float) and np.isnan(raw):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    if isinstance(raw, str) and raw.strip().lower() in ("nan", "none", "nat", "<na>"):
+        return ""
+    s = str(raw).strip()
+    if not s:
+        return ""
+    if s.lower() in ("nan", "none", "nat", "<na>"):
+        return ""
+    # Excel: "3160.0", "03160.0"
+    if re.fullmatch(r"-?\d+\.0", s):
+        s = s[:-2]
+    if not s:
+        return ""
+    # Apenas dígitos (com sinal opcional): zeros à esquerda
+    if re.fullmatch(r"-?\d+", s):
+        neg = s.startswith("-")
+        body = s[1:] if neg else s
+        body = body.lstrip("0") or "0"
+        return f"-{body}" if neg else body
+    return s
+
+
 def normalize_sku_key(series: pd.Series) -> pd.Series:
-    return series.fillna("").astype(str).str.strip()
+    """Série de chaves SKU para join e flags (mesma regra que :func:`normalize_sku_join_key_scalar`)."""
+    return series.map(normalize_sku_join_key_scalar)
 
 
 def _parse_number_scalar(raw: object) -> float:

@@ -10,6 +10,9 @@ CUSTO_SKU_COL = "Código"
 # Preço unitário de custo vindo do XLSX; custo total na linha = Quantidade × Custo_Unitario
 CUSTO_UNITARIO_COL = "Custo_Unitario"
 
+# Chave usada no join pedidos↔custo (normalização); o «Código» original mantém-se em ``Código``.
+SKU_NORMALIZADO_COL = "SKU_Normalizado"
+
 REQUIRED_PEDIDO_COLUMNS: tuple[str, ...] = (
     "Quantidade",
     "Preço de lista",

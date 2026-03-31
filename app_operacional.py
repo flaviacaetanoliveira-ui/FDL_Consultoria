@@ -3021,15 +3021,21 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     if "Status_Custo" in work.columns:
         _vc = work["Status_Custo"].astype(str).str.strip()
         _n_sem = int(_vc.eq("SKU_SEM_CORRESPONDENCIA").sum())
+        _n_ok_all = int(_vc.eq("CUSTO_OK").sum())
         _n_tot = len(work)
+        _ratio_sem = (_n_sem / _n_tot) if _n_tot else 0.0
         if _n_sem > 0:
-            st.info(
-                f"**Custo (demo interna):** {_n_sem} de {_n_tot} linhas **ainda não têm custo de produto** "
-                "na tabela de referência — o SKU do pedido não coincide com o da planilha de custo. "
-                "**Receita** e **Valor total** por linha continuam visíveis; **Resultado** e **Resultado %** "
-                "ficam em branco (não há margem sem custo alocado). "
-                "Isto é esperado neste recorte até o casamento de SKU ser melhorado."
-            )
+            if _ratio_sem <= 0.10:
+                st.caption(
+                    f"**Custo:** a maioria das linhas já tem custo alocado (**{_n_ok_all}** CUSTO_OK). "
+                    f"Restam **{_n_sem}** exceções (SKU ausente na planilha, código inválido ou cadastro divergente). "
+                    "Nessas linhas, **Resultado** pode ficar vazio."
+                )
+            else:
+                st.info(
+                    f"**Custo:** **{_n_sem}** de **{_n_tot}** linhas ainda sem custo na referência "
+                    "(SKU sem correspondência ou cadastro). Onde não há custo, **Resultado** fica vazio."
+                )
 
     pl_col, res_col = "Preço de lista", "Resultado"
     custo_prod_col = _faturamento_painel_custo_produto_col(list(work.columns))
@@ -3162,7 +3168,8 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     st.subheader("📊 Indicadores")
     st.caption(
         "Valores sobre o recorte filtrado. **Receita por Produtos** = soma da receita por linha "
-        "(Receita_Bruta do materializado, ou preço × quantidade); alinhado à coluna **Receita (produto)** na tabela."
+        "(Receita_Bruta do materializado, ou preço × quantidade); alinhado à coluna **Receita (produto)** na tabela. "
+        "Com custo alocado na maior parte das linhas, **Resultado total** e **Margem %** passam a refletir margem real."
     )
     _fdl_ui_gap_section()
     fk1, fk2, fk3, fk4, fk5 = st.columns(5)
@@ -3184,10 +3191,21 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
         _stc = filt["Status_Custo"].astype(str).str.strip()
         _n_ok_f = int(_stc.eq("CUSTO_OK").sum())
         _n_sem_f = int(_stc.eq("SKU_SEM_CORRESPONDENCIA").sum())
-        st.caption(
-            f"No recorte filtrado: **{_n_ok_f}** linhas com custo (CUSTO_OK), **{_n_sem_f}** sem correspondência de SKU. "
-            "Com receita mas sem custo alocado, o **Resultado total** tende a **R$ 0,00** — coerente com o pipeline."
-        )
+        _nf = len(filt)
+        if _n_sem_f == 0:
+            st.caption(
+                f"No recorte: **{_n_ok_f}** linhas com custo (CUSTO_OK). **Resultado total** inclui todas as linhas com custo neste filtro."
+            )
+        elif _n_sem_f <= max(10, int(0.1 * _nf)):
+            st.caption(
+                f"No recorte: **{_n_ok_f}** CUSTO_OK, **{_n_sem_f}** sem correspondência (exceção). "
+                "O **Resultado total** agrega sobretudo linhas com custo; linhas sem custo não somam margem."
+            )
+        else:
+            st.caption(
+                f"No recorte: **{_n_ok_f}** linhas com custo, **{_n_sem_f}** sem correspondência de SKU. "
+                "Onde não há custo, o resultado da linha fica vazio."
+            )
     else:
         st.caption("O mesmo recorte aplica-se à tabela seguinte.")
 
@@ -3254,9 +3272,13 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
         height=520,
         column_config=_cfg,
     )
+    _export = disp.copy()
+    if "SKU_Normalizado" in filt.columns:
+        _export["SKU_Normalizado"] = filt["SKU_Normalizado"].astype(str)
+        st.caption("O **CSV exportado** inclui a coluna **SKU_Normalizado** (chave de join), útil para cruzar com a planilha de custo.")
     st.download_button(
         "Exportar CSV (filtrado)",
-        disp.to_csv(index=False).encode("utf-8-sig"),
+        _export.to_csv(index=False).encode("utf-8-sig"),
         file_name="faturamento_filtrado.csv",
         mime="text/csv",
         key=f"fat_dl_csv_{_oid}",

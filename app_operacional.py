@@ -3024,9 +3024,11 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
         _n_tot = len(work)
         if _n_sem > 0:
             st.info(
-                f"**Custo (revisão interna):** {_n_sem} de {_n_tot} linhas neste recorte não têm custo "
-                "na tabela de referência (SKU sem correspondência). "
-                "Nesses casos **Resultado** e **Resultado %** ficam vazios — a margem só é calculada quando o custo está alocado."
+                f"**Custo (demo interna):** {_n_sem} de {_n_tot} linhas **ainda não têm custo de produto** "
+                "na tabela de referência — o SKU do pedido não coincide com o da planilha de custo. "
+                "**Receita** e **Valor total** por linha continuam visíveis; **Resultado** e **Resultado %** "
+                "ficam em branco (não há margem sem custo alocado). "
+                "Isto é esperado neste recorte até o casamento de SKU ser melhorado."
             )
 
     pl_col, res_col = "Preço de lista", "Resultado"
@@ -3158,7 +3160,10 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     n_alert = int(any_alert.sum())
 
     st.subheader("📊 Indicadores")
-    st.caption("Valores sobre o recorte filtrado.")
+    st.caption(
+        "Valores sobre o recorte filtrado. **Receita por Produtos** = soma da receita por linha "
+        "(Receita_Bruta do materializado, ou preço × quantidade); alinhado à coluna **Receita (produto)** na tabela."
+    )
     _fdl_ui_gap_section()
     fk1, fk2, fk3, fk4, fk5 = st.columns(5)
     with fk1:
@@ -3175,37 +3180,50 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     with fk5:
         st.metric("Alertas Ativos", _fmt_int_ptbr(n_alert))
 
-    st.caption("O mesmo recorte aplica-se à tabela seguinte.")
+    if "Status_Custo" in filt.columns:
+        _stc = filt["Status_Custo"].astype(str).str.strip()
+        _n_ok_f = int(_stc.eq("CUSTO_OK").sum())
+        _n_sem_f = int(_stc.eq("SKU_SEM_CORRESPONDENCIA").sum())
+        st.caption(
+            f"No recorte filtrado: **{_n_ok_f}** linhas com custo (CUSTO_OK), **{_n_sem_f}** sem correspondência de SKU. "
+            "Com receita mas sem custo alocado, o **Resultado total** tende a **R$ 0,00** — coerente com o pipeline."
+        )
+    else:
+        st.caption("O mesmo recorte aplica-se à tabela seguinte.")
 
     prod_col = _faturamento_resolve_produto_column(list(filt.columns))
     rpct = pd.to_numeric(filt["Resultado_Pct"], errors="coerce") if "Resultado_Pct" in filt.columns else pd.Series(float("nan"), index=filt.index)
+    receita_linha = _faturamento_painel_receita_series(filt, pl_col)
 
-    disp = pd.DataFrame(
-        {
-            "Plataforma": filt["Nome da plataforma"],
-            "Situação do pedido": filt["Situação"],
-            "N.º do pedido": filt["Número do pedido"],
-            "N.º pedido multiloja": filt["Número do pedido multiloja"],
-            "SKU": filt["Código"],
-            "Produto": filt[prod_col].astype(str) if prod_col else pd.Series("", index=filt.index),
-            "NF emitida?": filt["Existe Nota Fiscal gerada"],
-            "N.º da nota": filt["Número da nota"],
-            "Receita por Produtos": pd.to_numeric(filt[pl_col], errors="coerce"),
-            "Valor total": pd.to_numeric(filt["Valor total"], errors="coerce"),
-            "Custo do produto": pd.to_numeric(filt[custo_prod_col], errors="coerce"),
-            "Frete": pd.to_numeric(filt["Custo de Frete"], errors="coerce"),
-            "Comissão Plataforma": pd.to_numeric(filt["Taxa de Comissão"], errors="coerce"),
-            "Imposto": pd.to_numeric(filt["Imposto"], errors="coerce"),
-            "Despesas fixas": pd.to_numeric(filt["Despesas Fixas"], errors="coerce"),
-            "Resultado": pd.to_numeric(filt[res_col], errors="coerce"),
-            "Resultado %": rpct * 100.0,
-        }
-    )
+    disp_cols: dict[str, object] = {
+        "Plataforma": filt["Nome da plataforma"],
+        "Situação do pedido": filt["Situação"],
+        "N.º do pedido": filt["Número do pedido"],
+        "N.º pedido multiloja": filt["Número do pedido multiloja"],
+        "SKU": filt["Código"],
+        "Produto": filt[prod_col].astype(str) if prod_col else pd.Series("", index=filt.index),
+        "NF emitida?": filt["Existe Nota Fiscal gerada"],
+        "N.º da nota": filt["Número da nota"],
+        "Receita (produto)": receita_linha,
+        "Valor total": pd.to_numeric(filt["Valor total"], errors="coerce"),
+        "Custo do produto": pd.to_numeric(filt[custo_prod_col], errors="coerce"),
+        "Frete": pd.to_numeric(filt["Custo de Frete"], errors="coerce"),
+        "Comissão Plataforma": pd.to_numeric(filt["Taxa de Comissão"], errors="coerce"),
+        "Imposto": pd.to_numeric(filt["Imposto"], errors="coerce"),
+        "Despesas fixas": pd.to_numeric(filt["Despesas Fixas"], errors="coerce"),
+        "Resultado": pd.to_numeric(filt[res_col], errors="coerce"),
+        "Resultado %": rpct * 100.0,
+    }
+    if "Quantidade" in filt.columns:
+        disp_cols = {**{"Quantidade": pd.to_numeric(filt["Quantidade"], errors="coerce")}, **disp_cols}
+    if "Status_Custo" in filt.columns:
+        disp_cols = {**disp_cols, **{"Status custo": filt["Status_Custo"].astype(str)}}
+    disp = pd.DataFrame(disp_cols)
     disp["Alertas"] = filt.apply(_faturamento_alertas_text, axis=1)
 
     _cfg: dict[str, NumberColumn | TextColumn] = {}
     money_cols = (
-        "Receita por Produtos",
+        "Receita (produto)",
         "Valor total",
         "Custo do produto",
         "Frete",
@@ -3219,6 +3237,10 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
             _cfg[c] = NumberColumn(c, format="R$ %,.2f")
     if "Resultado %" in disp.columns:
         _cfg["Resultado %"] = NumberColumn("Resultado %", format="%.2f%%")
+    if "Quantidade" in disp.columns:
+        _cfg["Quantidade"] = NumberColumn("Quantidade", format="%.2f")
+    if "Status custo" in disp.columns:
+        _cfg["Status custo"] = TextColumn("Status custo", width="small")
     for c in ("Plataforma", "Situação do pedido", "N.º do pedido", "N.º pedido multiloja", "SKU", "Produto", "NF emitida?", "N.º da nota", "Alertas"):
         if c in disp.columns:
             _cfg[c] = TextColumn(c, width="medium" if c != "Alertas" else "large")

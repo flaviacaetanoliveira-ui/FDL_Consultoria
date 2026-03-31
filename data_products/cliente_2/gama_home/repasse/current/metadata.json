@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-30T10:03:13Z",
-  "source_signature": "e17107c18f05a1f961e3c133f1c7b17f",
+  "generated_at": "2026-03-31T05:20:43Z",
+  "source_signature": "de540e57c704b31c50c9dae2d034b135",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "gama_home",
@@ -34,9 +34,9 @@
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home",
     "linhas": 143,
-    "arquivos_contas_lidos": 0,
-    "col_situacao": "",
-    "col_numero": ""
+    "arquivos_contas_lidos": 4,
+    "col_situacao": "Situação",
+    "col_numero": "Número"
   },
   "app_mirror_csv": "dataset_repasse_app.csv"
 }

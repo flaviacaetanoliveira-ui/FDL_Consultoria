@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-30T09:38:38Z",
-  "source_signature": "3e8ba3c54b2cca4ee9e51f5aa42c5541",
+  "generated_at": "2026-03-31T05:20:44Z",
+  "source_signature": "d73652c03d481e2aa0717eb3cf43e888",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "gama_home",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "gama_home",
   "cnpj": null,
-  "row_count": 229,
+  "row_count": 281,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -88,14 +88,14 @@
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Vendas - Mercado Livre\\Gama Home - Vendas ML 2026.xlsx",
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Vendas_ML\\2026\\Gama Home - Vendas ML 2026.xlsx",
     "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Gama Home - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Gama Home - Vendas ML 2026.xlsx",
     "frete_arquivo": "Gama Home - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 229,
+    "linhas": 281,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

@@ -121,7 +121,14 @@ def _detect_col_nf_contas(columns: list[str]) -> str:
             if len(n) > best_len:
                 best = col
                 best_len = len(n)
-    return best
+    if best:
+        return best
+    # Relatório Bling «Contas a receber» costuma trazer só a coluna **Número** (título), sem «Número da nota».
+    for col in columns:
+        n = _norm_header_ascii(col)
+        if n in {"numero", "n", "nº"}:
+            return col
+    return ""
 
 
 def _nf_merge_key_one(val: object) -> str:
@@ -198,7 +205,7 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
     pasta_contas = _pasta_contas(root)
     files = []
     for ptn in ("*.csv", "*.xlsx", "*.xls"):
-        files.extend(p for p in pasta_contas.glob(ptn) if p.is_file())
+        files.extend(p for p in pasta_contas.rglob(ptn) if p.is_file())
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
 
     partes = []
@@ -399,7 +406,7 @@ def main() -> int:
     contas_all = []
     files = []
     for ptn in ("*.csv", "*.xlsx", "*.xls"):
-        files.extend(p for p in PASTA_CONTAS.glob(ptn) if p.is_file())
+        files.extend(p for p in PASTA_CONTAS.rglob(ptn) if p.is_file())
     for f in files:
         contas_all.append(_read_contas(f).dropna(axis=1, how="all").copy())
     contas_df = pd.concat(contas_all, ignore_index=True) if contas_all else pd.DataFrame()

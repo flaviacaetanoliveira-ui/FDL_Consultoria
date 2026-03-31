@@ -261,7 +261,7 @@ def _emit_repasse_pipeline_debug(base_dir: Path, df_final: Any) -> dict[str, Any
     pasta_contas = base_dir / "contas_receber"
     files_contas: list[Path] = []
     for ptn in ("*.csv", "*.xlsx", "*.xls"):
-        files_contas.extend(p for p in pasta_contas.glob(ptn) if p.is_file())
+        files_contas.extend(p for p in pasta_contas.rglob(ptn) if p.is_file())
     files_contas.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     partes_contas = []
     for f in files_contas:

@@ -13,7 +13,8 @@ from etapa3_conciliacao_vendas_liberacoes_validas import (
 from modelagem_por_pedido import construir_modelagem_por_pedido
 
 
-PASTA_NOTAS = BASE_DIR / "notas_saida"
+def _pasta_notas(base_dir: str | Path | None) -> Path:
+    return Path(base_dir or BASE_DIR).resolve() / "notas_saida"
 
 
 def _norm(s: pd.Series) -> pd.Series:
@@ -53,10 +54,11 @@ def _read_notas(path: Path) -> pd.DataFrame:
     raise RuntimeError(f"Falha ao ler notas: {path} ({last_err})")
 
 
-def _carregar_notas_saida() -> pd.DataFrame:
+def _carregar_notas_saida(base_dir: str | Path | None = None) -> pd.DataFrame:
+    pasta_notas = _pasta_notas(base_dir)
     files = []
     for ptn in ("*.csv", "*.xlsx", "*.xls"):
-        files.extend(p for p in PASTA_NOTAS.rglob(ptn) if p.is_file())
+        files.extend(p for p in pasta_notas.rglob(ptn) if p.is_file())
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
 
     partes = []
@@ -125,14 +127,17 @@ def _detectar_col_data_emissao(columns: list[str]) -> str:
     return ""
 
 
-def build_conciliacao_com_notas(filtrar_notas_invalidas: bool = True) -> pd.DataFrame:
+def build_conciliacao_com_notas(
+    filtrar_notas_invalidas: bool = True, base_dir: str | Path | None = None
+) -> pd.DataFrame:
     """
     Fluxo obrigatório:
     VENDAS -> LIBERAÇÕES -> NOTAS
     (sem join direto vendas<->notas).
     """
-    conc = build_conciliacao_vendas_liberacoes_validas(BASE_DIR).copy()
-    model = construir_modelagem_por_pedido(BASE_DIR)
+    root = Path(base_dir or BASE_DIR).resolve()
+    conc = build_conciliacao_vendas_liberacoes_validas(root).copy()
+    model = construir_modelagem_por_pedido(root)
     de_para = model["de_para_venda_pedido"].copy()
     pagamentos_por_pedido = model["pagamentos_por_pedido"].copy()
 
@@ -148,7 +153,7 @@ def build_conciliacao_com_notas(filtrar_notas_invalidas: bool = True) -> pd.Data
     pagamentos_por_pedido["ID do pedido"] = _norm(pagamentos_por_pedido["ID do pedido"])
     base = base[base["ID do pedido"].isin(set(pagamentos_por_pedido["ID do pedido"]))].copy()
 
-    notas = _carregar_notas_saida()
+    notas = _carregar_notas_saida(root)
     if filtrar_notas_invalidas:
         notas = _filtrar_notas_validas(notas)
     if notas.empty:

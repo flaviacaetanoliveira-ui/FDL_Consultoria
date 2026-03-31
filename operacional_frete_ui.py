@@ -37,6 +37,7 @@ from operacional_frete import (
     carregar_tabela_final_frete_operacional,
     dataframe_frete_conciliacao_principal,
     descobrir_fontes_frete,
+    frete_series_for_date_filter,
     frete_series_normalize_sale_dt,
     stable_mtime_ns_for_frete_url,
 )
@@ -248,23 +249,13 @@ def _painel_frete_conteudo_safe(
     ini_30 = today - timedelta(days=29)
     work = base_df
     recorte_30 = False
-    if "_data_venda_dt" in base_df.columns:
-        dts = frete_series_normalize_sale_dt(base_df["_data_venda_dt"])
-        if dts.notna().any():
-            ini_ts = pd.Timestamp(ini_30)
-            fim_ts = pd.Timestamp(today) + pd.Timedelta(days=1)
-            m = dts.notna() & (dts >= ini_ts) & (dts < fim_ts)
-            work = base_df.loc[m]
-            recorte_30 = True
-    elif "data_venda" in base_df.columns:
-        dv = pd.to_datetime(base_df["data_venda"], errors="coerce", dayfirst=True)
-        if dv.notna().any():
-            ddn = dv.dt.normalize()
-            ini_ts = pd.Timestamp(ini_30)
-            fim_ts = pd.Timestamp(today) + pd.Timedelta(days=1)
-            m = dv.notna() & (ddn >= ini_ts) & (ddn < fim_ts)
-            work = base_df.loc[m]
-            recorte_30 = True
+    fdt = frete_series_normalize_sale_dt(frete_series_for_date_filter(base_df))
+    if fdt.notna().any():
+        ini_ts = pd.Timestamp(ini_30)
+        fim_ts = pd.Timestamp(today) + pd.Timedelta(days=1)
+        m = fdt.notna() & (fdt >= ini_ts) & (fdt < fim_ts)
+        work = base_df.loc[m]
+        recorte_30 = True
 
     tbl_show = work[[c for c in work.columns if not str(c).startswith("_")]].copy()
     if "data_venda" not in tbl_show.columns and "_data_venda_dt" in work.columns:
@@ -349,13 +340,10 @@ def _painel_frete_conteudo(
     default_ini = today - timedelta(days=29)
     default_fim = today
 
-    if "_data_venda_dt" in work.columns:
-        dts = work["_data_venda_dt"].dropna()
-        if len(dts):
-            d_min_data = dts.min().date()
-            d_max_data = dts.max().date()
-        else:
-            d_min_data = d_max_data = today
+    fdt_bounds = frete_series_normalize_sale_dt(frete_series_for_date_filter(work))
+    if fdt_bounds.notna().any():
+        d_min_data = fdt_bounds.min().date()
+        d_max_data = fdt_bounds.max().date()
     else:
         d_min_data = d_max_data = today
 
@@ -435,8 +423,8 @@ def _painel_frete_conteudo(
             )
         tbl = tbl.loc[m]
 
-    if "_data_venda_dt" in tbl.columns:
-        dd = frete_series_normalize_sale_dt(tbl["_data_venda_dt"])
+    if "data_venda" in tbl.columns or "_data_venda_dt" in tbl.columns:
+        dd = frete_series_normalize_sale_dt(frete_series_for_date_filter(tbl))
         if dd.notna().any():
             ini = pd.Timestamp(data_ini)
             fim = pd.Timestamp(data_fim) + pd.Timedelta(days=1)

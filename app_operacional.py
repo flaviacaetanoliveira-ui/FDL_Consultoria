@@ -63,6 +63,7 @@ from operacional_frete import (
     dataframe_frete_conciliacao_principal,
     descobrir_fontes_frete,
     frete_kpis_executivos,
+    frete_series_for_date_filter,
     frete_series_normalize_sale_dt,
     frete_tabela_anuncios_cobrado_maior,
     frete_tabela_anuncios_repasse_frete,
@@ -3013,8 +3014,8 @@ def _render_frete_operacional_ui(
             default_ini = today - timedelta(days=29)
             default_fim = today
         
-            if "_data_venda_dt" in work.columns:
-                dts = frete_series_normalize_sale_dt(work["_data_venda_dt"])
+            if "data_venda" in work.columns or "_data_venda_dt" in work.columns:
+                dts = frete_series_normalize_sale_dt(frete_series_for_date_filter(work))
                 d_min_data, d_max_data, have_dt = _series_datetime_bounds_dates(dts)
                 if not have_dt:
                     d_min_data = d_max_data = today
@@ -3103,8 +3104,8 @@ def _render_frete_operacional_ui(
                     )
                 tbl = tbl.loc[m]
         
-            if "_data_venda_dt" in tbl.columns:
-                dd = frete_series_normalize_sale_dt(tbl["_data_venda_dt"])
+            if "data_venda" in tbl.columns or "_data_venda_dt" in tbl.columns:
+                dd = frete_series_normalize_sale_dt(frete_series_for_date_filter(tbl))
                 if dd.notna().any():
                     ini = pd.Timestamp(data_ini)
                     fim = pd.Timestamp(data_fim) + pd.Timedelta(days=1)

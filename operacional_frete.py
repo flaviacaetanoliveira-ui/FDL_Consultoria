@@ -179,6 +179,54 @@ def _compute_frete_cobrado_ml(
     return fc, pd.Series(False, index=re.index)
 
 
+_ML_PT_VENDA_RE = re.compile(
+    r"^(\d{1,2})\s+de\s+(.+?)\s+de\s+(\d{4})\s+(\d{1,2}):(\d{2})",
+    flags=re.IGNORECASE,
+)
+# Meses do export ML em português (chave sem acentos — ver _normalize_pt_month_token).
+_PT_MONTH_MAP_ASCII: dict[str, int] = {
+    "janeiro": 1,
+    "fevereiro": 2,
+    "marco": 3,
+    "abril": 4,
+    "maio": 5,
+    "junho": 6,
+    "julho": 7,
+    "agosto": 8,
+    "setembro": 9,
+    "outubro": 10,
+    "novembro": 11,
+    "dezembro": 12,
+}
+
+
+def _normalize_pt_month_token(raw: str) -> str:
+    s = unicodedata.normalize("NFKD", raw.casefold().strip())
+    return "".join(c for c in s if not unicodedata.combining(c))
+
+
+def _parse_ml_pt_br_datetime_string(val: object) -> pd.Timestamp:
+    """Export ML em PT-BR: «30 de março de 2026 18:53 hs.»."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return pd.NaT  # type: ignore[return-value]
+    s = str(val).strip()
+    if not s:
+        return pd.NaT  # type: ignore[return-value]
+    s_low = s.lower().replace(" hs.", " ").replace("hs.", " ").strip().rstrip(".")
+    m = _ML_PT_VENDA_RE.match(s_low)
+    if not m:
+        return pd.NaT  # type: ignore[return-value]
+    d_, mon_raw, y_, h_, mi_ = m.groups()
+    mon_key = _normalize_pt_month_token(mon_raw)
+    mon = _PT_MONTH_MAP_ASCII.get(mon_key)
+    if mon is None:
+        return pd.NaT  # type: ignore[return-value]
+    try:
+        return pd.Timestamp(int(y_), mon, int(d_), int(h_), int(mi_))
+    except (ValueError, OverflowError):
+        return pd.NaT  # type: ignore[return-value]
+
+
 def frete_parse_data_venda_series(s: pd.Series) -> pd.Series:
     """
     Converte coluna de data de venda. ISO YYYY-MM-DD primeiro — com dayfirst=True o pandas
@@ -186,11 +234,27 @@ def frete_parse_data_venda_series(s: pd.Series) -> pd.Series:
     """
     if pd.api.types.is_datetime64_any_dtype(s):
         return s
+    if s.dtype == object or str(s.dtype) == "string":
+        # Export ML em PT-BR: evita `to_datetime` (avisos dateutil) quando o formato bate.
+        pt = s.map(_parse_ml_pt_br_datetime_string)
+        if pt.notna().any():
+            t = pt.copy()
+            need = pt.isna() & s.notna()
+            if need.any():
+                rest = s.loc[need]
+                t.loc[need] = pd.to_datetime(rest, errors="coerce", dayfirst=False)
+                still = t.isna() & need
+                if still.any():
+                    t.loc[still] = pd.to_datetime(rest.loc[still], errors="coerce", dayfirst=True)
+            return t
     t = pd.to_datetime(s, errors="coerce", dayfirst=False)
     need = t.isna() & s.notna()
     if need.any():
         t2 = pd.to_datetime(s.loc[need], errors="coerce", dayfirst=True)
         t.loc[need] = t2
+    need_pt = t.isna() & s.notna()
+    if need_pt.any():
+        t.loc[need_pt] = s.loc[need_pt].map(_parse_ml_pt_br_datetime_string)
     return t
 
 
@@ -199,6 +263,27 @@ def frete_series_normalize_sale_dt(s: pd.Series) -> pd.Series:
     if pd.api.types.is_datetime64_any_dtype(s):
         return s.dt.normalize()
     return frete_parse_data_venda_series(s).dt.normalize()
+
+
+def frete_series_for_date_filter(df: pd.DataFrame) -> pd.Series:
+    """
+    Datetimes alinhados a `df.index` para filtro «data da venda» e limites do date_input.
+    Prefere `_data_venda_dt` quando preenchida; caso contrário faz parse de `data_venda`
+    (incl. texto em português do export ML).
+    """
+    idx = df.index
+    empty = pd.Series(pd.NaT, index=idx, dtype="datetime64[ns]")
+    if "data_venda" not in df.columns and "_data_venda_dt" not in df.columns:
+        return empty
+    parsed: pd.Series | None = None
+    if "data_venda" in df.columns:
+        parsed = frete_parse_data_venda_series(df["data_venda"])
+    if "_data_venda_dt" not in df.columns:
+        return parsed if parsed is not None else empty
+    from_file = pd.to_datetime(df["_data_venda_dt"], errors="coerce")
+    if parsed is None:
+        return from_file
+    return from_file.where(from_file.notna(), parsed)
 
 
 def dataframe_frete_conciliacao_principal(

@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import csv
 import sys
+import unicodedata
 from pathlib import Path
 
 import pandas as pd
 
 from integracao_notas_pedidos import BASE_DIR, build_conciliacao_com_notas
 from operacional_data_config import DATASET_EMPRESA
+
+
+def _pasta_contas(base_dir: str | Path) -> Path:
+    return Path(base_dir).resolve() / "contas_receber"
 
 
 PASTA_CONTAS = BASE_DIR / "contas_receber"
@@ -42,15 +47,26 @@ def _read_contas(path: Path) -> pd.DataFrame:
     raise RuntimeError(f"Falha ao ler contas a receber: {path} ({last_err})")
 
 
-def _detect_col(columns: list[str], candidates_norm: set[str]) -> str:
-    norm_map = {c: c.lower().strip() for c in columns}
-    # tentativa direta sem acentos já funciona para os arquivos atuais
-    for c, n in norm_map.items():
-        if n in candidates_norm:
+def _norm_header_ascii(name: object) -> str:
+    s = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode().lower().strip()
+    return " ".join(s.split())
+
+
+def _detect_col(columns: list[str], candidates_raw: set[str]) -> str:
+    """Cabeçalhos reais (Bling/CSV) variam; compara sem acentos e permite substring (alvos longos primeiro)."""
+    if not columns:
+        return ""
+    cand_norms = sorted({_norm_header_ascii(x) for x in candidates_raw}, key=len, reverse=True)
+    norm_map = [(c, _norm_header_ascii(c)) for c in columns if str(c).strip()]
+    for c, n in norm_map:
+        if n in cand_norms:
             return c
-    for c, n in norm_map.items():
-        if any(token in n for token in candidates_norm):
-            return c
+    for c, n in norm_map:
+        if not n:
+            continue
+        for cand in cand_norms:
+            if len(cand) >= 4 and cand in n:
+                return c
     return ""
 
 
@@ -96,14 +112,21 @@ def _detectar_col_data_emissao(columns: list[str]) -> str:
 
 
 def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.DataFrame, dict[str, object]]:
-    # Base já no fluxo correto: VENDAS -> LIBERAÇÕES -> NOTAS_VALIDAS
-    base = build_conciliacao_com_notas(filtrar_notas_invalidas=True).copy()
+    """
+    Monta a tabela operacional final.
+
+    - **Valor pago** e **Data de pagamento** vêm sempre das **liberações** (etapa3 + integração com notas),
+      não do ficheiro de contas a receber.
+    - **contas_receber** serve só para enriquecer **Situação** do título (ex.: Bling), via cruzamento por NF.
+    """
+    root = Path(base_dir).resolve()
+    base = build_conciliacao_com_notas(filtrar_notas_invalidas=True, base_dir=root).copy()
     base["Número da nota"] = _norm(base["Número da nota"])
 
-    # Leitura consolidada de contas a receber
+    pasta_contas = _pasta_contas(root)
     files = []
     for ptn in ("*.csv", "*.xlsx", "*.xls"):
-        files.extend(p for p in PASTA_CONTAS.glob(ptn) if p.is_file())
+        files.extend(p for p in pasta_contas.glob(ptn) if p.is_file())
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
 
     partes = []
@@ -160,7 +183,16 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
 
     col_situ = _detect_col(
         list(contas.columns),
-        {"situação", "situacao", "status", "situação do título", "situacao do titulo"},
+        {
+            "situação",
+            "situacao",
+            "status",
+            "situação do título",
+            "situacao do titulo",
+            "estado",
+            "condição",
+            "condicao",
+        },
     )
     col_nf = _detect_col(
         list(contas.columns),
@@ -198,6 +230,7 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
     out["Numero_sem_parcela"] = _numero_sem_parcela(out["Número da nota"])
     out = out.merge(contas_lookup, how="left", on="Numero_sem_parcela")
     out["Situação"] = _norm(out["Situação"])
+    # Data de pagamento / Valor pago: só a partir de `base` (liberações); contas_lookup não os inclui.
     out["Valor a receber"] = pd.to_numeric(out.get("Total BRL"), errors="coerce")
     out["Valor pago"] = pd.to_numeric(out.get("Valor pago"), errors="coerce")
     out["Diferença"] = out["Valor a receber"] - out["Valor pago"]

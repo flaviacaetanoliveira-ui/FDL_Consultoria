@@ -28,7 +28,7 @@ Get-ChildItem -Path $dataProducts -Directory | ForEach-Object {
 
         if (Test-Path -LiteralPath $repMeta) {
             try {
-                $j = Get-Content -LiteralPath $repMeta -Raw | ConvertFrom-Json
+                $j = Get-Content -LiteralPath $repMeta -Raw -Encoding utf8 | ConvertFrom-Json
                 if ($j.base_dir) { $baseDir = [string]$j.base_dir }
                 if ($j.org_id) { $orgId = [string]$j.org_id }
             } catch {
@@ -36,7 +36,7 @@ Get-ChildItem -Path $dataProducts -Directory | ForEach-Object {
         }
         if ((-not $baseDir) -and (Test-Path -LiteralPath $freMeta)) {
             try {
-                $j = Get-Content -LiteralPath $freMeta -Raw | ConvertFrom-Json
+                $j = Get-Content -LiteralPath $freMeta -Raw -Encoding utf8 | ConvertFrom-Json
                 if ($j.base_dir) { $baseDir = [string]$j.base_dir }
                 if ($j.org_id) { $orgId = [string]$j.org_id }
             } catch {

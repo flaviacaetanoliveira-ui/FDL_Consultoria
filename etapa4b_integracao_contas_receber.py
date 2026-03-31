@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import unicodedata
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 import pandas as pd
@@ -263,6 +264,43 @@ def _detectar_col_data_emissao(columns: list[str]) -> str:
     return ""
 
 
+def _formatar_data_pagamento_mista(series: pd.Series) -> pd.Series:
+    """
+    Converte série com datas mistas (com e sem timezone) para texto uniforme.
+    Evita perda de datas sem timezone quando coexistem com timestamps offset-aware.
+    """
+    def _one(v: object) -> str:
+        txt = str(v or "").strip()
+        if not txt or txt.lower() in {"nan", "none", "nat", "<na>", "null"}:
+            return ""
+        # Tenta primeiro timestamps com timezone.
+        t_utc = pd.to_datetime(txt, errors="coerce", utc=True, format="mixed")
+        if pd.notna(t_utc):
+            try:
+                t_utc = t_utc.tz_convert(ZoneInfo("America/Sao_Paulo")).tz_localize(None)
+            except Exception:  # noqa: BLE001
+                try:
+                    t_utc = t_utc.tz_localize(None)
+                except Exception:  # noqa: BLE001
+                    pass
+            return t_utc.strftime("%Y-%m-%d %H:%M:%S")
+        # Fallback para datas sem timezone.
+        t = pd.to_datetime(txt, errors="coerce", format="mixed")
+        if pd.isna(t):
+            return ""
+        if getattr(t, "tzinfo", None) is not None:
+            try:
+                t = t.tz_convert(ZoneInfo("America/Sao_Paulo")).tz_localize(None)
+            except Exception:  # noqa: BLE001
+                try:
+                    t = t.tz_localize(None)
+                except Exception:  # noqa: BLE001
+                    pass
+        return t.strftime("%Y-%m-%d %H:%M:%S")
+
+    return series.map(_one).astype(str)
+
+
 def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.DataFrame, dict[str, object]]:
     """
     Monta a tabela operacional final.
@@ -305,8 +343,7 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
             out["Data de emissão"] = out["Data de emissão"].dt.strftime("%Y-%m-%d").fillna("")
         else:
             out["Data de emissão"] = ""
-        out["Data de pagamento"] = pd.to_datetime(out["Data de pagamento"], errors="coerce")
-        out["Data de pagamento"] = out["Data de pagamento"].dt.strftime("%Y-%m-%d %H:%M:%S").fillna("")
+        out["Data de pagamento"] = _formatar_data_pagamento_mista(out["Data de pagamento"])
         out["Ação sugerida"] = out.apply(_classificar_acao, axis=1)
         final = out[
             [
@@ -393,8 +430,7 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
         if col_opt not in out.columns:
             out[col_opt] = pd.NA
     # Garante exibição consistente no app (evita None cru na tabela).
-    out["Data de pagamento"] = pd.to_datetime(out["Data de pagamento"], errors="coerce")
-    out["Data de pagamento"] = out["Data de pagamento"].dt.strftime("%Y-%m-%d %H:%M:%S").fillna("")
+    out["Data de pagamento"] = _formatar_data_pagamento_mista(out["Data de pagamento"])
     out["Data de pagamento"] = (
         out["Data de pagamento"].astype(str).str.replace("NaT", "", regex=False).str.replace("None", "", regex=False)
     )

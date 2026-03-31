@@ -3545,11 +3545,16 @@ def _parse_data_emissao_final(series: pd.Series) -> pd.Series:
 
 
 def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
-    """Tabela final: YYYY-MM-DD HH:MM:SS — ISO, sem dayfirst."""
+    """Tabela final: parse robusto (ISO/mixed, com/sem timezone)."""
     s = series.fillna("").astype(str).str.strip()
     s = s.str.replace("NaT", "", regex=False).str.replace("None", "", regex=False)
     s = s.mask(s.str.lower().isin({"none", "nan", "nat", "<na>", "null"}), "")
-    return pd.to_datetime(s, errors="coerce")
+    t = pd.to_datetime(s, errors="coerce", format="mixed", utc=True)
+    try:
+        t = t.dt.tz_convert(_BR_TZ).dt.tz_localize(None)
+    except Exception:  # noqa: BLE001
+        t = pd.to_datetime(s, errors="coerce", format="mixed")
+    return t
 
 
 def _repasse_ui_validacao_kpi_saas(contagens: dict[str, int]) -> None:

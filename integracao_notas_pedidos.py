@@ -153,8 +153,8 @@ def build_conciliacao_com_notas(
         .str.strip()
         .str.lower()
     )
-    conc_ml = conc[plataforma.ne("shopee")].copy()
-    conc_shopee = conc[plataforma.eq("shopee")].copy()
+    conc_ml = conc[plataforma.eq("mercado livre")].copy()
+    conc_nao_ml = conc[plataforma.ne("mercado livre")].copy()
 
     # Fluxo original (ML): N° de venda -> ID do pedido (de/para) e valida no universo de pagamentos.
     conc_ml = conc_ml.merge(de_para[["N° de venda", "ID do pedido"]], how="left", on="N° de venda")
@@ -162,11 +162,13 @@ def build_conciliacao_com_notas(
     base_ml = conc_ml[conc_ml["ID do pedido"].ne("")].copy()
     base_ml = base_ml[base_ml["ID do pedido"].isin(set(pagamentos_por_pedido["ID do pedido"]))].copy()
 
-    # Shopee: mantém linhas mesmo sem de/para ML; usa ID do pedido da própria plataforma.
-    if not conc_shopee.empty:
-        conc_shopee["ID do pedido"] = _norm(conc_shopee.get("ID do pedido", pd.Series("", index=conc_shopee.index)))
-        conc_shopee.loc[conc_shopee["ID do pedido"].eq(""), "ID do pedido"] = conc_shopee["N° de venda"]
-        base = pd.concat([base_ml, conc_shopee], ignore_index=True)
+    # Plataformas não-ML (Shopee, Amazon, ...): mantém linhas mesmo sem de/para ML.
+    if not conc_nao_ml.empty:
+        conc_nao_ml["ID do pedido"] = _norm(
+            conc_nao_ml.get("ID do pedido", pd.Series("", index=conc_nao_ml.index))
+        )
+        conc_nao_ml.loc[conc_nao_ml["ID do pedido"].eq(""), "ID do pedido"] = conc_nao_ml["N° de venda"]
+        base = pd.concat([base_ml, conc_nao_ml], ignore_index=True)
     else:
         base = base_ml
 

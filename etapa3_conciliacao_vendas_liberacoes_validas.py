@@ -56,6 +56,180 @@ def _first_existing(base: Path, candidates: tuple[str, ...]) -> Path | None:
     return None
 
 
+def _read_amazon_repo_file(path: Path) -> pd.DataFrame:
+    """
+    Repositório Amazon tem cabeçalho real após linhas descritivas.
+    """
+    lines = path.read_text(encoding="utf-8-sig", errors="ignore").splitlines()
+    header_idx = 0
+    for i, ln in enumerate(lines[:80]):
+        n = _normalize_name(ln)
+        if "data hora" in n and "id de liquidacao" in n:
+            header_idx = i
+            break
+    return pd.read_csv(path, dtype=str, encoding="utf-8-sig", skiprows=header_idx)
+
+
+_AMZ_PT_MONTHS: dict[str, int] = {
+    "jan": 1,
+    "fev": 2,
+    "mar": 3,
+    "abr": 4,
+    "mai": 5,
+    "jun": 6,
+    "jul": 7,
+    "ago": 8,
+    "set": 9,
+    "out": 10,
+    "nov": 11,
+    "dez": 12,
+}
+
+
+def _parse_amazon_repo_datetime_series(s: pd.Series) -> pd.Series:
+    """
+    Ex.: '1 de jan. de 2026 04:14:24 GMT-8'
+    """
+    parsed = pd.to_datetime(s, errors="coerce", dayfirst=True, format="mixed")
+    if parsed.notna().any():
+        return parsed
+    raw = s.fillna("").astype(str).str.strip()
+    out = pd.Series(pd.NaT, index=s.index, dtype="datetime64[ns]")
+    rgx = re.compile(
+        r"^(?P<d>\d{1,2})\s+de\s+(?P<m>[a-z]{3})\.?\s+de\s+(?P<y>\d{4})\s+(?P<h>\d{1,2})[:h](?P<mi>\d{2})[:m](?P<sec>\d{2})",
+        flags=re.IGNORECASE,
+    )
+    for idx, txt in raw.items():
+        txt_norm = unicodedata.normalize("NFKD", txt).encode("ascii", "ignore").decode("ascii").lower().strip()
+        m = rgx.match(txt_norm)
+        if not m:
+            continue
+        mon = _AMZ_PT_MONTHS.get(m.group("m").lower())
+        if not mon:
+            continue
+        try:
+            out.loc[idx] = pd.Timestamp(
+                year=int(m.group("y")),
+                month=int(mon),
+                day=int(m.group("d")),
+                hour=int(m.group("h")),
+                minute=int(m.group("mi")),
+                second=int(m.group("sec")),
+            )
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
+def _build_conciliacao_amazon(base_dir: str | Path) -> pd.DataFrame:
+    root = Path(base_dir)
+    pasta_amz = _first_existing(root, ("Amazon", "amazon"))
+    if pasta_amz is None:
+        return pd.DataFrame()
+
+    trans_files = sorted(
+        [p for p in pasta_amz.rglob("*") if p.is_file() and "transa" in _normalize_name(p.name) and p.suffix.lower() in {".csv", ".xlsx", ".xls"}],
+        key=lambda x: x.stat().st_mtime,
+        reverse=True,
+    )
+    repo_files = sorted(
+        [p for p in pasta_amz.rglob("*") if p.is_file() and "repositorio" in _normalize_name(p.name) and p.suffix.lower() in {".csv", ".xlsx", ".xls"}],
+        key=lambda x: x.stat().st_mtime,
+        reverse=True,
+    )
+    if not trans_files or not repo_files:
+        return pd.DataFrame()
+
+    # Vendas esperadas (Amazon Transações).
+    vendas_parts: list[pd.DataFrame] = []
+    for file_rank, path in enumerate(trans_files):
+        raw = read_sales_file(path)
+        col_pedido = _find_col(raw, {"ID do pedido", "Order ID"})
+        col_tipo = _find_col(raw, {"Tipo de transação", "Tipo de transacao", "Transaction type"})
+        col_total = _find_col(raw, {"(total) (BRL)", "total brl", "total"})
+        if not col_pedido or not col_tipo or not col_total:
+            continue
+        part = pd.DataFrame()
+        part["N° de venda"] = raw[col_pedido].fillna("").astype(str).str.strip()
+        part["tipo"] = raw[col_tipo].fillna("").astype(str).str.strip()
+        part["Total BRL"] = parse_brl_number(raw[col_total])
+        part = part[
+            part["N° de venda"].ne("")
+            & part["tipo"].str.contains("Pagamento do pedido", case=False, na=False)
+            & part["Total BRL"].notna()
+        ].copy()
+        if part.empty:
+            continue
+        part = part.groupby("N° de venda", as_index=False)["Total BRL"].sum(min_count=1)
+        part["_file_rank"] = file_rank
+        vendas_parts.append(part)
+    if not vendas_parts:
+        return pd.DataFrame()
+    vendas = pd.concat(vendas_parts, ignore_index=True).sort_values(
+        ["N° de venda", "_file_rank"], kind="stable"
+    )
+    vendas = vendas.drop_duplicates(subset=["N° de venda"], keep="first")
+    vendas = vendas.drop(columns=["_file_rank"], errors="ignore")
+
+    # Pagamentos (Amazon Repositório / extrato).
+    pag_parts: list[pd.DataFrame] = []
+    for file_rank, path in enumerate(repo_files):
+        if path.suffix.lower() in {".xlsx", ".xls"}:
+            raw = pd.read_excel(path, dtype=str)
+        else:
+            raw = _read_amazon_repo_file(path)
+        col_pedido = _find_col(raw, {"id do pedido", "ID do pedido", "order id"})
+        col_data = _find_col(raw, {"data/hora", "data hora", "date"})
+        col_total = _find_col(raw, {"total", "(total) (BRL)", "total brl"})
+        if not col_pedido or not col_total:
+            continue
+        part = pd.DataFrame()
+        part["N° de venda"] = raw[col_pedido].fillna("").astype(str).str.strip()
+        part["Data de pagamento"] = (
+            _parse_amazon_repo_datetime_series(raw[col_data]) if col_data else pd.NaT
+        )
+        part["Valor pago"] = parse_brl_number(raw[col_total])
+        part = part[part["N° de venda"].ne("") & part["Valor pago"].notna()].copy()
+        if part.empty:
+            continue
+        part = part.groupby("N° de venda", as_index=False).agg(
+            {"Data de pagamento": "min", "Valor pago": "sum"}
+        )
+        part["_file_rank"] = file_rank
+        pag_parts.append(part)
+    if not pag_parts:
+        return pd.DataFrame()
+    pagamentos = pd.concat(pag_parts, ignore_index=True).sort_values(
+        ["N° de venda", "_file_rank"], kind="stable"
+    )
+    pagamentos = pagamentos.drop_duplicates(subset=["N° de venda"], keep="first")
+    pagamentos = pagamentos.drop(columns=["_file_rank"], errors="ignore")
+
+    c = vendas.merge(pagamentos, how="left", on="N° de venda")
+    c["Valor pago"] = pd.to_numeric(c["Valor pago"], errors="coerce").round(2)
+    c["Tem pagamento"] = (c["Valor pago"].notna() & (c["Valor pago"] > 0)).map(
+        {True: "Sim", False: "Não"}
+    )
+    c["Diferença"] = c["Total BRL"] - c["Valor pago"]
+    c.loc[c["Valor pago"].isna(), "Diferença"] = pd.NA
+    c["Status financeiro"] = classificar_status_financeiro(c)
+    c["Chave usada"] = "ID do pedido"
+    c["Plataforma"] = "Amazon"
+    return c[
+        [
+            "N° de venda",
+            "Total BRL",
+            "Valor pago",
+            "Data de pagamento",
+            "Chave usada",
+            "Tem pagamento",
+            "Diferença",
+            "Status financeiro",
+            "Plataforma",
+        ]
+    ].copy()
+
+
 def _build_conciliacao_shopee(base_dir: str | Path) -> pd.DataFrame:
     root = Path(base_dir)
     pasta_vendas = _first_existing(root, ("Vendas_Shopee", "Vendas Shopee"))
@@ -291,9 +465,13 @@ def build_conciliacao_vendas_liberacoes_validas(base_dir: str | Path) -> pd.Data
         ]
     ].copy()
     conc_shopee = _build_conciliacao_shopee(base_dir)
-    if conc_shopee.empty:
-        return conciliacao_vendas_liberacoes_validas
-    return pd.concat([conciliacao_vendas_liberacoes_validas, conc_shopee], ignore_index=True)
+    conc_amazon = _build_conciliacao_amazon(base_dir)
+    partes = [conciliacao_vendas_liberacoes_validas]
+    if not conc_shopee.empty:
+        partes.append(conc_shopee)
+    if not conc_amazon.empty:
+        partes.append(conc_amazon)
+    return pd.concat(partes, ignore_index=True)
 
 
 def main() -> int:

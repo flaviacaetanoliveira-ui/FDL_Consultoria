@@ -1,5 +1,6 @@
 param(
-    [string] $RepoRoot = ""
+    [string] $RepoRoot = "",
+    [string[]] $ExcludeCliente = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -61,8 +62,14 @@ if (-not $targets -or $targets.Count -eq 0) {
 
 $ok = 0
 $fail = 0
+$skip = 0
 foreach ($t in $targets) {
     $tag = "$($t.cliente)/$($t.empresa)"
+    if ($ExcludeCliente -contains $t.cliente) {
+        Write-Host "[SKIP] $tag (excluído)" -ForegroundColor DarkGray
+        $skip++
+        continue
+    }
     if (-not (Test-Path -LiteralPath $t.base_dir)) {
         Write-Host "[FAIL] $tag base_dir inexistente: $($t.base_dir)" -ForegroundColor Red
         $fail++
@@ -85,6 +92,6 @@ foreach ($t in $targets) {
     }
 }
 
-Write-Host ("Resumo: OK={0} FAIL={1} TOTAL={2}" -f $ok, $fail, $targets.Count)
+Write-Host ("Resumo: OK={0} FAIL={1} SKIP={2} TOTAL={3}" -f $ok, $fail, $skip, $targets.Count)
 if ($fail -gt 0) { exit 1 }
 exit 0

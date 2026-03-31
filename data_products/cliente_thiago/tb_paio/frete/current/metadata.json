@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T06:59:46Z",
-  "source_signature": "52e5ab07e2ec34777461e0375a8c286b",
+  "generated_at": "2026-03-31T10:59:15Z",
+  "source_signature": "96d6c6eb196cae74c81d65554f4d58bb",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "tb_paio",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "tb_paio",
   "cnpj": null,
-  "row_count": 2518,
+  "row_count": 2543,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -23,7 +23,7 @@
     "Tarifa de venda e impostos (BRL)",
     "Receita por envio (BRL)",
     "Tarifas de envio (BRL)",
-    "Custo do envio (BRL)",
+    "Descontos e bônus",
     "Cancelamentos e reembolsos (BRL)",
     "Total (BRL)",
     "Mês de faturamento das suas tarifas",
@@ -95,7 +95,7 @@
     "vendas_arquivo": "TB Paio - Vendas ML 2026.xlsx",
     "frete_arquivo": "TB Paio - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 2518,
+    "linhas": 2543,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

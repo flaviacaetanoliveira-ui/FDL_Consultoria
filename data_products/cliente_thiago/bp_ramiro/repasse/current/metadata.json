@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-03-31T06:59:31Z",
-  "source_signature": "087617b23a3c53c4571be12a4c4ed9d4",
+  "generated_at": "2026-03-31T06:58:18Z",
+  "source_signature": "019af4d6ee088c2d9d3867ddb5464932",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
-  "empresa": "tb_paio",
+  "empresa": "bp_ramiro",
   "modulo": "repasse",
   "cliente_id": "cliente_thiago",
-  "empresa_id": "tb_paio",
+  "empresa_id": "bp_ramiro",
   "cnpj": null,
-  "row_count": 13145,
+  "row_count": 4668,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -30,10 +30,10 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro",
   "loader_info": {
-    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
-    "linhas": 13145,
+    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro",
+    "linhas": 4668,
     "arquivos_contas_lidos": 0,
     "col_situacao": "",
     "col_numero": ""

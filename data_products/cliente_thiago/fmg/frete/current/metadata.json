@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-03-31T06:59:22Z",
-  "source_signature": "2969b6cef3e94505262f8e6db0da3fdd",
+  "generated_at": "2026-03-31T06:58:56Z",
+  "source_signature": "f81080e950d00e1b3fef6e0bfb504846",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
-  "empresa": "let_decor",
+  "empresa": "fmg",
   "modulo": "frete",
   "cliente_id": "cliente_thiago",
-  "empresa_id": "let_decor",
+  "empresa_id": "fmg",
   "cnpj": null,
-  "row_count": 2648,
+  "row_count": 2609,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -30,7 +30,7 @@
     "Venda por publicidade",
     "SKU",
     "# de anúncio",
-    "Loja oficial",
+    "Canal de venda",
     "Título do anúncio",
     "Variação",
     "preco_unit_anuncio_produto",
@@ -68,36 +68,33 @@
     "Resultado",
     "Destino",
     "Motivo do resultado",
-    "Unidades.2",
     "Reclamação aberta",
     "Reclamação encerrada",
     "Em mediação",
     "Frete cobrado",
     "Qtd × preço unit. produto (ML)",
     "_data_venda_dt",
-    "Valor frete por anúncio",
-    "Frete esperado",
-    "Diferença",
-    "Status conciliação",
     "cliente_id",
     "empresa_id",
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
-  "org_id": "let_decor",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
+  "org_id": "fmg",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Vendas_ML\\2026\\Let Decor - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Let Decor - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG\\Vendas_ML\\FMG - Vendas ML 2026.xlsx",
+    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG\\FMG - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
-    "vendas_arquivo": "Let Decor - Vendas ML 2026.xlsx",
-    "frete_arquivo": "Let Decor - Frete por Anúncio 06032026.xlsx",
-    "frete_tabular": true,
-    "linhas": 2648,
-    "avisos": []
+    "vendas_arquivo": "FMG - Vendas ML 2026.xlsx",
+    "frete_arquivo": "FMG - Frete por Anúncio 06032026.xlsx",
+    "frete_tabular": false,
+    "linhas": 2609,
+    "avisos": [
+      "Arquivo de frete por anúncio não reconhecido como tabela (p.ex. export de ecrã). Divergências por anúncio ficam indisponíveis até existir Excel/CSV com colunas MLB + preço."
+    ]
   },
   "app_mirror_csv": "dataset_frete_app.csv"
 }

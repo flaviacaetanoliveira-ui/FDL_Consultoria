@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-03-31T06:59:22Z",
-  "source_signature": "2969b6cef3e94505262f8e6db0da3fdd",
+  "generated_at": "2026-03-31T06:58:33Z",
+  "source_signature": "b8e6560ef2f8dc7db40af67fcb35122f",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
-  "empresa": "let_decor",
+  "empresa": "bp_ramiro",
   "modulo": "frete",
   "cliente_id": "cliente_thiago",
-  "empresa_id": "let_decor",
+  "empresa_id": "bp_ramiro",
   "cnpj": null,
-  "row_count": 2648,
+  "row_count": 1117,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -30,7 +30,6 @@
     "Venda por publicidade",
     "SKU",
     "# de anúncio",
-    "Loja oficial",
     "Título do anúncio",
     "Variação",
     "preco_unit_anuncio_produto",
@@ -68,7 +67,6 @@
     "Resultado",
     "Destino",
     "Motivo do resultado",
-    "Unidades.2",
     "Reclamação aberta",
     "Reclamação encerrada",
     "Em mediação",
@@ -84,19 +82,19 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
-  "org_id": "let_decor",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro",
+  "org_id": "bp_ramiro",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Vendas_ML\\2026\\Let Decor - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Let Decor - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro\\Vendas_ML\\2026\\BP Ramiro - Vendas ML 2026.xlsx",
+    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro\\BP Ramiro - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
-    "vendas_arquivo": "Let Decor - Vendas ML 2026.xlsx",
-    "frete_arquivo": "Let Decor - Frete por Anúncio 06032026.xlsx",
+    "vendas_arquivo": "BP Ramiro - Vendas ML 2026.xlsx",
+    "frete_arquivo": "BP Ramiro - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 2648,
+    "linhas": 1117,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

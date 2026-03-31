@@ -182,11 +182,18 @@ def _dataset_empresa_label() -> str:
 
 
 def _filtrar_df_col_empresa_por_contexto(df: pd.DataFrame) -> pd.DataFrame:
-    """Em dynamic, restringe à empresa ativa (evita mistura se o CSV estiver errado)."""
+    """
+    Em modo fixed/live, restringe às empresas permitidas ou, em cenários multi-empresa no mesmo ficheiro,
+    alinha ao contexto.
+
+    Em **dynamic**, cada artefacto já vive em ``data_products/<cliente>/<org_id>/...`` — não filtrar pela
+    coluna ``empresa``: muitas materializações usam ``FDL_DATASET_EMPRESA`` global (ex.: «Antomóveis») e o
+    filtro por ``display_name`` esvaziava o repasse/faturamento para todas as orgs.
+    """
     if df.empty or "empresa" not in df.columns:
         return df
     if _materialized_path_mode() == "dynamic":
-        return df[df["empresa"] == _active_org.display_name].copy()
+        return df
     empresas = st.session_state["empresas_permitidas"]
     return df[df["empresa"].isin(empresas)].copy()
 

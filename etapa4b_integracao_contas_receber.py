@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import re
 import sys
 import unicodedata
 from pathlib import Path
@@ -68,6 +69,77 @@ def _detect_col(columns: list[str], candidates_raw: set[str]) -> str:
             if len(cand) >= 4 and cand in n:
                 return c
     return ""
+
+
+_STRICT_NF_CONTAS_COLS: set[str] = {
+    "número da nota",
+    "numero da nota",
+    "numero nota",
+    "número nota",
+    "nota fiscal",
+    "numero do documento",
+    "número do documento",
+    "documento fiscal",
+    "nfe",
+    "numero nfe",
+    "número nfe",
+    "numero da nf-e",
+    "número da nf-e",
+    "chave nfe",
+    "no da nota",
+    "nº da nota",
+    "nº documento",
+    "numero documento auxiliar",
+    "número documento auxiliar",
+}
+
+
+def _detect_col_nf_contas(columns: list[str]) -> str:
+    """
+    Evita escolher colunas genéricas «Número» / «Documento» do Bling (dados errados → merge sem Situação).
+    Prioriza cabeçalhos explícitos de NF; depois colunas cujo nome sugira nota/NF.
+    """
+    c = _detect_col(columns, _STRICT_NF_CONTAS_COLS)
+    if c:
+        return c
+    best = ""
+    best_len = -1
+    for col in columns:
+        n = _norm_header_ascii(col)
+        if not n or len(n) < 2:
+            continue
+        if "pedido" in n and "nota" not in n and "nf" not in n and "nfe" not in n:
+            continue
+        if (
+            "nota" in n
+            or "nfe" in n
+            or n in {"nf", "nfe"}
+            or n.endswith(" nf")
+            or " nf " in f" {n} "
+            or n.startswith("nf ")
+        ):
+            if len(n) > best_len:
+                best = col
+                best_len = len(n)
+    return best
+
+
+def _nf_merge_key_one(val: object) -> str:
+    """Chave estável para cruzar NF da nota com contas a receber (ignora prefixos tipo NF-, zeros à esquerda)."""
+    s = str(val or "").strip()
+    if not s:
+        return ""
+    s = re.sub(r"/.*$", "", s, flags=re.IGNORECASE)
+    nums = re.findall(r"\d+", s)
+    if not nums:
+        return ""
+    raw = nums[-1]
+    stripped = raw.lstrip("0")
+    return stripped if stripped else raw
+
+
+def _nf_merge_key_series(series: pd.Series) -> pd.Series:
+    return series.fillna("").astype(str).map(_nf_merge_key_one)
 
 
 def _classificar_acao(row: pd.Series) -> str:
@@ -194,42 +266,31 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
             "condicao",
         },
     )
-    col_nf = _detect_col(
-        list(contas.columns),
-        {
-            "número da nota",
-            "numero da nota",
-            "numero nota",
-            "número nota",
-            "nota fiscal",
-            "numero do documento",
-            "número do documento",
-            "documento",
-            "número",
-            "numero",
-        },
-    )
+    col_nf = _detect_col_nf_contas(list(contas.columns))
 
     contas_join = contas.copy()
     if col_nf:
-        contas_join["__nota__"] = _norm(contas_join[col_nf])
+        contas_join["__nota_raw__"] = _norm(contas_join[col_nf])
     else:
-        contas_join["__nota__"] = ""
-    contas_join["Numero_sem_parcela"] = _numero_sem_parcela(contas_join["__nota__"])
+        contas_join["__nota_raw__"] = ""
+    contas_join["__nf_key__"] = _nf_merge_key_series(contas_join["__nota_raw__"])
     if col_situ:
-        contas_join["Situação"] = _norm(contas_join[col_situ])
+        contas_join["_sit_contas"] = _norm(contas_join[col_situ])
     else:
-        contas_join["Situação"] = ""
+        contas_join["_sit_contas"] = ""
 
-    contas_lookup = contas_join[["Numero_sem_parcela", "Situação"]].copy()
-    contas_lookup = contas_lookup[contas_lookup["Numero_sem_parcela"].ne("")].drop_duplicates(
-        subset=["Numero_sem_parcela"], keep="first"
+    contas_lookup = contas_join[["__nf_key__", "_sit_contas"]].copy()
+    contas_lookup = contas_lookup[contas_lookup["__nf_key__"].ne("")].drop_duplicates(
+        subset=["__nf_key__"], keep="first"
     )
 
     out = base.copy()
+    out["__nf_key__"] = _nf_merge_key_series(out["Número da nota"])
+    out = out.merge(contas_lookup, how="left", on="__nf_key__")
+    out = out.drop(columns=["__nf_key__"], errors="ignore")
+    out["Situação"] = _norm(out["_sit_contas"])
+    out = out.drop(columns=["_sit_contas"], errors="ignore")
     out["Numero_sem_parcela"] = _numero_sem_parcela(out["Número da nota"])
-    out = out.merge(contas_lookup, how="left", on="Numero_sem_parcela")
-    out["Situação"] = _norm(out["Situação"])
     # Data de pagamento / Valor pago: só a partir de `base` (liberações); contas_lookup não os inclui.
     out["Valor a receber"] = pd.to_numeric(out.get("Total BRL"), errors="coerce")
     out["Valor pago"] = pd.to_numeric(out.get("Valor pago"), errors="coerce")
@@ -342,14 +403,30 @@ def main() -> int:
     for f in files:
         contas_all.append(_read_contas(f).dropna(axis=1, how="all").copy())
     contas_df = pd.concat(contas_all, ignore_index=True) if contas_all else pd.DataFrame()
-    col_situ = _detect_col(list(contas_df.columns), {"situação", "situacao", "status", "situação do título", "situacao do titulo"})
-    col_nf = _detect_col(list(contas_df.columns), {"número da nota", "numero da nota", "numero nota", "número nota", "nota fiscal", "numero do documento", "número do documento", "documento", "número", "numero"})
-    contas_df["__nota__"] = _norm(contas_df[col_nf]) if col_nf else ""
-    contas_df["Numero_sem_parcela"] = _numero_sem_parcela(contas_df["__nota__"])
-    contas_df["Situação"] = _norm(contas_df[col_situ]) if col_situ else ""
-    contas_lookup = contas_df[["Numero_sem_parcela", "Situação"]]
-    contas_lookup = contas_lookup[contas_lookup["Numero_sem_parcela"].ne("")].drop_duplicates(subset=["Numero_sem_parcela"], keep="first")
-    prev = prev.merge(contas_lookup, how="left", on="Numero_sem_parcela")
+    col_situ = _detect_col(
+        list(contas_df.columns),
+        {
+            "situação",
+            "situacao",
+            "status",
+            "situação do título",
+            "situacao do titulo",
+            "estado",
+            "condição",
+            "condicao",
+        },
+    )
+    col_nf = _detect_col_nf_contas(list(contas_df.columns))
+    contas_df["__nota_raw__"] = _norm(contas_df[col_nf]) if col_nf else ""
+    contas_df["__nf_key__"] = _nf_merge_key_series(contas_df["__nota_raw__"])
+    contas_df["_sit_contas"] = _norm(contas_df[col_situ]) if col_situ else ""
+    contas_lookup = contas_df[["__nf_key__", "_sit_contas"]]
+    contas_lookup = contas_lookup[contas_lookup["__nf_key__"].ne("")].drop_duplicates(subset=["__nf_key__"], keep="first")
+    prev["__nf_key__"] = _nf_merge_key_series(prev["Número da nota"])
+    prev = prev.merge(contas_lookup, how="left", on="__nf_key__")
+    prev = prev.drop(columns=["__nf_key__"], errors="ignore")
+    prev["Situação"] = _norm(prev["_sit_contas"])
+    prev = prev.drop(columns=["_sit_contas"], errors="ignore")
     prev["Situação"] = _norm(prev["Situação"])
     prev["Ação sugerida"] = prev.apply(_classificar_acao, axis=1)
     prev_com = int(prev["Situação"].ne("").sum())

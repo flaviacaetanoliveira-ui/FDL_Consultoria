@@ -3867,21 +3867,32 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     _fdl_ui_gap_section()
 
     csv_bytes = tabela_exibir.to_csv(index=False).encode("utf-8-sig")
-    tabela_excel = tabela_exibir.copy()
-    excel_buf = BytesIO()
-    with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
-        tabela_excel.to_excel(writer, index=False, sheet_name="Conciliação")
-        ws = writer.sheets["Conciliação"]
-        header_row = [cell.value for cell in ws[1]]
-        for c_data in ("Data de emissão", "Data de pagamento"):
-            if c_data in header_row:
-                col_idx = header_row.index(c_data) + 1
-                for row_idx in range(2, ws.max_row + 1):
-                    cell = ws.cell(row=row_idx, column=col_idx)
-                    if cell.value is not None:
-                        cell.number_format = oxl_number_formats.FORMAT_DATE_DDMMYY
-    excel_buf.seek(0)
-    pdf_bytes = _build_pdf_bytes(tabela_exibir)
+    # Guardrail de estabilidade: evita trabalho pesado em cada troca de filtro
+    # para não arriscar ecrã em branco por timeout/memória no Streamlit Cloud.
+    _max_rows_heavy_export = 3000
+    excel_bytes: bytes | None = None
+    pdf_bytes: bytes | None = None
+    heavy_exports_enabled = len(tabela_exibir) <= _max_rows_heavy_export
+    if heavy_exports_enabled:
+        try:
+            tabela_excel = tabela_exibir.copy()
+            excel_buf = BytesIO()
+            with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
+                tabela_excel.to_excel(writer, index=False, sheet_name="Conciliação")
+                ws = writer.sheets["Conciliação"]
+                header_row = [cell.value for cell in ws[1]]
+                for c_data in ("Data de emissão", "Data de pagamento"):
+                    if c_data in header_row:
+                        col_idx = header_row.index(c_data) + 1
+                        for row_idx in range(2, ws.max_row + 1):
+                            cell = ws.cell(row=row_idx, column=col_idx)
+                            if cell.value is not None:
+                                cell.number_format = oxl_number_formats.FORMAT_DATE_DDMMYY
+            excel_buf.seek(0)
+            excel_bytes = excel_buf.getvalue()
+            pdf_bytes = _build_pdf_bytes(tabela_exibir)
+        except Exception:  # noqa: BLE001
+            heavy_exports_enabled = False
 
     with st.container(border=True):
         st.caption("Exportar recorte filtrado")
@@ -3895,20 +3906,31 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 use_container_width=True,
             )
         with btn2:
-            st.download_button(
-                "Exportar Excel",
-                data=excel_buf.getvalue(),
-                file_name="conciliacao_operacional_filtrada.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
+            if heavy_exports_enabled and excel_bytes is not None:
+                st.download_button(
+                    "Exportar Excel",
+                    data=excel_bytes,
+                    file_name="conciliacao_operacional_filtrada.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                )
+            else:
+                st.button("Exportar Excel", disabled=True, use_container_width=True)
         with btn3:
-            st.download_button(
-                "Exportar PDF",
-                data=pdf_bytes,
-                file_name="conciliacao_operacional_filtrada.pdf",
-                mime="application/pdf",
-                use_container_width=True,
+            if heavy_exports_enabled and pdf_bytes is not None:
+                st.download_button(
+                    "Exportar PDF",
+                    data=pdf_bytes,
+                    file_name="conciliacao_operacional_filtrada.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+            else:
+                st.button("Exportar PDF", disabled=True, use_container_width=True)
+        if not heavy_exports_enabled:
+            st.caption(
+                f"Excel/PDF desativados para recortes acima de {_max_rows_heavy_export:,} linhas (estabilidade). "
+                "CSV segue disponível."
             )
 
     _fdl_ui_gap_section_lg()

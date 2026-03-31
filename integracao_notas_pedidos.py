@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import csv
+import re
 import sys
+import unicodedata
 from pathlib import Path
 
 import pandas as pd
@@ -106,6 +108,22 @@ def _filtrar_notas_validas(notas: pd.DataFrame) -> pd.DataFrame:
     return notas.loc[~invalidas].copy()
 
 
+def _strip_header_ascii_lower(name: str) -> str:
+    s = unicodedata.normalize("NFKD", str(name).strip()).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _detectar_col_valor_total_liquido(columns: list[str]) -> str:
+    """
+    Relatório de saídas Bling: «Valor total líquido» por linha (ítem + frete da linha).
+    Somatório por pedido = total coerente da NF no export.
+    """
+    for c in columns:
+        if _strip_header_ascii_lower(c) == "valor total liquido":
+            return c
+    return ""
+
+
 def _detectar_col_data_emissao(columns: list[str]) -> str:
     alvos = {
         "data de emissão",
@@ -193,7 +211,6 @@ def build_conciliacao_com_notas(
 
     col_pedido = "Número do pedido multiloja"
     col_num_nf = "Número" if "Número" in notas.columns else None
-    col_valor_nf = "Valor total" if "Valor total" in notas.columns else None
     col_data_emissao = _detectar_col_data_emissao(list(notas.columns))
 
     if col_pedido not in notas.columns:
@@ -201,10 +218,18 @@ def build_conciliacao_com_notas(
 
     notas[col_pedido] = _norm(notas[col_pedido])
     notas = notas[notas[col_pedido].ne("")].copy()
+    # Vários .csv de saídas (ex.: parcial + consolidado) repetem as mesmas linhas; não somar em duplicata.
+    _arq = "__arquivo__"
+    _dedup_cols = [c for c in notas.columns if c != _arq]
+    if _dedup_cols:
+        notas = notas.drop_duplicates(subset=_dedup_cols, keep="first")
     notas["Plataforma"] = _inferir_plataforma(notas)
     if col_num_nf is not None:
         notas[col_num_nf] = _norm(notas[col_num_nf])
-    if col_valor_nf is not None:
+    col_valor_nf = _detectar_col_valor_total_liquido(list(notas.columns))
+    if not col_valor_nf:
+        col_valor_nf = "Valor total" if "Valor total" in notas.columns else ""
+    if col_valor_nf:
         notas[col_valor_nf] = _to_num_br(notas[col_valor_nf])
     if col_data_emissao:
         # Layout de notas vem em padrão brasileiro (dd/mm/yyyy HH:MM:SS).
@@ -219,7 +244,7 @@ def build_conciliacao_com_notas(
                 col_num_nf,
                 lambda x: " | ".join(sorted({v for v in x if str(v).strip()})) if col_num_nf else "",
             ),
-            "Valor da nota": (col_valor_nf, "sum") if col_valor_nf else (col_pedido, lambda _: pd.NA),
+            "Valor da nota": (col_valor_nf, "sum") if bool(col_valor_nf) else (col_pedido, lambda _: pd.NA),
             "Plataforma": (
                 "Plataforma",
                 lambda x: x.value_counts().index[0] if len(x.value_counts()) else "Não identificado",

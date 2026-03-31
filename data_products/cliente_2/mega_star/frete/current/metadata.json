@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-30T09:39:00Z",
-  "source_signature": "fd7185850192cb39d0d9c343069d58f5",
+  "generated_at": "2026-03-31T05:23:10Z",
+  "source_signature": "bbb6cbcf41b74432b62d11f0c042accd",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_star",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_star",
   "cnpj": null,
-  "row_count": 989,
+  "row_count": 1004,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -87,14 +87,14 @@
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Vendas - Mercado Livre\\Mega Star - Vendas ML 2026.xlsx",
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Vendas_ML\\2026\\Mega Star - Vendas ML 2026.xlsx",
     "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Mega Star - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Mega Star - Vendas ML 2026.xlsx",
     "frete_arquivo": "Mega Star - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 989,
+    "linhas": 1004,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

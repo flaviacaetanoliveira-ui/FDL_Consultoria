@@ -243,15 +243,30 @@ def build_vendas_tratadas_from_folder(folder: Path) -> tuple[pd.DataFrame, pd.Da
 
     for path in files:
         df_raw = read_sales_file(path)
-        diagnostico.append(
-            {
-                "Arquivo": path.name,
-                "Caminho": str(path),
-                "Linhas brutas": int(len(df_raw)),
-            }
-        )
-        df_tratado = build_vendas_tratadas(df_raw)
+        diag_item: dict[str, object] = {
+            "Arquivo": path.name,
+            "Caminho": str(path),
+            "Linhas brutas": int(len(df_raw)),
+        }
+        try:
+            df_tratado = build_vendas_tratadas(df_raw)
+        except KeyError as exc:
+            # Alguns ficheiros podem vir corrompidos ou sem cabeçalho válido; manter os demais.
+            diag_item["Ignorado"] = True
+            diag_item["Motivo"] = str(exc)
+            diagnostico.append(diag_item)
+            continue
+
+        diag_item["Ignorado"] = False
+        diag_item["Linhas tratadas"] = int(len(df_tratado))
+        diagnostico.append(diag_item)
         tratados_por_arquivo.append(df_tratado)
+
+    if not tratados_por_arquivo:
+        raise ValueError(
+            "Nenhum arquivo de vendas válido encontrado após leitura da pasta. "
+            "Verifique cabeçalhos/colunas dos arquivos de vendas."
+        )
 
     consolidado = pd.concat(tratados_por_arquivo, ignore_index=True)
     vendas_tratadas = (

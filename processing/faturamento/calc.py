@@ -1,9 +1,19 @@
-"""Cálculos de imposto, despesas fixas e resultado."""
+"""Cálculos de imposto, despesas fixas e resultado (v2 — receita bruta × quantidade)."""
 from __future__ import annotations
 
 import pandas as pd
 
+from .config import CUSTO_UNITARIO_COL
+from .config import OUTRAS_DESPESAS_COL
+from .config import STATUS_CUSTO_OK
 from .normalize import to_numeric_br
+
+
+def resolve_coluna_base_imposto(df: pd.DataFrame, candidates: tuple[str, ...]) -> str | None:
+    for c in candidates:
+        if c and c in df.columns:
+            return c
+    return None
 
 
 def compute_financial_columns(
@@ -12,32 +22,57 @@ def compute_financial_columns(
     aliquota_imposto: float,
     aliquota_despesas_fixas: float,
     data_processamento_iso: str,
+    base_imposto_column: str | None,
 ) -> pd.DataFrame:
     out = df.copy()
     pl = "Preço de lista"
     vt = "Valor total"
     cf = "Custo de Frete"
     tc = "Taxa de Comissão"
+    qtd_col = "Quantidade"
 
+    out[qtd_col] = to_numeric_br(out[qtd_col])
     out[pl] = to_numeric_br(out[pl])
     out[vt] = to_numeric_br(out[vt])
     out[cf] = to_numeric_br(out[cf])
     out[tc] = to_numeric_br(out[tc])
-    out["Custo do Produto"] = to_numeric_br(out["Custo do Produto"])
+    out[CUSTO_UNITARIO_COL] = to_numeric_br(out[CUSTO_UNITARIO_COL])
 
-    out["Imposto"] = out[vt] * aliquota_imposto
-    out["Despesas Fixas"] = out[pl] * aliquota_despesas_fixas
+    if OUTRAS_DESPESAS_COL in out.columns:
+        out[OUTRAS_DESPESAS_COL] = to_numeric_br(out[OUTRAS_DESPESAS_COL])
+    else:
+        out[OUTRAS_DESPESAS_COL] = 0.0
+
+    out["Receita_Bruta"] = out[qtd_col] * out[pl]
+    out["Custo_Produto_Total"] = out[qtd_col] * out[CUSTO_UNITARIO_COL]
+
+    if base_imposto_column:
+        out["Base_Imposto"] = to_numeric_br(out[base_imposto_column])
+    else:
+        out["Base_Imposto"] = pd.NA
+
+    out["Imposto"] = out["Base_Imposto"] * aliquota_imposto
+    out["Despesas Fixas"] = out["Receita_Bruta"] * aliquota_despesas_fixas
     out["Resultado"] = (
-        out[pl]
-        - out["Custo do Produto"]
+        out["Receita_Bruta"]
+        - out["Custo_Produto_Total"]
         - out[cf]
-        - out["Imposto"]
         - out[tc]
+        - out[OUTRAS_DESPESAS_COL]
+        - out["Imposto"]
         - out["Despesas Fixas"]
     )
     out["Resultado_Pct"] = pd.NA
-    mask = out[pl].notna() & (out[pl] > 0)
-    out.loc[mask, "Resultado_Pct"] = out.loc[mask, "Resultado"] / out.loc[mask, pl]
+    mask_rb = out["Receita_Bruta"].notna() & (out["Receita_Bruta"] > 0)
+    out.loc[mask_rb, "Resultado_Pct"] = (
+        out.loc[mask_rb, "Resultado"] / out.loc[mask_rb, "Receita_Bruta"]
+    )
+
+    if "Status_Custo" in out.columns:
+        ok = out["Status_Custo"].eq(STATUS_CUSTO_OK)
+        bad = ~ok.fillna(True)
+        out.loc[bad, "Resultado"] = pd.NA
+        out.loc[bad, "Resultado_Pct"] = pd.NA
 
     out["Aliquota_Imposto_Utilizada"] = aliquota_imposto
     out["Aliquota_Despesas_Fixas_Utilizada"] = aliquota_despesas_fixas

@@ -459,13 +459,26 @@ def _materialize_faturamento(
         "params_path": str(params_path.resolve()),
         "aliquota_imposto_usada": loader_meta.get("aliquota_imposto"),
         "aliquota_despesas_fixas_usada": loader_meta.get("aliquota_despesas_fixas"),
-        "permite_faturamento_sem_nf": loader_meta.get("permite_faturamento_sem_nf"),
-        "pedidos_fonte": loader_meta.get("pedidos"),
+        "permite_faturamento_sem_nf": loader_meta.get("permite_faturamento_sem_nf")
+        if loader_meta.get("schema_version") != 2
+        else loader_meta.get("permite_faturamento_sem_nf_default"),
+        "pedidos_fonte": loader_meta.get("pedidos") or loader_meta.get("empresas_fonte"),
         "custo_fonte": loader_meta.get("custo"),
         "data_processamento": loader_meta.get("data_processamento"),
         "validation_ok": True,
         "app_mirror_csv": "dataset_faturamento_app.csv",
     }
+    for k in (
+        "schema_version",
+        "cliente_slug",
+        "cliente_root",
+        "coluna_base_imposto_resolvida",
+        "coluna_base_imposto_candidatas",
+        "empresas_fonte",
+        "status_custo_counts",
+    ):
+        if k in loader_meta:
+            meta[k] = loader_meta[k]
     _write_parquet(df_out, out_dir / "dataset.parquet")
     _write_faturamento_app_mirror_csv(df, out_dir / "dataset_faturamento_app.csv")
     _write_metadata(out_dir / "metadata.json", meta)
@@ -637,7 +650,20 @@ def main() -> int:
         rev_fat = args.pipeline_revision_faturamento or PIPELINE_REVISION_FATURAMENTO
 
         for mod in modules:
-            out_dir = root / path_cliente / path_empresa / mod / "current"
+            path_cli_cur = path_cliente
+            path_emp_cur = path_empresa
+            if mod == "faturamento" and faturamento_params_path:
+                from processing.faturamento.params import peek_faturamento_schema_version, read_cliente_slug_v2
+
+                if peek_faturamento_schema_version(faturamento_params_path) >= 2:
+                    path_cli_cur = _path_segment(read_cliente_slug_v2(faturamento_params_path))
+                    path_emp_cur = "_multi"
+                    out_dir = root / path_cli_cur / "faturamento" / "current"
+                else:
+                    # Faturamento V1 (params legado, deprecado): saída por --cliente / --empresa na CLI.
+                    out_dir = root / path_cliente / path_empresa / mod / "current"
+            else:
+                out_dir = root / path_cliente / path_empresa / mod / "current"
             print(f"[materialize] modulo={mod} -> {out_dir}")
             if mod == "repasse":
                 assert base_dir is not None
@@ -663,11 +689,12 @@ def main() -> int:
                 _materialize_faturamento(
                     params_path=faturamento_params_path,
                     out_dir=out_dir,
-                    path_cliente=path_cliente,
-                    path_empresa=path_empresa,
+                    path_cliente=path_cli_cur,
+                    path_empresa=path_emp_cur,
                     pipeline_revision=rev_fat,
                 )
-            print(f"  OK dataset.parquet + metadata.json (pipeline_revision={rev})")
+            mod_rev = rev_fat if mod == "faturamento" else rev
+            print(f"  OK dataset.parquet + metadata.json (pipeline_revision={mod_rev})")
     except SystemExit:
         raise
     except BaseException as exc:  # noqa: BLE001

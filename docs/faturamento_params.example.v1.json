@@ -1,0 +1,7 @@
+{
+  "aliquota_imposto": 0.12,
+  "aliquota_despesas_fixas": 0.05,
+  "permite_faturamento_sem_nf": false,
+  "pedidos_dir": "C:/caminho/para/PEDIDOS",
+  "custo_xlsx": "C:/caminho/para/Tabela de Produtos Anto Moveis - ATUALIZADO.xlsx"
+}

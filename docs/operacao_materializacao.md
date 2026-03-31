@@ -7,6 +7,8 @@
 3. **Saída:** `data_products\<cliente>\<empresa>\<modulo>\current\` com `dataset*.parquet`, CSV espelho e `metadata.json`.
 4. **Streamlit:** em modo materializado, lê apenas os ficheiros finais em `current/` (sem recomputar o pipeline).
 
+**Faturamento:** o **padrão** é params `schema_version` 2 e saída única em `data_products\<cliente_slug>\faturamento\current\`. O layout antigo por empresa (`\<cliente\>\<empresa>\faturamento\current\` com params V1) é **legado deprecado** — ver [faturamento_pipeline.md](faturamento_pipeline.md).
+
 **Repasse (pipeline, variáveis, consumo no app):** ver [modulo_repasse_estrutura.md](modulo_repasse_estrutura.md).
 
 ## Lock

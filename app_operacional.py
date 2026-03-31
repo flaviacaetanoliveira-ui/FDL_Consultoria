@@ -762,6 +762,111 @@ def _faturamento_consume_mode() -> str:
     return "materialized"
 
 
+def _faturamento_data_layout() -> str:
+    """
+    Como interpretar o ficheiro materializado com path/URL explícitos.
+
+    - v1: layout legado (faturamento por pasta de empresa; sem filtro ``org_id``).
+    - v2: dataset multi-empresa; filtrar pela org ativa quando existir coluna ``org_id``.
+    - auto: inferir (fallback): ``v2`` se existir coluna ``org_id`` com dados, senão ``v1``.
+
+    Descoberta **sem** path explícito: ``v2_canonical`` fixa layout efetivo em v2;
+    ``v1_repasse_sibling`` fixa em v1.
+    """
+    raw = os.environ.get("FDL_FATURAMENTO_DATA_LAYOUT", "").strip().lower()
+    if raw in {"v1", "v2", "auto"}:
+        return raw
+    try:
+        s = str(st.secrets.get("FDL_FATURAMENTO_DATA_LAYOUT", "")).strip().lower()
+        if s in {"v1", "v2", "auto"}:
+            return s
+    except Exception:
+        pass
+    return "auto"
+
+
+def _faturamento_resolve_disk_path(path_s: str) -> Path:
+    p = Path(path_s.strip()).expanduser()
+    if not p.is_absolute():
+        p = (_REPO_APP_ROOT / p).resolve()
+    else:
+        p = p.resolve()
+    return p
+
+
+def _faturamento_v2_canonical_dataset_path_str() -> str:
+    """``data_products/<cliente_slug>/faturamento/current/dataset_faturamento_app.csv`` (ou Parquet)."""
+    slug = _materialized_cliente_slug().strip()
+    if not slug:
+        return ""
+    root = _materialized_data_products_root().strip().strip("/\\")
+    base = Path(root) / slug / "faturamento" / "current"
+    if not base.is_absolute():
+        base = (_REPO_APP_ROOT / base).resolve()
+    else:
+        base = base.resolve()
+    for name in ("dataset_faturamento_app.csv", "dataset.parquet"):
+        cand = base / name
+        if cand.is_file():
+            return str(cand.resolve())
+    return ""
+
+
+def _faturamento_resolve_materialized_target() -> dict[str, str]:
+    """
+    Ordem: explícito (path/URL) → V2 canônico (se layout não for só v1) → derivado V1 do repasse.
+
+    Devolve chaves: path_s, url_s, resolution_source, path_final_resolved, layout_declared.
+    """
+    declared = _faturamento_data_layout()
+    mp = _faturamento_materialized_path_str()
+    mu = _faturamento_materialized_url_str()
+    if mp or mu:
+        final = ""
+        if mp:
+            try:
+                p = _faturamento_resolve_disk_path(mp)
+                final = str(p) if p.is_file() else mp.strip()
+            except Exception:
+                final = mp.strip()
+        if not final and mu:
+            final = mu.strip()
+        return {
+            "path_s": mp.strip(),
+            "url_s": mu.strip(),
+            "resolution_source": "explicit",
+            "path_final_resolved": final or mp.strip() or mu.strip(),
+            "layout_declared": declared,
+        }
+    if declared != "v1":
+        v2s = _faturamento_v2_canonical_dataset_path_str()
+        if v2s:
+            return {
+                "path_s": v2s,
+                "url_s": "",
+                "resolution_source": "v2_canonical",
+                "path_final_resolved": v2s,
+                "layout_declared": declared,
+            }
+    for anchor in (_repasse_materialized_path_str(), _precomputed_path_str()):
+        d = _derive_faturamento_materialized_from_repasse_anchor(anchor)
+        if d:
+            return {
+                "path_s": d,
+                "url_s": "",
+                "resolution_source": "v1_repasse_sibling",
+                "path_final_resolved": d,
+                "layout_declared": declared,
+            }
+    return {
+        "path_s": "",
+        "url_s": "",
+        "resolution_source": "none",
+        "path_final_resolved": "",
+        "layout_declared": declared,
+    }
+
+
 def _faturamento_materialized_path_str() -> str:
     if _materialized_path_mode() == "dynamic":
         return ""
@@ -790,6 +895,10 @@ def _derive_faturamento_materialized_from_repasse_anchor(anchor: str) -> str:
     """
     Se o repasse/precomputed apontar para .../<cliente>/<empresa>/repasse/current/dataset_repasse_app.csv,
     tenta o irmão .../<empresa>/faturamento/current/dataset_faturamento_app.csv e, se faltar, dataset.parquet.
+
+    Isto alinha ao layout **V1** (faturamento por pasta de empresa). Faturamento **V2** grava em
+    ``data_products/<cliente_slug>/faturamento/current/``; esse caminho exige ``FDL_FATURAMENTO_MATERIALIZED_PATH``
+    ou evolução desta derivação — ver ``docs/faturamento_pipeline.md``.
     """
     if not (anchor or "").strip():
         return ""
@@ -812,17 +921,43 @@ def _derive_faturamento_materialized_from_repasse_anchor(anchor: str) -> str:
     return ""
 
 
-def _faturamento_materialized_targets() -> tuple[str, str]:
-    """Path/URL explícitos; se vazios, derivado do CSV do repasse (mesmo layout data_products)."""
-    mp = _faturamento_materialized_path_str()
-    mu = _faturamento_materialized_url_str()
-    if mp or mu:
-        return mp, mu
-    for anchor in (_repasse_materialized_path_str(), _precomputed_path_str()):
-        d = _derive_faturamento_materialized_from_repasse_anchor(anchor)
-        if d:
-            return d, ""
-    return "", ""
+def _faturamento_classify_layout_effective(
+    *,
+    resolution_source: str,
+    layout_declared: str,
+    df: pd.DataFrame,
+) -> tuple[str, str]:
+    """
+    Devolve (layout_efetivo v1|v2, nota_curta_para_metadata).
+    """
+    if resolution_source == "v2_canonical":
+        return "v2", "v2_canonical"
+    if resolution_source == "v1_repasse_sibling":
+        return "v1", "v1_repasse_sibling"
+    if resolution_source == "explicit":
+        if layout_declared == "v1":
+            return "v1", "explicit_declared_v1"
+        if layout_declared == "v2":
+            return "v2", "explicit_declared_v2"
+        if "org_id" in df.columns and df["org_id"].notna().any():
+            return "v2", "explicit_auto_org_id"
+        return "v1", "explicit_auto_no_org_id"
+    return "v1", "fallback_v1"
+
+
+def _faturamento_apply_layout_scope(
+    df: pd.DataFrame, *, layout_effective: str, org_id: str
+) -> tuple[pd.DataFrame, str | None]:
+    """
+    Para layout v2, restringe à org ativa. Devolve (df, nota_warning ou None).
+    """
+    if layout_effective != "v2":
+        return df, None
+    oid = str(org_id).strip()
+    if "org_id" not in df.columns:
+        return df, "Layout v2: coluna org_id ausente — filtro por org não aplicado."
+    out = df.loc[df["org_id"].astype(str).str.strip() == oid].copy()
+    return out, None
 
 
 def _load_faturamento_file_from_disk(path: Path) -> pd.DataFrame:
@@ -871,10 +1006,10 @@ def _faturamento_ts_for_path(path: Path) -> str:
         return _now_ts_br_str()
 
 
-def _load_faturamento_data() -> tuple[pd.DataFrame, dict[str, object], str]:
+def _load_faturamento_data(active_org_id: str) -> tuple[pd.DataFrame, dict[str, object], str]:
     """
-    Carrega apenas dataset materializado (CSV/XLSX/Parquet em path ou URL).
-    Sem pipeline live nesta fase.
+    Carrega dataset materializado (path/URL explícitos → V2 canônico → V1 derivado),
+    classifica layout (v1/v2) e aplica escopo por ``org_id`` quando o layout efetivo é v2.
     """
     if _faturamento_consume_mode() != "materialized":
         return (
@@ -886,15 +1021,30 @@ def _load_faturamento_data() -> tuple[pd.DataFrame, dict[str, object], str]:
             _now_ts_br_str(),
         )
 
-    path_s, url_s = _faturamento_materialized_targets()
+    resolved = _faturamento_resolve_materialized_target()
+    path_s = resolved["path_s"]
+    url_s = resolved["url_s"]
+    resolution_source = resolved["resolution_source"]
+    path_final = resolved["path_final_resolved"]
+    layout_declared = resolved["layout_declared"]
+
     if not path_s and not url_s:
+        slug_h = _materialized_cliente_slug().strip() or "(defina FDL_MATERIALIZED_CLIENTE_SLUG)"
         return (
             pd.DataFrame(),
             {
                 "faturamento_consume": "missing_config",
+                "faturamento_resolution_source": resolution_source,
+                "faturamento_layout_declared": layout_declared,
+                "faturamento_path_final_resolved": path_final,
                 "faturamento_note": (
-                    "Defina FDL_FATURAMENTO_MATERIALIZED_PATH ou URL, ou coloque o dataset em "
-                    ".../faturamento/current/ alinhado ao repasse materializado."
+                    "Faturamento materializado não encontrado. Opções: "
+                    "(1) FDL_FATURAMENTO_MATERIALIZED_PATH ou URL; "
+                    "(2) V2: ficheiro em data_products/"
+                    f"{slug_h}/faturamento/current/ "
+                    "(csv ou parquet), com FDL_FATURAMENTO_DATA_LAYOUT=v2 se usar path explícito; "
+                    "(3) V1: repasse materializado irmão em .../<org>/faturamento/current/. "
+                    "Com path/URL explícitos use FDL_FATURAMENTO_DATA_LAYOUT=v1 ou v2 em produção."
                 ),
             },
             _now_ts_br_str(),
@@ -902,23 +1052,39 @@ def _load_faturamento_data() -> tuple[pd.DataFrame, dict[str, object], str]:
 
     target = (path_s or url_s)[:500]
     try:
-        df = _load_faturamento_materialized_dataframe(path_s, url_s)
+        df0 = _load_faturamento_materialized_dataframe(path_s, url_s)
+        n_loaded = int(len(df0))
+        layout_effective, layout_note = _faturamento_classify_layout_effective(
+            resolution_source=resolution_source,
+            layout_declared=layout_declared,
+            df=df0,
+        )
+        df_scoped, scope_warn = _faturamento_apply_layout_scope(
+            df0, layout_effective=layout_effective, org_id=active_org_id
+        )
         ts = _now_ts_br_str()
         if path_s:
-            p = Path(path_s).expanduser()
-            if not p.is_absolute():
-                p = (_REPO_APP_ROOT / p).resolve()
-            if p.is_file():
-                ts = _faturamento_ts_for_path(p)
-        return (
-            df,
-            {
-                "faturamento_consume": "materialized",
-                "faturamento_materialized_target": target,
-                "linhas": int(len(df)),
-            },
-            ts,
-        )
+            try:
+                p = _faturamento_resolve_disk_path(path_s)
+                if p.is_file():
+                    ts = _faturamento_ts_for_path(p)
+                    path_final = str(p.resolve())
+            except Exception:
+                pass
+        info: dict[str, object] = {
+            "faturamento_consume": "materialized",
+            "faturamento_materialized_target": target,
+            "faturamento_resolution_source": resolution_source,
+            "faturamento_layout_declared": layout_declared,
+            "faturamento_data_layout": layout_effective,
+            "faturamento_layout_classification": layout_note,
+            "faturamento_path_final_resolved": path_final or (path_s or url_s).strip(),
+            "faturamento_row_count_loaded": n_loaded,
+            "linhas": int(len(df_scoped)),
+        }
+        if scope_warn:
+            info["faturamento_scope_note"] = scope_warn
+        return (df_scoped, info, ts)
     except Exception as exc:
         return (
             pd.DataFrame(),
@@ -926,6 +1092,9 @@ def _load_faturamento_data() -> tuple[pd.DataFrame, dict[str, object], str]:
                 "faturamento_consume": "error",
                 "faturamento_materialized_error": str(exc).strip() or exc.__class__.__name__,
                 "faturamento_materialized_target": target,
+                "faturamento_resolution_source": resolution_source,
+                "faturamento_layout_declared": layout_declared,
+                "faturamento_path_final_resolved": path_final,
             },
             _now_ts_br_str(),
         )
@@ -937,6 +1106,8 @@ def _faturamento_load_cache_signature(org_id: str) -> str:
             str(org_id),
             str(OPERACIONAL_CACHE_REVISION),
             _faturamento_consume_mode(),
+            _faturamento_data_layout(),
+            str(_materialized_cliente_slug()).strip(),
             str(_faturamento_materialized_path_str()).strip(),
             str(_faturamento_materialized_url_str()).strip(),
             str(_repasse_materialized_path_str()).strip(),
@@ -947,9 +1118,11 @@ def _faturamento_load_cache_signature(org_id: str) -> str:
 
 
 @st.cache_data(show_spinner=False, ttl=900)
-def _load_faturamento_dataframe_cached(load_signature: str) -> tuple[pd.DataFrame, dict[str, object], str]:
+def _load_faturamento_dataframe_cached(
+    load_signature: str, active_org_id: str
+) -> tuple[pd.DataFrame, dict[str, object], str]:
     _ = load_signature
-    return _load_faturamento_data()
+    return _load_faturamento_data(active_org_id)
 
 
 def _derive_frete_materialized_path_from_repasse_anchor(anchor: str) -> str:
@@ -2697,10 +2870,57 @@ def _faturamento_divergencia_tol() -> float:
 
 
 def _faturamento_resolve_produto_column(columns: list[str]) -> str | None:
-    for c in ("Produto", "Nome do produto", "Título", "Título do anúncio", "Nome"):
+    for c in ("Descrição", "Produto", "Nome do produto", "Título", "Título do anúncio", "Nome"):
         if c in columns:
             return c
     return None
+
+
+def _faturamento_painel_custo_produto_col(columns: list[str]) -> str | None:
+    """Materializado V2 usa ``Custo_Produto_Total``; legado pode usar ``Custo do Produto``."""
+    if "Custo_Produto_Total" in columns:
+        return "Custo_Produto_Total"
+    if "Custo do Produto" in columns:
+        return "Custo do Produto"
+    return None
+
+
+def _faturamento_painel_receita_series(df: pd.DataFrame, pl_col: str) -> pd.Series:
+    """Soma de receita para KPIs: ``Receita_Bruta`` (V2) ou preço×quantidade / só preço."""
+    if "Receita_Bruta" in df.columns:
+        return pd.to_numeric(df["Receita_Bruta"], errors="coerce")
+    if "Quantidade" in df.columns and pl_col in df.columns:
+        return pd.to_numeric(df[pl_col], errors="coerce") * pd.to_numeric(df["Quantidade"], errors="coerce")
+    if pl_col in df.columns:
+        return pd.to_numeric(df[pl_col], errors="coerce")
+    return pd.Series(float("nan"), index=df.index, dtype=float)
+
+
+def _faturamento_painel_missing_schema_columns(df: pd.DataFrame) -> list[str]:
+    """Colunas mínimas para o painel; custo aceita alias V2."""
+    c = set(df.columns)
+    miss: list[str] = []
+    for col in (
+        "Preço de lista",
+        "Valor total",
+        "Resultado",
+        "Situação",
+        "Nome da plataforma",
+        "Código",
+        "Número do pedido",
+        "Número do pedido multiloja",
+        "Existe Nota Fiscal gerada",
+        "Número da nota",
+        "Custo de Frete",
+        "Taxa de Comissão",
+        "Imposto",
+        "Despesas Fixas",
+    ):
+        if col not in c:
+            miss.append(col)
+    if _faturamento_painel_custo_produto_col(list(df.columns)) is None:
+        miss.append("Custo_Produto_Total ou Custo do Produto")
+    return miss
 
 
 def _faturamento_compute_alert_bools(df: pd.DataFrame) -> pd.DataFrame:
@@ -2775,24 +2995,7 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
         st.info("Sem dados para este recorte. Verifique a empresa ou contacte o suporte.")
         return
 
-    _req = (
-        "Preço de lista",
-        "Valor total",
-        "Resultado",
-        "Situação",
-        "Nome da plataforma",
-        "Código",
-        "Número do pedido",
-        "Número do pedido multiloja",
-        "Existe Nota Fiscal gerada",
-        "Número da nota",
-        "Custo de Frete",
-        "Taxa de Comissão",
-        "Custo do Produto",
-        "Imposto",
-        "Despesas Fixas",
-    )
-    missing = [c for c in _req if c not in df.columns]
+    missing = _faturamento_painel_missing_schema_columns(df)
     if missing:
         if _is_admin_mode():
             st.warning(
@@ -2815,7 +3018,20 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
         if c not in work.columns:
             work[c] = False
 
+    if "Status_Custo" in work.columns:
+        _vc = work["Status_Custo"].astype(str).str.strip()
+        _n_sem = int(_vc.eq("SKU_SEM_CORRESPONDENCIA").sum())
+        _n_tot = len(work)
+        if _n_sem > 0:
+            st.info(
+                f"**Custo (revisão interna):** {_n_sem} de {_n_tot} linhas neste recorte não têm custo "
+                "na tabela de referência (SKU sem correspondência). "
+                "Nesses casos **Resultado** e **Resultado %** ficam vazios — a margem só é calculada quando o custo está alocado."
+            )
+
     pl_col, res_col = "Preço de lista", "Resultado"
+    custo_prod_col = _faturamento_painel_custo_produto_col(list(work.columns))
+    assert custo_prod_col is not None  # garantido por _faturamento_painel_missing_schema_columns
 
     has_data_col = "Data" in work.columns
     if has_data_col:
@@ -2933,9 +3149,10 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
 
     filt = filt.sort_values(res_col, ascending=True, na_position="last")
 
-    pl_sum = float(pd.to_numeric(filt[pl_col], errors="coerce").fillna(0).sum())
+    receita_s = _faturamento_painel_receita_series(filt, pl_col)
+    receita_sum = float(receita_s.fillna(0).sum())
     res_sum = float(pd.to_numeric(filt[res_col], errors="coerce").fillna(0).sum())
-    margem_total = (res_sum / pl_sum) if pl_sum not in (0.0, -0.0) else float("nan")
+    margem_total = (res_sum / receita_sum) if receita_sum not in (0.0, -0.0) else float("nan")
     n_cons = int(filt["faturamento_consolidado"].fillna(False).astype(bool).sum()) if "faturamento_consolidado" in filt.columns else 0
     any_alert = filt["_ab_pl_zero"] | filt["_ab_div"] | filt["_ab_sem_nf_np"]
     n_alert = int(any_alert.sum())
@@ -2945,11 +3162,11 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     _fdl_ui_gap_section()
     fk1, fk2, fk3, fk4, fk5 = st.columns(5)
     with fk1:
-        st.metric("Receita por Produtos", _fmt_brl_ptbr_celula(pl_sum))
+        st.metric("Receita por Produtos", _fmt_brl_ptbr_celula(receita_sum))
     with fk2:
         st.metric("Resultado Total", _fmt_brl_ptbr_celula(res_sum))
     with fk3:
-        if pl_sum == 0 or (isinstance(margem_total, float) and math.isnan(margem_total)):
+        if receita_sum == 0 or (isinstance(margem_total, float) and math.isnan(margem_total)):
             st.metric("Margem Total %", "—")
         else:
             st.metric("Margem Total %", f"{margem_total * 100:.2f}%".replace(".", ","))
@@ -2975,7 +3192,7 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
             "N.º da nota": filt["Número da nota"],
             "Receita por Produtos": pd.to_numeric(filt[pl_col], errors="coerce"),
             "Valor total": pd.to_numeric(filt["Valor total"], errors="coerce"),
-            "Custo do produto": pd.to_numeric(filt["Custo do Produto"], errors="coerce"),
+            "Custo do produto": pd.to_numeric(filt[custo_prod_col], errors="coerce"),
             "Frete": pd.to_numeric(filt["Custo de Frete"], errors="coerce"),
             "Comissão Plataforma": pd.to_numeric(filt["Taxa de Comissão"], errors="coerce"),
             "Imposto": pd.to_numeric(filt["Imposto"], errors="coerce"),
@@ -4056,12 +4273,25 @@ elif _fv == "faturamento":
     _fdl_global_trace("faturamento: a carregar _load_faturamento_dataframe_cached")
     with st.spinner("A carregar dados de Faturamento…"):
         faturamento_df, faturamento_info, ts_proc = _load_faturamento_dataframe_cached(
-            _faturamento_load_cache_signature(_active_org.org_id)
+            _faturamento_load_cache_signature(_active_org.org_id),
+            _active_org.org_id,
         )
     fc = str(faturamento_info.get("faturamento_consume", "")).strip()
     if fc == "materialized" and _admin_mode:
         _t_disp = str(faturamento_info.get("faturamento_materialized_target", ""))[:500]
-        st.caption(f"Faturamento: ficheiro consolidado (`{_t_disp}`).")
+        _lay = str(faturamento_info.get("faturamento_data_layout", ""))
+        _src = str(faturamento_info.get("faturamento_resolution_source", ""))
+        _pf = str(faturamento_info.get("faturamento_path_final_resolved", ""))[:500]
+        st.caption(
+            f"Faturamento: layout **{_lay}** · origem `{_src}` · alvo=`{_t_disp}` · path=`{_pf}`"
+        )
+        if faturamento_info.get("faturamento_scope_note"):
+            st.caption(str(faturamento_info["faturamento_scope_note"]))
+        with st.expander("Debug — `faturamento_info` (materializado)", expanded=False):
+            try:
+                st.json(json.loads(json.dumps(faturamento_info, default=str)))
+            except (TypeError, ValueError):
+                st.write({k: str(v)[:2000] for k, v in faturamento_info.items()})
     elif fc == "missing_config":
         if _admin_mode:
             st.warning(
@@ -4086,8 +4316,9 @@ elif _fv == "faturamento":
             st.warning("Esta vista não está disponível na configuração atual. Contacte o administrador.")
 
     if not faturamento_df.empty and "empresa" not in faturamento_df.columns:
-        faturamento_df = faturamento_df.copy()
-        faturamento_df["empresa"] = _dataset_empresa_label()
+        if str(faturamento_info.get("faturamento_data_layout", "")).strip() != "v2":
+            faturamento_df = faturamento_df.copy()
+            faturamento_df["empresa"] = _dataset_empresa_label()
 
     if not faturamento_df.empty:
         faturamento_df = _filtrar_df_col_empresa_por_contexto(faturamento_df)

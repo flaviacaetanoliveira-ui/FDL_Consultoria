@@ -27,7 +27,7 @@ import pandas as pd
 import streamlit as st
 
 from etapa1_vendas import detect_excel_header_row, list_sales_files, read_sales_file
-from fdl_paths import CLIENTE_BASE_DIR
+from fdl_paths import CLIENTE_BASE_DIR, resolve_pasta_vendas_ml
 
 # Colunas e valores na UI (UTF-8). operacional_frete_ui deve importar estes nomes — evita mojibake no .py.
 FRETE_UI_N_VENDA = "N.º venda"
@@ -1092,13 +1092,13 @@ def descobrir_fontes_frete(base_dir: Path | None = None) -> FontesFrete:
     Fontes para construir a tabela operacional de frete (automático, como a tabela final do repasse).
 
     - Cloud: `FDL_FRETE_VENDAS_URL` e opcionalmente `FDL_FRETE_ANUNCIO_URL` nos Secrets.
-    - Local: último ficheiro .xlsx/.xls/.csv em `FDL_BASE_DIR/Vendas - Mercado Livre` e planilha
-      «Frete por Anúncio» na raiz do cliente ou subpastas (ver `_find_frete_anuncio_path`).
+    - Local: último ficheiro .xlsx/.xls/.csv em `Vendas - Mercado Livre` ou `Vendas_ML` sob a base
+      do cliente e planilha «Frete por Anúncio» na raiz ou subpastas (ver `_find_frete_anuncio_path`).
     """
     vendas_url = _frete_secret_str("FDL_FRETE_VENDAS_URL", "FDL_FRETE_PRECOMPUTED_URL")
     frete_url = _frete_secret_str("FDL_FRETE_ANUNCIO_URL")
     root = base_dir or CLIENTE_BASE_DIR
-    vendas_dir = root / "Vendas - Mercado Livre"
+    vendas_dir = resolve_pasta_vendas_ml(root)
     v_local = None if vendas_url else _latest_vendas_ml_path(vendas_dir)
     f_local = None if frete_url else _find_frete_anuncio_path(root)
     return FontesFrete(

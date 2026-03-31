@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-30T09:39:03Z",
-  "source_signature": "2ad49dc21a67e130d569b38fe9fcfabf",
+  "generated_at": "2026-03-31T04:56:09Z",
+  "source_signature": "c5fc7a1b113b009ea14e7620264ab3bd",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "moveis_eap",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "moveis_eap",
   "cnpj": null,
-  "row_count": 909,
+  "row_count": 911,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -87,14 +87,14 @@
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Vendas - Mercado Livre\\Moveis EAP - Vendas ML 2026.xlsx",
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Vendas_ML\\2026\\Moveis EAP - Vendas ML 2026.xlsx",
     "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Moveis EAP - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Moveis EAP - Vendas ML 2026.xlsx",
     "frete_arquivo": "Moveis EAP - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 909,
+    "linhas": 911,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

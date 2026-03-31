@@ -11,9 +11,9 @@ from typing import Iterable, Optional
 
 import pandas as pd
 
-from fdl_paths import CLIENTE_BASE_DIR
+from fdl_paths import CLIENTE_BASE_DIR, resolve_pasta_vendas_ml
 
-PASTA_VENDAS = CLIENTE_BASE_DIR / "Vendas - Mercado Livre"
+PASTA_VENDAS = resolve_pasta_vendas_ml(CLIENTE_BASE_DIR)
 
 
 def _strip_accents(s: str) -> str:
@@ -43,7 +43,7 @@ def find_latest_sales_file(folder: Path) -> Path:
     patterns = ["*.xlsx", "*.xls", "*.csv"]
     candidates: list[Path] = []
     for pat in patterns:
-        candidates.extend(p for p in folder.glob(pat) if p.is_file())
+        candidates.extend(p for p in folder.rglob(pat) if p.is_file())
 
     if not candidates:
         raise FileNotFoundError(f"Nenhum arquivo CSV/Excel encontrado em: {folder}")
@@ -57,7 +57,7 @@ def list_sales_files(folder: Path) -> list[Path]:
         raise FileNotFoundError(f"Pasta não encontrada: {folder}")
     candidates: list[Path] = []
     for pat in ("*.xlsx", "*.xls", "*.csv"):
-        candidates.extend(p for p in folder.glob(pat) if p.is_file())
+        candidates.extend(p for p in folder.rglob(pat) if p.is_file())
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return candidates
 

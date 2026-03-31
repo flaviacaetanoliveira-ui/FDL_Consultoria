@@ -16,6 +16,26 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent
 
+# Pasta de export ML (detalhe de vendas). Clientes Antomóveis: "Vendas - Mercado Livre"; outros: "Vendas_ML".
+PASTA_VENDAS_ML_CANONICA = "Vendas - Mercado Livre"
+PASTA_VENDAS_ML_ALTERNATIVA = "Vendas_ML"
+
+
+def resolve_pasta_vendas_ml(base_dir: str | Path) -> Path:
+    """
+    Resolve a pasta de ficheiros de vendas ML sob `base_dir`.
+    Preferência: `Vendas - Mercado Livre`; se não existir, `Vendas_ML`.
+    Se nenhuma existir, devolve o caminho canónico (para mensagens de erro consistentes).
+    """
+    base = Path(base_dir)
+    canon = base / PASTA_VENDAS_ML_CANONICA
+    alt = base / PASTA_VENDAS_ML_ALTERNATIVA
+    if canon.is_dir():
+        return canon
+    if alt.is_dir():
+        return alt
+    return canon
+
 
 def _resolve_base_dir() -> Path:
     raw = os.environ.get("FDL_BASE_DIR", "").strip()

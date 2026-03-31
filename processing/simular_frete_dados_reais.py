@@ -10,7 +10,7 @@ Ou:
   python processing/simular_frete_dados_reais.py --base-dir "C:\\...\\cliente_1"
 
 Requisitos na pasta base:
-  - Ficheiro(s) .xlsx/.csv em "Vendas - Mercado Livre" (export ML detalhe envios), OU
+  - Ficheiro(s) .xlsx/.csv em "Vendas - Mercado Livre" ou "Vendas_ML" (export ML detalhe envios), OU
   - FDL_FRETE_VENDAS_URL definido no ambiente (não coberto aqui).
 
 O CSV `powerbi_mirror/output/conciliacao_operacional.csv` é do REPASSE — não serve como fonte de frete ML.
@@ -74,12 +74,22 @@ def main() -> int:
         print(f"Pasta não encontrada: {base}", file=sys.stderr)
         return 1
 
-    vendas_dir = base / "Vendas - Mercado Livre"
+    _ensure_repo_on_path()
+    from fdl_paths import resolve_pasta_vendas_ml
+
+    vendas_dir = resolve_pasta_vendas_ml(base)
     if not vendas_dir.is_dir():
-        print(f"Pasta esperada em falta: {vendas_dir}", file=sys.stderr)
+        print(
+            f"Pasta de vendas ML em falta: {vendas_dir} (crie **Vendas_ML** ou **Vendas - Mercado Livre**).",
+            file=sys.stderr,
+        )
         return 1
 
-    sales = list(vendas_dir.glob("*.xlsx")) + list(vendas_dir.glob("*.xls")) + list(vendas_dir.glob("*.csv"))
+    sales = (
+        list(vendas_dir.rglob("*.xlsx"))
+        + list(vendas_dir.rglob("*.xls"))
+        + list(vendas_dir.rglob("*.csv"))
+    )
     sales = [p for p in sales if p.is_file() and p.name.lower() != "leia-me.txt"]
     if not sales:
         print(

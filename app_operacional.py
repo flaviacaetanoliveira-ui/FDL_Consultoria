@@ -31,6 +31,7 @@ from reportlab.pdfgen import canvas
 
 from carregamento_bases import PIPELINE_DATA_REVISION
 from etapa4b_integracao_contas_receber import BASE_DIR, carregar_tabela_final_operacional
+from fdl_paths import resolve_pasta_vendas_ml
 from operacional_app_context import (
     SESSION_ACTIVE_ORG_KEY,
     get_active_organization,
@@ -1404,7 +1405,13 @@ def _load_frete_data(org_id: str) -> tuple[pd.DataFrame, dict[str, object], str]
 def _prepare_uploaded_base(zip_bytes: bytes) -> Path:
     """Extrai pacote ZIP de dados para o BASE_DIR esperado pelo pipeline."""
     base_dir = Path(BASE_DIR)
-    expected_dirs = {"Vendas - Mercado Livre", "Liberações_ML", "notas_saida", "contas_receber"}
+    expected_dirs = {
+        "Vendas - Mercado Livre",
+        "Vendas_ML",
+        "Liberações_ML",
+        "notas_saida",
+        "contas_receber",
+    }
 
     if base_dir.exists():
         shutil.rmtree(base_dir)
@@ -1628,7 +1635,9 @@ def _download_shared_folder_dataset(public_url: str) -> None:
                 and str(meta.get("root", "")) == sync_context["root"]
                 and str(meta.get("client", "")) == sync_context["client"]
             )
-            has_local_data = all((base_dir / name).exists() for name in REQUIRED_ONEDRIVE_SOURCE_FOLDERS)
+            has_local_data = resolve_pasta_vendas_ml(base_dir).is_dir() and all(
+                (base_dir / name).is_dir() for name in REQUIRED_ONEDRIVE_SOURCE_FOLDERS if name != "Vendas - Mercado Livre"
+            )
             if same_context and has_local_data and (time.time() - last_ts) < ONEDRIVE_SYNC_MIN_INTERVAL_SECONDS:
                 return
         except Exception:
@@ -1875,7 +1884,15 @@ def _download_shared_folder_dataset(public_url: str) -> None:
             shutil.rmtree(dst)
         shutil.copytree(src, dst)
 
-    missing = [name for name in REQUIRED_ONEDRIVE_SOURCE_FOLDERS if not any((base_dir / name).rglob("*"))]
+    missing: list[str] = []
+    vdir = resolve_pasta_vendas_ml(base_dir)
+    if not vdir.is_dir() or not any(vdir.rglob("*")):
+        missing.append("Vendas - Mercado Livre")
+    for name in REQUIRED_ONEDRIVE_SOURCE_FOLDERS:
+        if name == "Vendas - Mercado Livre":
+            continue
+        if not any((base_dir / name).rglob("*")):
+            missing.append(name)
     if missing:
         raise ValueError(
             "Link de pasta acessado, mas sem arquivos em: " + ", ".join(sorted(missing))

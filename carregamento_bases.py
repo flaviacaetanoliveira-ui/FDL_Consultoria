@@ -9,6 +9,7 @@ import pandas as pd
 
 from etapa1_vendas import build_vendas_tratadas_from_folder
 from etapa2_liberacoes import build_liberacoes_from_folder
+from fdl_paths import resolve_pasta_vendas_ml
 
 # Incrementar quando o pipeline de bases mudar (ex.: conceito de Valor pago nas liberações).
 # Invalida st.cache_data sem depender só do botão «Atualizar dados».
@@ -52,7 +53,7 @@ class DiagnosticoBases:
 
 def _paths_por_fonte(base_dir: str | Path) -> tuple[Path, Path]:
     base = Path(base_dir)
-    pasta_vendas = base / "Vendas - Mercado Livre"
+    pasta_vendas = resolve_pasta_vendas_ml(base)
     pasta_liberacoes = base / "Liberações_ML"
     return pasta_vendas, pasta_liberacoes
 

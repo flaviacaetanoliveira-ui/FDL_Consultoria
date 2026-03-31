@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-30T10:03:55Z",
-  "source_signature": "3ceac79c6fb5ab5c8e171a10a63f0938",
+  "generated_at": "2026-03-31T04:56:08Z",
+  "source_signature": "e02ae9dc45530b4280344ec07b9ef09d",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "moveis_eap",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "moveis_eap",
   "cnpj": null,
-  "row_count": 1622,
+  "row_count": 1468,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -33,7 +33,7 @@
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP",
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP",
-    "linhas": 1622,
+    "linhas": 1468,
     "arquivos_contas_lidos": 0,
     "col_situacao": "",
     "col_numero": ""

@@ -36,6 +36,9 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from fdl_paths import resolve_pasta_vendas_ml  # noqa: E402
 
 PIPELINE_REVISION_DEFAULT = "phase1-v1"
 
@@ -68,17 +71,16 @@ def _set_base_dir(base_dir: Path) -> Path:
 
 def _collect_repasse_signature_files(base: Path) -> list[tuple[str, int]]:
     """Lista (caminho relativo, mtime_ns) de ficheiros nas pastas do repasse."""
-    subs = (
-        "Vendas - Mercado Livre",
-        "Liberações_ML",
-        "notas_saida",
-        "contas_receber",
-    )
-    out: list[tuple[str, int]] = []
-    for sub in subs:
+    dirs: list[Path] = []
+    vd = resolve_pasta_vendas_ml(base)
+    if vd.is_dir():
+        dirs.append(vd)
+    for sub in ("Liberações_ML", "notas_saida", "contas_receber"):
         d = base / sub
-        if not d.is_dir():
-            continue
+        if d.is_dir():
+            dirs.append(d)
+    out: list[tuple[str, int]] = []
+    for d in dirs:
         for f in sorted(d.rglob("*")):
             if f.is_file():
                 rel = str(f.relative_to(base)).replace("\\", "/")
@@ -361,7 +363,7 @@ def _materialize_frete(
     if not vendas_ref:
         raise SystemExit(
             "Frete: sem fonte de vendas ML. Defina FDL_FRETE_VENDAS_URL ou coloque ficheiros em "
-            f"'{base_dir / 'Vendas - Mercado Livre'}'."
+            f"'{resolve_pasta_vendas_ml(base_dir)}' (ou pasta irmã **Vendas_ML** / **Vendas - Mercado Livre**)."
         )
     if (fontes.vendas_url or "").strip():
         v_ns = stable_mtime_ns_for_frete_url(fontes.vendas_url)
@@ -484,9 +486,15 @@ def _preflight_sources(base_dir: Path) -> int:
 
     code = 0
     print(f"[preflight] base_dir={base_dir.resolve()}")
-    obrigatorias = ("Vendas - Mercado Livre", "Liberações_ML", "contas_receber")
     opcionais = ("notas_saida",)
-    for sub in obrigatorias:
+    v_dir = resolve_pasta_vendas_ml(base_dir)
+    if not v_dir.is_dir():
+        print(f"[preflight] ERRO: pasta de vendas ML em falta: {v_dir} (ou **Vendas_ML**)", file=sys.stderr)
+        code = 1
+    else:
+        n = sum(1 for p in v_dir.rglob("*") if p.is_file())
+        print(f"[preflight] OK vendas ({v_dir.name})/ ({n} ficheiros)")
+    for sub in ("Liberações_ML", "contas_receber"):
         d = base_dir / sub
         if not d.is_dir():
             print(f"[preflight] ERRO: pasta obrigatória em falta: {d}", file=sys.stderr)

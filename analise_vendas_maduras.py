@@ -7,9 +7,10 @@ import pandas as pd
 
 from conciliacao_valor_recebido_real import BASE_DIR, build_conciliacao_com_recebido_real
 from etapa1_vendas import detect_columns, list_sales_files, normalize_col_name, read_sales_file
+from fdl_paths import resolve_pasta_vendas_ml
 
 
-PASTA_VENDAS = BASE_DIR / "Vendas - Mercado Livre"
+PASTA_VENDAS = resolve_pasta_vendas_ml(BASE_DIR)
 MESES_PT = {
     "janeiro": "01",
     "fevereiro": "02",

@@ -13,6 +13,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from etapa4b_integracao_contas_receber import BASE_DIR, carregar_tabela_final_operacional
+from fdl_paths import resolve_pasta_vendas_ml
 
 
 OUT_DIR = Path(__file__).resolve().parent / "output"
@@ -47,7 +48,7 @@ def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     effective_base_dir = Path(os.environ.get("FDL_BASE_DIR", str(BASE_DIR))).resolve()
     required_dirs = [
-        effective_base_dir / "Vendas - Mercado Livre",
+        resolve_pasta_vendas_ml(effective_base_dir),
         effective_base_dir / "Liberações_ML",
         effective_base_dir / "notas_saida",
         effective_base_dir / "contas_receber",

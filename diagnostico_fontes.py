@@ -17,9 +17,9 @@ from etapa2_liberacoes import (
     read_input_file,
 )
 
-from fdl_paths import CLIENTE_BASE_DIR
+from fdl_paths import CLIENTE_BASE_DIR, resolve_pasta_vendas_ml
 
-PASTA_VENDAS = CLIENTE_BASE_DIR / "Vendas - Mercado Livre"
+PASTA_VENDAS = resolve_pasta_vendas_ml(CLIENTE_BASE_DIR)
 
 
 def list_files(folder: Path) -> list[Path]:

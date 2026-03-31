@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 from streamlit.column_config import TextColumn
 
-from fdl_paths import CLIENTE_BASE_DIR
+from fdl_paths import CLIENTE_BASE_DIR, resolve_pasta_vendas_ml
 from operacional_frete import (
     FRETE_ML_COL,
     FRETE_UI_ANUNCIO,
@@ -180,15 +180,15 @@ def painel_frete_fragment(
         str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
     )
     if not vendas_ref:
-        vendas_dir = Path(CLIENTE_BASE_DIR) / "Vendas - Mercado Livre"
+        vendas_dir = resolve_pasta_vendas_ml(CLIENTE_BASE_DIR)
         if not vendas_dir.is_dir():
             st.warning(
                 "Não existe fonte de vendas ML: defina **FDL_FRETE_VENDAS_URL** nos Secrets ou a pasta "
-                "**Vendas - Mercado Livre** na base do cliente (**FDL_BASE_DIR**)."
+                "**Vendas - Mercado Livre** / **Vendas_ML** na base do cliente (**FDL_BASE_DIR**)."
             )
         else:
             st.warning(
-                "A pasta **Vendas - Mercado Livre** existe mas **não há ficheiros .xlsx, .xls ou .csv** "
+                f"A pasta **{vendas_dir.name}** existe mas **não há ficheiros .xlsx, .xls ou .csv** "
                 "de vendas ML (export do relatório). Copie o export para essa pasta ou configure **FDL_FRETE_VENDAS_URL**."
             )
         st.caption(str(Path(CLIENTE_BASE_DIR).resolve()))

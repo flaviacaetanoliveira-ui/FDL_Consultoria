@@ -71,9 +71,9 @@ from operacional_frete import (
     validate_frete_operacional_dataframe,
 )
 from operacional_frete_ui import (
+    _column_config_frete,
     _dataframe_frete_grid,
     _frete_conciliacao_grid_com_icones,
-    frete_executivo_display_styled,
 )
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
@@ -3287,7 +3287,6 @@ def _render_frete_operacional_ui(
             t_grid, recebido=recebido_series, layout="executivo"
         )
         t_main = _frete_conciliacao_grid_com_icones(t_main)
-        t_main_disp = frete_executivo_display_styled(t_main)
         _h_df = 550 if len(t_main) > 8 else 360
     
         if t_main.empty:
@@ -3297,10 +3296,16 @@ def _render_frete_operacional_ui(
         else:
             if _fdl_safe_mode():
                 st.warning("**Modo seguro (FDL_SAFE_MODE)** — sem editor «Recebido?».")
-            st.dataframe(t_main_disp, use_container_width=True, height=_h_df)
+            st.dataframe(
+                t_main,
+                column_config=_column_config_frete(t_main),
+                use_container_width=True,
+                hide_index=True,
+                height=_h_df,
+            )
             st.caption(
-                "Legenda de cores: **verde** — OK · **vermelho** — divergência / cobrado a maior · "
-                "**âmbar** — atenção (ex.: repasse, cobrado a menor, sem frete na plataforma)."
+                "Use o ícone **olho** na barra da tabela para mostrar ou ocultar colunas. "
+                "Em **Situação do Frete**, os ícones indicam o estado (ex.: ✅ OK, ⬆️ cobrado a maior, 🚚 repasse)."
             )
             if not _fdl_safe_mode() and not _fdl_minimal_layout():
                 st.caption(

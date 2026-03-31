@@ -312,7 +312,13 @@ def _painel_frete_conteudo_safe(
 
     t_grid = _dataframe_frete_grid(tbl_show, fmt_brl_ptbr_celula, col_referencia_como_texto)
     t_main = dataframe_frete_conciliacao_principal(t_grid)
-    st.dataframe(t_main, use_container_width=True, hide_index=True, height=520)
+    st.dataframe(
+        t_main,
+        column_config=_column_config_frete(t_main),
+        use_container_width=True,
+        hide_index=True,
+        height=520,
+    )
     st.download_button(
         "Exportar CSV",
         tbl_show.to_csv(index=False).encode("utf-8-sig"),

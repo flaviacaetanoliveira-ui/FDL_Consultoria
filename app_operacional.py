@@ -4278,10 +4278,9 @@ if _fv == "repasse":
         )
         tabela = tabela_geral.copy()
 
-        # Base operacional exclusiva de extrato (liberações/pagamentos):
-        # somente linhas com Valor pago > 0.
+        # Mantém também linhas sem pagamento para não ocultar plataformas
+        # em cenários onde o extrato ainda não foi consolidado.
         tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
-        tabela = tabela[tabela["Valor pago"].fillna(0).gt(0)].copy()
 
         # Exibição operacional focada em vendas:
         # mantém somente linhas com N° de venda preenchido.

@@ -40,6 +40,12 @@ FRETE_UI_STATUS_SEM_FRETE_ML = "Sem frete da plataforma nesta venda"
 # Rótulo antigo em CSVs materializados gerados antes da troca de texto na UI.
 FRETE_LEGACY_STATUS_SEM_FRETE_ML = "Venda sem informação de frete no ML"
 FRETE_UI_STATUS_SEM_PRECO_PLANILHA = "Frete não cadastrado no anúncio"
+# Export ML «Pacote de N produtos»: uma linha resumo sem # anúncio — não dá join à planilha de frete.
+FRETE_UI_STATUS_PACOTE_SEM_ANUNCIO_ML = (
+    "Pacote ML sem # anúncio no export (vários itens na mesma venda)"
+)
+FRETE_UI_SIT_PACOTE_SEM_ID = "Pacote: export ML sem identificador do anúncio"
+FRETE_UI_VAL_ACAO_PACOTE = "Preferir export de vendas com uma linha por item (ML) ou tratar manualmente"
 FRETE_UI_TITULO_ANUNCIO = "Título do anúncio"
 FRETE_UI_FRETE_ESPERADO = "Frete esperado"
 FRETE_UI_QTD_PRECO_ML = "Qtd × preço unit. produto (ML)"
@@ -64,6 +70,7 @@ FRETE_SITUACAO_FRETE_VALORES_FILTRO: tuple[str, ...] = (
     FRETE_UI_ANALISADO_REPASSE_FRETE,
     FRETE_UI_ANALISADO_COBRADO_MAIOR,
     FRETE_UI_ANALISADO_COBRADO_MENOR,
+    FRETE_UI_SIT_PACOTE_SEM_ID,
 )
 FRETE_UI_RECEBIDO = "Recebido?"
 FRETE_VAL_RECEBIDO_SIM = "Sim"
@@ -107,42 +114,47 @@ def compute_frete_situacao_frete_column(df: pd.DataFrame) -> pd.Series:
     fe_num = pd.to_numeric(fe.reindex(idx), errors="coerce")
     fc_num = pd.to_numeric(fc.reindex(idx), errors="coerce")
     has_both = fe_num.notna() & fc_num.notna() & diff.notna()
-    if not has_both.any():
-        return out
-    atol_z = 1e-6
-    fe_z = pd.Series(
-        np.isclose(
-            fe_num.to_numpy(dtype=float, copy=False),
-            0.0,
-            rtol=0,
-            atol=_FRETE_ANALISADO_FE_ZERO_ATOL,
-        ),
-        index=idx,
-    )
-    fc_z = pd.Series(
-        np.isclose(fc_num.to_numpy(dtype=float, copy=False), 0.0, rtol=0, atol=atol_z),
-        index=idx,
-    )
-    d_ok = pd.Series(
-        np.isclose(
-            diff.reindex(idx).to_numpy(dtype=float, copy=False),
-            0.0,
-            rtol=0,
-            atol=atol_z,
-        ),
-        index=idx,
-    )
-    # «Esperado > 0» em termos operacionais: não é frete ~0 na planilha e acima da tolerância mínima.
-    fe_pos = ~fe_z & (fe_num > _FRETE_ANALISADO_FE_ZERO_ATOL)
+    if has_both.any():
+        atol_z = 1e-6
+        fe_z = pd.Series(
+            np.isclose(
+                fe_num.to_numpy(dtype=float, copy=False),
+                0.0,
+                rtol=0,
+                atol=_FRETE_ANALISADO_FE_ZERO_ATOL,
+            ),
+            index=idx,
+        )
+        fc_z = pd.Series(
+            np.isclose(fc_num.to_numpy(dtype=float, copy=False), 0.0, rtol=0, atol=atol_z),
+            index=idx,
+        )
+        d_ok = pd.Series(
+            np.isclose(
+                diff.reindex(idx).to_numpy(dtype=float, copy=False),
+                0.0,
+                rtol=0,
+                atol=atol_z,
+            ),
+            index=idx,
+        )
+        # «Esperado > 0» em termos operacionais: não é frete ~0 na planilha e acima da tolerância mínima.
+        fe_pos = ~fe_z & (fe_num > _FRETE_ANALISADO_FE_ZERO_ATOL)
 
-    ok_mask = has_both & (d_ok | (fe_z & fc_z) | (fe_pos & fc_z))
-    repasse = has_both & ~ok_mask & fe_z & ~fc_z & (diff < -atol_z)
-    maior = has_both & ~ok_mask & fe_pos & ~fc_z & (fc_num > fe_num + atol_z)
-    menor = has_both & ~ok_mask & fe_pos & ~fc_z & (fc_num < fe_num - atol_z) & (fc_num > atol_z)
-    out.loc[ok_mask] = "OK"
-    out.loc[repasse] = FRETE_UI_ANALISADO_REPASSE_FRETE
-    out.loc[maior] = FRETE_UI_ANALISADO_COBRADO_MAIOR
-    out.loc[menor] = FRETE_UI_ANALISADO_COBRADO_MENOR
+        ok_mask = has_both & (d_ok | (fe_z & fc_z) | (fe_pos & fc_z))
+        repasse = has_both & ~ok_mask & fe_z & ~fc_z & (diff < -atol_z)
+        maior = has_both & ~ok_mask & fe_pos & ~fc_z & (fc_num > fe_num + atol_z)
+        menor = has_both & ~ok_mask & fe_pos & ~fc_z & (fc_num < fe_num - atol_z) & (fc_num > atol_z)
+        out.loc[ok_mask] = "OK"
+        out.loc[repasse] = FRETE_UI_ANALISADO_REPASSE_FRETE
+        out.loc[maior] = FRETE_UI_ANALISADO_COBRADO_MAIOR
+        out.loc[menor] = FRETE_UI_ANALISADO_COBRADO_MENOR
+
+    if FRETE_UI_STATUS_CONC in df.columns:
+        stc = df[FRETE_UI_STATUS_CONC].astype(str).str.strip()
+        m_pac = stc.eq(FRETE_UI_STATUS_PACOTE_SEM_ANUNCIO_ML)
+        if m_pac.any():
+            out.loc[m_pac] = FRETE_UI_SIT_PACOTE_SEM_ID
     return out
 
 
@@ -157,6 +169,7 @@ def compute_frete_acao_recomendada_column(situacao: pd.Series) -> pd.Series:
         FRETE_UI_ANALISADO_REPASSE_FRETE: FRETE_UI_VAL_ACAO_REPASSE,
         FRETE_UI_ANALISADO_COBRADO_MAIOR: FRETE_UI_VAL_ACAO_MAIOR,
         FRETE_UI_ANALISADO_COBRADO_MENOR: FRETE_UI_VAL_ACAO_MENOR,
+        FRETE_UI_SIT_PACOTE_SEM_ID: FRETE_UI_VAL_ACAO_PACOTE,
     }
     return situacao.map(m).astype(object)
 
@@ -198,6 +211,14 @@ _PT_MONTH_MAP_ASCII: dict[str, int] = {
     "novembro": 11,
     "dezembro": 12,
 }
+
+_PACOTE_DE_N_RE = re.compile(r"(?i)pacote\s+de\s+(\d+)\s*produtos?")
+
+
+def _pacote_n_from_estado(estado: pd.Series) -> pd.Series:
+    """N em «Pacote de N produtos» no campo Estado (export ML agregado por venda)."""
+    ext = estado.astype(str).str.extract(_PACOTE_DE_N_RE, expand=False)
+    return pd.to_numeric(ext, errors="coerce")
 
 
 def _normalize_pt_month_token(raw: str) -> str:
@@ -479,6 +500,7 @@ def frete_situacao_com_indicador_visual(s: pd.Series) -> pd.Series:
         FRETE_UI_ANALISADO_REPASSE_FRETE: "🟡 ",
         FRETE_UI_ANALISADO_COBRADO_MAIOR: "🔴 ",
         FRETE_UI_ANALISADO_COBRADO_MENOR: "🟠 ",
+        FRETE_UI_SIT_PACOTE_SEM_ID: "🔵 ",
     }
 
     def _m(x: object) -> object:
@@ -1072,8 +1094,12 @@ def carregar_base_frete_ml(
     meta["frete_cobrado_modo"] = "receita_mais_tarifas_sinal"
     v["frete_ml"] = frete_ml
 
-    qtd = pd.to_numeric(v["unidades"], errors="coerce").fillna(0.0)
-    v["_qtd"] = qtd
+    qtd = pd.to_numeric(v["unidades"], errors="coerce")
+    if "estado" in v.columns:
+        pac_n = _pacote_n_from_estado(v["estado"])
+        use_pac = (qtd.isna() | (qtd == 0)) & pac_n.notna() & (pac_n > 0)
+        qtd = qtd.where(~use_pac, pac_n)
+    v["_qtd"] = qtd.fillna(0.0)
     v["_id_norm"] = (
         v["id_anuncio"].astype(str).str.strip().str.upper().str.replace(r"\s+", "", regex=True)
     )
@@ -1143,17 +1169,27 @@ def carregar_base_frete_ml(
             # Custo do envio não entra no cálculo nem no critério de status.
             ml_sem_info = receita_v.isna() & tarifas_v.isna()
 
+            id_empty = m["id_anuncio"].isna() | m["id_anuncio"].astype(str).str.strip().isin(
+                ("", "nan", "none", "<na>", "null")
+            )
+            es_pacote = m["estado"].astype(str).str.contains(
+                r"(?i)pacote\s+de\s+\d+", na=False
+            )
+            pacote_sem_id = preco_plan.isna() & es_pacote & id_empty & ~ml_sem_info
+
             # Status só técnico: sem preço planilha; sem ML; OK / Divergência por |d| (receita sem tarifas
             # deixa de ser rótulo especial — cai no OK/Divergência como as demais linhas).
             pode_conciliar = fe.notna() & fc.notna()
             st_ok = np.select(
                 [
+                    pacote_sem_id,
                     preco_plan.isna(),
                     ml_sem_info,
                     pode_conciliar & (d.abs() <= tol),
                     pode_conciliar & (d.abs() > tol),
                 ],
                 [
+                    FRETE_UI_STATUS_PACOTE_SEM_ANUNCIO_ML,
                     FRETE_UI_STATUS_SEM_PRECO_PLANILHA,
                     FRETE_UI_STATUS_SEM_FRETE_ML,
                     "OK",
@@ -1193,6 +1229,17 @@ def carregar_base_frete_ml(
         "_preco_frete_unit_arquivo": FRETE_UI_VALOR_FRETE_ANUNCIO,
     }
     v = v.rename(columns={a: b for a, b in rename_final.items() if a in v.columns})
+    if FRETE_UI_ANUNCIO in v.columns and "Estado" in v.columns:
+        an = v[FRETE_UI_ANUNCIO]
+        blank_id = an.isna() | an.astype(str).str.strip().isin(("", "nan", "none", "<na>", "null"))
+        pac_txt = v["Estado"].astype(str).str.contains(r"(?i)pacote\s+de\s+\d+", na=False)
+        show = blank_id & pac_txt
+        if show.any():
+            v.loc[show, FRETE_UI_ANUNCIO] = (
+                "— "
+                + v.loc[show, "Estado"].astype(str).str.strip()
+                + " (venda sem MLB no export — vários anúncios)"
+            )
     meta["linhas"] = int(len(v))
     _dbg(f"linhas_carregadas={meta['linhas']}")
     _dbg(f"colunas_saida={list(v.columns)}")

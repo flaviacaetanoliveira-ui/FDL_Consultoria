@@ -1,8 +1,11 @@
-"""Entrypoint Streamlit Cloud — Cliente 5 (Flávio), mesmo repositório que `app.py` / `app_cliente2.py`.
+"""Entrypoint Streamlit Cloud — Cliente 5 (Flávio: Esquilo + Wood), igual ao fluxo do `app_cliente2.py`.
 
-Define um Main file path distinto no Streamlit Cloud para um deploy dedicado (secrets dynamic,
-ex.: FDL_MATERIALIZED_CLIENTE_SLUG=cliente_5). A lógica continua só em `app_operacional`
-(via `fdl_streamlit_bootstrap`).
+**Secrets (espelho do cliente 2):** o mesmo `app_operacional` e a mesma regra de troca de empresa na sidebar
+(`org_id` → `data_products/<slug>/<org_id>/…`). Neste deploy defina **`FDL_MATERIALIZED_CLIENTE_SLUG=cliente_5`**
+(junto com `FDL_MATERIALIZED_PATH_MODE=dynamic` e `FDL_DATA_PRODUCTS_ROOT`, como no Mega Fácil).
+
+- `app_cliente2.py` → `cliente_2` (Gama, Mega Fácil, …)
+- `app_cliente5.py` → `cliente_5` (Esquilo, Wood)
 """
 
 from __future__ import annotations

@@ -30,9 +30,11 @@ function Invoke-Materialize {
         [string] $BaseDir,
         [string] $EmpresaSeg,
         [string] $OrgId,
-        [string] $DatasetEmpresa
+        [string] $DatasetEmpresa,
+        [ValidateSet("repasse", "frete", "all")]
+        [string] $Modulo = "all"
     )
-    $args = @(
+    $pyArgs = @(
         "processing/materialize_financeiro.py",
         "--base-dir", $BaseDir,
         "--root", "data_products",
@@ -40,10 +42,33 @@ function Invoke-Materialize {
         "--empresa", $EmpresaSeg,
         "--org-id", $OrgId,
         "--dataset-empresa", $DatasetEmpresa,
-        "--modulo", "all"
+        "--modulo", $Modulo
     )
-    & python @args
+    & python @pyArgs
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+function Invoke-MaterializeRepasseThenFrete {
+    param(
+        [string] $BaseDir,
+        [string] $EmpresaSeg,
+        [string] $OrgId,
+        [string] $DatasetEmpresa
+    )
+    Invoke-Materialize -BaseDir $BaseDir -EmpresaSeg $EmpresaSeg -OrgId $OrgId -DatasetEmpresa $DatasetEmpresa -Modulo "repasse"
+    & python @(
+        "processing/materialize_financeiro.py",
+        "--base-dir", $BaseDir,
+        "--root", "data_products",
+        "--cliente", "cliente_5",
+        "--empresa", $EmpresaSeg,
+        "--org-id", $OrgId,
+        "--dataset-empresa", $DatasetEmpresa,
+        "--modulo", "frete"
+    )
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Frete nao gerado para $EmpresaSeg (exit $LASTEXITCODE). Use export ML Detalhe de envios; relatorio Pedidos resumido nao basta. Repasse OK."
+    }
 }
 
 if (-not (Test-Path -LiteralPath $esquiloBase)) {
@@ -62,14 +87,15 @@ Write-Host "=== Preflight Wood ===" -ForegroundColor Cyan
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 if ($PreflightOnly) {
-    Write-Host "Preflight concluído (--PreflightOnly). Nada foi materializado." -ForegroundColor Green
+    Write-Host 'Preflight concluido (-PreflightOnly). Nada foi materializado.' -ForegroundColor Green
     exit 0
 }
 
 Write-Host "=== Materializar Esquilo -> data_products/cliente_5/esquilo/ ===" -ForegroundColor Cyan
-Invoke-Materialize -BaseDir $esquiloBase -EmpresaSeg "esquilo" -OrgId "esquilo" -DatasetEmpresa "Esquilo"
+Invoke-MaterializeRepasseThenFrete -BaseDir $esquiloBase -EmpresaSeg "esquilo" -OrgId "esquilo" -DatasetEmpresa "Esquilo"
 
 Write-Host "=== Materializar Wood -> data_products/cliente_5/wood/ ===" -ForegroundColor Cyan
-Invoke-Materialize -BaseDir $woodBase -EmpresaSeg "wood" -OrgId "wood" -DatasetEmpresa "Wood"
+Invoke-MaterializeRepasseThenFrete -BaseDir $woodBase -EmpresaSeg "wood" -OrgId "wood" -DatasetEmpresa "Wood"
 
-Write-Host "Concluído." -ForegroundColor Green
+Write-Host "Concluido." -ForegroundColor Green
+exit 0

@@ -258,6 +258,19 @@ def frete_parse_data_venda_series(s: pd.Series) -> pd.Series:
     return t
 
 
+def frete_format_data_venda_display(s: pd.Series) -> pd.Series:
+    """
+    Texto curto para a grelha / export: DD/MM/AAAA HH:MM (pt-BR).
+    Se o parse falhar, mantém o valor original como string.
+    """
+    if s.empty:
+        return pd.Series(dtype=object, index=s.index)
+    t = s if pd.api.types.is_datetime64_any_dtype(s) else frete_parse_data_venda_series(s)
+    fmt = t.dt.strftime("%d/%m/%Y %H:%M")
+    fallback = s.map(lambda x: "" if x is None or (isinstance(x, float) and pd.isna(x)) else str(x).strip())
+    return fmt.where(t.notna(), fallback)
+
+
 def frete_series_normalize_sale_dt(s: pd.Series) -> pd.Series:
     """Normaliza data de venda ao dia; materializado/CSV pode trazer object em vez de datetime64."""
     if pd.api.types.is_datetime64_any_dtype(s):
@@ -338,6 +351,8 @@ def dataframe_frete_conciliacao_principal(
             out[label] = situacao
         elif col_key == FRETE_UI_ACAO_RECOMENDADA:
             out[label] = acao
+        elif col_key == "data_venda" and col_key in work.columns:
+            out[label] = frete_format_data_venda_display(work[col_key])
         else:
             out[label] = work[col_key] if col_key in work.columns else pd.NA
     if recebido is not None:
@@ -757,6 +772,11 @@ def _cmap_sufficient_for_frete_ml(cmap: dict[str, str]) -> bool:
 
 
 def _latest_vendas_ml_path(folder: Path) -> Path | None:
+    """
+    Escolhe vendas para o módulo Frete. ``list_sales_files`` já ordena por mtime (mais recente primeiro).
+    Não usar só o ficheiro mais recente: pastas do cliente podem misturar exports Bling/repasse (colunas
+    «Data», «Número»…) com o CSV/xlsx «Pedidos» do ML; o mais recente por vezes é o errado.
+    """
     if not folder.is_dir():
         return None
     try:
@@ -765,6 +785,29 @@ def _latest_vendas_ml_path(folder: Path) -> Path | None:
         return None
     if not files:
         return None
+    _max_probe = 48
+    for p in files[:_max_probe]:
+        try:
+            df = read_sales_file(p)
+        except Exception:
+            continue
+        if getattr(df, "empty", True):
+            continue
+        df = df.dropna(axis=1, how="all")
+        try:
+            cmap = _resolve_columns(df)
+        except Exception:
+            continue
+        if _cmap_sufficient_for_frete_ml(cmap):
+            return p
+    # Pastas com export «Pedidos» (resumo) + outros CSV mais recentes: preferir «Pedidos» para mensagem de erro
+    # clara no loader; se não houver, compat. com o comportamento antigo (ficheiro mais recente).
+    pedidos = [p for p in files if "pedidos" in p.name.lower()]
+    if pedidos:
+        try:
+            return max(pedidos, key=lambda x: x.stat().st_mtime)
+        except OSError:
+            pass
     try:
         return max(files, key=lambda p: p.stat().st_mtime)
     except OSError:

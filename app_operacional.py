@@ -1084,6 +1084,15 @@ def _load_faturamento_data(active_org_id: str) -> tuple[pd.DataFrame, dict[str, 
         }
         if scope_warn:
             info["faturamento_scope_note"] = scope_warn
+        if "Status_Custo" in df_scoped.columns:
+            _vc = (
+                df_scoped["Status_Custo"]
+                .astype(str)
+                .str.strip()
+                .value_counts()
+                .to_dict()
+            )
+            info["faturamento_status_custo_counts"] = _vc
         return (df_scoped, info, ts)
     except Exception as exc:
         return (
@@ -1100,6 +1109,27 @@ def _load_faturamento_data(active_org_id: str) -> tuple[pd.DataFrame, dict[str, 
         )
 
 
+def _faturamento_materialized_source_stat_token() -> str:
+    """
+    Inclui mtime/tamanho do ficheiro resolvido para invalidar o cache após rematerialização
+    (o path costuma ser o mesmo; sem isto o ``@st.cache_data`` pode servir dados antigos até ao TTL).
+    """
+    resolved = _faturamento_resolve_materialized_target()
+    path_s = (resolved.get("path_s") or "").strip()
+    if not path_s:
+        return "no_path"
+    try:
+        p = Path(path_s).expanduser()
+        if not p.is_absolute():
+            p = (_REPO_APP_ROOT / p).resolve()
+        if p.is_file():
+            st = p.stat()
+            return f"{p.resolve()}|mtime_ns={st.st_mtime_ns}|size={st.st_size}"
+    except OSError:
+        pass
+    return f"unstat:{path_s[:240]}"
+
+
 def _faturamento_load_cache_signature(org_id: str) -> str:
     return "|".join(
         [
@@ -1113,6 +1143,7 @@ def _faturamento_load_cache_signature(org_id: str) -> str:
             str(_repasse_materialized_path_str()).strip(),
             str(_precomputed_path_str()).strip(),
             str(_strict_materialized()),
+            _faturamento_materialized_source_stat_token(),
         ]
     )
 
@@ -4328,6 +4359,18 @@ elif _fv == "faturamento":
         _pf = str(faturamento_info.get("faturamento_path_final_resolved", ""))[:500]
         st.caption(
             f"Faturamento: layout **{_lay}** · origem `{_src}` · alvo=`{_t_disp}` · path=`{_pf}`"
+        )
+        _cnt = faturamento_info.get("faturamento_status_custo_counts")
+        if isinstance(_cnt, dict) and _cnt:
+            st.caption(
+                f"**Status_Custo** no dataset após filtro de org (validação vs. export): `{_cnt}` · "
+                f"linhas carregadas: **{faturamento_info.get('faturamento_row_count_loaded', '—')}** → "
+                f"**{faturamento_info.get('linhas', '—')}** após escopo."
+            )
+        st.caption(
+            "**V2 canónico:** `data_products/<FDL_MATERIALIZED_CLIENTE_SLUG>/faturamento/current/` — com **CSV e Parquet**, "
+            "o app lê o **CSV** primeiro. O **slug** tem de ser o da materialização (ex. **cliente_5**); com **cliente_2** "
+            "no secrets e dados só em `cliente_5/`, o ficheiro não é encontrado nesse passo."
         )
         if faturamento_info.get("faturamento_scope_note"):
             st.caption(str(faturamento_info["faturamento_scope_note"]))

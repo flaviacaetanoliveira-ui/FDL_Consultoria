@@ -3866,7 +3866,6 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     st.caption("Analise o recorte na grelha; exporte para partilhar fora do sistema.")
     _fdl_ui_gap_section()
 
-    csv_bytes = tabela_exibir.to_csv(index=False).encode("utf-8-sig")
     # Guardrail de estabilidade: evita trabalho pesado em cada troca de filtro
     # para não arriscar ecrã em branco por timeout/memória no Streamlit Cloud.
     _max_rows_heavy_export = 3000
@@ -3896,15 +3895,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 
     with st.container(border=True):
         st.caption("Exportar recorte filtrado")
-        btn1, btn2, btn3 = st.columns([1, 1, 1])
-        with btn1:
-            st.download_button(
-                "Exportar CSV",
-                data=csv_bytes,
-                file_name="conciliacao_operacional_filtrada.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
+        btn2, btn3 = st.columns([1, 1])
         with btn2:
             if heavy_exports_enabled and excel_bytes is not None:
                 st.download_button(
@@ -3929,8 +3920,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 st.button("Exportar PDF", disabled=True, use_container_width=True)
         if not heavy_exports_enabled:
             st.caption(
-                f"Excel/PDF desativados para recortes acima de {_max_rows_heavy_export:,} linhas (estabilidade). "
-                "CSV segue disponível."
+                f"Excel/PDF desativados para recortes acima de {_max_rows_heavy_export:,} linhas (estabilidade)."
             )
 
     _fdl_ui_gap_section_lg()

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T06:59:22Z",
-  "source_signature": "2969b6cef3e94505262f8e6db0da3fdd",
+  "generated_at": "2026-03-31T10:58:05Z",
+  "source_signature": "5a11aee73a81f97595cc74482b6937a4",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "let_decor",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "let_decor",
   "cnpj": null,
-  "row_count": 2648,
+  "row_count": 2682,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -23,7 +23,7 @@
     "Tarifa de venda e impostos (BRL)",
     "Receita por envio (BRL)",
     "Tarifas de envio (BRL)",
-    "Custo do envio (BRL)",
+    "Descontos e bônus",
     "Cancelamentos e reembolsos (BRL)",
     "Total (BRL)",
     "Mês de faturamento das suas tarifas",
@@ -96,7 +96,7 @@
     "vendas_arquivo": "Let Decor - Vendas ML 2026.xlsx",
     "frete_arquivo": "Let Decor - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 2648,
+    "linhas": 2682,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

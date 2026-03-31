@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T10:54:09Z",
-  "source_signature": "eace31e6f306881988739d527fc8b3f6",
+  "generated_at": "2026-03-31T14:49:19Z",
+  "source_signature": "20fff867088cc422263c22902b3fc889",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_5",
   "empresa": "wood",
@@ -85,13 +85,13 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
   "org_id": "wood",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Vendas_ML\\2026\\Wood - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Wood - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Vendas_ML\\2026\\Wood - Vendas ML 2026.xlsx",
+    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Wood - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Wood - Vendas ML 2026.xlsx",

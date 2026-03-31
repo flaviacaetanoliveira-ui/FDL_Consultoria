@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T10:59:15Z",
-  "source_signature": "96d6c6eb196cae74c81d65554f4d58bb",
+  "generated_at": "2026-03-31T14:52:57Z",
+  "source_signature": "c0323551a5d5a59308d398fb30e59b09",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "tb_paio",
@@ -83,13 +83,13 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
   "org_id": "tb_paio",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio\\Vendas_ML\\2026\\TB Paio - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio\\TB Paio - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio\\Vendas_ML\\2026\\TB Paio - Vendas ML 2026.xlsx",
+    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio\\TB Paio - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "TB Paio - Vendas ML 2026.xlsx",

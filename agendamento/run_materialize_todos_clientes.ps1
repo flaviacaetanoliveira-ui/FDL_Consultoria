@@ -9,6 +9,29 @@ if (-not $RepoRoot) {
 }
 Set-Location $RepoRoot
 
+function Resolve-BaseDirForCurrentMachine {
+    param([string] $RawBaseDir)
+
+    $base = ($RawBaseDir | ForEach-Object { $_.ToString().Trim() })
+    if (-not $base) { return "" }
+    if (Test-Path -LiteralPath $base) { return $base }
+
+    $anchor = "\OneDrive - FDL Consultoria\"
+    $idx = $base.IndexOf($anchor, [System.StringComparison]::OrdinalIgnoreCase)
+    if ($idx -lt 0) { return "" }
+
+    $suffix = $base.Substring($idx + $anchor.Length).TrimStart("\")
+    $cands = @(
+        (Join-Path $env:USERPROFILE ("OneDrive - FDL Consultoria\" + $suffix)),
+        (Join-Path (Join-Path "C:\Users" $env:USERNAME) ("OneDrive - FDL Consultoria\" + $suffix))
+    ) | Select-Object -Unique
+
+    foreach ($cand in $cands) {
+        if (Test-Path -LiteralPath $cand) { return $cand }
+    }
+    return ""
+}
+
 $dataProducts = Join-Path $RepoRoot "data_products"
 if (-not (Test-Path -LiteralPath $dataProducts)) {
     Write-Error "Pasta não encontrada: $dataProducts"
@@ -70,15 +93,19 @@ foreach ($t in $targets) {
         $skip++
         continue
     }
-    if (-not (Test-Path -LiteralPath $t.base_dir)) {
+    $baseDirResolved = Resolve-BaseDirForCurrentMachine $t.base_dir
+    if (-not $baseDirResolved) {
         Write-Host "[FAIL] $tag base_dir inexistente: $($t.base_dir)" -ForegroundColor Red
         $fail++
         continue
     }
+    if ($baseDirResolved -ne $t.base_dir) {
+        Write-Host "[INFO] $tag base_dir ajustado para esta máquina: $baseDirResolved" -ForegroundColor Yellow
+    }
 
-    Write-Host "[RUN ] $tag --base-dir `"$($t.base_dir)`"" -ForegroundColor Cyan
+    Write-Host "[RUN ] $tag --base-dir `"$baseDirResolved`"" -ForegroundColor Cyan
     & python "processing/materialize_financeiro.py" `
-        --base-dir $t.base_dir `
+        --base-dir $baseDirResolved `
         --cliente $t.cliente `
         --empresa $t.empresa `
         --org-id $t.org_id `

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T10:58:05Z",
-  "source_signature": "5a11aee73a81f97595cc74482b6937a4",
+  "generated_at": "2026-03-31T14:51:41Z",
+  "source_signature": "a3ba635c25d3fb4f32bbd174a4b4d044",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "let_decor",
@@ -84,13 +84,13 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
   "org_id": "let_decor",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Vendas_ML\\2026\\Let Decor - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Let Decor - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Vendas_ML\\2026\\Let Decor - Vendas ML 2026.xlsx",
+    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Let Decor - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Let Decor - Vendas ML 2026.xlsx",

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T10:56:33Z",
-  "source_signature": "ab154abe1c02c7b68d9ecc0fa4499bc6",
+  "generated_at": "2026-03-31T14:50:23Z",
+  "source_signature": "e0bf7cd840c12961ccb22689d7749568",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "fmg",
@@ -83,13 +83,13 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
   "org_id": "fmg",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG\\Vendas_ML\\FMG - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG\\FMG - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG\\Vendas_ML\\FMG - Vendas ML 2026.xlsx",
+    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG\\FMG - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "FMG - Vendas ML 2026.xlsx",

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T05:23:43Z",
-  "source_signature": "8b225f8bd67dea0d31cd0b4f49b39ee4",
+  "generated_at": "2026-03-31T14:53:07Z",
+  "source_signature": "2b5508424317ef57ad59daa85a0667db",
   "pipeline_revision": "phase1-v1",
   "cliente": "default",
   "empresa": "antomoveis",
@@ -83,13 +83,13 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
   "org_id": "antomoveis",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Vendas - Mercado Livre\\Anto Móveis - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Anto Móveis - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Vendas - Mercado Livre\\Anto Móveis - Vendas ML 2026.xlsx",
+    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Anto Móveis - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Anto Móveis - Vendas ML 2026.xlsx",

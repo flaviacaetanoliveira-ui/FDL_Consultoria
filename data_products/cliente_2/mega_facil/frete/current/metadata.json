@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T05:22:57Z",
-  "source_signature": "058213969c49f0273f3b44097fec2586",
+  "generated_at": "2026-03-31T14:45:37Z",
+  "source_signature": "2a18411d46772498a7dc22888645c9ae",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_facil",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_facil",
   "cnpj": null,
-  "row_count": 3509,
+  "row_count": 3516,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -25,6 +25,7 @@
     "Tarifas de envio (BRL)",
     "Custo do envio (BRL)",
     "Custo por diferenças nas medidas e no peso do pacote",
+    "Descontos e bônus",
     "Cancelamentos e reembolsos (BRL)",
     "Total (BRL)",
     "Mês de faturamento das suas tarifas",
@@ -85,19 +86,19 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil",
   "org_id": "mega_facil",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Vendas_ML\\2026\\Mega Facil - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Mega Facil - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Vendas_ML\\2026\\Mega Facil - Vendas ML 2026.xlsx",
+    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Mega Facil - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Mega Facil - Vendas ML 2026.xlsx",
     "frete_arquivo": "Mega Facil - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 3509,
+    "linhas": 3516,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

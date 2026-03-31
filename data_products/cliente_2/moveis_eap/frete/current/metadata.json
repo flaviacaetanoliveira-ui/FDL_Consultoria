@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T05:23:37Z",
-  "source_signature": "c5fc7a1b113b009ea14e7620264ab3bd",
+  "generated_at": "2026-03-31T14:46:45Z",
+  "source_signature": "f383a37f43ca6d076763f52c44a8e108",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "moveis_eap",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "moveis_eap",
   "cnpj": null,
-  "row_count": 911,
+  "row_count": 915,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -23,7 +23,7 @@
     "Tarifa de venda e impostos (BRL)",
     "Receita por envio (BRL)",
     "Tarifas de envio (BRL)",
-    "Custo do envio (BRL)",
+    "Descontos e bônus",
     "Cancelamentos e reembolsos (BRL)",
     "Total (BRL)",
     "Mês de faturamento das suas tarifas",
@@ -82,19 +82,19 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP",
   "org_id": "moveis_eap",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Vendas_ML\\2026\\Moveis EAP - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Moveis EAP - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Vendas_ML\\2026\\Moveis EAP - Vendas ML 2026.xlsx",
+    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Moveis EAP - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Moveis EAP - Vendas ML 2026.xlsx",
     "frete_arquivo": "Moveis EAP - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 911,
+    "linhas": 915,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

@@ -182,6 +182,40 @@ def _dataset_empresa_label() -> str:
     return DATASET_EMPRESA
 
 
+def _enabled_finance_modules() -> set[str]:
+    """
+    Módulos visíveis na sidebar (default: repasse, frete, faturamento).
+    Ex.: FDL_ENABLED_FINANCE_MODULES=repasse,frete para clientes sem faturamento.
+    """
+    raw = os.environ.get("FDL_ENABLED_FINANCE_MODULES", "").strip()
+    if not raw:
+        try:
+            raw = str(st.secrets.get("FDL_ENABLED_FINANCE_MODULES", "")).strip()
+        except Exception:
+            raw = ""
+    if not raw:
+        return {"repasse", "frete", "faturamento"}
+    out = {x.strip().lower() for x in raw.split(",") if x.strip()}
+    valid = {"repasse", "frete", "faturamento"}
+    return out & valid or {"repasse", "frete", "faturamento"}
+
+
+def _repasse_sem_bling() -> bool:
+    """Cliente sem Bling: ações operacionais usam «Baixado» em vez de «Baixar no Bling»."""
+    raw = os.environ.get("FDL_REPASSE_SEM_BLING", "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    try:
+        sec = st.secrets.get("FDL_REPASSE_SEM_BLING", False)
+        if isinstance(sec, bool):
+            return sec
+        return str(sec).strip().lower() in {"1", "true", "yes", "on"}
+    except Exception:
+        return False
+
+
 def _filtrar_df_col_empresa_por_contexto(df: pd.DataFrame) -> pd.DataFrame:
     """
     Em modo fixed/live, restringe às empresas permitidas ou, em cenários multi-empresa no mesmo ficheiro,
@@ -203,6 +237,10 @@ if "op_financeiro_view" not in st.session_state:
     st.session_state["op_financeiro_view"] = "repasse"
 elif st.session_state["op_financeiro_view"] not in ("repasse", "frete", "faturamento"):
     st.session_state["op_financeiro_view"] = "repasse"
+
+_enabled_modules = _enabled_finance_modules()
+if st.session_state["op_financeiro_view"] not in _enabled_modules:
+    st.session_state["op_financeiro_view"] = "repasse" if "repasse" in _enabled_modules else "frete"
 
 _fdl_global_trace("03: após definir vista financeiro (session_state)")
 
@@ -2508,6 +2546,7 @@ def _format_frete_anuncio_tabela_display(df: pd.DataFrame) -> pd.DataFrame:
 _REPASSE_ACAO_SUGERIDA_EXIBICAO: dict[str, str] = {
     "Ok": "✅ OK",
     "Baixar no Bling": "⬇️ Baixar no Bling",
+    "Baixado": "✅ Baixado",
     "Analisar diferença": "🔍 Analisar diferença",
     "Verificar recebimento": "📥 Verificar recebimento",
     "Verificar faturamento": "📄 Verificar faturamento",
@@ -3537,13 +3576,14 @@ def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
 def _repasse_ui_validacao_kpi_saas(contagens: dict[str, int]) -> None:
     """KPIs da base filtrada — `st.metric` dentro de contentores com borda (UI nativa)."""
     ok = int(contagens.get("Ok", 0))
-    bling = int(contagens.get("Baixar no Bling", 0))
+    bling = int(contagens.get("Baixado", 0)) if _repasse_sem_bling() else int(contagens.get("Baixar no Bling", 0))
     div = int(contagens.get("Analisar diferença", 0))
     zero = int(contagens.get("Zerado", 0))
+    c2_label = "Baixado" if _repasse_sem_bling() else "Baixar no Bling"
     c1, c2, c3, c4 = st.columns(4)
     specs: list[tuple[Any, str, int]] = [
         (c1, "OK", ok),
-        (c2, "Baixar no Bling", bling),
+        (c2, c2_label, bling),
         (c3, "Divergências", div),
         (c4, "Zerados", zero),
     ]
@@ -3699,11 +3739,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 
     st.subheader("📊 Resumo por ação")
     st.caption("Contagens sobre o recorte filtrado.")
-    acoes_validacao = [
-        "Ok",
-        "Baixar no Bling",
-        "Analisar diferença",
-    ]
+    acoes_validacao = ["Ok", "Baixado" if _repasse_sem_bling() else "Baixar no Bling", "Analisar diferença"]
     contagens_acao = {a: int(tabela["Ação sugerida operacional"].eq(a).sum()) for a in acoes_validacao}
     contagens_acao["Zerado"] = int(tabela["Ação sugerida operacional"].eq("Revisar venda zerada").sum())
     _repasse_ui_validacao_kpi_saas(contagens_acao)
@@ -4127,27 +4163,30 @@ with st.sidebar:
 
     with st.container(border=True):
         st.caption("Financeiro")
-        st.button(
-            _lbl_repasse,
-            key="fdl_mod_repasse",
-            use_container_width=True,
-            type="primary" if _sb_view == "repasse" else "secondary",
-            on_click=_sb_nav_set_repasse,
-        )
-        st.button(
-            _lbl_frete,
-            key="fdl_mod_frete",
-            use_container_width=True,
-            type="primary" if _sb_view == "frete" else "secondary",
-            on_click=_sb_nav_set_frete,
-        )
-        st.button(
-            _lbl_faturamento,
-            key="fdl_mod_faturamento",
-            use_container_width=True,
-            type="primary" if _sb_view == "faturamento" else "secondary",
-            on_click=_sb_nav_set_faturamento,
-        )
+        if "repasse" in _enabled_modules:
+            st.button(
+                _lbl_repasse,
+                key="fdl_mod_repasse",
+                use_container_width=True,
+                type="primary" if _sb_view == "repasse" else "secondary",
+                on_click=_sb_nav_set_repasse,
+            )
+        if "frete" in _enabled_modules:
+            st.button(
+                _lbl_frete,
+                key="fdl_mod_frete",
+                use_container_width=True,
+                type="primary" if _sb_view == "frete" else "secondary",
+                on_click=_sb_nav_set_frete,
+            )
+        if "faturamento" in _enabled_modules:
+            st.button(
+                _lbl_faturamento,
+                key="fdl_mod_faturamento",
+                use_container_width=True,
+                type="primary" if _sb_view == "faturamento" else "secondary",
+                on_click=_sb_nav_set_faturamento,
+            )
 
     _ts_parts = str(_sb_ts_display).strip().split(None, 1)
     _ts_d = _ts_parts[0] if _ts_parts else "—"
@@ -4192,9 +4231,11 @@ _fdl_global_trace("05: após sidebar — antes do hero / painel principal")
 if _fv == "repasse":
     try:
         _fdl_global_trace("repasse: a preparar base (map_acao / filtros negócio)")
+        _acao_baixa = "Baixado" if _repasse_sem_bling() else "Baixar no Bling"
         map_acao = {
             "Ok": "Ok",
-            "Baixar no Bling": "Baixar no Bling",
+            "Baixar no Bling": _acao_baixa,
+            "Baixado": _acao_baixa,
             "Analisar manualmente": "Analisar diferença",
             "Verificar título no Bling": "Verificar recebimento",
             "Revisar venda zerada": "Revisar venda zerada",

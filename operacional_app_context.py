@@ -202,6 +202,74 @@ _REGISTRO_EMPRESA: dict[str, AppOrganization] = {
             ),
         ),
     ),
+    "BP Ramiro": AppOrganization(
+        org_id="bp_ramiro",
+        display_name="BP Ramiro",
+        module_ids=("financeiro",),
+        routes=(
+            ModuleRoute(
+                route_id="conciliacao-repasse",
+                label="Conciliação de Repasse",
+                page_module="app_operacional",
+            ),
+            ModuleRoute(
+                route_id="faturamento",
+                label="Faturamento",
+                page_module="app_operacional",
+            ),
+        ),
+    ),
+    "FMG": AppOrganization(
+        org_id="fmg",
+        display_name="FMG",
+        module_ids=("financeiro",),
+        routes=(
+            ModuleRoute(
+                route_id="conciliacao-repasse",
+                label="Conciliação de Repasse",
+                page_module="app_operacional",
+            ),
+            ModuleRoute(
+                route_id="faturamento",
+                label="Faturamento",
+                page_module="app_operacional",
+            ),
+        ),
+    ),
+    "Let Decor": AppOrganization(
+        org_id="let_decor",
+        display_name="Let Decor",
+        module_ids=("financeiro",),
+        routes=(
+            ModuleRoute(
+                route_id="conciliacao-repasse",
+                label="Conciliação de Repasse",
+                page_module="app_operacional",
+            ),
+            ModuleRoute(
+                route_id="faturamento",
+                label="Faturamento",
+                page_module="app_operacional",
+            ),
+        ),
+    ),
+    "TB Paio": AppOrganization(
+        org_id="tb_paio",
+        display_name="TB Paio",
+        module_ids=("financeiro",),
+        routes=(
+            ModuleRoute(
+                route_id="conciliacao-repasse",
+                label="Conciliação de Repasse",
+                page_module="app_operacional",
+            ),
+            ModuleRoute(
+                route_id="faturamento",
+                label="Faturamento",
+                page_module="app_operacional",
+            ),
+        ),
+    ),
 }
 
 

@@ -132,6 +132,12 @@ USUARIOS: dict[str, dict[str, Any]] = {
         "cliente": "Flávio",
         "empresas": ["Esquilo", "Wood"],
     },
+    "bistaffathiago@gmail.com": {
+        "nome": "Thiago",
+        "senha": "Letdecor",
+        "cliente": "Thiago",
+        "empresas": ["BP Ramiro", "FMG", "Let Decor", "TB Paio"],
+    },
 }
 
 

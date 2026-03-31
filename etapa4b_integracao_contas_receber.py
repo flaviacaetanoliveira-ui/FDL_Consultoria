@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import os
 import re
 import sys
 import unicodedata
@@ -150,6 +151,12 @@ def _nf_merge_key_series(series: pd.Series) -> pd.Series:
 
 
 def _classificar_acao(row: pd.Series) -> str:
+    sem_bling = os.environ.get("FDL_REPASSE_SEM_BLING", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     tolerancia = 0.01
     valor_pago = pd.to_numeric(row["Valor pago"], errors="coerce")
     valor_receber = pd.to_numeric(row.get("Valor a receber"), errors="coerce")
@@ -168,7 +175,7 @@ def _classificar_acao(row: pd.Series) -> str:
         return "Analisar diferença"
     if pago:
         return "Ok"
-    return "Baixar no Bling"
+    return "Baixado" if sem_bling else "Baixar no Bling"
 
 
 def _numero_sem_parcela(series: pd.Series) -> pd.Series:

@@ -192,16 +192,24 @@ def _build_conciliacao_amazon(base_dir: str | Path) -> pd.DataFrame:
             raw = _read_amazon_repo_file(path)
         col_pedido = _find_col(raw, {"id do pedido", "ID do pedido", "order id"})
         col_data = _find_col(raw, {"data/hora", "data hora", "date"})
+        col_tipo = _find_col(raw, {"tipo", "type"})
         col_total = _find_col(raw, {"total", "(total) (BRL)", "total brl"})
         if not col_pedido or not col_total:
             continue
         part = pd.DataFrame()
         part["N° de venda"] = raw[col_pedido].fillna("").astype(str).str.strip()
+        part["tipo"] = raw[col_tipo].fillna("").astype(str).str.strip() if col_tipo else ""
         part["Data de pagamento"] = (
             _parse_amazon_repo_datetime_series(raw[col_data]) if col_data else pd.NaT
         )
         part["Valor pago"] = parse_brl_number(raw[col_total])
         part = part[part["N° de venda"].ne("") & part["Valor pago"].notna()].copy()
+        # Extrato Amazon inclui taxas/frete/reembolsos; para pagamento da venda,
+        # considera apenas lançamentos de pedido com crédito positivo.
+        part = part[
+            part["tipo"].str.contains("Pedido", case=False, na=False)
+            & (pd.to_numeric(part["Valor pago"], errors="coerce") > 0)
+        ].copy()
         if part.empty:
             continue
         part = part.groupby("N° de venda", as_index=False).agg(

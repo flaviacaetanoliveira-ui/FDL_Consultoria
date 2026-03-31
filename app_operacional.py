@@ -3610,16 +3610,6 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             if "Plataforma" in base.columns
             else []
         )
-        acoes = sorted(
-            [
-                x
-                for x in base["Ação sugerida operacional"].dropna().unique().tolist()
-                if str(x).strip()
-            ]
-        )
-        sit = sorted(
-            [x for x in base["Situação"].dropna().unique().tolist() if str(x).strip()]
-        )
         st.markdown("**Período** · data de pagamento")
         st.caption("Comparação por dia civil (meia-noite a meia-noite).")
         r2 = st.columns((1.15, 1.15))
@@ -3652,6 +3642,21 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         r1 = st.columns((1.15, 1.15, 1.15))
         with r1[0]:
             sel_plat = _multiselect_stable("op_ms_plat", "Plataforma", plats, compact_label=True)
+        # Recalcula opções dependentes da plataforma selecionada para evitar filtros «presos»
+        # de outra plataforma (ex.: seleção anterior de ML zerando Shopee).
+        base_opts = base.copy()
+        if "Plataforma" in base_opts.columns and sel_plat:
+            base_opts = base_opts[base_opts["Plataforma"].isin(sel_plat)].copy()
+        acoes = sorted(
+            [
+                x
+                for x in base_opts["Ação sugerida operacional"].dropna().unique().tolist()
+                if str(x).strip()
+            ]
+        )
+        sit = sorted(
+            [x for x in base_opts["Situação"].dropna().unique().tolist() if str(x).strip()]
+        )
         with r1[1]:
             sel_acao = _multiselect_stable("op_ms_acao", "Ação sugerida", acoes, compact_label=True)
         with r1[2]:

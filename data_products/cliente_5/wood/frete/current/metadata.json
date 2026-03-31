@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T06:23:05Z",
-  "source_signature": "382cb9c068520b664c42c19c1b850ffa",
+  "generated_at": "2026-03-31T10:54:09Z",
+  "source_signature": "eace31e6f306881988739d527fc8b3f6",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_5",
   "empresa": "wood",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "wood",
   "cnpj": null,
-  "row_count": 3246,
+  "row_count": 3265,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -25,6 +25,7 @@
     "Tarifas de envio (BRL)",
     "Custo do envio (BRL)",
     "Custo por diferenças nas medidas e no peso do pacote",
+    "Descontos e bônus",
     "Cancelamentos e reembolsos (BRL)",
     "Total (BRL)",
     "Mês de faturamento das suas tarifas",
@@ -96,7 +97,7 @@
     "vendas_arquivo": "Wood - Vendas ML 2026.xlsx",
     "frete_arquivo": "Wood - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 3246,
+    "linhas": 3265,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

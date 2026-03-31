@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T06:59:06Z",
-  "source_signature": "3b21a9f73059f69bd62e2dc770849e46",
+  "generated_at": "2026-03-31T10:57:05Z",
+  "source_signature": "7e064445130172793af265b3da675426",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "let_decor",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "let_decor",
   "cnpj": null,
-  "row_count": 11409,
+  "row_count": 11443,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -33,7 +33,7 @@
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
-    "linhas": 11409,
+    "linhas": 11443,
     "arquivos_contas_lidos": 0,
     "col_situacao": "",
     "col_numero": ""

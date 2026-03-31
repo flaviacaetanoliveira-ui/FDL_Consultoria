@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T06:58:56Z",
-  "source_signature": "f81080e950d00e1b3fef6e0bfb504846",
+  "generated_at": "2026-03-31T10:56:33Z",
+  "source_signature": "ab154abe1c02c7b68d9ecc0fa4499bc6",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "fmg",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "fmg",
   "cnpj": null,
-  "row_count": 2609,
+  "row_count": 2655,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -23,7 +23,7 @@
     "Tarifa de venda e impostos (BRL)",
     "Receita por envio (BRL)",
     "Tarifas de envio (BRL)",
-    "Custo do envio (BRL)",
+    "Descontos e bônus",
     "Cancelamentos e reembolsos (BRL)",
     "Total (BRL)",
     "Mês de faturamento das suas tarifas",
@@ -74,6 +74,10 @@
     "Frete cobrado",
     "Qtd × preço unit. produto (ML)",
     "_data_venda_dt",
+    "Valor frete por anúncio",
+    "Frete esperado",
+    "Diferença",
+    "Status conciliação",
     "cliente_id",
     "empresa_id",
     "cnpj"
@@ -90,11 +94,9 @@
   "loader_meta": {
     "vendas_arquivo": "FMG - Vendas ML 2026.xlsx",
     "frete_arquivo": "FMG - Frete por Anúncio 06032026.xlsx",
-    "frete_tabular": false,
-    "linhas": 2609,
-    "avisos": [
-      "Arquivo de frete por anúncio não reconhecido como tabela (p.ex. export de ecrã). Divergências por anúncio ficam indisponíveis até existir Excel/CSV com colunas MLB + preço."
-    ]
+    "frete_tabular": true,
+    "linhas": 2655,
+    "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"
 }

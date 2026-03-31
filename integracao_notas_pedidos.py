@@ -232,8 +232,14 @@ def build_conciliacao_com_notas(
     if "Plataforma_x" in out.columns or "Plataforma_y" in out.columns:
         px = out["Plataforma_x"] if "Plataforma_x" in out.columns else pd.Series(pd.NA, index=out.index)
         py = out["Plataforma_y"] if "Plataforma_y" in out.columns else pd.Series(pd.NA, index=out.index)
-        py_ok = py.notna() & py.astype(str).str.strip().ne("")
-        out["Plataforma"] = py.where(py_ok, px)
+        px_txt = px.fillna("").astype(str).str.strip()
+        py_txt = py.fillna("").astype(str).str.strip()
+        py_ok = py_txt.ne("")
+        # Preserva plataforma já conhecida da conciliação (Shopee/Amazon etc.).
+        # Para ML/indefinido, pode aproveitar inferência via notas.
+        preservar_px = px_txt.ne("") & px_txt.ne("Mercado Livre")
+        out["Plataforma"] = py_txt.where(py_ok, px_txt)
+        out.loc[preservar_px, "Plataforma"] = px_txt.loc[preservar_px]
         out = out.drop(columns=["Plataforma_x", "Plataforma_y"], errors="ignore")
     keep_cols = [
         "N° de venda",

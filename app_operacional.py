@@ -3557,6 +3557,16 @@ def _parse_data_pagamento_final(series: pd.Series) -> pd.Series:
     return t
 
 
+def _first_series(df: pd.DataFrame, col: str) -> pd.Series:
+    """
+    Retorna a primeira série quando há colunas duplicadas com o mesmo nome.
+    """
+    obj = df[col]
+    if isinstance(obj, pd.DataFrame):
+        return obj.iloc[:, 0]
+    return obj
+
+
 def _repasse_ui_validacao_kpi_saas(contagens: dict[str, int]) -> None:
     """KPIs da base filtrada — `st.metric` dentro de contentores com borda (UI nativa)."""
     if _repasse_vendas_liberacoes_only():
@@ -3793,25 +3803,25 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         tabela_exibir = tabela[exibir_cols].copy()
         if "Valor da nota" in tabela_exibir.columns:
             tabela_exibir["Valor da nota"] = pd.to_numeric(
-                tabela_exibir["Valor da nota"], errors="coerce"
+                _first_series(tabela_exibir, "Valor da nota"), errors="coerce"
             )
         else:
             tabela_exibir["Valor da nota"] = 0.0
         if "Valor a receber" in tabela_exibir.columns:
             tabela_exibir["Valor a receber"] = pd.to_numeric(
-                tabela_exibir["Valor a receber"], errors="coerce"
+                _first_series(tabela_exibir, "Valor a receber"), errors="coerce"
             )
         else:
             tabela_exibir["Valor a receber"] = 0.0
         if "Valor pago" in tabela_exibir.columns:
             tabela_exibir["Valor pago"] = pd.to_numeric(
-                tabela_exibir["Valor pago"], errors="coerce"
+                _first_series(tabela_exibir, "Valor pago"), errors="coerce"
             )
         else:
             tabela_exibir["Valor pago"] = 0.0
         if "Diferença" in tabela_exibir.columns:
             tabela_exibir["Diferença"] = pd.to_numeric(
-                tabela_exibir["Diferença"], errors="coerce"
+                _first_series(tabela_exibir, "Diferença"), errors="coerce"
             )
         else:
             tabela_exibir["Diferença"] = 0.0

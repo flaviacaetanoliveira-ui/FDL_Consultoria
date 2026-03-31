@@ -3621,6 +3621,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.warning("Sem dados de repasse para esta vista. Contacte o suporte se o problema continuar.")
         return
 
+    # Chaves de widget por org: sem isto, ao mudar de empresa o estado do Streamlit podia manter
+    # limites/valores de outra org e parecer que o calendário «começa» na data errada.
+    _rep_wk = _frete_org_widget_suffix(_active_org.org_id)
+
     with st.container(border=True):
         st.subheader("Filtros")
         st.caption("Período, critérios e busca para refinar o recorte.")
@@ -3644,7 +3648,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 max_value=_d_max,
                 format="DD/MM/YYYY",
                 label_visibility="collapsed",
-                key="op_repasse_d_pag_ini",
+                key=f"op_repasse_d_pag_ini_{_rep_wk}",
             )
         with r2[1]:
             st.caption("Fim")
@@ -3655,7 +3659,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 max_value=_d_max,
                 format="DD/MM/YYYY",
                 label_visibility="collapsed",
-                key="op_repasse_d_pag_fim",
+                key=f"op_repasse_d_pag_fim_{_rep_wk}",
             )
         data_pag_ini = _safe_streamlit_date(data_pag_ini, _d_min)
         data_pag_fim = _safe_streamlit_date(data_pag_fim, _d_max)
@@ -3663,7 +3667,9 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.markdown("**Critérios**")
         r1 = st.columns((1.15, 1.15, 1.15))
         with r1[0]:
-            sel_plat = _multiselect_stable("op_ms_plat", "Plataforma", plats, compact_label=True)
+            sel_plat = _multiselect_stable(
+                f"op_ms_plat_{_rep_wk}", "Plataforma", plats, compact_label=True
+            )
         # Recalcula opções dependentes da plataforma selecionada para evitar filtros «presos»
         # de outra plataforma (ex.: seleção anterior de ML zerando Shopee).
         base_opts = base.copy()
@@ -3680,16 +3686,18 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             [x for x in base_opts["Situação"].dropna().unique().tolist() if str(x).strip()]
         )
         with r1[1]:
-            sel_acao = _multiselect_stable("op_ms_acao", "Ação sugerida", acoes, compact_label=True)
+            sel_acao = _multiselect_stable(
+                f"op_ms_acao_{_rep_wk}", "Ação sugerida", acoes, compact_label=True
+            )
         with r1[2]:
-            sel_sit = _multiselect_stable("op_ms_sit", "Situação", sit, compact_label=True)
+            sel_sit = _multiselect_stable(f"op_ms_sit_{_rep_wk}", "Situação", sit, compact_label=True)
         st.write("")
         st.markdown("**Busca**")
         busca = st.text_input(
             "Texto (venda, pedido ou nota)",
             placeholder="Venda, pedido ou nota…",
             label_visibility="collapsed",
-            key="op_repasse_busca_txt",
+            key=f"op_repasse_busca_txt_{_rep_wk}",
         ).strip().lower()
         if not has_dp_base:
             st.info(

@@ -4763,6 +4763,15 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.write("")
         dp_series_full = pd.to_datetime(base["Data de pagamento"], errors="coerce")
         _d_min, _d_max, has_dp_base = _series_datetime_bounds_dates(dp_series_full)
+        # O Streamlit mantém data_input no session_state: após rematerializar com datas mais recentes,
+        # o «Fim» podia ficar preso (ex.: 23/03) embora a base já vá até 31/03. Repor início/fim quando
+        # os limites reais da coluna mudarem.
+        _bounds_sig_key = f"op_repasse_dp_bounds_sig_{_rep_wk}"
+        _bounds_sig = (_d_min.isoformat(), _d_max.isoformat())
+        if st.session_state.get(_bounds_sig_key) != _bounds_sig:
+            st.session_state[_bounds_sig_key] = _bounds_sig
+            st.session_state[f"op_repasse_d_pag_ini_{_rep_wk}"] = _d_min
+            st.session_state[f"op_repasse_d_pag_fim_{_rep_wk}"] = _d_max
         plats = (
             sorted([x for x in base["Plataforma"].dropna().unique().tolist() if str(x).strip()])
             if "Plataforma" in base.columns

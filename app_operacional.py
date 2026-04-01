@@ -5250,6 +5250,11 @@ elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in 
         faturamento_df = _filtrar_df_col_empresa_por_contexto(faturamento_df)
 
     faturamento_info = {**faturamento_info, "linhas": int(len(faturamento_df))}
+    _fat_escopo_ui = (
+        FAT_DRE_ESCOPO_CONSOLIDADO if _fat_consolidado else FAT_DRE_ESCOPO_EMPRESA
+    )
+    if not str(faturamento_info.get("faturamento_escopo") or "").strip():
+        faturamento_info = {**faturamento_info, "faturamento_escopo": _fat_escopo_ui}
     tabela_geral = pd.DataFrame()
     info = faturamento_info
     _fdl_global_trace(f"faturamento_dre: após filtro empresa ({len(faturamento_df)} linhas)")

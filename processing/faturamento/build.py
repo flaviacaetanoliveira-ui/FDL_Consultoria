@@ -16,7 +16,7 @@ from .calc import compute_financial_columns, resolve_coluna_base_imposto
 from .config import PIPELINE_REVISION_FATURAMENTO
 from .flags import apply_faturamento_flags
 from .io_custo import load_custo_xlsx
-from .io_pedidos import load_latest_pedidos_csv
+from .io_pedidos import load_all_pedidos_csv_concatenated, load_latest_pedidos_csv
 from .join_custo import join_custo_produto
 from .params import (
     FaturamentoParams,
@@ -161,14 +161,15 @@ def _build_faturamento_dataset_v2(
 
     for emp in params.empresas:
         ped_dir = (params.cliente_root / emp.pedidos_dir).resolve()
-        df_p, meta_ped = load_latest_pedidos_csv(ped_dir)
+        df_p, meta_ped = load_all_pedidos_csv_concatenated(ped_dir)
         df_p = _normalize_pedidos_export(df_p)
         assert_required_columns_pedido(df_p)
         df_p = df_p.copy()
         df_p["empresa"] = emp.empresa
         df_p["org_id"] = emp.org_id
         df_p["cliente_slug"] = params.cliente_slug
-        df_p["pedidos_arquivo"] = meta_ped.get("arquivo", "")
+        if "pedidos_arquivo" not in df_p.columns:
+            df_p["pedidos_arquivo"] = str(meta_ped.get("arquivo", ""))
 
         df_j = join_custo_produto(df_p, df_c)
         df_j = assign_custo_audit_columns(df_j, dup_keys)

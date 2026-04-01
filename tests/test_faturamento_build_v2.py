@@ -25,6 +25,10 @@ class TestFaturamentoBuildV2(unittest.TestCase):
         )
         shutil.copy(
             REPO / "tests" / "fixtures" / "faturamento" / "pedidos_min.csv",
+            root / "Esquilo" / "b.csv",
+        )
+        shutil.copy(
+            REPO / "tests" / "fixtures" / "faturamento" / "pedidos_min.csv",
             root / "Wood" / "b.csv",
         )
         custo_path = root / "custo.xlsx"
@@ -84,7 +88,8 @@ class TestFaturamentoBuildV2(unittest.TestCase):
         self.assertEqual(read_cliente_slug_v2(self.params_path), "cliente_test_faturamento_v2")
 
         df, meta = build_faturamento_dataset(self.params_path)
-        self.assertEqual(len(df), 4)
+        # Esquilo: dois CSV idênticos na pasta → concatena 2+2 linhas; Wood: um CSV → 2 linhas
+        self.assertEqual(len(df), 6)
         self.assertEqual(meta.get("schema_version"), 2)
         self.assertEqual(set(df["org_id"].unique()), {"esquilo", "wood"})
         self.assertEqual(df["cliente_slug"].iloc[0], "cliente_test_faturamento_v2")

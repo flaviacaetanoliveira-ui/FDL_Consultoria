@@ -86,6 +86,17 @@ Definir nos **secrets** do Streamlit (ou variáveis de ambiente equivalentes), a
 
 Com **admin**, o app mostra caption com layout, origem da resolução, path e um expander com `faturamento_info` (incl. `faturamento_row_count_loaded` vs linhas após filtro).
 
+### Convenções do produto (Faturamento & DRE na app)
+
+Decisões de regra fechadas para o módulo na interface (sem redesign; textos de ajuda refletem isto):
+
+| Tema | Política |
+|------|-----------|
+| **Período** | Eixo oficial do filtro: coluna **`Data`** (pedido / export ML). **`Data do faturamento`** no materializado é secundária / futura (competência fiscal), até a fonte ser uniforme. |
+| **«Valor Nota Fiscal»** | **Convenção de rótulo** na UI: os valores mostrados são a soma / linha da coluna **`Valor total`** do materializado. **Não** equivalem ao valor fiscal legal da NF-e enquanto não existir integração com documentos fiscais. |
+| **Frete** | Regra técnica no pipeline: separação ME vs transportadora própria quando o CSV traz coluna de modalidade; frete de transportadora própria pode integrar **`Receita_Bruta`** — sujeito a validação amostral com financeiro. |
+| **NF** | No fluxo só com pedidos ML, **`Número da nota`** (e similares) costuma vazio: **comportamento esperado**, não erro de tela. Número confiável: outra fonte ou join futuro. |
+
 ## Checklist — remoção futura da V1
 
 Usar esta lista antes de apagar ramos V1 no código, exemplos e documentação de params legados.

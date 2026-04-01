@@ -377,8 +377,23 @@ def _faturamento_period_calendar_limits(d_min: date, d_max: date) -> tuple[date,
     return cal_min, cal_max
 
 
-# Rótulo de produto (validação Flávio): coluna continua a ser ``Valor total`` no materializado.
+# Convenção de produto (Faturamento & DRE):
+# - «Valor Nota Fiscal» na UI **não** é o valor legal da NF-e; fonte técnica = coluna ``Valor total`` até integração fiscal.
+# - Período padrão: coluna ``Data``. ``Data do faturamento`` é secundária / futura.
+# - NF vazia no fluxo por pedidos ML é esperada; não indica falha da tela.
 _FATURAMENTO_UI_VALOR_NOTA_FISCAL = "Valor Nota Fiscal"
+_FATURAMENTO_HELP_VALOR_NOTA_FISCAL = (
+    "Convenção do módulo: valores da coluna **Valor total** do materializado (pedidos). "
+    "**Não** equivalem ao valor fiscal da NF-e sem integração com documentos fiscais."
+)
+_FATURAMENTO_HELP_PERIODO_DATA = (
+    "Eixo oficial do período: coluna **Data** (pedido / export ML). "
+    "**Data do faturamento** na tabela é informativa e pode estar incompleta — não rege este filtro."
+)
+_FATURAMENTO_HELP_NUMERO_NF_COL = (
+    "Com export só de pedidos ML, costuma vazio — **esperado**, não erro. "
+    "NF confiável: outra fonte ou join futuro."
+)
 
 
 def _sb_user_initials(display_name: str) -> str:
@@ -3310,6 +3325,9 @@ def _render_faturamento_dre_visao_geral(df: pd.DataFrame, load_info: dict[str, o
 
     with st.container(border=True):
         st.caption("**Indicadores principais**")
+        st.caption(
+            f"**{_FATURAMENTO_UI_VALOR_NOTA_FISCAL}** = soma de **Valor total** (convenção do módulo; não é valor fiscal da NF-e sem integração específica)."
+        )
         rp = st.columns(5)
         with rp[0]:
             st.metric("Receita bruta", _fmt_brl_ptbr_celula(agg["receita_bruta"]))
@@ -3379,10 +3397,10 @@ def _render_faturamento_dre_visao_geral(df: pd.DataFrame, load_info: dict[str, o
             else:
                 st.metric("Outras despesas", "—")
         st.caption(
-            "**Definições:** receita bruta = Σ **Receita_Bruta** (no materializado novo, inclui frete de transportadora própria "
-            "quando o CSV de pedidos traz modalidade de envio); **Valor Nota Fiscal** na UI = Σ **Valor total**; "
-            "desconto comercial = receita bruta − valor nota fiscal. Com export consistente, "
-            "**Receita_Bruta − Desconto proporcional total ≈ Valor total** linha a linha (ajustando a parte de frete em RB, se aplicável)."
+            "**Definições:** receita bruta = Σ **Receita_Bruta** (inclui frete de transportadora própria quando o CSV traz modalidade "
+            "de envio; validar com financeiro). **Valor Nota Fiscal** = convenção do módulo: Σ **Valor total** — **não** é valor fiscal da NF-e "
+            "sem integração específica. Desconto comercial = receita bruta − essa soma. **NF vazia** no fluxo por pedidos ML: esperado. "
+            "Com export consistente, RB − desconto proporcional ≈ Valor total linha a linha (ajuste se RB incluir frete TP)."
         )
         _plug = agg.get("diag_plug_rb_desc_vt")
         if (
@@ -3641,7 +3659,8 @@ def _render_faturamento_dre_recorte_global(df: pd.DataFrame) -> pd.DataFrame:
     with st.container(border=True):
         st.subheader("Recorte do módulo")
         st.caption(
-            "**Situação** (padrão Atendido), **Data** e **plataforma** · aplicam-se à Visão geral e ao detalhamento."
+            "**Situação** (padrão Atendido), **período por Data** (oficial do módulo) e **plataforma** · "
+            "aplicam-se à Visão geral e ao detalhamento. **Data do faturamento** na base é secundária / futura."
         )
         sits = sorted(
             {str(x).strip() for x in out["Situação"].dropna().unique() if str(x).strip()}
@@ -3705,6 +3724,7 @@ def _render_faturamento_dre_recorte_global(df: pd.DataFrame) -> pd.DataFrame:
                     max_value=cal_max,
                     format="DD/MM/YYYY",
                     key="fdl_fat_dre_d_ini",
+                    help=_FATURAMENTO_HELP_PERIODO_DATA,
                 )
             with r0[1]:
                 st.date_input(
@@ -3713,6 +3733,7 @@ def _render_faturamento_dre_recorte_global(df: pd.DataFrame) -> pd.DataFrame:
                     max_value=cal_max,
                     format="DD/MM/YYYY",
                     key="fdl_fat_dre_d_fim",
+                    help=_FATURAMENTO_HELP_PERIODO_DATA,
                 )
             st.caption(
                 "Pode escolher datas fora do intervalo em que existem linhas na base; só entram vendas cuja **Data** "
@@ -3899,6 +3920,7 @@ def _painel_faturamento(
                         max_value=cal_max,
                         format="DD/MM/YYYY",
                         key=k_ini,
+                        help=_FATURAMENTO_HELP_PERIODO_DATA,
                     )
                 with r0[1]:
                     d_fim = st.date_input(
@@ -3907,6 +3929,7 @@ def _painel_faturamento(
                         max_value=cal_max,
                         format="DD/MM/YYYY",
                         key=k_fim,
+                        help=_FATURAMENTO_HELP_PERIODO_DATA,
                     )
                 st.caption(
                     "Datas fora do intervalo dos dados são permitidas; só entram linhas com **Data** no período escolhido."
@@ -4160,7 +4183,7 @@ def _painel_faturamento(
                 _cfg[c] = NumberColumn(
                     c,
                     format="R$ %,.2f",
-                    help="Mesmo valor que a coluna **Valor total** no materializado (valor da nota / líquido da linha).",
+                    help=_FATURAMENTO_HELP_VALOR_NOTA_FISCAL,
                 )
             elif c == "Custo frete (total)":
                 _cfg[c] = NumberColumn(
@@ -4193,14 +4216,25 @@ def _painel_faturamento(
         "N.º da nota",
     ):
         if c in disp.columns:
-            _cfg[c] = TextColumn(c, width="large" if c == "Alertas" else "medium")
+            _tc_kw: dict[str, str] = {"width": "large" if c == "Alertas" else "medium"}
+            if c == "Data":
+                _tc_kw["help"] = _FATURAMENTO_HELP_PERIODO_DATA
+            elif c == "Data do faturamento":
+                _tc_kw["help"] = (
+                    "Campo secundário / futuro (competência fiscal). Pode estar vazio ou inconsistente; "
+                    "o período do módulo usa a coluna **Data**."
+                )
+            elif c == "N.º da nota":
+                _tc_kw["help"] = _FATURAMENTO_HELP_NUMERO_NF_COL
+            _cfg[c] = TextColumn(c, **_tc_kw)
 
     st.subheader("Tabela principal")
     st.caption(
         f"{len(disp)} linhas · **Resultado** ascendente. "
         "À esquerda: operação do dia; à direita: NF, quantidade e composição de custos/taxas (**Ref. ML** no fim). "
-        f"**{_FATURAMENTO_UI_VALOR_NOTA_FISCAL}** = coluna **Valor total** no materializado (ver ajuda no cabeçalho). "
-        "Quando o CSV de pedidos tiver modalidade de envio, o frete aparece repartido (ME vs transp. própria) e o total em **Custo frete (total)**. "
+        f"**{_FATURAMENTO_UI_VALOR_NOTA_FISCAL}** = **Valor total** (convenção; ver ajuda da coluna — não é NF-e legal). "
+        "**N.º da nota** vazio: esperado sem integração fiscal. "
+        "Frete repartido (ME / transp. própria) quando o CSV tiver modalidade; total em **Custo frete (total)**. "
         "**Pedido** = multiloja se existir, senão n.º do pedido."
     )
     st.dataframe(

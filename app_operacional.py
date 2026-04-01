@@ -2954,6 +2954,60 @@ def _faturamento_painel_missing_schema_columns(df: pd.DataFrame) -> list[str]:
     return miss
 
 
+def _faturamento_disp_texto_sem_none(s: pd.Series, *, placeholder: str = "—") -> pd.Series:
+    """Evita que None/NaN apareçam como o texto «None» no ``st.dataframe`` (colunas opcionais do CSV de pedidos)."""
+
+    def _cell(v: object) -> str:
+        if v is None:
+            return placeholder
+        if isinstance(v, float) and math.isnan(v):
+            return placeholder
+        try:
+            if pd.isna(v):
+                return placeholder
+        except (ValueError, TypeError):
+            pass
+        xs = str(v).strip()
+        if not xs or xs.casefold() in {"nan", "none", "nat", "<na>"}:
+            return placeholder
+        return xs
+
+    return s.map(_cell)
+
+
+def _faturamento_disp_data_pedidos(s: pd.Series) -> pd.Series:
+    """Datas do export ML (dia/mês/ano); placeholders tipo 00/00/0000 → «—»."""
+
+    def _one(v: object) -> str:
+        if v is None:
+            return "—"
+        if isinstance(v, float) and math.isnan(v):
+            return "—"
+        if isinstance(v, (pd.Timestamp, datetime)):
+            if pd.isna(v):
+                return "—"
+            ts = pd.Timestamp(v)
+            if ts.year < 1900:
+                return "—"
+            return ts.strftime("%d/%m/%Y")
+        try:
+            if pd.isna(v):
+                return "—"
+        except (ValueError, TypeError):
+            pass
+        xs = str(v).strip()
+        if not xs or xs.casefold() in {"nan", "none", "nat"}:
+            return "—"
+        if xs in {"00/00/0000", "0/0/0000"} or xs.replace("0", "").replace("/", "").strip() == "":
+            return "—"
+        t = pd.to_datetime(xs, errors="coerce", dayfirst=True)
+        if pd.isna(t) or t.year < 1900:
+            return xs
+        return t.strftime("%d/%m/%Y")
+
+    return s.map(_one)
+
+
 def _faturamento_compute_alert_bools(df: pd.DataFrame) -> pd.DataFrame:
     """Colunas auxiliares _ab_* para KPIs, filtros e texto de alertas."""
     try:
@@ -3200,7 +3254,15 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
         filt = filt[filt["Situação"].isin(sel_sit)]
     if busca:
         m_bus = pd.Series(False, index=filt.index)
-        for col in ("Número do pedido", "Número do pedido multiloja", "Código", "Número da nota"):
+        for col in (
+            "Número do pedido",
+            "Número do pedido multiloja",
+            "Código",
+            "Número da nota",
+            "Número",
+            "Data",
+            "Data do faturamento",
+        ):
             if col in filt.columns:
                 m_bus = m_bus | filt[col].fillna("").astype(str).str.lower().str.contains(busca, regex=False)
         filt = filt.loc[m_bus].copy()
@@ -3278,10 +3340,19 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
         "Situação do pedido": filt["Situação"],
         "N.º do pedido": filt["Número do pedido"],
         "N.º pedido multiloja": filt["Número do pedido multiloja"],
+        "Data da venda": _faturamento_disp_data_pedidos(filt["Data"])
+        if "Data" in filt.columns
+        else pd.Series("—", index=filt.index),
+        "Data do faturamento": _faturamento_disp_data_pedidos(filt["Data do faturamento"])
+        if "Data do faturamento" in filt.columns
+        else pd.Series("—", index=filt.index),
+        "Ref. ML (col. Número)": _faturamento_disp_texto_sem_none(filt["Número"])
+        if "Número" in filt.columns
+        else pd.Series("—", index=filt.index),
         "SKU": filt["Código"],
         "Produto": filt[prod_col].astype(str) if prod_col else pd.Series("", index=filt.index),
-        "NF emitida?": filt["Existe Nota Fiscal gerada"],
-        "N.º da nota": filt["Número da nota"],
+        "NF emitida?": _faturamento_disp_texto_sem_none(filt["Existe Nota Fiscal gerada"]),
+        "N.º da nota": _faturamento_disp_texto_sem_none(filt["Número da nota"]),
         "Receita (produto)": receita_linha,
         "Valor total": pd.to_numeric(filt["Valor total"], errors="coerce"),
         "Custo do produto": pd.to_numeric(filt[custo_prod_col], errors="coerce"),
@@ -3319,12 +3390,30 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
         _cfg["Quantidade"] = NumberColumn("Quantidade", format="%.2f")
     if "Status custo" in disp.columns:
         _cfg["Status custo"] = TextColumn("Status custo", width="small")
-    for c in ("Plataforma", "Situação do pedido", "N.º do pedido", "N.º pedido multiloja", "SKU", "Produto", "NF emitida?", "N.º da nota", "Alertas"):
+    for c in (
+        "Plataforma",
+        "Situação do pedido",
+        "N.º do pedido",
+        "N.º pedido multiloja",
+        "Data da venda",
+        "Data do faturamento",
+        "Ref. ML (col. Número)",
+        "SKU",
+        "Produto",
+        "NF emitida?",
+        "N.º da nota",
+        "Alertas",
+    ):
         if c in disp.columns:
             _cfg[c] = TextColumn(c, width="medium" if c != "Alertas" else "large")
 
     st.subheader("Tabela principal")
-    st.caption(f"{len(disp)} registos com os filtros atuais · ordenação: Resultado (ascendente).")
+    st.caption(
+        f"{len(disp)} registos com os filtros atuais · ordenação: Resultado (ascendente). "
+        "**NF emitida?** / **N.º da nota:** «—» quando o export não traz NF. "
+        "**N.º do pedido** / **multiloja** = identificadores da venda; **Data da venda** / **Data do faturamento** vêm do CSV; "
+        "**Ref. ML (col. Número)** é o campo «Número» do export (não é número de nota fiscal)."
+    )
     st.dataframe(
         disp,
         use_container_width=True,

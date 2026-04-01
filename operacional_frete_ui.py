@@ -37,6 +37,7 @@ from operacional_frete import (
     carregar_tabela_final_frete_operacional,
     dataframe_frete_conciliacao_principal,
     descobrir_fontes_frete,
+    frete_vendas_loader_args,
     frete_series_for_date_filter,
     frete_series_normalize_sale_dt,
     stable_mtime_ns_for_frete_url,
@@ -177,9 +178,7 @@ def painel_frete_fragment(
         with st.expander("Detalhe técnico", expanded=False):
             st.exception(exc)
         return
-    vendas_ref = (fontes.vendas_url or "").strip() or (
-        str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
-    )
+    vendas_ref, v_ns = frete_vendas_loader_args(fontes)
     if not vendas_ref:
         vendas_dir = resolve_pasta_vendas_ml(CLIENTE_BASE_DIR)
         if not vendas_dir.is_dir():
@@ -194,10 +193,6 @@ def painel_frete_fragment(
             )
         st.caption(str(Path(CLIENTE_BASE_DIR).resolve()))
         return
-    if (fontes.vendas_url or "").strip():
-        v_ns = stable_mtime_ns_for_frete_url(fontes.vendas_url)
-    else:
-        v_ns = int(fontes.vendas_path.stat().st_mtime_ns)
     frete_ref = (fontes.frete_url or "").strip() or (
         str(fontes.frete_path.resolve())
         if fontes.frete_path and fontes.frete_path.is_file()

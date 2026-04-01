@@ -52,11 +52,24 @@ def _relatorio_identificacao_fontes(
     lines.append(f"Base analisada: {base}")
     lines.append(f"Vendas via URL (FDL_FRETE_VENDAS_URL / PRECOMPUTED): {vendas_url}")
     lines.append(f"Frete anuncio via URL (FDL_FRETE_ANUNCIO_URL): {frete_url}")
-    if vp and vp.is_file():
+    vpaths = tuple(getattr(fontes, "vendas_paths", ()) or ())
+    if len(vpaths) > 1:
+        lines.append(f"Vendas ML locais concatenadas no frete ({len(vpaths)} ficheiros):")
+        for p in vpaths:
+            if p.is_file():
+                try:
+                    st = p.stat()
+                    mtime = datetime.fromtimestamp(st.st_mtime).isoformat(sep=" ", timespec="seconds")
+                    lines.append(f"  - {p}")
+                    lines.append(f"    mtime: {mtime}  tamanho_bytes: {st.st_size}")
+                except OSError as e:
+                    lines.append(f"  - {p} (stat erro: {e})")
+        lines.append("(Prioridade em duplicados de N.º venda: ficheiro com mtime mais recente primeiro.)")
+    elif vp and vp.is_file():
         try:
             st = vp.stat()
             mtime = datetime.fromtimestamp(st.st_mtime).isoformat(sep=" ", timespec="seconds")
-            lines.append(f"Vendas local (mais recente em Vendas - Mercado Livre): {vp}")
+            lines.append(f"Vendas local (Vendas - Mercado Livre / Vendas_ML): {vp}")
             lines.append(f"  mtime: {mtime}  tamanho_bytes: {st.st_size}")
         except OSError as e:
             lines.append(f"Vendas local: {vp} (stat erro: {e})")
@@ -120,6 +133,7 @@ def _set_base_and_import(base: Path) -> tuple[object, object]:
         FRETE_UI_VALOR_FRETE_ANUNCIO,
         carregar_tabela_final_frete_operacional,
         descobrir_fontes_frete,
+        frete_vendas_loader_args,
         stable_mtime_ns_for_frete_url,
     )
 
@@ -134,6 +148,7 @@ def _set_base_and_import(base: Path) -> tuple[object, object]:
             FRETE_UI_VALOR_FRETE_ANUNCIO,
             carregar_tabela_final_frete_operacional,
             descobrir_fontes_frete,
+            frete_vendas_loader_args,
             stable_mtime_ns_for_frete_url,
         ),
         base,
@@ -285,6 +300,7 @@ def main() -> int:
         _V,
         carregar_tabela_final_frete_operacional,
         descobrir_fontes_frete,
+        frete_vendas_loader_args,
         stable_mtime_ns_for_frete_url,
     ) = pack
 
@@ -296,9 +312,7 @@ def main() -> int:
     fontes = descobrir_fontes_frete(base)
     vendas_url_on, parece_demo = _relatorio_identificacao_fontes(fontes, base, lines)
 
-    vendas_ref = (fontes.vendas_url or "").strip() or (
-        str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
-    )
+    vendas_ref, v_ns = frete_vendas_loader_args(fontes)
     if not vendas_ref:
         lines.append("ERRO: sem ficheiro de vendas ML (pasta Vendas - Mercado Livre vazia ou so .gitkeep).")
         OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -310,16 +324,18 @@ def main() -> int:
         str(fontes.frete_path.resolve()) if fontes.frete_path and fontes.frete_path.is_file() else None
     )
 
-    if not vendas_url_on and fontes.vendas_path and fontes.vendas_path.is_file():
+    if not vendas_url_on and getattr(fontes, "vendas_paths", ()):
+        for p in fontes.vendas_paths:
+            if p.is_file():
+                n_raw = _count_linhas_vendas(p)
+                if n_raw is not None:
+                    lines.append(f"Linhas em {p.name} (read_sales_file): {n_raw}")
+        lines.append("")
+    elif not vendas_url_on and fontes.vendas_path and fontes.vendas_path.is_file():
         n_raw = _count_linhas_vendas(fontes.vendas_path)
         if n_raw is not None:
             lines.append(f"Linhas no ficheiro de vendas (read_sales_file): {n_raw}")
         lines.append("")
-
-    if (fontes.vendas_url or "").strip():
-        v_ns = stable_mtime_ns_for_frete_url(fontes.vendas_url)
-    else:
-        v_ns = int(fontes.vendas_path.stat().st_mtime_ns)
 
     if (fontes.frete_url or "").strip():
         f_ns = stable_mtime_ns_for_frete_url(fontes.frete_url)
@@ -329,7 +345,8 @@ def main() -> int:
         f_ns = None
 
     lines.append("--- Referencias usadas no loader ---")
-    lines.append(f"Vendas: {vendas_ref}")
+    vr_show = "\n  ".join(vendas_ref) if isinstance(vendas_ref, tuple) else str(vendas_ref)
+    lines.append(f"Vendas: {vr_show}")
     lines.append(f"Frete anuncio: {frete_ref or '(nenhum)'}")
     lines.append("")
 

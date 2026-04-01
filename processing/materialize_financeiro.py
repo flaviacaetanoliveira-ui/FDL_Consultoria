@@ -99,13 +99,14 @@ def build_repasse_source_signature(base: Path) -> str:
 
 def build_frete_source_signature(
     *,
-    vendas_ref: str,
+    vendas_ref: str | tuple[str, ...],
     vendas_mtime_ns: int,
     frete_ref: str | None,
     frete_mtime_ns: int | None,
 ) -> str:
+    vr = "\n".join(vendas_ref) if isinstance(vendas_ref, tuple) else vendas_ref
     parts = [
-        f"vendas_ref={vendas_ref}",
+        f"vendas_ref={vr}",
         f"vendas_mtime_ns={vendas_mtime_ns}",
         f"frete_ref={frete_ref or ''}",
         f"frete_mtime_ns={frete_mtime_ns if frete_mtime_ns is not None else ''}",
@@ -353,23 +354,16 @@ def _materialize_frete(
     from operacional_frete import (
         carregar_tabela_final_frete_operacional,
         descobrir_fontes_frete,
-        stable_mtime_ns_for_frete_url,
+        frete_vendas_loader_args,
     )
 
     fontes = descobrir_fontes_frete(base_dir)
-    vendas_ref = (fontes.vendas_url or "").strip() or (
-        str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
-    )
+    vendas_ref, v_ns = frete_vendas_loader_args(fontes)
     if not vendas_ref:
         raise SystemExit(
             "Frete: sem fonte de vendas ML. Defina FDL_FRETE_VENDAS_URL ou coloque ficheiros em "
             f"'{resolve_pasta_vendas_ml(base_dir)}' (ou pasta irmã **Vendas_ML** / **Vendas - Mercado Livre**)."
         )
-    if (fontes.vendas_url or "").strip():
-        v_ns = stable_mtime_ns_for_frete_url(fontes.vendas_url)
-    else:
-        assert fontes.vendas_path is not None
-        v_ns = int(fontes.vendas_path.stat().st_mtime_ns)
 
     frete_ref = (fontes.frete_url or "").strip() or (
         str(fontes.frete_path.resolve()) if fontes.frete_path and fontes.frete_path.is_file() else None
@@ -385,6 +379,7 @@ def _materialize_frete(
         "vendas_url": bool((fontes.vendas_url or "").strip()),
         "frete_url": bool((fontes.frete_url or "").strip()),
         "vendas_path": str(fontes.vendas_path) if fontes.vendas_path else None,
+        "vendas_paths": [str(p) for p in fontes.vendas_paths],
         "frete_path": str(fontes.frete_path) if fontes.frete_path else None,
     }
 
@@ -526,7 +521,7 @@ def _preflight_sources(base_dir: Path) -> int:
     from operacional_frete import descobrir_fontes_frete
 
     f = descobrir_fontes_frete(base_dir)
-    v_ok = bool((f.vendas_url or "").strip() or f.vendas_path)
+    v_ok = bool((f.vendas_url or "").strip() or f.vendas_path or f.vendas_paths)
     fr_ok = bool((f.frete_url or "").strip() or (f.frete_path is not None and f.frete_path.is_file()))
     print(
         f"[preflight] Frete — vendas ML: {'OK' if v_ok else 'FALTA'} "

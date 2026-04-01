@@ -220,7 +220,7 @@ def _check_frete(base_dir: Path, materialized_dir: Path, org_id: str) -> dict[st
         FRETE_UI_N_VENDA,
         carregar_tabela_final_frete_operacional,
         descobrir_fontes_frete,
-        stable_mtime_ns_for_frete_url,
+        frete_vendas_loader_args,
     )
     from processing.materialize_financeiro import build_frete_source_signature
 
@@ -233,16 +233,9 @@ def _check_frete(base_dir: Path, materialized_dir: Path, org_id: str) -> dict[st
     mat_core = _strip_identity(mat)
 
     fontes = descobrir_fontes_frete(base_dir)
-    vendas_ref = (fontes.vendas_url or "").strip() or (
-        str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
-    )
+    vendas_ref, v_ns = frete_vendas_loader_args(fontes)
     if not vendas_ref:
         return {"modulo": "frete", "status": "error", "detail": "no vendas source for fresh run"}
-    if (fontes.vendas_url or "").strip():
-        v_ns = stable_mtime_ns_for_frete_url(fontes.vendas_url)
-    else:
-        assert fontes.vendas_path is not None
-        v_ns = int(fontes.vendas_path.stat().st_mtime_ns)
     frete_ref = (fontes.frete_url or "").strip() or (
         str(fontes.frete_path.resolve()) if fontes.frete_path and fontes.frete_path.is_file() else None
     )

@@ -73,6 +73,7 @@ from operacional_frete import (
     compute_frete_situacao_frete_column,
     dataframe_frete_conciliacao_principal,
     descobrir_fontes_frete,
+    frete_vendas_loader_args,
     frete_kpis_executivos,
     frete_series_for_date_filter,
     frete_series_normalize_sale_dt,
@@ -1412,15 +1413,21 @@ def _frete_session_cache_is_valid(payload: object) -> bool:
 
 
 def _frete_loader_source_signature(org_id: str, fontes: FontesFrete) -> str:
-    vendas_origin = (fontes.vendas_url or "").strip() or (
-        str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
-    )
     if (fontes.vendas_url or "").strip():
+        u = (fontes.vendas_url or "").strip()
+        vendas_origin = u
         vendas_sig = str(stable_mtime_ns_for_frete_url(fontes.vendas_url))
-    elif fontes.vendas_path and fontes.vendas_path.is_file():
-        vendas_sig = str(int(fontes.vendas_path.stat().st_mtime_ns))
     else:
-        vendas_sig = "none"
+        paths = [p for p in fontes.vendas_paths if p.is_file()]
+        if not paths and fontes.vendas_path and fontes.vendas_path.is_file():
+            paths = [fontes.vendas_path]
+        if paths:
+            vendas_origin = ";".join(str(p.resolve()) for p in paths)
+            pieces = "|".join(f"{p.resolve()}:{int(p.stat().st_mtime_ns)}" for p in paths)
+            vendas_sig = hashlib.sha256(pieces.encode("utf-8")).hexdigest()[:24]
+        else:
+            vendas_origin = ""
+            vendas_sig = "none"
 
     frete_origin = (fontes.frete_url or "").strip() or (
         str(fontes.frete_path.resolve()) if fontes.frete_path else ""
@@ -1454,6 +1461,29 @@ def _frete_ts_for_path(path: Path) -> str:
         return _ts_br_from_mtime_ns(int(path.stat().st_mtime_ns))
     except OSError:
         return _now_ts_br_str()
+
+
+def _frete_ts_live_from_fontes(fontes: FontesFrete) -> str:
+    paths = [p for p in fontes.vendas_paths if p.is_file()]
+    if not paths and fontes.vendas_path and fontes.vendas_path.is_file():
+        paths = [fontes.vendas_path]
+    if not paths:
+        return _now_ts_br_str()
+    try:
+        m = max(int(p.stat().st_mtime_ns) for p in paths)
+        return _ts_br_from_mtime_ns(m)
+    except OSError:
+        return _now_ts_br_str()
+
+
+def _frete_local_vendas_caption(fontes: FontesFrete) -> str | None:
+    if fontes.vendas_paths and len(fontes.vendas_paths) > 1:
+        head = fontes.vendas_paths[:6]
+        tail = "; ".join(str(p.resolve()) for p in head)
+        return tail + (" …" if len(fontes.vendas_paths) > 6 else "")
+    if fontes.vendas_path:
+        return str(fontes.vendas_path.resolve())
+    return None
 
 
 def _load_frete_data_strict_materialized_only(
@@ -1633,9 +1663,7 @@ def _load_frete_data(org_id: str) -> tuple[pd.DataFrame, dict[str, object], str]
     except Exception as exc:
         return pd.DataFrame(), _empty_info(frete_consume="error", frete_fontes_error=str(exc)), _now_ts_br_str()
 
-    vendas_ref = (fontes.vendas_url or "").strip() or (
-        str(fontes.vendas_path.resolve()) if fontes.vendas_path else ""
-    )
+    vendas_ref, v_ns = frete_vendas_loader_args(fontes)
 
     if not _mat_try and not vendas_ref:
         return (
@@ -1667,12 +1695,7 @@ def _load_frete_data(org_id: str) -> tuple[pd.DataFrame, dict[str, object], str]
             meta_frete = _cached.get("meta_frete", {})
             if not isinstance(meta_frete, dict):
                 meta_frete = {}
-            ts_live = _now_ts_br_str()
-            if fontes.vendas_path and fontes.vendas_path.is_file():
-                try:
-                    ts_live = _frete_ts_for_path(fontes.vendas_path)
-                except OSError:
-                    pass
+            ts_live = _frete_ts_live_from_fontes(fontes)
             consume = "live_fallback" if (_mat_try and mat_load_error is not None) else "live"
             fb_err = str(mat_load_error).strip() if mat_load_error else ""
             t_fallback = ((_f_mp or _f_mu)[:500] if _mat_try else "") or ""
@@ -1685,8 +1708,10 @@ def _load_frete_data(org_id: str) -> tuple[pd.DataFrame, dict[str, object], str]
             )
             if (fontes.vendas_url or "").strip():
                 info_fb["frete_vendas_from_url"] = True
-            elif fontes.vendas_path:
-                info_fb["frete_fonte_local_path"] = str(fontes.vendas_path.resolve())
+            else:
+                cap = _frete_local_vendas_caption(fontes)
+                if cap:
+                    info_fb["frete_fonte_local_path"] = cap
             if (
                 _is_admin_mode()
                 and _frete_consume_mode() == "materialized"
@@ -1710,11 +1735,6 @@ def _load_frete_data(org_id: str) -> tuple[pd.DataFrame, dict[str, object], str]
         )
 
     try:
-        v_ns = (
-            stable_mtime_ns_for_frete_url(fontes.vendas_url)
-            if (fontes.vendas_url or "").strip()
-            else int(fontes.vendas_path.stat().st_mtime_ns)
-        )
         frete_ref = (fontes.frete_url or "").strip() or (
             str(fontes.frete_path.resolve())
             if fontes.frete_path and fontes.frete_path.is_file()
@@ -1749,12 +1769,7 @@ def _load_frete_data(org_id: str) -> tuple[pd.DataFrame, dict[str, object], str]
         "loaded_at": _loaded_at,
         "source_signature": _sig_store,
     }
-    ts_live = _now_ts_br_str()
-    if fontes.vendas_path and fontes.vendas_path.is_file():
-        try:
-            ts_live = _frete_ts_for_path(fontes.vendas_path)
-        except OSError:
-            pass
+    ts_live = _frete_ts_live_from_fontes(fontes)
     consume = "live_fallback" if (_mat_try and mat_load_error is not None) else "live"
     fb_err = ""
     if mat_load_error:
@@ -1768,8 +1783,10 @@ def _load_frete_data(org_id: str) -> tuple[pd.DataFrame, dict[str, object], str]
     )
     if (fontes.vendas_url or "").strip():
         info_out["frete_vendas_from_url"] = True
-    elif fontes.vendas_path:
-        info_out["frete_fonte_local_path"] = str(fontes.vendas_path.resolve())
+    else:
+        cap = _frete_local_vendas_caption(fontes)
+        if cap:
+            info_out["frete_fonte_local_path"] = cap
     if (
         _is_admin_mode()
         and _frete_consume_mode() == "materialized"

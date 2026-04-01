@@ -20,7 +20,7 @@ import time
 import unicodedata
 from io import BytesIO
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, Sequence
 
 import numpy as np
 import pandas as pd
@@ -556,6 +556,9 @@ class FontesFrete(NamedTuple):
     """Fontes para o painel de Frete: pastas locais (FDL_BASE_DIR) ou URLs (Secrets Cloud)."""
 
     vendas_path: Path | None
+    """Primeiro ficheiro ML válido (mais recente por mtime entre os elegíveis); representativo na UI."""
+    vendas_paths: tuple[Path, ...]
+    """Todos os exports ML válidos sob a pasta de vendas (vários períodos / subpastas), ordem mtime desc."""
     frete_path: Path | None
     vendas_url: str
     frete_url: str
@@ -795,21 +798,36 @@ def _cmap_sufficient_for_frete_ml(cmap: dict[str, str]) -> bool:
     return base.issubset(cmap.keys())
 
 
-def _latest_vendas_ml_path(folder: Path) -> Path | None:
+def _aggregate_mtime_ns_for_frete_paths(paths: Sequence[Path]) -> int:
+    """Chave estável para @st.cache_data quando há vários ficheiros de vendas ML."""
+    h = 14695981039346656037
+    for p in paths:
+        try:
+            ns = int(p.stat().st_mtime_ns)
+        except OSError:
+            ns = 0
+        h ^= ns & 0xFFFFFFFFFFFFFFFF
+        h = (h * 1099511628211) & 0xFFFFFFFFFFFFFFFF
+    return int(h & 0x7FFFFFFFFFFFFFFF)
+
+
+def _collect_vendas_ml_paths_for_frete(folder: Path) -> list[Path]:
     """
-    Escolhe vendas para o módulo Frete. ``list_sales_files`` já ordena por mtime (mais recente primeiro).
-    Não usar só o ficheiro mais recente: pastas do cliente podem misturar exports Bling/repasse (colunas
-    «Data», «Número»…) com o CSV/xlsx «Pedidos» do ML; o mais recente por vezes é o errado.
+    Todos os ficheiros sob a pasta de vendas ML com schema de frete (como liberações: vários períodos).
+    ``list_sales_files`` ordena por mtime (mais recente primeiro); a mesma ordem define prioridade em
+    duplicados de N.º venda (mantém-se o export mais recente).
     """
     if not folder.is_dir():
-        return None
+        return []
     try:
         files = [p for p in list_sales_files(folder) if p.suffix.lower() in {".xlsx", ".xls", ".csv"}]
     except OSError:
-        return None
+        return []
     if not files:
-        return None
-    _max_probe = 48
+        return []
+    _max_probe = 120
+    seen: set[str] = set()
+    valid: list[Path] = []
     for p in files[:_max_probe]:
         try:
             df = read_sales_file(p)
@@ -823,19 +841,41 @@ def _latest_vendas_ml_path(folder: Path) -> Path | None:
         except Exception:
             continue
         if _cmap_sufficient_for_frete_ml(cmap):
-            return p
-    # Pastas com export «Pedidos» (resumo) + outros CSV mais recentes: preferir «Pedidos» para mensagem de erro
-    # clara no loader; se não houver, compat. com o comportamento antigo (ficheiro mais recente).
+            key = str(p.resolve())
+            if key not in seen:
+                seen.add(key)
+                valid.append(p)
+    if valid:
+        return valid
     pedidos = [p for p in files if "pedidos" in p.name.lower()]
     if pedidos:
         try:
-            return max(pedidos, key=lambda x: x.stat().st_mtime)
+            return [max(pedidos, key=lambda x: x.stat().st_mtime)]
         except OSError:
             pass
     try:
-        return max(files, key=lambda p: p.stat().st_mtime)
+        return [max(files, key=lambda p: p.stat().st_mtime)]
     except OSError:
-        return None
+        return []
+
+
+def frete_vendas_loader_args(fontes: FontesFrete) -> tuple[str | tuple[str, ...], int]:
+    """
+    Referência(s) e chave mtime para ``carregar_base_frete_ml`` / ``carregar_tabela_final_frete_operacional``.
+    Vários ficheiros locais devolvem ``tuple[str, ...]`` (paths resolvidos) e agregado de mtimes.
+    """
+    if (fontes.vendas_url or "").strip():
+        u = fontes.vendas_url.strip()
+        return u, stable_mtime_ns_for_frete_url(u)
+    paths = [p for p in fontes.vendas_paths if p.is_file()]
+    if not paths and fontes.vendas_path is not None and fontes.vendas_path.is_file():
+        paths = [fontes.vendas_path]
+    if not paths:
+        return "", 0
+    if len(paths) == 1:
+        p0 = paths[0]
+        return str(p0.resolve()), int(p0.stat().st_mtime_ns)
+    return tuple(str(p.resolve()) for p in paths), _aggregate_mtime_ns_for_frete_paths(paths)
 
 
 def _find_frete_anuncio_path(base: Path) -> Path | None:
@@ -1033,7 +1073,7 @@ def _try_read_tabular_frete_anuncio(path: Path) -> pd.DataFrame | None:
 @st.cache_data(show_spinner=False, ttl=120)
 def carregar_base_frete_ml(
     _org_id: str,
-    vendas_path_str: str,
+    vendas_ref: str | tuple[str, ...],
     vendas_mtime_ns: int,
     frete_path_str: str | None,
     frete_mtime_ns: int | None,
@@ -1055,38 +1095,79 @@ def carregar_base_frete_ml(
         elapsed = time.perf_counter() - t_global
         meta["debug_logs"].append(f"[{elapsed:7.2f}s] {msg}")
 
-    if _is_http_url(vendas_path_str):
+    def _local_path_to_canonical_v(local_path: Path) -> pd.DataFrame:
+        t_parse = time.perf_counter()
+        raw = read_sales_file(local_path)
+        _dbg(
+            f"parse_vendas path={local_path.name} tempo={time.perf_counter() - t_parse:.2f}s"
+        )
+        raw = raw.dropna(axis=1, how="all")
+        _dbg(f"colunas_vendas[{local_path.name}]={list(raw.columns)}")
+        cmap_local = _resolve_columns(raw)
+        _dbg(f"colunas_detectadas[{local_path.name}]={cmap_local}")
+        if not _cmap_sufficient_for_frete_ml(cmap_local):
+            miss = sorted(
+                {"n_venda", "receita_envio", "unidades", "id_anuncio"}
+                - set(cmap_local.keys())
+            )
+            if miss:
+                _dbg(f"colunas_obrigatorias_faltando[{local_path.name}]={miss}")
+            raise ValueError(
+                "Relatório de vendas ML sem colunas necessárias. "
+                f"Ficheiro: {local_path.name}. Falta: {miss}. "
+                f"Primeiras colunas: {list(raw.columns)[:20]}"
+            )
+        return raw.rename(columns={cmap_local[k]: k for k in cmap_local}).copy()
+
+    if isinstance(vendas_ref, tuple):
+        if not vendas_ref:
+            raise ValueError("Lista de ficheiros de vendas ML vazia.")
+        _dbg(f"origem_vendas=local_multi n={len(vendas_ref)}")
+        parts: list[pd.DataFrame] = []
+        names: list[str] = []
+        for ps in vendas_ref:
+            lp = Path(ps)
+            if not lp.is_file():
+                raise FileNotFoundError(f"Vendas ML não encontrado: {lp}")
+            parts.append(_local_path_to_canonical_v(lp))
+            names.append(lp.name)
+        v = pd.concat(parts, ignore_index=True)
+        nk = v["n_venda"].astype(str).str.strip().str.upper()
+        v = v.assign(__nk=nk).drop_duplicates(subset=["__nk"], keep="first").drop(columns=["__nk"])
+        meta["vendas_arquivo"] = ", ".join(names[:8]) + (" …" if len(names) > 8 else "")
+        meta["vendas_arquivos"] = names
+        meta["vendas_concat_n_fontes"] = len(names)
+    elif _is_http_url(vendas_ref):
         _dbg("origem_vendas=url")
         t_dl = time.perf_counter()
-        payload_v, fn_v, _lm_v = _download_frete_payload(vendas_path_str.strip(), debug_log=_dbg)
+        payload_v, fn_v, _lm_v = _download_frete_payload(vendas_ref.strip(), debug_log=_dbg)
         del _lm_v
         _dbg(f"download_vendas_total={time.perf_counter() - t_dl:.2f}s")
         t_parse = time.perf_counter()
         df = _read_vendas_ml_bytes(payload_v, fn_v)
         _dbg(f"parse_vendas_total={time.perf_counter() - t_parse:.2f}s")
         meta["vendas_arquivo"] = fn_v or "vendas_ml_remoto"
-    else:
-        _dbg(f"origem_vendas=local path={vendas_path_str}")
-        meta["vendas_arquivo"] = Path(vendas_path_str).name
-        t_parse = time.perf_counter()
-        df = read_sales_file(Path(vendas_path_str))
-        _dbg(f"parse_vendas_total={time.perf_counter() - t_parse:.2f}s")
-    df = df.dropna(axis=1, how="all")
-    _dbg(f"colunas_vendas={list(df.columns)}")
-    cmap = _resolve_columns(df)
-    _dbg(f"colunas_detectadas={cmap}")
-    if not _cmap_sufficient_for_frete_ml(cmap):
-        miss = sorted(
-            {"n_venda", "receita_envio", "unidades", "id_anuncio"}
-            - set(cmap.keys())
-        )
-        if miss:
-            _dbg(f"colunas_obrigatorias_faltando={miss}")
+        df = df.dropna(axis=1, how="all")
+        _dbg(f"colunas_vendas={list(df.columns)}")
+        cmap = _resolve_columns(df)
+        _dbg(f"colunas_detectadas={cmap}")
+        if not _cmap_sufficient_for_frete_ml(cmap):
+            miss = sorted(
+                {"n_venda", "receita_envio", "unidades", "id_anuncio"}
+                - set(cmap.keys())
+            )
+            if miss:
+                _dbg(f"colunas_obrigatorias_faltando={miss}")
             raise ValueError(
                 "Relatório de vendas ML sem colunas necessárias. "
                 f"Falta: {miss}. Primeiras colunas: {list(df.columns)[:20]}"
             )
-    v = df.rename(columns={cmap[k]: k for k in cmap})
+        v = df.rename(columns={cmap[k]: k for k in cmap})
+    else:
+        _dbg(f"origem_vendas=local path={vendas_ref}")
+        lp = Path(vendas_ref)
+        meta["vendas_arquivo"] = lp.name
+        v = _local_path_to_canonical_v(lp)
 
     v = v.copy()
     ta_ser = v["tarifas_envio"] if "tarifas_envio" in v.columns else None
@@ -1248,7 +1329,7 @@ def carregar_base_frete_ml(
 
 def carregar_tabela_final_frete_operacional(
     org_id: str,
-    vendas_path_str: str,
+    vendas_ref: str | tuple[str, ...],
     vendas_mtime_ns: int,
     frete_path_str: str | None,
     frete_mtime_ns: int | None,
@@ -1258,7 +1339,7 @@ def carregar_tabela_final_frete_operacional(
     carregar_base_frete_ml, com validação de schema operacional).
     """
     df, meta = carregar_base_frete_ml(
-        org_id, vendas_path_str, vendas_mtime_ns, frete_path_str, frete_mtime_ns
+        org_id, vendas_ref, vendas_mtime_ns, frete_path_str, frete_mtime_ns
     )
     validate_frete_operacional_dataframe(df)
     return df, meta
@@ -1269,17 +1350,19 @@ def descobrir_fontes_frete(base_dir: Path | None = None) -> FontesFrete:
     Fontes para construir a tabela operacional de frete (automático, como a tabela final do repasse).
 
     - Cloud: `FDL_FRETE_VENDAS_URL` e opcionalmente `FDL_FRETE_ANUNCIO_URL` nos Secrets.
-    - Local: último ficheiro .xlsx/.xls/.csv em `Vendas - Mercado Livre` ou `Vendas_ML` sob a base
-      do cliente e planilha «Frete por Anúncio» na raiz ou subpastas (ver `_find_frete_anuncio_path`).
+    - Local: **todos** os exports ML válidos (vários períodos / subpastas) em `Vendas - Mercado Livre` ou
+      `Vendas_ML`, concatenados no loader; planilha «Frete por Anúncio» na raiz ou subpastas.
     """
     vendas_url = _frete_secret_str("FDL_FRETE_VENDAS_URL", "FDL_FRETE_PRECOMPUTED_URL")
     frete_url = _frete_secret_str("FDL_FRETE_ANUNCIO_URL")
     root = base_dir or CLIENTE_BASE_DIR
     vendas_dir = resolve_pasta_vendas_ml(root)
-    v_local = None if vendas_url else _latest_vendas_ml_path(vendas_dir)
+    collected: list[Path] = [] if vendas_url else _collect_vendas_ml_paths_for_frete(vendas_dir)
+    v_local = collected[0] if collected else None
     f_local = None if frete_url else _find_frete_anuncio_path(root)
     return FontesFrete(
         vendas_path=v_local,
+        vendas_paths=tuple(collected),
         frete_path=f_local,
         vendas_url=vendas_url,
         frete_url=frete_url,

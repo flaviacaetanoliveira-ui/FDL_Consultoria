@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-01T11:49:47Z",
+  "generated_at": "2026-04-01T14:23:13Z",
   "source_signature": "e3738c145f0ff9c45123bbd7e8b6e380",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
@@ -89,6 +89,9 @@
     "vendas_url": false,
     "frete_url": false,
     "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Vendas_ML\\2026\\Gama Home - Vendas ML 2026.xlsx",
+    "vendas_paths": [
+      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Vendas_ML\\2026\\Gama Home - Vendas ML 2026.xlsx"
+    ],
     "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Gama Home - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {

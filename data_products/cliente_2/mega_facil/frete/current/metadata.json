@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-01T11:51:06Z",
-  "source_signature": "39356a24a66d39c492670b601a889616",
+  "generated_at": "2026-04-01T14:23:08Z",
+  "source_signature": "4322870c55c4b519e93e1f8e68f1fb68",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_facil",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_facil",
   "cnpj": null,
-  "row_count": 3552,
+  "row_count": 18803,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -74,6 +74,7 @@
     "Reclamação aberta",
     "Reclamação encerrada",
     "Em mediação",
+    "Unidades.2",
     "Frete cobrado",
     "Qtd × preço unit. produto (ML)",
     "_data_venda_dt",
@@ -92,13 +93,17 @@
     "vendas_url": false,
     "frete_url": false,
     "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Vendas_ML\\2026\\Mega Facil - Vendas ML 2026.xlsx",
+    "vendas_paths": [
+      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Vendas_ML\\2026\\Mega Facil - Vendas ML 2026.xlsx",
+      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Vendas_ML\\2025\\Mega Facil - Vendas ML 2025.xlsx"
+    ],
     "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Mega Facil - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
-    "vendas_arquivo": "Mega Facil - Vendas ML 2026.xlsx",
+    "vendas_arquivo": "Mega Facil - Vendas ML 2026.xlsx, Mega Facil - Vendas ML 2025.xlsx",
     "frete_arquivo": "Mega Facil - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 3552,
+    "linhas": 18803,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

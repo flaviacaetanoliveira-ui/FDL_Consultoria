@@ -3258,20 +3258,30 @@ def _render_faturamento_dre_visao_geral(df: pd.DataFrame, load_info: dict[str, o
         with rp[4]:
             st.metric("Pedidos atendidos", _fmt_int_ptbr(agg["pedidos_atendidos_distintos"]))
 
+    _n_ok_custo_vg = max(0, n_lin - n_sem)
     if n_sem > 0:
         ratio = (n_sem / n_lin) if n_lin else 0.0
+        _msg_custo = (
+            f"**{_n_ok_custo_vg}** linhas com custo alocado; **{n_sem}** exceções sem custo.\n\n"
+            "O resultado total considera apenas linhas com custo."
+        )
         if ratio > 0.10:
-            st.info(
-                f"**Custo:** **{n_sem}** de **{n_lin}** linhas sem **Status_Custo** = CUSTO_OK. "
-                "Nessas linhas o **Resultado** do materializado fica vazio e **não entra** na soma do resultado — "
-                "a margem principal reflete sobretudo linhas com custo alocado."
-            )
+            st.info(_msg_custo)
         else:
-            st.caption(
-                f"**Custo:** **{n_sem}** linha(s) sem CUSTO_OK; o **Resultado** total agrega apenas linhas com valor numérico."
-            )
+            st.caption(_msg_custo)
+    elif n_lin > 0:
+        st.caption(
+            f"**{_n_ok_custo_vg}** linhas com custo alocado. O resultado total considera apenas linhas com custo."
+        )
 
     with st.expander("Outras métricas e definições", expanded=False):
+        _n_ic = (
+            int(df["faturamento_consolidado"].fillna(False).astype(bool).sum())
+            if "faturamento_consolidado" in df.columns
+            else 0
+        )
+        st.metric("Itens consolidados (visão NF)", _fmt_int_ptbr(_n_ic))
+        st.caption("Contagem de linhas em visão consolidada de NF (filtros do detalhamento).")
         o1 = st.columns(4)
         with o1[0]:
             st.metric("Desconto comercial", _fmt_brl_ptbr_celula(agg["desconto_comercial"]))
@@ -3908,43 +3918,46 @@ def _painel_faturamento(
             "(Receita_Bruta do materializado, ou preço × quantidade); alinhado à coluna **Receita (produto)** na tabela. "
             "Com custo alocado na maior parte das linhas, **Resultado total** e **Margem %** passam a refletir margem real."
         )
-    _fdl_ui_gap_section()
-    fk1, fk2, fk3, fk4, fk5 = st.columns(5)
-    with fk1:
+    _fdl_ui_gap_tight() if mvp_rotulos_bloco_dre else _fdl_ui_gap_section()
+    if mvp_rotulos_bloco_dre:
+        fk1, fk2, fk3, fk4 = st.columns(4)
+        _fk = [fk1, fk2, fk3, fk4]
+    else:
+        fk1, fk2, fk3, fk4, fk5 = st.columns(5)
+        _fk = [fk1, fk2, fk3, fk4, fk5]
+    with _fk[0]:
         st.metric(
             "Receita bruta" if mvp_rotulos_bloco_dre else "Receita por Produtos",
             _fmt_brl_ptbr_celula(receita_sum),
         )
-    with fk2:
+    with _fk[1]:
         st.metric("Resultado Total", _fmt_brl_ptbr_celula(res_sum))
-    with fk3:
+    with _fk[2]:
         if receita_sum == 0 or (isinstance(margem_total, float) and math.isnan(margem_total)):
             st.metric("Margem Total %", "—")
         else:
             st.metric("Margem Total %", f"{margem_total * 100:.2f}%".replace(".", ","))
-    with fk4:
-        st.metric("Itens Consolidados", _fmt_int_ptbr(n_cons))
-    with fk5:
-        st.metric("Alertas Ativos", _fmt_int_ptbr(n_alert))
+    if mvp_rotulos_bloco_dre:
+        with _fk[3]:
+            st.metric("Alertas Ativos", _fmt_int_ptbr(n_alert))
+    else:
+        with _fk[3]:
+            st.metric("Itens Consolidados", _fmt_int_ptbr(n_cons))
+        with _fk[4]:
+            st.metric("Alertas Ativos", _fmt_int_ptbr(n_alert))
 
     if "Status_Custo" in filt.columns:
         _stc = filt["Status_Custo"].astype(str).str.strip()
         _n_ok_f = int(_stc.eq("CUSTO_OK").sum())
-        _n_sem_f = int(_stc.eq("SKU_SEM_CORRESPONDENCIA").sum())
-        _nf = len(filt)
-        if _n_sem_f == 0:
+        _n_exc_f = int(len(filt) - _n_ok_f)
+        if _n_exc_f == 0:
             st.caption(
-                f"No recorte: **{_n_ok_f}** linhas com custo (CUSTO_OK). **Resultado total** inclui todas as linhas com custo neste filtro."
-            )
-        elif _n_sem_f <= max(10, int(0.1 * _nf)):
-            st.caption(
-                f"No recorte: **{_n_ok_f}** CUSTO_OK, **{_n_sem_f}** sem correspondência (exceção). "
-                "O **Resultado total** agrega sobretudo linhas com custo; linhas sem custo não somam margem."
+                f"**{_n_ok_f}** linhas com custo alocado. O resultado total considera apenas linhas com custo."
             )
         else:
             st.caption(
-                f"No recorte: **{_n_ok_f}** linhas com custo, **{_n_sem_f}** sem correspondência de SKU. "
-                "Onde não há custo, o resultado da linha fica vazio."
+                f"**{_n_ok_f}** linhas com custo alocado; **{_n_exc_f}** exceções sem custo.\n\n"
+                "O resultado total considera apenas linhas com custo."
             )
     else:
         st.caption("O mesmo recorte aplica-se à tabela seguinte.")
@@ -3975,7 +3988,7 @@ def _painel_faturamento(
         ("SKU", filt["Código"]),
         ("Produto", filt[prod_col].astype(str) if prod_col else pd.Series("", index=_ix)),
         ("Receita bruta", receita_linha),
-        ("Valor total (receita líquida)", pd.to_numeric(filt["Valor total"], errors="coerce")),
+        ("Receita líquida", pd.to_numeric(filt["Valor total"], errors="coerce")),
         ("Resultado", pd.to_numeric(filt[res_col], errors="coerce")),
         ("Resultado %", rpct * 100.0),
     ]
@@ -3994,12 +4007,6 @@ def _painel_faturamento(
             if "Data do faturamento" in filt.columns
             else pd.Series("—", index=_ix),
         ),
-        (
-            "Ref. ML (col. Número)",
-            _faturamento_disp_texto_sem_none(filt["Número"])
-            if "Número" in filt.columns
-            else pd.Series("—", index=_ix),
-        ),
         ("NF emitida?", _faturamento_disp_texto_sem_none(filt["Existe Nota Fiscal gerada"])),
         ("N.º da nota", _faturamento_disp_texto_sem_none(filt["Número da nota"])),
     ]
@@ -4014,12 +4021,20 @@ def _painel_faturamento(
             ("Despesas fixas", pd.to_numeric(filt["Despesas Fixas"], errors="coerce")),
         ]
     )
+    _tail.append(
+        (
+            "Ref. ML (col. Número)",
+            _faturamento_disp_texto_sem_none(filt["Número"])
+            if "Número" in filt.columns
+            else pd.Series("—", index=_ix),
+        )
+    )
     disp = pd.concat([disp, pd.DataFrame(dict(_tail))], axis=1)
 
     _cfg: dict[str, NumberColumn | TextColumn] = {}
     money_cols = (
         "Receita bruta",
-        "Valor total (receita líquida)",
+        "Receita líquida",
         "Custo do produto",
         "Frete",
         "Comissão Plataforma",
@@ -4029,7 +4044,14 @@ def _painel_faturamento(
     )
     for c in money_cols:
         if c in disp.columns:
-            _cfg[c] = NumberColumn(c, format="R$ %,.2f")
+            if c == "Receita líquida":
+                _cfg[c] = NumberColumn(
+                    c,
+                    format="R$ %,.2f",
+                    help="Fonte no materializado: coluna **Valor total**.",
+                )
+            else:
+                _cfg[c] = NumberColumn(c, format="R$ %,.2f")
     if "Resultado %" in disp.columns:
         _cfg["Resultado %"] = NumberColumn("Resultado %", format="%.2f%%")
     if "Quantidade" in disp.columns:
@@ -4057,8 +4079,9 @@ def _painel_faturamento(
 
     st.subheader("Tabela principal")
     st.caption(
-        f"{len(disp)} linhas · ordenação: **Resultado** (ascendente). "
-        "Colunas à esquerda: leitura operacional; à direita: identificadores extra, NF e custos de composição. "
+        f"{len(disp)} linhas · **Resultado** ascendente. "
+        "À esquerda: operação do dia; à direita: NF, quantidade e composição de custos/taxas (**Ref. ML** no fim). "
+        "**Receita líquida** = coluna **Valor total** (ver ajuda no cabeçalho da coluna). "
         "**Pedido** = multiloja se existir, senão n.º do pedido."
     )
     st.dataframe(

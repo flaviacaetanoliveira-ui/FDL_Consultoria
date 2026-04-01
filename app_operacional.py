@@ -40,6 +40,17 @@ from operacional_app_context import (
     organizacao_por_nome_cadastrado,
     require_app_user,
 )
+
+# MVP Faturamento & DRE: área de produto separada de Financeiro (Repasse/Frete).
+SESSION_FDL_PRODUCT_AREA_KEY = "fdl_product_area"
+FDL_PRODUCT_AREA_FINANCEIRO = "financeiro"
+FDL_PRODUCT_AREA_FATURAMENTO_DRE = "faturamento_dre"
+
+# Filtros globais / escopo de carga (MVP)
+SESSION_FAT_DRE_ESCOPO_KEY = "fdl_fat_dre_escopo"
+FAT_DRE_ESCOPO_EMPRESA = "empresa_ativa"
+FAT_DRE_ESCOPO_CONSOLIDADO = "consolidado"
+
 from operacional_data_config import DATASET_EMPRESA
 from operacional_frete import (
     FRETE_ML_COL,
@@ -185,6 +196,7 @@ def _dataset_empresa_label() -> str:
 def _enabled_finance_modules() -> set[str]:
     """
     Módulos visíveis na sidebar (default: repasse, frete, faturamento).
+    ``faturamento`` controla o módulo **Faturamento & DRE** (fora do grupo Financeiro).
     Ex.: FDL_ENABLED_FINANCE_MODULES=repasse,frete para clientes sem faturamento.
     """
     raw = os.environ.get("FDL_ENABLED_FINANCE_MODULES", "").strip()
@@ -257,8 +269,36 @@ elif st.session_state["op_financeiro_view"] not in ("repasse", "frete", "faturam
     st.session_state["op_financeiro_view"] = "repasse"
 
 _enabled_modules = _enabled_finance_modules()
+
+# Área de produto: Financeiro (repasse/frete) vs Faturamento & DRE (módulo próprio).
+if SESSION_FDL_PRODUCT_AREA_KEY not in st.session_state:
+    if st.session_state.get("op_financeiro_view") == "faturamento":
+        st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FATURAMENTO_DRE
+        st.session_state["op_financeiro_view"] = "repasse"
+    else:
+        st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FINANCEIRO
+# Migração de sessões antigas que ainda tinham só op_financeiro_view == faturamento
+if st.session_state.get("op_financeiro_view") == "faturamento":
+    st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FATURAMENTO_DRE
+    st.session_state["op_financeiro_view"] = "repasse"
+if st.session_state["op_financeiro_view"] not in ("repasse", "frete"):
+    st.session_state["op_financeiro_view"] = "repasse"
+
 if st.session_state["op_financeiro_view"] not in _enabled_modules:
     st.session_state["op_financeiro_view"] = "repasse" if "repasse" in _enabled_modules else "frete"
+
+if (
+    "faturamento" not in _enabled_modules
+    and st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY) == FDL_PRODUCT_AREA_FATURAMENTO_DRE
+):
+    st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FINANCEIRO
+
+if (
+    "faturamento" in _enabled_modules
+    and st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY) == FDL_PRODUCT_AREA_FATURAMENTO_DRE
+):
+    if SESSION_FAT_DRE_ESCOPO_KEY not in st.session_state:
+        st.session_state[SESSION_FAT_DRE_ESCOPO_KEY] = FAT_DRE_ESCOPO_EMPRESA
 
 _fdl_global_trace("03: após definir vista financeiro (session_state)")
 
@@ -334,14 +374,16 @@ def _sb_user_initials(display_name: str) -> str:
 
 def _sb_nav_set_repasse() -> None:
     st.session_state["op_financeiro_view"] = "repasse"
+    st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FINANCEIRO
 
 
 def _sb_nav_set_frete() -> None:
     st.session_state["op_financeiro_view"] = "frete"
+    st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FINANCEIRO
 
 
-def _sb_nav_set_faturamento() -> None:
-    st.session_state["op_financeiro_view"] = "faturamento"
+def _sb_nav_set_faturamento_dre() -> None:
+    st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FATURAMENTO_DRE
 
 
 def _sb_logout_click() -> None:
@@ -618,17 +660,24 @@ def _fdl_ui_gap_section_lg() -> None:
     st.markdown('<div class="fdl-ui-gap-section-lg" aria-hidden="true"></div>', unsafe_allow_html=True)
 
 
-def _render_financeiro_header(*, segment: str, title: str, subtitle: str = "") -> None:
+def _render_financeiro_header(
+    *,
+    segment: str,
+    title: str,
+    subtitle: str = "",
+    kicker_area: str = "Financeiro",
+) -> None:
     """Topo unificado: evita repetir o nome do cliente (já na barra lateral)."""
     esc_seg = html.escape(segment)
     esc_title = html.escape(title)
+    esc_ka = html.escape((kicker_area or "Financeiro").strip() or "Financeiro")
     esc_sub = html.escape((subtitle or "").strip())
     sub_html = ""
     if esc_sub:
         sub_html = f'<p class="fdl-header-sub">{esc_sub}</p>'
     st.markdown(
         f'<div class="fdl-financeiro-header">'
-        f'<p class="fdl-header-kicker">Financeiro · {esc_seg}</p>'
+        f'<p class="fdl-header-kicker">{esc_ka} · {esc_seg}</p>'
         f'<h1 class="fdl-header-title">{esc_title}</h1>'
         f"{sub_html}"
         f"</div>",
@@ -960,6 +1009,19 @@ def _faturamento_apply_layout_scope(
     return out, None
 
 
+def _faturamento_apply_layout_scope_consolidado_v2(
+    df: pd.DataFrame, *, allowed_org_ids: frozenset[str]
+) -> tuple[pd.DataFrame, str | None]:
+    """V2: todas as orgs permitidas ao utilizador (não a org ativa da sidebar)."""
+    if "org_id" not in df.columns:
+        return df.copy(), "Layout v2: coluna org_id ausente — consolidado sem filtro por org."
+    if not allowed_org_ids:
+        return df.iloc[0:0].copy(), None
+    oid_s = df["org_id"].astype(str).str.strip()
+    out = df.loc[oid_s.isin(allowed_org_ids)].copy()
+    return out, None
+
+
 def _load_faturamento_file_from_disk(path: Path) -> pd.DataFrame:
     if not path.is_file():
         raise FileNotFoundError(f"Ficheiro de faturamento não encontrado: {path}")
@@ -1006,10 +1068,16 @@ def _faturamento_ts_for_path(path: Path) -> str:
         return _now_ts_br_str()
 
 
-def _load_faturamento_data(active_org_id: str) -> tuple[pd.DataFrame, dict[str, object], str]:
+def _load_faturamento_data(
+    active_org_id: str,
+    *,
+    scope_consolidado: bool = False,
+    allowed_org_ids: frozenset[str] | None = None,
+) -> tuple[pd.DataFrame, dict[str, object], str]:
     """
     Carrega dataset materializado (path/URL explícitos → V2 canônico → V1 derivado),
-    classifica layout (v1/v2) e aplica escopo por ``org_id`` quando o layout efetivo é v2.
+    classifica layout (v1/v2) e aplica escopo por ``org_id`` (empresa ativa) ou,
+    em modo consolidado, todas as orgs permitidas ao utilizador quando o layout é v2.
     """
     if _faturamento_consume_mode() != "materialized":
         return (
@@ -1059,9 +1127,15 @@ def _load_faturamento_data(active_org_id: str) -> tuple[pd.DataFrame, dict[str, 
             layout_declared=layout_declared,
             df=df0,
         )
-        df_scoped, scope_warn = _faturamento_apply_layout_scope(
-            df0, layout_effective=layout_effective, org_id=active_org_id
-        )
+        aids = allowed_org_ids or frozenset()
+        if scope_consolidado and layout_effective == "v2":
+            df_scoped, scope_warn = _faturamento_apply_layout_scope_consolidado_v2(
+                df0, allowed_org_ids=aids
+            )
+        else:
+            df_scoped, scope_warn = _faturamento_apply_layout_scope(
+                df0, layout_effective=layout_effective, org_id=active_org_id
+            )
         ts = _now_ts_br_str()
         if path_s:
             try:
@@ -1084,6 +1158,11 @@ def _load_faturamento_data(active_org_id: str) -> tuple[pd.DataFrame, dict[str, 
         }
         if scope_warn:
             info["faturamento_scope_note"] = scope_warn
+        info["faturamento_escopo"] = (
+            FAT_DRE_ESCOPO_CONSOLIDADO
+            if scope_consolidado
+            else FAT_DRE_ESCOPO_EMPRESA
+        )
         if "Status_Custo" in df_scoped.columns:
             _vc = (
                 df_scoped["Status_Custo"]
@@ -1130,10 +1209,14 @@ def _faturamento_materialized_source_stat_token() -> str:
     return f"unstat:{path_s[:240]}"
 
 
-def _faturamento_load_cache_signature(org_id: str) -> str:
+def _faturamento_load_cache_signature(
+    org_id: str, *, consolidado: bool, allowed_org_ids_key: str
+) -> str:
     return "|".join(
         [
             str(org_id),
+            "1" if consolidado else "0",
+            str(allowed_org_ids_key),
             str(OPERACIONAL_CACHE_REVISION),
             _faturamento_consume_mode(),
             _faturamento_data_layout(),
@@ -1150,10 +1233,18 @@ def _faturamento_load_cache_signature(org_id: str) -> str:
 
 @st.cache_data(show_spinner=False, ttl=900)
 def _load_faturamento_dataframe_cached(
-    load_signature: str, active_org_id: str
+    load_signature: str,
+    active_org_id: str,
+    consolidado: bool,
+    allowed_org_ids_key: str,
 ) -> tuple[pd.DataFrame, dict[str, object], str]:
     _ = load_signature
-    return _load_faturamento_data(active_org_id)
+    aids = frozenset(
+        x.strip() for x in str(allowed_org_ids_key).split(",") if x.strip()
+    )
+    return _load_faturamento_data(
+        active_org_id, scope_consolidado=consolidado, allowed_org_ids=aids
+    )
 
 
 def _derive_frete_materialized_path_from_repasse_anchor(anchor: str) -> str:
@@ -2954,6 +3045,332 @@ def _faturamento_painel_missing_schema_columns(df: pd.DataFrame) -> list[str]:
     return miss
 
 
+def _faturamento_num_col(df: pd.DataFrame, col: str) -> pd.Series:
+    if col not in df.columns:
+        return pd.Series(0.0, index=df.index, dtype=float)
+    return pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+
+
+def _faturamento_pedido_id_series(df: pd.DataFrame) -> pd.Series:
+    """
+    Chave estável por linha para contagem distinta de pedidos.
+    Usa multiloja quando preenchido; caso contrário ``Número do pedido``.
+    Com ``org_id`` (v2 / consolidado), prefixa a org para evitar colisões entre empresas.
+    """
+    ml = df["Número do pedido multiloja"].fillna("").astype(str).str.strip()
+    ped = df["Número do pedido"].fillna("").astype(str).str.strip()
+    core = ml.mask(ml.eq(""), ped)
+    if "org_id" in df.columns:
+        oid = df["org_id"].fillna("").astype(str).str.strip()
+        return oid + "|" + core
+    return core
+
+
+def _faturamento_atendido_mask(df: pd.DataFrame) -> pd.Series:
+    """Alinhado a ``apply_faturamento_flags``: situação normalizada == «atendido»."""
+    if "Situação" not in df.columns:
+        return pd.Series(False, index=df.index, dtype=bool)
+    situ = df["Situação"].fillna("").astype(str).str.strip().str.casefold()
+    return situ.eq("atendido")
+
+
+def _faturamento_agg_recorte(df: pd.DataFrame) -> dict[str, Any]:
+    """
+    Agregações numéricas do recorte (Visão Geral, KPIs). Independente de Streamlit.
+
+    Definições do módulo (totais no recorte):
+
+    * **Receita bruta** = Σ ``Receita_Bruta`` (via ``_faturamento_painel_receita_series``).
+    * **Receita líquida** = Σ ``Valor total`` quando a coluna existe; caso contrário fallback Σ RB − Σ desconto.
+    * **Desconto comercial** = receita bruta − receita líquida (equivale a Σ ``Desconto proporcional total``
+      quando RB − Desconto − Valor total fecha linha a linha, como no pipeline).
+
+    O **resultado** soma só valores numéricos de ``Resultado`` (linhas sem custo OK ficam vazias no materializado).
+
+    ``diag_plug_rb_desc_vt``: Σ RB − Σ Desconto − Σ VT (só diagnóstico; ~0 em dados consistentes).
+    """
+    out: dict[str, Any] = {
+        "n_linhas": int(len(df)),
+        "receita_bruta": 0.0,
+        "desconto_comercial": 0.0,
+        "receita_liquida": 0.0,
+        "custo_produto": 0.0,
+        "frete": 0.0,
+        "comissao_plataforma": 0.0,
+        "imposto": 0.0,
+        "despesas_fixas": 0.0,
+        "outras_despesas": 0.0,
+        "resultado": 0.0,
+        "margem_principal_pct": float("nan"),
+        "pedidos_atendidos_distintos": 0,
+        "n_linhas_sem_custo_ok": 0,
+        "diag_plug_rb_desc_vt": None,
+    }
+    if df.empty:
+        return out
+    pl_col = "Preço de lista"
+    rb_s = _faturamento_painel_receita_series(df, pl_col).fillna(0.0)
+    out["receita_bruta"] = float(rb_s.sum())
+    desc_col = "Desconto proporcional total"
+    has_vt = "Valor total" in df.columns
+    has_desc = desc_col in df.columns
+    vt_sum = float(_faturamento_num_col(df, "Valor total").sum()) if has_vt else None
+    desc_sum = float(_faturamento_num_col(df, desc_col).sum()) if has_desc else None
+
+    if vt_sum is not None:
+        out["receita_liquida"] = vt_sum
+        out["desconto_comercial"] = float(out["receita_bruta"] - vt_sum)
+    elif desc_sum is not None:
+        out["desconto_comercial"] = desc_sum
+        out["receita_liquida"] = float(out["receita_bruta"] - desc_sum)
+    else:
+        out["desconto_comercial"] = 0.0
+        out["receita_liquida"] = float(out["receita_bruta"])
+
+    if has_vt and has_desc and vt_sum is not None and desc_sum is not None:
+        out["diag_plug_rb_desc_vt"] = float(out["receita_bruta"] - desc_sum - vt_sum)
+    ccol = _faturamento_painel_custo_produto_col(list(df.columns))
+    if ccol and ccol in df.columns:
+        out["custo_produto"] = float(pd.to_numeric(df[ccol], errors="coerce").fillna(0.0).sum())
+    out["frete"] = float(_faturamento_num_col(df, "Custo de Frete").sum())
+    out["comissao_plataforma"] = float(_faturamento_num_col(df, "Taxa de Comissão").sum())
+    out["imposto"] = float(_faturamento_num_col(df, "Imposto").sum())
+    out["despesas_fixas"] = float(_faturamento_num_col(df, "Despesas Fixas").sum())
+    if "Outras Despesas" in df.columns:
+        out["outras_despesas"] = float(_faturamento_num_col(df, "Outras Despesas").sum())
+    res_s = pd.to_numeric(df["Resultado"], errors="coerce") if "Resultado" in df.columns else pd.Series(
+        dtype=float
+    )
+    out["resultado"] = float(res_s.sum(skipna=True))
+    rb = float(out["receita_bruta"])
+    if rb not in (0.0, -0.0) and not math.isnan(rb):
+        out["margem_principal_pct"] = float(out["resultado"] / rb)
+    m_at = _faturamento_atendido_mask(df)
+    if m_at.any():
+        pids = _faturamento_pedido_id_series(df.loc[m_at]).astype(str).str.strip()
+        pids = pids[pids.ne("")]
+        out["pedidos_atendidos_distintos"] = int(pids.nunique()) if len(pids) else 0
+    try:
+        from processing.faturamento.config import STATUS_CUSTO_OK
+    except Exception:
+        STATUS_CUSTO_OK = "CUSTO_OK"
+    if "Status_Custo" in df.columns:
+        sc = df["Status_Custo"].astype(str).str.strip()
+        out["n_linhas_sem_custo_ok"] = int((~sc.eq(STATUS_CUSTO_OK)).sum())
+    return out
+
+
+def _faturamento_visao_geral_chart_por_plataforma(df: pd.DataFrame) -> pd.DataFrame:
+    """Série para gráfico: receita bruta por plataforma (top 12)."""
+    if df.empty or "Nome da plataforma" not in df.columns:
+        return pd.DataFrame()
+    pl_col = "Preço de lista"
+    rb = _faturamento_painel_receita_series(df, pl_col).fillna(0.0)
+    plat = (
+        df["Nome da plataforma"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .replace("", "(sem plataforma)")
+    )
+    g = (
+        pd.DataFrame({"_rb": rb, "_plat": plat})
+        .groupby("_plat", sort=False)["_rb"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(12)
+    )
+    return pd.DataFrame({"Plataforma": g.index.astype(str), "Receita bruta": g.values})
+
+
+def _render_faturamento_dre_visao_geral(df: pd.DataFrame, load_info: dict[str, object]) -> None:
+    """Bloco MVP Visão Geral — mesmo recorte global que o painel detalhado."""
+    if _faturamento_painel_missing_schema_columns(df):
+        return
+    st.subheader("Visão geral")
+    escopo = str(load_info.get("faturamento_escopo", "") or "").strip()
+    escopo_lbl = (
+        "Consolidado (orgs permitidas)"
+        if escopo == FAT_DRE_ESCOPO_CONSOLIDADO
+        else "Empresa ativa"
+        if escopo == FAT_DRE_ESCOPO_EMPRESA
+        else escopo or "—"
+    )
+    st.caption(
+        f"Métricas sobre o **mesmo recorte** dos filtros globais · escopo de carga: **{escopo_lbl}**."
+    )
+    _fdl_ui_gap_section()
+    agg = _faturamento_agg_recorte(df)
+    n_lin = int(agg["n_linhas"])
+    n_sem = int(agg["n_linhas_sem_custo_ok"])
+    if n_lin == 0:
+        st.info("Sem linhas neste recorte — alargue período, situação ou plataforma.")
+        return
+
+    r1 = st.columns(4)
+    with r1[0]:
+        st.metric("Receita bruta", _fmt_brl_ptbr_celula(agg["receita_bruta"]))
+    with r1[1]:
+        st.metric("Receita líquida", _fmt_brl_ptbr_celula(agg["receita_liquida"]))
+    with r1[2]:
+        st.metric("Desconto comercial", _fmt_brl_ptbr_celula(agg["desconto_comercial"]))
+    with r1[3]:
+        st.metric("Linhas no recorte", _fmt_int_ptbr(n_lin))
+
+    st.caption(
+        "**Definições:** receita bruta = Σ **Receita_Bruta**; receita líquida = Σ **Valor total**; "
+        "desconto comercial = receita bruta − receita líquida. "
+        "Com export completo, **Receita_Bruta − Desconto proporcional total** e **Valor total** fecham linha a linha "
+        "(validação do pipeline); totais seguem estas colunas."
+    )
+    _plug = agg.get("diag_plug_rb_desc_vt")
+    if (
+        _plug is not None
+        and _is_admin_mode()
+        and abs(float(_plug)) > max(1.0, 0.001 * max(n_lin, 1))
+    ):
+        st.caption(
+            f"**Admin · diagnóstico:** Σ Receita_Bruta − Σ Desconto prop. − Σ Valor total = **{_plug:,.2f}** "
+            "(esperado ~0; valores altos indicam linhas fora do fecho ou NA em desconto/valor)."
+        )
+
+    r2 = st.columns(4)
+    with r2[0]:
+        st.metric("Custo do produto", _fmt_brl_ptbr_celula(agg["custo_produto"]))
+    with r2[1]:
+        st.metric("Frete", _fmt_brl_ptbr_celula(agg["frete"]))
+    with r2[2]:
+        st.metric("Comissão plataforma", _fmt_brl_ptbr_celula(agg["comissao_plataforma"]))
+    with r2[3]:
+        st.metric("Imposto", _fmt_brl_ptbr_celula(agg["imposto"]))
+
+    r3 = st.columns(4)
+    with r3[0]:
+        st.metric("Despesas fixas", _fmt_brl_ptbr_celula(agg["despesas_fixas"]))
+    with r3[1]:
+        if "Outras Despesas" in df.columns:
+            st.metric("Outras despesas", _fmt_brl_ptbr_celula(agg["outras_despesas"]))
+        else:
+            st.metric("Outras despesas", "—")
+    with r3[2]:
+        st.metric("Resultado", _fmt_brl_ptbr_celula(agg["resultado"]))
+    with r3[3]:
+        mp = agg["margem_principal_pct"]
+        if isinstance(mp, float) and not math.isnan(mp):
+            st.metric("Margem principal", f"{mp * 100:.2f}%".replace(".", ","))
+        else:
+            st.metric("Margem principal", "—")
+
+    r4 = st.columns(4)
+    with r4[0]:
+        st.metric("Pedidos atendidos (distintos)", _fmt_int_ptbr(agg["pedidos_atendidos_distintos"]))
+    with r4[1]:
+        st.metric("Linhas sem custo OK", _fmt_int_ptbr(n_sem))
+
+    if n_sem > 0:
+        ratio = (n_sem / n_lin) if n_lin else 0.0
+        if ratio > 0.10:
+            st.info(
+                f"**Custo:** **{n_sem}** de **{n_lin}** linhas sem **Status_Custo** = CUSTO_OK. "
+                "Nessas linhas o **Resultado** do materializado fica vazio e **não entra** na soma do resultado — "
+                "a margem principal reflete sobretudo linhas com custo alocado."
+            )
+        else:
+            st.caption(
+                f"**Custo:** **{n_sem}** linha(s) sem CUSTO_OK neste recorte; o **Resultado** total agrega apenas linhas com resultado numérico."
+            )
+
+    chart_df = _faturamento_visao_geral_chart_por_plataforma(df)
+    if not chart_df.empty:
+        st.caption("Receita bruta por plataforma (top 12 no recorte).")
+        st.bar_chart(chart_df.set_index("Plataforma"), use_container_width=True)
+
+    _fdl_ui_gap_section()
+
+
+def _faturamento_dre_etiquetas_empresa_recorte(df: pd.DataFrame) -> list[str]:
+    """Rótulos únicos de empresa no recorte (coluna ``empresa``; senão ``org_id``)."""
+    if df.empty:
+        return []
+    if "empresa" in df.columns:
+        u = sorted({str(x).strip() for x in df["empresa"].dropna().unique() if str(x).strip()})
+        if u:
+            return u
+    if "org_id" in df.columns:
+        return sorted({str(x).strip() for x in df["org_id"].dropna().unique() if str(x).strip()})
+    return []
+
+
+def _faturamento_dre_filtrar_por_etiquetas_empresa(df: pd.DataFrame, labels: list[str]) -> pd.DataFrame:
+    if df.empty or not labels:
+        return df
+    if "empresa" in df.columns:
+        em = df["empresa"].fillna("").astype(str).str.strip()
+        return df.loc[em.isin(labels)].copy()
+    if "org_id" in df.columns:
+        oid = df["org_id"].astype(str).str.strip()
+        return df.loc[oid.isin(labels)].copy()
+    return df
+
+
+def _render_faturamento_dre_bloco_por_empresa(
+    df_recorte: pd.DataFrame,
+    load_info: dict[str, object],
+    ts_proc: str,
+    org_id: str,
+) -> None:
+    """E5: painel detalhado como bloco operacional **Faturamento por empresa** (export e alertas inalterados)."""
+    st.subheader("Faturamento por empresa")
+    escopo = str(load_info.get("faturamento_escopo", "") or "").strip()
+    if escopo == FAT_DRE_ESCOPO_CONSOLIDADO:
+        st.caption(
+            "Bloco **operacional** sobre o recorte global: grelha, exportação CSV e filtros de visão NF, alertas e busca. "
+            "A **Visão geral** acima continua agregada em todas as empresas do recorte; aqui pode restringir a uma ou mais empresas."
+        )
+    else:
+        st.caption(
+            "Bloco **operacional** da **empresa ativa**: mesma base filtrada pelo recorte global do módulo, com visão NF, alertas, busca e exportação."
+        )
+    _fdl_ui_gap_section()
+
+    df_painel = df_recorte
+    opts = _faturamento_dre_etiquetas_empresa_recorte(df_recorte)
+    if escopo == FAT_DRE_ESCOPO_CONSOLIDADO and len(opts) > 1:
+        _ekey = f"fdl_fat_dre_painel_emp_{org_id}"
+        if _ekey not in st.session_state:
+            st.session_state[_ekey] = list(opts)
+        else:
+            prev = st.session_state[_ekey]
+            if isinstance(prev, list):
+                st.session_state[_ekey] = [x for x in prev if x in opts]
+            else:
+                st.session_state[_ekey] = list(opts)
+            if not st.session_state[_ekey]:
+                st.session_state[_ekey] = list(opts)
+        _sel = st.multiselect(
+            "Empresas neste bloco",
+            options=opts,
+            key=_ekey,
+            help="Aplica-se só a este bloco (KPIs, tabela e export). A Visão geral não muda.",
+        )
+        df_painel = (
+            _faturamento_dre_filtrar_por_etiquetas_empresa(df_recorte, list(_sel))
+            if _sel
+            else df_recorte.copy()
+        )
+    elif escopo == FAT_DRE_ESCOPO_CONSOLIDADO and len(opts) == 1:
+        st.caption(f"**Uma empresa** no recorte consolidado: **{opts[0]}**.")
+
+    _painel_faturamento(
+        df_painel,
+        load_info,
+        ts_proc,
+        org_id,
+        use_modulo_recorte=True,
+        mvp_rotulos_bloco_dre=True,
+    )
+
+
 def _faturamento_disp_texto_sem_none(s: pd.Series, *, placeholder: str = "—") -> pd.Series:
     """Evita que None/NaN apareçam como o texto «None» no ``st.dataframe`` (colunas opcionais do CSV de pedidos)."""
 
@@ -3072,6 +3489,126 @@ def _faturamento_alertas_text(s: pd.Series) -> str:
     return " · ".join(parts)
 
 
+def _faturamento_dre_global_filter_keys() -> list[str]:
+    return [
+        "fdl_fat_dre_sit",
+        "fdl_fat_dre_d_ini",
+        "fdl_fat_dre_d_fim",
+        "fdl_fat_dre_plat",
+    ]
+
+
+def _render_faturamento_dre_recorte_global(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filtros globais do módulo Faturamento & DRE: Situação (padrão Atendido), Período (Data), Plataforma.
+    Devolve o DataFrame já recortado para o painel.
+    """
+    if df.empty:
+        return df
+    out = df
+    with st.container(border=True):
+        st.subheader("Recorte do módulo")
+        st.caption(
+            "**Situação** (padrão **Atendido**), **período** na coluna **Data** e **plataforma** aplicam-se a todo o módulo. "
+            "O painel abaixo refina só visão NF, alertas e busca."
+        )
+        sits = sorted(
+            {str(x).strip() for x in out["Situação"].dropna().unique() if str(x).strip()}
+        )
+        if "fdl_fat_dre_sit" not in st.session_state:
+            st.session_state["fdl_fat_dre_sit"] = (
+                ["Atendido"] if "Atendido" in sits else ([] if not sits else [sits[0]])
+            )
+        else:
+            prev = st.session_state["fdl_fat_dre_sit"]
+            if isinstance(prev, list):
+                st.session_state["fdl_fat_dre_sit"] = [x for x in prev if x in sits]
+            else:
+                st.session_state["fdl_fat_dre_sit"] = (
+                    ["Atendido"] if "Atendido" in sits else []
+                )
+        st.multiselect(
+            "Situação",
+            sits,
+            key="fdl_fat_dre_sit",
+            help="Por omissão **Atendido**. Se limpar todas as opções, mostram-se todas as situações.",
+        )
+        has_data = "Data" in out.columns
+        if has_data:
+            d_min, d_max, ok_dates = _series_datetime_bounds_dates(out["Data"])
+        else:
+            d_min = d_max = datetime.now(_BR_TZ).date()
+            ok_dates = False
+        r0 = st.columns((1.15, 1.15))
+        if ok_dates:
+            if "fdl_fat_dre_d_ini" not in st.session_state:
+                st.session_state["fdl_fat_dre_d_ini"] = d_min
+            if "fdl_fat_dre_d_fim" not in st.session_state:
+                st.session_state["fdl_fat_dre_d_fim"] = d_max
+            st.session_state["fdl_fat_dre_d_ini"] = min(
+                max(_safe_streamlit_date(st.session_state["fdl_fat_dre_d_ini"], d_min), d_min),
+                d_max,
+            )
+            st.session_state["fdl_fat_dre_d_fim"] = min(
+                max(_safe_streamlit_date(st.session_state["fdl_fat_dre_d_fim"], d_max), d_min),
+                d_max,
+            )
+            with r0[0]:
+                st.date_input(
+                    "Período — início (Data)",
+                    min_value=d_min,
+                    max_value=d_max,
+                    format="DD/MM/YYYY",
+                    key="fdl_fat_dre_d_ini",
+                )
+            with r0[1]:
+                st.date_input(
+                    "Período — fim (Data)",
+                    min_value=d_min,
+                    max_value=d_max,
+                    format="DD/MM/YYYY",
+                    key="fdl_fat_dre_d_fim",
+                )
+        else:
+            if has_data:
+                st.caption(
+                    "A coluna **Data** existe mas sem valores utilizáveis — o filtro por período está desativado."
+                )
+        plats = sorted(
+            {
+                str(x).strip()
+                for x in out["Nome da plataforma"].dropna().unique()
+                if str(x).strip()
+            }
+        )
+        _multiselect_stable("fdl_fat_dre_plat", "Plataforma", plats)
+        sel_plat_g = st.session_state.get("fdl_fat_dre_plat") or []
+        if st.button("Redefinir recorte", key="fdl_fat_dre_reset_recorte"):
+            for _k in _faturamento_dre_global_filter_keys():
+                st.session_state.pop(_k, None)
+            st.rerun()
+
+    sel_sit_g = st.session_state.get("fdl_fat_dre_sit") or []
+    sliced = out.copy()
+    if sel_sit_g:
+        sliced = sliced[sliced["Situação"].isin(sel_sit_g)].copy()
+    if ok_dates:
+        d_ini_g = _safe_streamlit_date(st.session_state.get("fdl_fat_dre_d_ini"), d_min)
+        d_fim_g = _safe_streamlit_date(st.session_state.get("fdl_fat_dre_d_fim"), d_max)
+        if d_fim_g < d_ini_g:
+            st.warning("A data final do recorte não pode ser anterior à inicial.")
+            d_fim_g = d_ini_g
+        d_cmp = pd.to_datetime(sliced["Data"], errors="coerce")
+        dd = d_cmp.dt.normalize()
+        _ini_ts = pd.Timestamp(d_ini_g)
+        _fim_ts = pd.Timestamp(d_fim_g) + pd.Timedelta(days=1)
+        m_d = d_cmp.notna() & (dd >= _ini_ts) & (dd < _fim_ts)
+        sliced = sliced.loc[m_d].copy()
+    if sel_plat_g and "Nome da plataforma" in sliced.columns:
+        sliced = sliced[sliced["Nome da plataforma"].isin(sel_plat_g)].copy()
+    return sliced
+
+
 def _faturamento_filter_keys(org_id: str) -> list[str]:
     oid = str(org_id)
     return [
@@ -3088,9 +3625,19 @@ def _faturamento_filter_keys(org_id: str) -> list[str]:
 _FATURAMENTO_PAINEL_EM_CONSTRUCAO = False
 
 
-def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc: str, org_id: str) -> None:
+def _painel_faturamento(
+    df: pd.DataFrame,
+    _load_info: dict[str, object],
+    ts_proc: str,
+    org_id: str,
+    *,
+    use_modulo_recorte: bool = False,
+    mvp_rotulos_bloco_dre: bool = False,
+) -> None:
     """
     Fase 1 — Faturamento: KPIs, filtros, tabela principal e export CSV (recorte filtrado).
+    Com ``use_modulo_recorte=True``, período/situação/plataforma vêm só do recorte global do módulo.
+    Com ``mvp_rotulos_bloco_dre=True``, rótulos alinham ao bloco **Faturamento por empresa** (MVP DRE).
     """
     if _FATURAMENTO_PAINEL_EM_CONSTRUCAO:
         with st.container(border=True):
@@ -3151,14 +3698,21 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     assert custo_prod_col is not None  # garantido por _faturamento_painel_missing_schema_columns
 
     has_data_col = "Data" in work.columns
-    if has_data_col:
-        d_min, d_max, has_usable_dates = _series_datetime_bounds_dates(work["Data"])
-    else:
-        d_min = d_max = datetime.now(_BR_TZ).date()
+    if use_modulo_recorte:
         has_usable_dates = False
-
-    plats = sorted({str(x).strip() for x in work["Nome da plataforma"].dropna().unique() if str(x).strip()})
-    sits = sorted({str(x).strip() for x in work["Situação"].dropna().unique() if str(x).strip()})
+        d_min = d_max = datetime.now(_BR_TZ).date()
+        plats: list[str] = []
+        sits: list[str] = []
+    else:
+        if has_data_col:
+            d_min, d_max, has_usable_dates = _series_datetime_bounds_dates(work["Data"])
+        else:
+            d_min = d_max = datetime.now(_BR_TZ).date()
+            has_usable_dates = False
+        plats = sorted(
+            {str(x).strip() for x in work["Nome da plataforma"].dropna().unique() if str(x).strip()}
+        )
+        sits = sorted({str(x).strip() for x in work["Situação"].dropna().unique() if str(x).strip()})
 
     _opt_alertas = (
         "Preço lista zero",
@@ -3168,40 +3722,53 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
 
     with st.container(border=True):
         st.subheader("Filtros")
-        st.caption("Período, visão, critérios e busca para refinar o recorte.")
+        if use_modulo_recorte:
+            st.caption(
+                "Neste bloco: visão NF, alertas e busca. **Período**, **situação** e **plataforma** vêm do **Recorte do módulo** acima."
+                if not mvp_rotulos_bloco_dre
+                else "**Faturamento por empresa:** visão NF, alertas e busca. O **Recorte do módulo** (acima) define período, situação e plataforma."
+            )
+        else:
+            st.caption("Período, visão, critérios e busca para refinar o recorte.")
         _fdl_ui_gap_section()
         visao = st.selectbox(
             "Visão",
             ("Todos", "Consolidado", "Com NF", "Sem NF permitido"),
             key=f"fat_visao_{_oid}",
         )
-        r0 = st.columns((1.15, 1.15))
-        if has_usable_dates:
-            with r0[0]:
-                d_ini = st.date_input(
-                    "Período — início (Data)",
-                    value=d_min,
-                    min_value=d_min,
-                    max_value=d_max,
-                    format="DD/MM/YYYY",
-                    key=f"fat_d_ini_{_oid}",
+        if not use_modulo_recorte:
+            r0 = st.columns((1.15, 1.15))
+            if has_usable_dates:
+                with r0[0]:
+                    d_ini = st.date_input(
+                        "Período — início (Data)",
+                        value=d_min,
+                        min_value=d_min,
+                        max_value=d_max,
+                        format="DD/MM/YYYY",
+                        key=f"fat_d_ini_{_oid}",
+                    )
+                with r0[1]:
+                    d_fim = st.date_input(
+                        "Período — fim (Data)",
+                        value=d_max,
+                        min_value=d_min,
+                        max_value=d_max,
+                        format="DD/MM/YYYY",
+                        key=f"fat_d_fim_{_oid}",
+                    )
+            elif has_data_col:
+                st.caption(
+                    "A coluna **Data** existe mas não tem valores parseáveis — o filtro por período está desativado."
                 )
-            with r0[1]:
-                d_fim = st.date_input(
-                    "Período — fim (Data)",
-                    value=d_max,
-                    min_value=d_min,
-                    max_value=d_max,
-                    format="DD/MM/YYYY",
-                    key=f"fat_d_fim_{_oid}",
-                )
-        elif has_data_col:
-            st.caption("A coluna **Data** existe mas não tem valores parseáveis — o filtro por período está desativado.")
-        r1 = st.columns((1.15, 1.15))
-        with r1[0]:
-            sel_plat = _multiselect_stable(f"fat_ms_plat_{_oid}", "Plataforma", plats)
-        with r1[1]:
-            sel_sit = _multiselect_stable(f"fat_ms_sit_{_oid}", "Situação do pedido", sits)
+            r1 = st.columns((1.15, 1.15))
+            with r1[0]:
+                sel_plat = _multiselect_stable(f"fat_ms_plat_{_oid}", "Plataforma", plats)
+            with r1[1]:
+                sel_sit = _multiselect_stable(f"fat_ms_sit_{_oid}", "Situação do pedido", sits)
+        else:
+            sel_plat = []
+            sel_sit = []
         busca = st.text_input(
             "Busca (pedido, multiloja, SKU, n.º da nota)",
             key=f"fat_busca_{_oid}",
@@ -3223,7 +3790,7 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
                 st.session_state.pop(_k, None)
             st.rerun()
 
-    if has_usable_dates:
+    if not use_modulo_recorte and has_usable_dates:
         d_ini = _safe_streamlit_date(d_ini, d_min)
         d_fim = _safe_streamlit_date(d_fim, d_max)
 
@@ -3237,7 +3804,7 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     elif visao == "Sem NF permitido":
         filt = filt[filt["faturamento_sem_nf"].fillna(False).astype(bool)]
 
-    if has_usable_dates:
+    if not use_modulo_recorte and has_usable_dates:
         if d_fim < d_ini:
             st.warning("A data final não pode ser anterior à inicial.")
             d_fim = d_ini
@@ -3248,9 +3815,9 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
         m_d = d_cmp.notna() & (dd >= _ini_ts) & (dd < _fim_ts)
         filt = filt.loc[m_d].copy()
 
-    if sel_plat:
+    if not use_modulo_recorte and sel_plat:
         filt = filt[filt["Nome da plataforma"].isin(sel_plat)]
-    if sel_sit:
+    if not use_modulo_recorte and sel_sit:
         filt = filt[filt["Situação"].isin(sel_sit)]
     if busca:
         m_bus = pd.Series(False, index=filt.index)
@@ -3288,15 +3855,25 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
     n_alert = int(any_alert.sum())
 
     st.subheader("📊 Indicadores")
-    st.caption(
-        "Valores sobre o recorte filtrado. **Receita por Produtos** = soma da receita por linha "
-        "(Receita_Bruta do materializado, ou preço × quantidade); alinhado à coluna **Receita (produto)** na tabela. "
-        "Com custo alocado na maior parte das linhas, **Resultado total** e **Margem %** passam a refletir margem real."
-    )
+    if mvp_rotulos_bloco_dre:
+        st.caption(
+            "Valores **após** os filtros deste bloco (visão NF, alertas, busca). **Receita bruta** = Σ **Receita_Bruta** "
+            "por linha (coluna **Receita (produto)** na grelha). **Resultado total** e **Margem %** seguem a política de "
+            "linhas sem custo (Resultado vazio no materializado)."
+        )
+    else:
+        st.caption(
+            "Valores sobre o recorte filtrado. **Receita por Produtos** = soma da receita por linha "
+            "(Receita_Bruta do materializado, ou preço × quantidade); alinhado à coluna **Receita (produto)** na tabela. "
+            "Com custo alocado na maior parte das linhas, **Resultado total** e **Margem %** passam a refletir margem real."
+        )
     _fdl_ui_gap_section()
     fk1, fk2, fk3, fk4, fk5 = st.columns(5)
     with fk1:
-        st.metric("Receita por Produtos", _fmt_brl_ptbr_celula(receita_sum))
+        st.metric(
+            "Receita bruta" if mvp_rotulos_bloco_dre else "Receita por Produtos",
+            _fmt_brl_ptbr_celula(receita_sum),
+        )
     with fk2:
         st.metric("Resultado Total", _fmt_brl_ptbr_celula(res_sum))
     with fk3:
@@ -4419,7 +4996,11 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 _admin_mode = _is_admin_mode()
 
 _fv = st.session_state["op_financeiro_view"]
-_fdl_global_trace(f"rerun: vista={_fv}")
+_fdl_product_area = str(st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY, FDL_PRODUCT_AREA_FINANCEIRO))
+if _fdl_product_area not in (FDL_PRODUCT_AREA_FINANCEIRO, FDL_PRODUCT_AREA_FATURAMENTO_DRE):
+    _fdl_product_area = FDL_PRODUCT_AREA_FINANCEIRO
+    st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = _fdl_product_area
+_fdl_global_trace(f"rerun: area={_fdl_product_area} vista={_fv}")
 frete_df = pd.DataFrame()
 frete_info: dict[str, object] = {}
 faturamento_df = pd.DataFrame()
@@ -4462,12 +5043,23 @@ if _fv == "frete":
     tabela_geral = pd.DataFrame()
     info = frete_info
     _fdl_global_trace("frete: dados carregados")
-elif _fv == "faturamento":
-    _fdl_global_trace("faturamento: a carregar _load_faturamento_dataframe_cached")
+elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in _enabled_modules:
+    _fat_consolidado = (
+        st.session_state.get(SESSION_FAT_DRE_ESCOPO_KEY, FAT_DRE_ESCOPO_EMPRESA)
+        == FAT_DRE_ESCOPO_CONSOLIDADO
+    )
+    _allowed_org_key = ",".join(sorted(o.org_id for o in _app_ctx.organizations))
+    _fdl_global_trace("faturamento_dre: a carregar _load_faturamento_dataframe_cached")
     with st.spinner("A carregar dados de Faturamento…"):
         faturamento_df, faturamento_info, ts_proc = _load_faturamento_dataframe_cached(
-            _faturamento_load_cache_signature(_active_org.org_id),
+            _faturamento_load_cache_signature(
+                _active_org.org_id,
+                consolidado=_fat_consolidado,
+                allowed_org_ids_key=_allowed_org_key,
+            ),
             _active_org.org_id,
+            _fat_consolidado,
+            _allowed_org_key,
         )
     fc = str(faturamento_info.get("faturamento_consume", "")).strip()
     if fc == "materialized" and _admin_mode:
@@ -4481,9 +5073,14 @@ elif _fv == "faturamento":
         _cnt = faturamento_info.get("faturamento_status_custo_counts")
         if isinstance(_cnt, dict) and _cnt:
             st.caption(
-                f"**Status_Custo** no dataset após filtro de org (validação vs. export): `{_cnt}` · "
+                f"**Status_Custo** após escopo (**{faturamento_info.get('faturamento_escopo', '—')}**): `{_cnt}` · "
                 f"linhas carregadas: **{faturamento_info.get('faturamento_row_count_loaded', '—')}** → "
                 f"**{faturamento_info.get('linhas', '—')}** após escopo."
+            )
+        if faturamento_info.get("faturamento_escopo") == FAT_DRE_ESCOPO_CONSOLIDADO:
+            st.caption(
+                "**Consolidado:** conjunto = todas as organizações permitidas ao utilizador (intersecção com `org_id` no ficheiro). "
+                "A **Empresa** na barra lateral não restringe este conjunto; use **Empresa ativa** no escopo para uma única org."
             )
         st.caption(
             "**V2 canónico:** `data_products/<FDL_MATERIALIZED_CLIENTE_SLUG>/faturamento/current/` — com **CSV e Parquet**, "
@@ -4531,7 +5128,7 @@ elif _fv == "faturamento":
     faturamento_info = {**faturamento_info, "linhas": int(len(faturamento_df))}
     tabela_geral = pd.DataFrame()
     info = faturamento_info
-    _fdl_global_trace(f"faturamento: após filtro empresa ({len(faturamento_df)} linhas)")
+    _fdl_global_trace(f"faturamento_dre: após filtro empresa ({len(faturamento_df)} linhas)")
 else:
     try:
         _fdl_global_trace("repasse: a carregar _load_data (cache por org/config)")
@@ -4602,13 +5199,17 @@ _inject_fdl_professional_theme()
 if _bootstrap_debug_enabled() and _admin_mode:
     with st.expander("Diagnóstico bootstrap (FDL_DEBUG_BOOTSTRAP=1)", expanded=True):
         st.write("**Última etapa:**", st.session_state.get("_fdl_bootstrap_stage", "—"))
-        st.write("**Vista ativa:**", _fv)
+        st.write("**Área:**", _fdl_product_area, "· **Vista financeiro:**", _fv)
         st.write("**Modo seguro (FDL_SAFE_MODE):**", _fdl_safe_mode())
         st.write("**Layout mínimo (FDL_MINIMAL_LAYOUT, omisso=on):**", _fdl_minimal_layout())
         _n_linhas_dbg = (
             len(tabela_geral)
             if _fv == "repasse"
-            else (len(faturamento_df) if _fv == "faturamento" else "— (vista frete)")
+            else (
+                len(faturamento_df)
+                if _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE
+                else "— (vista frete)"
+            )
         )
         st.write("**Linhas tabela_geral (repasse) / faturamento_df:**", _n_linhas_dbg)
         _lg = st.session_state.get("_fdl_bootstrap_log")
@@ -4670,11 +5271,36 @@ with st.sidebar:
                 st.rerun()
 
     _sb_view = st.session_state.get("op_financeiro_view", "repasse")
+    _sb_area = st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY, FDL_PRODUCT_AREA_FINANCEIRO)
     st.caption("Módulos")
 
     _lbl_repasse = "Conciliação de Repasse"
     _lbl_frete = "Conciliação de Frete"
-    _lbl_faturamento = "Faturamento"
+    _lbl_fat_dre = "Faturamento & DRE"
+
+    if "faturamento" in _enabled_modules:
+        with st.container(border=True):
+            st.caption("Faturamento & DRE")
+            st.button(
+                _lbl_fat_dre,
+                key="fdl_mod_faturamento_dre",
+                use_container_width=True,
+                type="primary" if _sb_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE else "secondary",
+                on_click=_sb_nav_set_faturamento_dre,
+            )
+            if _sb_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE:
+                if SESSION_FAT_DRE_ESCOPO_KEY not in st.session_state:
+                    st.session_state[SESSION_FAT_DRE_ESCOPO_KEY] = FAT_DRE_ESCOPO_EMPRESA
+                st.radio(
+                    "Escopo de carregamento",
+                    options=[FAT_DRE_ESCOPO_EMPRESA, FAT_DRE_ESCOPO_CONSOLIDADO],
+                    format_func=lambda x: (
+                        "Empresa ativa (acima)"
+                        if x == FAT_DRE_ESCOPO_EMPRESA
+                        else "Consolidado (orgs permitidas)"
+                    ),
+                    key=SESSION_FAT_DRE_ESCOPO_KEY,
+                )
 
     with st.container(border=True):
         st.caption("Financeiro")
@@ -4683,7 +5309,9 @@ with st.sidebar:
                 _lbl_repasse,
                 key="fdl_mod_repasse",
                 use_container_width=True,
-                type="primary" if _sb_view == "repasse" else "secondary",
+                type="primary"
+                if _sb_area == FDL_PRODUCT_AREA_FINANCEIRO and _sb_view == "repasse"
+                else "secondary",
                 on_click=_sb_nav_set_repasse,
             )
         if "frete" in _enabled_modules:
@@ -4691,16 +5319,10 @@ with st.sidebar:
                 _lbl_frete,
                 key="fdl_mod_frete",
                 use_container_width=True,
-                type="primary" if _sb_view == "frete" else "secondary",
+                type="primary"
+                if _sb_area == FDL_PRODUCT_AREA_FINANCEIRO and _sb_view == "frete"
+                else "secondary",
                 on_click=_sb_nav_set_frete,
-            )
-        if "faturamento" in _enabled_modules:
-            st.button(
-                _lbl_faturamento,
-                key="fdl_mod_faturamento",
-                use_container_width=True,
-                type="primary" if _sb_view == "faturamento" else "secondary",
-                on_click=_sb_nav_set_faturamento,
             )
 
     _ts_parts = str(_sb_ts_display).strip().split(None, 1)
@@ -4743,7 +5365,7 @@ with st.sidebar:
 
 _fdl_global_trace("05: após sidebar — antes do hero / painel principal")
 
-if _fv == "repasse":
+if _fv == "repasse" and _fdl_product_area == FDL_PRODUCT_AREA_FINANCEIRO:
     try:
         _fdl_global_trace("repasse: a preparar base (map_acao / filtros negócio)")
         _acao_baixa = "Baixado" if _repasse_sem_bling() else "Baixar no Bling"
@@ -4781,18 +5403,18 @@ if _fv == "repasse":
 else:
     tabela_operacional_base = pd.DataFrame()
 
-_fv = st.session_state["op_financeiro_view"]
-if _fv == "repasse":
+if _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in _enabled_modules:
+    _render_financeiro_header(
+        segment="Painel",
+        title="Faturamento & DRE",
+        subtitle="Recorte global → Visão geral → Faturamento por empresa (MVP).",
+        kicker_area="Faturamento & DRE",
+    )
+elif _fv == "repasse":
     _render_financeiro_header(
         segment="Repasse",
         title="Conciliação de Repasse",
         subtitle="Recebimentos, notas e divergências numa única vista.",
-    )
-elif _fv == "faturamento":
-    _render_financeiro_header(
-        segment="Faturamento",
-        title="Faturamento",
-        subtitle="Pedidos e notas fiscais consolidados.",
     )
 else:
     _render_financeiro_header(
@@ -4801,7 +5423,7 @@ else:
         subtitle="Frete cobrado na plataforma face ao valor esperado por anúncio.",
     )
 
-if _fv == "repasse":
+if _fv == "repasse" and _fdl_product_area == FDL_PRODUCT_AREA_FINANCEIRO:
     try:
         _fdl_global_trace("repasse: a renderizar _painel_conciliacao_fragment (filtros UI)")
         _painel_conciliacao_fragment(tabela_operacional_base, ts_proc)
@@ -4810,14 +5432,22 @@ if _fv == "repasse":
         _fdl_global_trace(f"repasse: ERRO no painel — {exc.__class__.__name__}")
         st.error("Erro ao renderizar a **Conciliação de Repasse** (filtros ou tabela).")
         st.exception(exc)
-elif _fv == "faturamento":
+elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in _enabled_modules:
     try:
-        _fdl_global_trace("faturamento: a renderizar _painel_faturamento")
-        _painel_faturamento(faturamento_df, faturamento_info, ts_proc, _active_org.org_id)
-        _fdl_global_trace("faturamento: painel concluído")
+        _fdl_global_trace("faturamento_dre: recorte + visão geral + faturamento por empresa")
+        _df_fat_recorte = _render_faturamento_dre_recorte_global(faturamento_df)
+        _render_faturamento_dre_visao_geral(_df_fat_recorte, faturamento_info)
+        st.divider()
+        _render_faturamento_dre_bloco_por_empresa(
+            _df_fat_recorte,
+            faturamento_info,
+            ts_proc,
+            _active_org.org_id,
+        )
+        _fdl_global_trace("faturamento_dre: painel concluído")
     except Exception as exc:
-        _fdl_global_trace(f"faturamento: ERRO no painel — {exc.__class__.__name__}")
-        st.error("Erro ao renderizar o painel de **Faturamento**.")
+        _fdl_global_trace(f"faturamento_dre: ERRO no painel — {exc.__class__.__name__}")
+        st.error("Erro ao renderizar **Faturamento & DRE**.")
         st.exception(exc)
 elif _fv == "frete":
     try:

@@ -57,10 +57,18 @@ def _coalesce_nota_fiscal_em_numero_da_nota(out: pd.DataFrame) -> pd.DataFrame:
         "Número da nota fiscal",
         "Numero da nota fiscal",
         "Nº da nota fiscal",
+        "Nº nota fiscal",
+        "Numero nota fiscal",
+        "Número NF-e",
+        "Numero NF-e",
+        "NF-e número",
+        "NF-e numero",
         "Número NF",
         "Numero NF",
         "NF número",
         "NF numero",
+        "Nota fiscal número",
+        "Nota fiscal numero",
     ):
         if alias in out.columns and alias != col:
             fb = _strip_str_series(out[alias])

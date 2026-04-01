@@ -363,6 +363,24 @@ def _series_datetime_bounds_dates(series: pd.Series) -> tuple[date, date, bool]:
     return t.min().date(), t.max().date(), True
 
 
+def _faturamento_period_calendar_limits(d_min: date, d_max: date) -> tuple[date, date]:
+    """
+    Limites do ``date_input`` mais amplos que o min/max dos dados carregados.
+
+    Sem isto, o utilizador não consegue escolher janeiro→hoje quando a base só tem março
+    (o widget ficava preso a [d_min, d_max] e o estado era re-clampado a cada rerun).
+    O filtro continua a usar só linhas cuja **Data** cai no intervalo escolhido.
+    """
+    today = datetime.now(_BR_TZ).date()
+    cal_max = max(d_max, today)
+    cal_min = min(d_min, today - timedelta(days=3 * 365))
+    return cal_min, cal_max
+
+
+# Rótulo de produto (validação Flávio): coluna continua a ser ``Valor total`` no materializado.
+_FATURAMENTO_UI_VALOR_NOTA_FISCAL = "Valor Nota Fiscal"
+
+
 def _sb_user_initials(display_name: str) -> str:
     """Iniciais para avatar (máx. 2 caracteres)."""
     parts = [p for p in str(display_name).strip().split() if p]
@@ -3129,8 +3147,8 @@ def _faturamento_agg_recorte(df: pd.DataFrame) -> dict[str, Any]:
     Definições do módulo (totais no recorte):
 
     * **Receita bruta** = Σ ``Receita_Bruta`` (via ``_faturamento_painel_receita_series``).
-    * **Receita líquida** = Σ ``Valor total`` quando a coluna existe; caso contrário fallback Σ RB − Σ desconto.
-    * **Desconto comercial** = receita bruta − receita líquida (equivale a Σ ``Desconto proporcional total``
+    * **Valor Nota Fiscal** (UI; coluna ``Valor total``) = Σ ``Valor total`` quando existe; caso contrário fallback Σ RB − Σ desconto.
+    * **Desconto comercial** = receita bruta − valor nota fiscal (equivale a Σ ``Desconto proporcional total``
       quando RB − Desconto − Valor total fecha linha a linha, como no pipeline).
 
     O **resultado** soma só valores numéricos de ``Resultado`` (linhas sem custo OK ficam vazias no materializado).
@@ -3144,6 +3162,8 @@ def _faturamento_agg_recorte(df: pd.DataFrame) -> dict[str, Any]:
         "receita_liquida": 0.0,
         "custo_produto": 0.0,
         "frete": 0.0,
+        "frete_me": 0.0,
+        "frete_tp": 0.0,
         "comissao_plataforma": 0.0,
         "imposto": 0.0,
         "despesas_fixas": 0.0,
@@ -3181,6 +3201,12 @@ def _faturamento_agg_recorte(df: pd.DataFrame) -> dict[str, Any]:
     if ccol and ccol in df.columns:
         out["custo_produto"] = float(pd.to_numeric(df[ccol], errors="coerce").fillna(0.0).sum())
     out["frete"] = float(_faturamento_num_col(df, "Custo de Frete").sum())
+    if "Frete Mercado Envios" in df.columns and "Frete transportadora própria" in df.columns:
+        out["frete_me"] = float(_faturamento_num_col(df, "Frete Mercado Envios").sum())
+        out["frete_tp"] = float(_faturamento_num_col(df, "Frete transportadora própria").sum())
+    else:
+        out["frete_me"] = float(out["frete"])
+        out["frete_tp"] = 0.0
     out["comissao_plataforma"] = float(_faturamento_num_col(df, "Taxa de Comissão").sum())
     out["imposto"] = float(_faturamento_num_col(df, "Imposto").sum())
     out["despesas_fixas"] = float(_faturamento_num_col(df, "Despesas Fixas").sum())
@@ -3288,7 +3314,7 @@ def _render_faturamento_dre_visao_geral(df: pd.DataFrame, load_info: dict[str, o
         with rp[0]:
             st.metric("Receita bruta", _fmt_brl_ptbr_celula(agg["receita_bruta"]))
         with rp[1]:
-            st.metric("Receita líquida", _fmt_brl_ptbr_celula(agg["receita_liquida"]))
+            st.metric(_FATURAMENTO_UI_VALOR_NOTA_FISCAL, _fmt_brl_ptbr_celula(agg["receita_liquida"]))
         with rp[2]:
             st.metric("Resultado", _fmt_brl_ptbr_celula(agg["resultado"]))
         with rp[3]:
@@ -3335,7 +3361,11 @@ def _render_faturamento_dre_visao_geral(df: pd.DataFrame, load_info: dict[str, o
             st.metric("Custo do produto", _fmt_brl_ptbr_celula(agg["custo_produto"]))
         o2 = st.columns(4)
         with o2[0]:
-            st.metric("Frete", _fmt_brl_ptbr_celula(agg["frete"]))
+            if "Frete Mercado Envios" in df.columns and "Frete transportadora própria" in df.columns:
+                st.metric("Frete (Mercado Envios)", _fmt_brl_ptbr_celula(agg["frete_me"]))
+                st.metric("Frete (transp. própria)", _fmt_brl_ptbr_celula(agg["frete_tp"]))
+            else:
+                st.metric("Frete", _fmt_brl_ptbr_celula(agg["frete"]))
         with o2[1]:
             st.metric("Comissão plataforma", _fmt_brl_ptbr_celula(agg["comissao_plataforma"]))
         with o2[2]:
@@ -3349,9 +3379,10 @@ def _render_faturamento_dre_visao_geral(df: pd.DataFrame, load_info: dict[str, o
             else:
                 st.metric("Outras despesas", "—")
         st.caption(
-            "**Definições:** receita bruta = Σ **Receita_Bruta**; receita líquida = Σ **Valor total**; "
-            "desconto comercial = receita bruta − receita líquida. Com export consistente, "
-            "**Receita_Bruta − Desconto proporcional total ≈ Valor total** linha a linha."
+            "**Definições:** receita bruta = Σ **Receita_Bruta** (no materializado novo, inclui frete de transportadora própria "
+            "quando o CSV de pedidos traz modalidade de envio); **Valor Nota Fiscal** na UI = Σ **Valor total**; "
+            "desconto comercial = receita bruta − valor nota fiscal. Com export consistente, "
+            "**Receita_Bruta − Desconto proporcional total ≈ Valor total** linha a linha (ajustando a parte de frete em RB, se aplicável)."
         )
         _plug = agg.get("diag_plug_rb_desc_vt")
         if (
@@ -3640,6 +3671,9 @@ def _render_faturamento_dre_recorte_global(df: pd.DataFrame) -> pd.DataFrame:
         else:
             d_min = d_max = datetime.now(_BR_TZ).date()
             ok_dates = False
+        cal_min, cal_max = (
+            _faturamento_period_calendar_limits(d_min, d_max) if ok_dates else (d_min, d_max)
+        )
         r_sp = st.columns((1, 1))
         with r_sp[0]:
             st.multiselect(
@@ -3654,32 +3688,36 @@ def _render_faturamento_dre_recorte_global(df: pd.DataFrame) -> pd.DataFrame:
             if "fdl_fat_dre_d_ini" not in st.session_state:
                 st.session_state["fdl_fat_dre_d_ini"] = d_min
             if "fdl_fat_dre_d_fim" not in st.session_state:
-                st.session_state["fdl_fat_dre_d_fim"] = d_max
+                st.session_state["fdl_fat_dre_d_fim"] = min(d_max, datetime.now(_BR_TZ).date())
             st.session_state["fdl_fat_dre_d_ini"] = min(
-                max(_safe_streamlit_date(st.session_state["fdl_fat_dre_d_ini"], d_min), d_min),
-                d_max,
+                max(_safe_streamlit_date(st.session_state["fdl_fat_dre_d_ini"], d_min), cal_min),
+                cal_max,
             )
             st.session_state["fdl_fat_dre_d_fim"] = min(
-                max(_safe_streamlit_date(st.session_state["fdl_fat_dre_d_fim"], d_max), d_min),
-                d_max,
+                max(_safe_streamlit_date(st.session_state["fdl_fat_dre_d_fim"], d_max), cal_min),
+                cal_max,
             )
             r0 = st.columns((1, 1))
             with r0[0]:
                 st.date_input(
                     "Período — início",
-                    min_value=d_min,
-                    max_value=d_max,
+                    min_value=cal_min,
+                    max_value=cal_max,
                     format="DD/MM/YYYY",
                     key="fdl_fat_dre_d_ini",
                 )
             with r0[1]:
                 st.date_input(
                     "Período — fim",
-                    min_value=d_min,
-                    max_value=d_max,
+                    min_value=cal_min,
+                    max_value=cal_max,
                     format="DD/MM/YYYY",
                     key="fdl_fat_dre_d_fim",
                 )
+            st.caption(
+                "Pode escolher datas fora do intervalo em que existem linhas na base; só entram vendas cuja **Data** "
+                "está entre início (inclusive) e fim (inclusive)."
+            )
         elif has_data:
             st.caption("**Data** sem valores utilizáveis — período desativado.")
         if st.button("Redefinir recorte", key="fdl_fat_dre_reset_recorte", help="Repõe situação, datas e plataforma"):
@@ -3839,24 +3877,40 @@ def _painel_faturamento(
         if not use_modulo_recorte:
             r0 = st.columns((1.15, 1.15))
             if has_usable_dates:
+                cal_min, cal_max = _faturamento_period_calendar_limits(d_min, d_max)
+                k_ini = f"fat_d_ini_{_oid}"
+                k_fim = f"fat_d_fim_{_oid}"
+                if k_ini not in st.session_state:
+                    st.session_state[k_ini] = d_min
+                if k_fim not in st.session_state:
+                    st.session_state[k_fim] = min(d_max, datetime.now(_BR_TZ).date())
+                st.session_state[k_ini] = min(
+                    max(_safe_streamlit_date(st.session_state[k_ini], d_min), cal_min),
+                    cal_max,
+                )
+                st.session_state[k_fim] = min(
+                    max(_safe_streamlit_date(st.session_state[k_fim], d_max), cal_min),
+                    cal_max,
+                )
                 with r0[0]:
                     d_ini = st.date_input(
                         "Período — início (Data)",
-                        value=d_min,
-                        min_value=d_min,
-                        max_value=d_max,
+                        min_value=cal_min,
+                        max_value=cal_max,
                         format="DD/MM/YYYY",
-                        key=f"fat_d_ini_{_oid}",
+                        key=k_ini,
                     )
                 with r0[1]:
                     d_fim = st.date_input(
                         "Período — fim (Data)",
-                        value=d_max,
-                        min_value=d_min,
-                        max_value=d_max,
+                        min_value=cal_min,
+                        max_value=cal_max,
                         format="DD/MM/YYYY",
-                        key=f"fat_d_fim_{_oid}",
+                        key=k_fim,
                     )
+                st.caption(
+                    "Datas fora do intervalo dos dados são permitidas; só entram linhas com **Data** no período escolhido."
+                )
             elif has_data_col:
                 st.caption(
                     "A coluna **Data** existe mas não tem valores parseáveis — o filtro por período está desativado."
@@ -4036,7 +4090,7 @@ def _painel_faturamento(
         ("SKU", filt["Código"]),
         ("Produto", filt[prod_col].astype(str) if prod_col else pd.Series("", index=_ix)),
         ("Receita bruta", receita_linha),
-        ("Receita líquida", pd.to_numeric(filt["Valor total"], errors="coerce")),
+        (_FATURAMENTO_UI_VALOR_NOTA_FISCAL, pd.to_numeric(filt["Valor total"], errors="coerce")),
         ("Resultado", pd.to_numeric(filt[res_col], errors="coerce")),
         ("Resultado %", rpct * 100.0),
     ]
@@ -4060,10 +4114,17 @@ def _painel_faturamento(
     ]
     if "Quantidade" in filt.columns:
         _tail.append(("Quantidade", pd.to_numeric(filt["Quantidade"], errors="coerce")))
+    _tail.append(("Custo do produto", pd.to_numeric(filt[custo_prod_col], errors="coerce")))
+    if "Frete Mercado Envios" in filt.columns and "Frete transportadora própria" in filt.columns:
+        _tail.append(("Frete Mercado Envios", pd.to_numeric(filt["Frete Mercado Envios"], errors="coerce")))
+        _tail.append(
+            ("Frete transp. própria", pd.to_numeric(filt["Frete transportadora própria"], errors="coerce"))
+        )
+        _tail.append(("Custo frete (total)", pd.to_numeric(filt["Custo de Frete"], errors="coerce")))
+    else:
+        _tail.append(("Frete", pd.to_numeric(filt["Custo de Frete"], errors="coerce")))
     _tail.extend(
         [
-            ("Custo do produto", pd.to_numeric(filt[custo_prod_col], errors="coerce")),
-            ("Frete", pd.to_numeric(filt["Custo de Frete"], errors="coerce")),
             ("Comissão Plataforma", pd.to_numeric(filt["Taxa de Comissão"], errors="coerce")),
             ("Imposto", pd.to_numeric(filt["Imposto"], errors="coerce")),
             ("Despesas fixas", pd.to_numeric(filt["Despesas Fixas"], errors="coerce")),
@@ -4082,8 +4143,11 @@ def _painel_faturamento(
     _cfg: dict[str, NumberColumn | TextColumn] = {}
     money_cols = (
         "Receita bruta",
-        "Receita líquida",
+        _FATURAMENTO_UI_VALOR_NOTA_FISCAL,
         "Custo do produto",
+        "Frete Mercado Envios",
+        "Frete transp. própria",
+        "Custo frete (total)",
         "Frete",
         "Comissão Plataforma",
         "Imposto",
@@ -4092,11 +4156,17 @@ def _painel_faturamento(
     )
     for c in money_cols:
         if c in disp.columns:
-            if c == "Receita líquida":
+            if c == _FATURAMENTO_UI_VALOR_NOTA_FISCAL:
                 _cfg[c] = NumberColumn(
                     c,
                     format="R$ %,.2f",
-                    help="Fonte no materializado: coluna **Valor total**.",
+                    help="Mesmo valor que a coluna **Valor total** no materializado (valor da nota / líquido da linha).",
+                )
+            elif c == "Custo frete (total)":
+                _cfg[c] = NumberColumn(
+                    c,
+                    format="R$ %,.2f",
+                    help="Soma ME + transportadora própria; continua a entrar no **Resultado**.",
                 )
             else:
                 _cfg[c] = NumberColumn(c, format="R$ %,.2f")
@@ -4129,7 +4199,8 @@ def _painel_faturamento(
     st.caption(
         f"{len(disp)} linhas · **Resultado** ascendente. "
         "À esquerda: operação do dia; à direita: NF, quantidade e composição de custos/taxas (**Ref. ML** no fim). "
-        "**Receita líquida** = coluna **Valor total** (ver ajuda no cabeçalho da coluna). "
+        f"**{_FATURAMENTO_UI_VALOR_NOTA_FISCAL}** = coluna **Valor total** no materializado (ver ajuda no cabeçalho). "
+        "Quando o CSV de pedidos tiver modalidade de envio, o frete aparece repartido (ME vs transp. própria) e o total em **Custo frete (total)**. "
         "**Pedido** = multiloja se existir, senão n.º do pedido."
     )
     st.dataframe(

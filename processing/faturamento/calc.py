@@ -8,6 +8,38 @@ from .config import OUTRAS_DESPESAS_COL
 from .config import STATUS_CUSTO_OK
 from .normalize import to_numeric_br
 
+_COL_MODALIDADE_ENVIO_CANDIDATES: tuple[str, ...] = (
+    "Modalidade de envio",
+    "Tipo de envio",
+    "Transportadora",
+    "Serviço de envio",
+    "Servico de envio",
+    "Tipo de logística",
+    "Tipo de logistica",
+)
+
+
+def _frete_mercado_envios_vs_transportadora(df: pd.DataFrame, cf_numeric: pd.Series) -> tuple[pd.Series, pd.Series]:
+    """
+    Parte ``Custo de Frete`` entre Mercado Envios e transportadora própria (ou terceiros não-ME).
+
+    Sem coluna de modalidade no CSV de pedidos, trata todo o frete como ME (comportamento anterior).
+    ``Receita_Bruta`` no pipeline passa a incluir o frete de transportadora própria (ver ``compute_financial_columns``).
+    """
+    cf0 = cf_numeric.fillna(0.0)
+    col = next((c for c in _COL_MODALIDADE_ENVIO_CANDIDATES if c in df.columns), None)
+    if col is None:
+        return cf0, pd.Series(0.0, index=df.index, dtype=float)
+    txt = df[col].fillna("").astype(str).str.strip().str.casefold()
+    is_me = txt.str.contains("mercado envio", regex=False) | txt.str.contains(
+        "coleta do mercado", regex=False
+    )
+    # Texto vazio: manter legado (conta como ME quando há custo de frete).
+    is_me = is_me | txt.eq("")
+    frete_me = cf0.where(is_me, 0.0)
+    frete_tp = cf0.where(~is_me, 0.0)
+    return frete_me, frete_tp
+
 
 def resolve_coluna_base_imposto(df: pd.DataFrame, candidates: tuple[str, ...]) -> str | None:
     for c in candidates:
@@ -43,7 +75,11 @@ def compute_financial_columns(
     else:
         out[OUTRAS_DESPESAS_COL] = 0.0
 
-    out["Receita_Bruta"] = out[qtd_col] * out[pl]
+    frete_me, frete_tp = _frete_mercado_envios_vs_transportadora(out, out[cf])
+    out["Frete Mercado Envios"] = frete_me
+    out["Frete transportadora própria"] = frete_tp
+    # Frete da transportadora própria integra receita bruta (contabilidade pedida na validação).
+    out["Receita_Bruta"] = out[qtd_col] * out[pl] + frete_tp
     out["Custo_Produto_Total"] = out[qtd_col] * out[CUSTO_UNITARIO_COL]
 
     if base_imposto_column:

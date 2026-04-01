@@ -6,6 +6,10 @@ Leitura de faturamento_params.json.
   sem novas evoluções; remoção futura quando V2 for o único fluxo suportado no app e dados.
 
 Alíquotas: números decimais com ponto no JSON (ex.: 0.12).
+
+No fluxo V2 com notas rateadas (``faturamento-v3``), ``coluna_base_imposto`` mantém-se no JSON por
+compatibilidade; o imposto usa ``Nota_Valor_Liquido_Rateado`` / ``Base_Imposto``, não essa coluna.
+Ver ``docs/faturamento_imposto_coluna_base_vs_nota.md``.
 """
 from __future__ import annotations
 
@@ -37,6 +41,7 @@ class EmpresaFaturamentoEntry:
     empresa: str
     pedidos_dir: str
     permite_faturamento_sem_nf: bool | None
+    notas_saida_dir: str | None = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +54,8 @@ class FaturamentoParamsV2:
     aliquota_despesas_fixas: float
     permite_faturamento_sem_nf_default: bool
     coluna_base_imposto: tuple[str, ...]
+    params_mensais_resolved: Path | None
+    notas_saida_dir: str
 
 
 class FaturamentoParamsError(ValueError):
@@ -166,18 +173,29 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
         ped_path = (cliente_root / pdir).resolve()
         if not ped_path.is_dir():
             raise FaturamentoParamsError(f"Pasta de pedidos não existe: {ped_path}")
+        ns_emp = e.get("notas_saida_dir")
+        ns_emp_s = str(ns_emp).strip() if ns_emp is not None and str(ns_emp).strip() else None
         entries.append(
             EmpresaFaturamentoEntry(
                 org_id=_sanitize_slug_segment(oid),
                 empresa=ename,
                 pedidos_dir=pdir,
                 permite_faturamento_sem_nf=_optional_bool(e.get("permite_faturamento_sem_nf")),
+                notas_saida_dir=ns_emp_s,
             )
         )
 
     ai = _as_float("aliquota_imposto", raw.get("aliquota_imposto"))
     ad = _as_float("aliquota_despesas_fixas", raw.get("aliquota_despesas_fixas"))
     cands = _coluna_base_tuple(raw.get("coluna_base_imposto"))
+
+    pm = raw.get("params_mensais")
+    params_mensais_resolved: Path | None = None
+    if pm is not None and str(pm).strip():
+        p_pm = Path(str(pm).strip()).expanduser()
+        params_mensais_resolved = p_pm.resolve() if p_pm.is_absolute() else (cliente_root / p_pm).resolve()
+
+    notas_saida_dir = str(raw.get("notas_saida_dir", "notas_saida") or "notas_saida").strip() or "notas_saida"
 
     root_digits = set(re.findall(r"\d+", cliente_root.name))
     slug_digits = set(re.findall(r"\d+", slug))
@@ -198,6 +216,8 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
         aliquota_despesas_fixas=ad,
         permite_faturamento_sem_nf_default=default_sem_nf,
         coluna_base_imposto=cands,
+        params_mensais_resolved=params_mensais_resolved,
+        notas_saida_dir=notas_saida_dir,
     )
 
 

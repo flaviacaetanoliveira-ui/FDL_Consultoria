@@ -3081,7 +3081,9 @@ def _faturamento_painel_custo_produto_col(columns: list[str]) -> str | None:
 
 
 def _faturamento_painel_receita_series(df: pd.DataFrame, pl_col: str) -> pd.Series:
-    """Soma de receita para KPIs: ``Receita_Bruta`` (V2) ou preço×quantidade / só preço."""
+    """Soma de receita para KPIs: ``Vl_Venda`` (Qtd×lista), senão ``Receita_Bruta``, senão preço×qtd."""
+    if "Vl_Venda" in df.columns:
+        return pd.to_numeric(df["Vl_Venda"], errors="coerce")
     if "Receita_Bruta" in df.columns:
         return pd.to_numeric(df["Receita_Bruta"], errors="coerce")
     if "Quantidade" in df.columns and pl_col in df.columns:
@@ -3161,7 +3163,7 @@ def _faturamento_agg_recorte(df: pd.DataFrame) -> dict[str, Any]:
 
     Definições do módulo (totais no recorte):
 
-    * **Receita bruta** = Σ ``Receita_Bruta`` (via ``_faturamento_painel_receita_series``).
+    * **Receita bruta (venda comercial)** = Σ ``Vl_Venda`` se existir; senão Σ ``Receita_Bruta`` / preço×qtd.
     * **Valor Nota Fiscal** (UI; coluna ``Valor total``) = Σ ``Valor total`` quando existe; caso contrário fallback Σ RB − Σ desconto.
     * **Desconto comercial** = receita bruta − valor nota fiscal (equivale a Σ ``Desconto proporcional total``
       quando RB − Desconto − Valor total fecha linha a linha, como no pipeline).
@@ -3215,7 +3217,10 @@ def _faturamento_agg_recorte(df: pd.DataFrame) -> dict[str, Any]:
     ccol = _faturamento_painel_custo_produto_col(list(df.columns))
     if ccol and ccol in df.columns:
         out["custo_produto"] = float(pd.to_numeric(df[ccol], errors="coerce").fillna(0.0).sum())
-    out["frete"] = float(_faturamento_num_col(df, "Custo de Frete").sum())
+    if "Frete_Plataforma" in df.columns:
+        out["frete"] = float(_faturamento_num_col(df, "Frete_Plataforma").sum())
+    else:
+        out["frete"] = float(_faturamento_num_col(df, "Custo de Frete").sum())
     if "Frete Mercado Envios" in df.columns and "Frete transportadora própria" in df.columns:
         out["frete_me"] = float(_faturamento_num_col(df, "Frete Mercado Envios").sum())
         out["frete_tp"] = float(_faturamento_num_col(df, "Frete transportadora própria").sum())
@@ -3457,6 +3462,38 @@ def _faturamento_dre_filtrar_por_etiquetas_empresa(df: pd.DataFrame, labels: lis
     return df
 
 
+def _faturamento_dre_default_empresa_labels(
+    df: pd.DataFrame, org_id: str, org_display_name: str
+) -> list[str]:
+    """Rótulos iniciais do multiselect **Empresa** (recorte comercial) ≈ empresa ativa."""
+    opts = _faturamento_dre_etiquetas_empresa_recorte(df)
+    if not opts:
+        return []
+    if len(opts) == 1:
+        return list(opts)
+    oid = str(org_id).strip()
+    picked: list[str] = []
+    if "org_id" in df.columns:
+        m = df["org_id"].astype(str).str.strip() == oid
+        if m.any() and "empresa" in df.columns:
+            picked = sorted(
+                {str(x).strip() for x in df.loc[m, "empresa"].dropna().unique() if str(x).strip()}
+            )
+        elif m.any() and oid in opts:
+            picked = [oid]
+    if not picked and "empresa" in df.columns and org_display_name:
+        dn = str(org_display_name).strip().casefold()
+        m2 = df["empresa"].fillna("").astype(str).str.strip().str.casefold() == dn
+        if m2.any():
+            picked = sorted(
+                {str(x).strip() for x in df.loc[m2, "empresa"].dropna().unique() if str(x).strip()}
+            )
+    picked = [p for p in picked if p in opts]
+    if picked:
+        return picked
+    return [opts[0]]
+
+
 def _render_faturamento_dre_bloco_por_empresa(
     df_recorte: pd.DataFrame,
     load_info: dict[str, object],
@@ -3635,127 +3672,260 @@ def _faturamento_alertas_text(s: pd.Series) -> str:
 
 def _faturamento_dre_global_filter_keys() -> list[str]:
     return [
+        "fdl_fat_dre_emp",
         "fdl_fat_dre_sit",
         "fdl_fat_dre_d_ini",
         "fdl_fat_dre_d_fim",
         "fdl_fat_dre_plat",
+        "fdl_fat_dre_presenca_nf",
+        "fdl_fat_dre_nf_emi_use",
+        "fdl_fat_dre_nf_emi_ini",
+        "fdl_fat_dre_nf_emi_fim",
+        "fdl_fat_dre_nf_sit",
     ]
 
 
-def _render_faturamento_dre_recorte_global(df: pd.DataFrame) -> pd.DataFrame:
+def _render_faturamento_dre_recorte_global(
+    df: pd.DataFrame,
+    *,
+    org_id: str,
+    org_display_name: str,
+) -> pd.DataFrame:
     """
-    Filtros globais do módulo Faturamento & DRE: Situação (padrão Atendido), Período (Data), Plataforma.
-    Devolve o DataFrame já recortado para o painel.
+    Recorte global (comercial + fiscal) do módulo Faturamento & DRE, alinhado a
+    ``docs/faturamento_recorte_modulo_aprovado.md``. Devolve o DataFrame já recortado.
     """
     if df.empty:
         with st.container(border=True):
             st.subheader("Recorte do módulo")
             st.info(
                 "Sem linhas na base de faturamento. Confirme **materialização**, **escopo** na barra lateral e permissões. "
-                "Com dados carregados, os filtros (situação, período, plataforma) aparecem neste bloco."
+                "Com dados carregados, os blocos de recorte comercial e fiscal aparecem aqui."
             )
         return df
     out = df
+    has_data = "Data" in out.columns
+    if has_data:
+        d_min, d_max, ok_dates = _series_datetime_bounds_dates(out["Data"])
+    else:
+        d_min = d_max = datetime.now(_BR_TZ).date()
+        ok_dates = False
+    cal_min, cal_max = (
+        _faturamento_period_calendar_limits(d_min, d_max) if ok_dates else (d_min, d_max)
+    )
+    has_nf_emi = "Nota_Data_Emissao" in out.columns
+    if has_nf_emi:
+        nf_d_min, nf_d_max, nf_ok_dates = _series_datetime_bounds_dates(out["Nota_Data_Emissao"])
+    else:
+        nf_d_min = nf_d_max = datetime.now(_BR_TZ).date()
+        nf_ok_dates = False
+    nf_cal_min, nf_cal_max = (
+        _faturamento_period_calendar_limits(nf_d_min, nf_d_max) if nf_ok_dates else (nf_d_min, nf_d_max)
+    )
+    sits = sorted({str(x).strip() for x in out["Situação"].dropna().unique() if str(x).strip()})
+    plats = sorted(
+        {str(x).strip() for x in out["Nome da plataforma"].dropna().unique() if str(x).strip()}
+    )
+    emp_opts = _faturamento_dre_etiquetas_empresa_recorte(out)
+    nf_sit_vals = (
+        sorted({str(x).strip() for x in out["Nota_Situacao"].dropna().unique() if str(x).strip()})
+        if "Nota_Situacao" in out.columns
+        else []
+    )
+    nf_sit_opts = sorted(set(nf_sit_vals) | {"Cancelada", "Denegada", "Inutilizada"})
+
     with st.container(border=True):
         st.subheader("Recorte do módulo")
         st.caption(
-            "**Situação** (padrão Atendido), **período por Data** (oficial do módulo) e **plataforma** · "
-            "aplicam-se à Visão geral e ao detalhamento. **Data do faturamento** na base é secundária / futura."
+            "Dois eixos independentes: **comercial** (venda / empresa / plataforma) e **fiscal** (emissão NF / situação da NF). "
+            "Com ambos os intervalos de datas preenchidos, o resultado é a **interseção**. "
+            "A **Visão geral**, o **detalhamento** e o **CSV exportado** usam o mesmo recorte."
         )
-        sits = sorted(
-            {str(x).strip() for x in out["Situação"].dropna().unique() if str(x).strip()}
-        )
-        if "fdl_fat_dre_sit" not in st.session_state:
-            st.session_state["fdl_fat_dre_sit"] = (
-                ["Atendido"] if "Atendido" in sits else ([] if not sits else [sits[0]])
-            )
-        else:
-            prev = st.session_state["fdl_fat_dre_sit"]
-            if isinstance(prev, list):
-                st.session_state["fdl_fat_dre_sit"] = [x for x in prev if x in sits]
-            else:
+        with st.container(border=True):
+            st.caption("**Recorte comercial**")
+            if emp_opts:
+                if "fdl_fat_dre_emp" not in st.session_state:
+                    st.session_state["fdl_fat_dre_emp"] = _faturamento_dre_default_empresa_labels(
+                        out, org_id, org_display_name
+                    )
+                else:
+                    prev_e = st.session_state["fdl_fat_dre_emp"]
+                    if isinstance(prev_e, list):
+                        st.session_state["fdl_fat_dre_emp"] = [x for x in prev_e if x in emp_opts]
+                    else:
+                        st.session_state["fdl_fat_dre_emp"] = _faturamento_dre_default_empresa_labels(
+                            out, org_id, org_display_name
+                        )
+                    if not st.session_state["fdl_fat_dre_emp"]:
+                        st.session_state["fdl_fat_dre_emp"] = _faturamento_dre_default_empresa_labels(
+                            out, org_id, org_display_name
+                        )
+                st.multiselect(
+                    "Empresa",
+                    emp_opts,
+                    key="fdl_fat_dre_emp",
+                    help="Padrão: **empresa ativa**. Vazio = todas as empresas visíveis nesta base.",
+                    placeholder="Todas",
+                )
+            if "fdl_fat_dre_sit" not in st.session_state:
                 st.session_state["fdl_fat_dre_sit"] = (
-                    ["Atendido"] if "Atendido" in sits else []
+                    ["Atendido"] if "Atendido" in sits else ([] if not sits else [sits[0]])
                 )
-        plats = sorted(
-            {
-                str(x).strip()
-                for x in out["Nome da plataforma"].dropna().unique()
-                if str(x).strip()
-            }
-        )
-        has_data = "Data" in out.columns
-        if has_data:
-            d_min, d_max, ok_dates = _series_datetime_bounds_dates(out["Data"])
-        else:
-            d_min = d_max = datetime.now(_BR_TZ).date()
-            ok_dates = False
-        cal_min, cal_max = (
-            _faturamento_period_calendar_limits(d_min, d_max) if ok_dates else (d_min, d_max)
-        )
-        r_sp = st.columns((1, 1))
-        with r_sp[0]:
+            else:
+                prev = st.session_state["fdl_fat_dre_sit"]
+                if isinstance(prev, list):
+                    st.session_state["fdl_fat_dre_sit"] = [x for x in prev if x in sits]
+                else:
+                    st.session_state["fdl_fat_dre_sit"] = ["Atendido"] if "Atendido" in sits else []
+            r_sp = st.columns((1, 1))
+            with r_sp[0]:
+                st.multiselect(
+                    "Situação do pedido",
+                    sits,
+                    key="fdl_fat_dre_sit",
+                    help="Padrão **Atendido**. Vazio = todas as situações.",
+                )
+            with r_sp[1]:
+                _multiselect_stable("fdl_fat_dre_plat", "Plataforma", plats)
+            if ok_dates:
+                if "fdl_fat_dre_d_ini" not in st.session_state:
+                    st.session_state["fdl_fat_dre_d_ini"] = d_min
+                if "fdl_fat_dre_d_fim" not in st.session_state:
+                    st.session_state["fdl_fat_dre_d_fim"] = min(d_max, datetime.now(_BR_TZ).date())
+                st.session_state["fdl_fat_dre_d_ini"] = min(
+                    max(_safe_streamlit_date(st.session_state["fdl_fat_dre_d_ini"], d_min), cal_min),
+                    cal_max,
+                )
+                st.session_state["fdl_fat_dre_d_fim"] = min(
+                    max(_safe_streamlit_date(st.session_state["fdl_fat_dre_d_fim"], d_max), cal_min),
+                    cal_max,
+                )
+                r0 = st.columns((1, 1))
+                with r0[0]:
+                    st.date_input(
+                        "Data da venda — início",
+                        min_value=cal_min,
+                        max_value=cal_max,
+                        format="DD/MM/YYYY",
+                        key="fdl_fat_dre_d_ini",
+                        help=_FATURAMENTO_HELP_PERIODO_DATA,
+                    )
+                with r0[1]:
+                    st.date_input(
+                        "Data da venda — fim",
+                        min_value=cal_min,
+                        max_value=cal_max,
+                        format="DD/MM/YYYY",
+                        key="fdl_fat_dre_d_fim",
+                        help=_FATURAMENTO_HELP_PERIODO_DATA,
+                    )
+                st.caption(
+                    "Eixo **Data** do pedido (venda). Pode escolher datas fora do intervalo dos dados; só entram linhas cuja **Data** "
+                    "cai entre início (inclusive) e fim (inclusive)."
+                )
+            elif has_data:
+                st.caption("**Data** sem valores utilizáveis — filtro por data da venda desativado.")
+            _pres_opts = ("Todos", "Com NF vinculada", "Sem NF vinculada")
+            st.selectbox(
+                "Com / sem nota (vínculo fiscal na base)",
+                options=list(_pres_opts),
+                key="fdl_fat_dre_presenca_nf",
+                help="Refinamento comercial alinhado a **faturamento_nota_vinculada** (join pedidos↔notas). "
+                "A **Visão** da tabela (Consolidado / Com NF / …) continua separada, abaixo.",
+            )
+
+        with st.container(border=True):
+            st.caption("**Recorte fiscal**")
+            if "fdl_fat_dre_nf_emi_use" not in st.session_state:
+                st.session_state["fdl_fat_dre_nf_emi_use"] = False
+            st.checkbox(
+                "Filtrar por data de emissão da NF",
+                key="fdl_fat_dre_nf_emi_use",
+                help="Desligado por omissão (**recorte fiscal inativo**). Ligado: aplica intervalo sobre **Nota_Data_Emissao** e "
+                "**exclui linhas sem nota vinculada**.",
+            )
+            _emi_on = bool(st.session_state.get("fdl_fat_dre_nf_emi_use"))
+            if _emi_on:
+                if nf_ok_dates:
+                    if "fdl_fat_dre_nf_emi_ini" not in st.session_state:
+                        st.session_state["fdl_fat_dre_nf_emi_ini"] = nf_d_min
+                    if "fdl_fat_dre_nf_emi_fim" not in st.session_state:
+                        st.session_state["fdl_fat_dre_nf_emi_fim"] = min(
+                            nf_d_max, datetime.now(_BR_TZ).date()
+                        )
+                    st.session_state["fdl_fat_dre_nf_emi_ini"] = min(
+                        max(
+                            _safe_streamlit_date(st.session_state["fdl_fat_dre_nf_emi_ini"], nf_d_min),
+                            nf_cal_min,
+                        ),
+                        nf_cal_max,
+                    )
+                    st.session_state["fdl_fat_dre_nf_emi_fim"] = min(
+                        max(
+                            _safe_streamlit_date(st.session_state["fdl_fat_dre_nf_emi_fim"], nf_d_max),
+                            nf_cal_min,
+                        ),
+                        nf_cal_max,
+                    )
+                    r_nf = st.columns((1, 1))
+                    with r_nf[0]:
+                        st.date_input(
+                            "Data de emissão da NF — início",
+                            min_value=nf_cal_min,
+                            max_value=nf_cal_max,
+                            format="DD/MM/YYYY",
+                            key="fdl_fat_dre_nf_emi_ini",
+                        )
+                    with r_nf[1]:
+                        st.date_input(
+                            "Data de emissão da NF — fim",
+                            min_value=nf_cal_min,
+                            max_value=nf_cal_max,
+                            format="DD/MM/YYYY",
+                            key="fdl_fat_dre_nf_emi_fim",
+                        )
+                elif has_nf_emi:
+                    st.caption("**Nota_Data_Emissao** sem datas utilizáveis — não é possível aplicar o intervalo.")
+                else:
+                    st.caption("Coluna **Nota_Data_Emissao** ausente — filtro fiscal por emissão indisponível.")
+            if "fdl_fat_dre_nf_sit" not in st.session_state:
+                st.session_state["fdl_fat_dre_nf_sit"] = []
+            else:
+                prev_nf = st.session_state["fdl_fat_dre_nf_sit"]
+                if isinstance(prev_nf, list):
+                    st.session_state["fdl_fat_dre_nf_sit"] = [x for x in prev_nf if x in nf_sit_opts]
+                else:
+                    st.session_state["fdl_fat_dre_nf_sit"] = []
             st.multiselect(
-                "Situação",
-                sits,
-                key="fdl_fat_dre_sit",
-                help="Padrão **Atendido**. Vazio = todas as situações.",
+                "Situação da NF",
+                nf_sit_opts,
+                key="fdl_fat_dre_nf_sit",
+                help="Vazio = todas. Valores vêm do export de notas (materialização); **Cancelada** mantém-se como opção mesmo sem linhas.",
+                placeholder="Todas",
             )
-        with r_sp[1]:
-            _multiselect_stable("fdl_fat_dre_plat", "Plataforma", plats)
-        if ok_dates:
-            if "fdl_fat_dre_d_ini" not in st.session_state:
-                st.session_state["fdl_fat_dre_d_ini"] = d_min
-            if "fdl_fat_dre_d_fim" not in st.session_state:
-                st.session_state["fdl_fat_dre_d_fim"] = min(d_max, datetime.now(_BR_TZ).date())
-            st.session_state["fdl_fat_dre_d_ini"] = min(
-                max(_safe_streamlit_date(st.session_state["fdl_fat_dre_d_ini"], d_min), cal_min),
-                cal_max,
-            )
-            st.session_state["fdl_fat_dre_d_fim"] = min(
-                max(_safe_streamlit_date(st.session_state["fdl_fat_dre_d_fim"], d_max), cal_min),
-                cal_max,
-            )
-            r0 = st.columns((1, 1))
-            with r0[0]:
-                st.date_input(
-                    "Período — início",
-                    min_value=cal_min,
-                    max_value=cal_max,
-                    format="DD/MM/YYYY",
-                    key="fdl_fat_dre_d_ini",
-                    help=_FATURAMENTO_HELP_PERIODO_DATA,
-                )
-            with r0[1]:
-                st.date_input(
-                    "Período — fim",
-                    min_value=cal_min,
-                    max_value=cal_max,
-                    format="DD/MM/YYYY",
-                    key="fdl_fat_dre_d_fim",
-                    help=_FATURAMENTO_HELP_PERIODO_DATA,
-                )
-            st.caption(
-                "Pode escolher datas fora do intervalo em que existem linhas na base; só entram vendas cuja **Data** "
-                "está entre início (inclusive) e fim (inclusive)."
-            )
-        elif has_data:
-            st.caption("**Data** sem valores utilizáveis — período desativado.")
-        if st.button("Redefinir recorte", key="fdl_fat_dre_reset_recorte", help="Repõe situação, datas e plataforma"):
+
+        if st.button(
+            "Redefinir recorte",
+            key="fdl_fat_dre_reset_recorte",
+            help="Repõe empresa, comercial, fiscal e refinamentos deste bloco",
+        ):
             for _k in _faturamento_dre_global_filter_keys():
                 st.session_state.pop(_k, None)
             st.rerun()
         sel_plat_g = st.session_state.get("fdl_fat_dre_plat") or []
 
+    sel_emp_g = st.session_state.get("fdl_fat_dre_emp") or []
     sel_sit_g = st.session_state.get("fdl_fat_dre_sit") or []
     sliced = out.copy()
+    if emp_opts and sel_emp_g:
+        sliced = _faturamento_dre_filtrar_por_etiquetas_empresa(sliced, list(sel_emp_g))
     if sel_sit_g:
         sliced = sliced[sliced["Situação"].isin(sel_sit_g)].copy()
     if ok_dates:
         d_ini_g = _safe_streamlit_date(st.session_state.get("fdl_fat_dre_d_ini"), d_min)
         d_fim_g = _safe_streamlit_date(st.session_state.get("fdl_fat_dre_d_fim"), d_max)
         if d_fim_g < d_ini_g:
-            st.warning("A data final do recorte não pode ser anterior à inicial.")
+            st.warning("A data final da **venda** não pode ser anterior à inicial.")
             d_fim_g = d_ini_g
         d_cmp = pd.to_datetime(sliced["Data"], errors="coerce")
         dd = d_cmp.dt.normalize()
@@ -3765,6 +3935,61 @@ def _render_faturamento_dre_recorte_global(df: pd.DataFrame) -> pd.DataFrame:
         sliced = sliced.loc[m_d].copy()
     if sel_plat_g and "Nome da plataforma" in sliced.columns:
         sliced = sliced[sliced["Nome da plataforma"].isin(sel_plat_g)].copy()
+
+    _pres = str(st.session_state.get("fdl_fat_dre_presenca_nf") or "Todos").strip()
+    if _pres == "Com NF vinculada" and "faturamento_nota_vinculada" in sliced.columns:
+        sliced = sliced.loc[sliced["faturamento_nota_vinculada"].fillna(False).astype(bool)].copy()
+    elif _pres == "Sem NF vinculada" and "faturamento_nota_vinculada" in sliced.columns:
+        sliced = sliced.loc[~sliced["faturamento_nota_vinculada"].fillna(False).astype(bool)].copy()
+
+    _emi_active = bool(st.session_state.get("fdl_fat_dre_nf_emi_use"))
+    if _emi_active:
+        if "faturamento_nota_vinculada" in sliced.columns:
+            sliced = sliced.loc[sliced["faturamento_nota_vinculada"].fillna(False).astype(bool)].copy()
+        elif "Nota_Numero_Normalizado" in sliced.columns:
+            nn = sliced["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
+            sliced = sliced.loc[nn.ne("")].copy()
+        else:
+            sliced = sliced.iloc[0:0].copy()
+        if not has_nf_emi or not nf_ok_dates:
+            sliced = sliced.iloc[0:0].copy()
+        elif not sliced.empty:
+            d_ni = _safe_streamlit_date(st.session_state.get("fdl_fat_dre_nf_emi_ini"), nf_d_min)
+            d_nf = _safe_streamlit_date(st.session_state.get("fdl_fat_dre_nf_emi_fim"), nf_d_max)
+            if d_nf < d_ni:
+                st.warning("A data final da **emissão da NF** não pode ser anterior à inicial.")
+                d_nf = d_ni
+            ts_nf = pd.to_datetime(sliced["Nota_Data_Emissao"], errors="coerce")
+            dd_nf = ts_nf.dt.normalize()
+            _ini_nf = pd.Timestamp(d_ni)
+            _fim_nf = pd.Timestamp(d_nf) + pd.Timedelta(days=1)
+            m_nf = ts_nf.notna() & (dd_nf >= _ini_nf) & (dd_nf < _fim_nf)
+            sliced = sliced.loc[m_nf].copy()
+
+    sel_nf_sit = st.session_state.get("fdl_fat_dre_nf_sit") or []
+    if sel_nf_sit:
+        col_nf_s = "Nota_Situacao"
+        if col_nf_s in sliced.columns:
+            ss = sliced[col_nf_s].fillna("").astype(str).str.strip()
+            sliced = sliced.loc[ss.isin(sel_nf_sit)].copy()
+        elif _is_admin_mode():
+            st.warning(
+                "Filtro **Situação da NF** não aplicado: o materializado não traz a coluna **Nota_Situacao**. "
+                "Reprocesse o faturamento com notas de saída para atualizar."
+            )
+
+    if _emi_active and (not has_nf_emi or not nf_ok_dates):
+        _msg_nf = (
+            "esta base não inclui a coluna **Nota_Data_Emissao**"
+            if not has_nf_emi
+            else "a coluna **Nota_Data_Emissao** não tem datas de emissão utilizáveis (apenas vazias ou inválidas)"
+        )
+        st.info(
+            f"O filtro **por data de emissão da NF** está ligado, mas {_msg_nf}. "
+            "Por isso o **recorte fica vazio** — a Visão geral e a tabela não mostram linhas até desligar esse filtro "
+            "ou corrigir o materializado / export de notas de saída."
+        )
+
     return sliced
 
 
@@ -3883,9 +4108,9 @@ def _painel_faturamento(
         st.subheader("Filtros")
         if use_modulo_recorte:
             st.caption(
-                "Neste bloco: visão NF, alertas e busca. **Período**, **situação** e **plataforma** vêm do **Recorte do módulo** acima."
+                "Neste bloco: visão NF, alertas e busca. **Recorte comercial** e **recorte fiscal** (empresa, datas venda/emissão, plataforma, situações) vêm do **Recorte do módulo** acima."
                 if not mvp_rotulos_bloco_dre
-                else "**Detalhamento operacional:** visão NF, alertas e busca. O **Recorte do módulo** (acima) define período, situação e plataforma."
+                else "**Detalhamento operacional:** visão NF, alertas e busca. O **Recorte do módulo** (acima) define comercial + fiscal; aqui só refina visão e qualidade."
             )
         else:
             st.caption("Período, visão, critérios e busca para refinar o recorte.")
@@ -5700,7 +5925,11 @@ if _fv == "repasse" and _fdl_product_area == FDL_PRODUCT_AREA_FINANCEIRO:
 elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in _enabled_modules:
     try:
         _fdl_global_trace("faturamento_dre: recorte + visão geral + detalhamento operacional")
-        _df_fat_recorte = _render_faturamento_dre_recorte_global(faturamento_df)
+        _df_fat_recorte = _render_faturamento_dre_recorte_global(
+            faturamento_df,
+            org_id=_active_org.org_id,
+            org_display_name=_active_org.display_name,
+        )
         _render_faturamento_dre_visao_geral(_df_fat_recorte, faturamento_info)
         _fdl_ui_gap_tight()
         st.divider()

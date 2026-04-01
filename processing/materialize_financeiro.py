@@ -486,6 +486,9 @@ def _materialize_faturamento(
         "coluna_base_imposto_candidatas",
         "empresas_fonte",
         "status_custo_counts",
+        "params_mensais_path",
+        "notas_saida_dir_default",
+        "notas_por_empresa",
     ):
         if k in loader_meta:
             meta[k] = loader_meta[k]

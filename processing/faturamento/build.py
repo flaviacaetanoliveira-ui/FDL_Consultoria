@@ -12,12 +12,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from .calc import compute_financial_columns, resolve_coluna_base_imposto
+from .calc import compute_financial_columns, compute_financial_columns_regras_fechadas, resolve_coluna_base_imposto
 from .config import PIPELINE_REVISION_FATURAMENTO
 from .flags import apply_faturamento_flags
 from .io_custo import load_custo_xlsx
 from .io_pedidos import load_all_pedidos_csv_concatenated, load_latest_pedidos_csv
 from .join_custo import join_custo_produto
+from .join_notas import enrich_pedidos_com_notas
 from .params import (
     FaturamentoParams,
     FaturamentoParamsV2,
@@ -153,11 +154,18 @@ def _build_faturamento_dataset_v1(params: FaturamentoParams, params_path: Path) 
 def _build_faturamento_dataset_v2(
     params: FaturamentoParamsV2, params_path: Path
 ) -> tuple[pd.DataFrame, dict[str, object]]:
+    from .io_params_mensais import load_params_mensais_dataframe
+
     df_c, meta_custo = load_custo_xlsx(params.custo_xlsx_resolved)
     dup_keys = normalized_duplicate_sku_keys_custo(df_c)
 
+    params_mensais_df = None
+    if params.params_mensais_resolved is not None and params.params_mensais_resolved.is_file():
+        params_mensais_df = load_params_mensais_dataframe(params.params_mensais_resolved)
+
     parts: list[pd.DataFrame] = []
     emp_sources: list[dict[str, object]] = []
+    notas_meta_por_empresa: list[dict[str, object]] = []
 
     for emp in params.empresas:
         ped_dir = (params.cliente_root / emp.pedidos_dir).resolve()
@@ -179,6 +187,16 @@ def _build_faturamento_dataset_v2(
             permite = params.permite_faturamento_sem_nf_default
         df_j["_permite_sem_nf"] = bool(permite)
 
+        rel_notas = (emp.notas_saida_dir or params.notas_saida_dir).strip() or params.notas_saida_dir
+        notas_dir = (params.cliente_root / rel_notas).resolve()
+        df_j, meta_notas = enrich_pedidos_com_notas(
+            df_j,
+            notas_dir=notas_dir,
+            org_id=emp.org_id,
+            empresa=emp.empresa,
+        )
+        notas_meta_por_empresa.append({"org_id": emp.org_id, **meta_notas})
+
         parts.append(df_j)
         emp_sources.append(
             {
@@ -193,12 +211,12 @@ def _build_faturamento_dataset_v2(
     base_resolved = resolve_coluna_base_imposto(df, params.coluna_base_imposto)
 
     data_proc = _utc_now_iso()
-    df = compute_financial_columns(
+    df = compute_financial_columns_regras_fechadas(
         df,
-        aliquota_imposto=params.aliquota_imposto,
-        aliquota_despesas_fixas=params.aliquota_despesas_fixas,
+        df_params_mensais=params_mensais_df,
+        fallback_aliquota_imposto=params.aliquota_imposto,
+        fallback_despesa_fixa=params.aliquota_despesas_fixas,
         data_processamento_iso=data_proc,
-        base_imposto_column=base_resolved,
     )
     df = apply_faturamento_flags(df, permite_sem_nf=df["_permite_sem_nf"])
     df = df.drop(columns=["_permite_sem_nf"], errors="ignore")
@@ -223,6 +241,11 @@ def _build_faturamento_dataset_v2(
         "data_processamento": data_proc,
         "row_count": len(df),
         "status_custo_counts": status_counts,
+        "params_mensais_path": str(params.params_mensais_resolved.resolve())
+        if params.params_mensais_resolved
+        else None,
+        "notas_saida_dir_default": params.notas_saida_dir,
+        "notas_por_empresa": notas_meta_por_empresa,
     }
     return df, meta
 

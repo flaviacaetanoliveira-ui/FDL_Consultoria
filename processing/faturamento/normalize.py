@@ -48,6 +48,31 @@ def normalize_sku_key(series: pd.Series) -> pd.Series:
     return series.map(normalize_sku_join_key_scalar)
 
 
+def normalize_pedido_join_key_scalar(raw: object) -> str:
+    """
+    Chave canónica para vínculo pedidos ↔ notas (número do pedido / multiloja).
+
+    Trim, remove sufixo ``.0`` de float Excel, preserva letras e dígitos (ex. ``MLB123``).
+    """
+    if raw is None:
+        return ""
+    try:
+        if isinstance(raw, float) and np.isnan(raw):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    s = str(raw).strip()
+    if not s or s.lower() in ("nan", "none", "nat", "<na>"):
+        return ""
+    if re.fullmatch(r"-?\d+\.0", s):
+        s = s[:-2]
+    return s.strip()
+
+
+def normalize_pedido_join_key(series: pd.Series) -> pd.Series:
+    return series.map(normalize_pedido_join_key_scalar)
+
+
 def _parse_number_scalar(raw: object) -> float:
     """Interpreta valores com vírgula BR (1.234,56) ou ponto decimal (79.95)."""
     if raw is None or (isinstance(raw, float) and np.isnan(raw)):

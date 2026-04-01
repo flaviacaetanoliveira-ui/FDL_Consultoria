@@ -606,6 +606,14 @@ def _inject_fdl_professional_theme() -> None:
                 color: #4b5563;
                 line-height: 1.5;
             }
+            .fdl-financeiro-header--compact .fdl-header-title {
+                margin-bottom: 0.2rem;
+                font-size: 1.45rem;
+            }
+            .fdl-financeiro-header--compact .fdl-header-sub {
+                font-size: 0.88rem;
+                line-height: 1.35;
+            }
             /* Cartão de métrica (Streamlit 1.35+: stMetricContainer envolve label + valor) */
             [data-testid="stMetricContainer"] {
                 border-radius: 0.5rem !important;
@@ -676,6 +684,7 @@ def _render_financeiro_header(
     title: str,
     subtitle: str = "",
     kicker_area: str = "Financeiro",
+    compact_spacing: bool = False,
 ) -> None:
     """Topo unificado: evita repetir o nome do cliente (já na barra lateral)."""
     esc_seg = html.escape(segment)
@@ -685,16 +694,20 @@ def _render_financeiro_header(
     sub_html = ""
     if esc_sub:
         sub_html = f'<p class="fdl-header-sub">{esc_sub}</p>'
+    _cls = "fdl-financeiro-header" + (" fdl-financeiro-header--compact" if compact_spacing else "")
     st.markdown(
-        f'<div class="fdl-financeiro-header">'
+        f'<div class="{_cls}">'
         f'<p class="fdl-header-kicker">{esc_ka} · {esc_seg}</p>'
         f'<h1 class="fdl-header-title">{esc_title}</h1>'
         f"{sub_html}"
         f"</div>",
         unsafe_allow_html=True,
     )
-    _fdl_ui_gap_section()
-    st.divider()
+    if compact_spacing:
+        _fdl_ui_gap_tight()
+    else:
+        _fdl_ui_gap_section()
+        st.divider()
 
 
 def _fdl_safe_mode() -> bool:
@@ -3220,8 +3233,6 @@ def _faturamento_visao_geral_tabela_plataforma(df: pd.DataFrame) -> pd.DataFrame
 
 def _render_faturamento_dre_visao_geral(df: pd.DataFrame, load_info: dict[str, object]) -> None:
     """Bloco MVP Visão Geral — mesmo recorte global que o painel detalhado."""
-    if _faturamento_painel_missing_schema_columns(df):
-        return
     st.subheader("Visão geral")
     escopo = str(load_info.get("faturamento_escopo", "") or "").strip()
     escopo_lbl = (
@@ -3233,6 +3244,20 @@ def _render_faturamento_dre_visao_geral(df: pd.DataFrame, load_info: dict[str, o
     )
     st.caption(f"Mesmo **recorte global** · escopo de carga: **{escopo_lbl}**.")
     _fdl_ui_gap_tight()
+    if df.empty:
+        st.info(
+            "Sem dados para o resumo executivo. Confirme a **carga** de faturamento e o **recorte** acima quando existir base."
+        )
+        return
+    if _faturamento_painel_missing_schema_columns(df):
+        if _is_admin_mode():
+            st.warning(
+                "Visão geral indisponível: faltam colunas esperadas no ficheiro de faturamento. "
+                "Verifique o materializado (layout V2)."
+            )
+        else:
+            st.warning("Dados insuficientes para a Visão geral. Contacte o suporte.")
+        return
     agg = _faturamento_agg_recorte(df)
     n_lin = int(agg["n_linhas"])
     n_sem = int(agg["n_linhas_sem_custo_ok"])
@@ -3557,6 +3582,12 @@ def _render_faturamento_dre_recorte_global(df: pd.DataFrame) -> pd.DataFrame:
     Devolve o DataFrame já recortado para o painel.
     """
     if df.empty:
+        with st.container(border=True):
+            st.subheader("Recorte do módulo")
+            st.info(
+                "Sem linhas na base de faturamento. Confirme **materialização**, **escopo** na barra lateral e permissões. "
+                "Com dados carregados, os filtros (situação, período, plataforma) aparecem neste bloco."
+            )
         return df
     out = df
     with st.container(border=True):
@@ -5502,6 +5533,7 @@ if _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in _e
         title="Faturamento & DRE",
         subtitle="Recorte global → Visão geral → Detalhamento operacional (MVP).",
         kicker_area="Faturamento & DRE",
+        compact_spacing=True,
     )
 elif _fv == "repasse":
     _render_financeiro_header(

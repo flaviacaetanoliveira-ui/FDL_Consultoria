@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T17:33:34Z",
-  "source_signature": "ed54d607161ebe75029876eceffb675f",
+  "generated_at": "2026-04-01T11:54:51Z",
+  "source_signature": "398ed8f8acb6d7def17ec1195e68180f",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "bp_ramiro",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "bp_ramiro",
   "cnpj": null,
-  "row_count": 958,
+  "row_count": 1907,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -33,7 +33,7 @@
   "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro",
   "loader_info": {
     "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro",
-    "linhas": 958,
+    "linhas": 1907,
     "arquivos_contas_lidos": 0,
     "col_situacao": "",
     "col_numero": ""

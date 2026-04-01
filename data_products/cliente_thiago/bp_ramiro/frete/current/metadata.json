@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T17:34:13Z",
-  "source_signature": "e389a5ef0f971fb7070b4718426cca90",
+  "generated_at": "2026-04-01T11:55:20Z",
+  "source_signature": "ca7667d384f7a0a7605fb1a648e1322d",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "bp_ramiro",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "bp_ramiro",
   "cnpj": null,
-  "row_count": 3552,
+  "row_count": 1163,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -23,7 +23,7 @@
     "Tarifa de venda e impostos (BRL)",
     "Receita por envio (BRL)",
     "Tarifas de envio (BRL)",
-    "Custo do envio (BRL)",
+    "Descontos e bônus",
     "Cancelamentos e reembolsos (BRL)",
     "Total (BRL)",
     "Mês de faturamento das suas tarifas",
@@ -87,14 +87,14 @@
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro\\Vendas_ML\\2025\\BP Ramiro - Vendas ML 2025.xlsx",
+    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro\\Vendas_ML\\2026\\BP Ramiro - Vendas ML 2026.xlsx",
     "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro\\BP Ramiro - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
-    "vendas_arquivo": "BP Ramiro - Vendas ML 2025.xlsx",
+    "vendas_arquivo": "BP Ramiro - Vendas ML 2026.xlsx",
     "frete_arquivo": "BP Ramiro - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 3552,
+    "linhas": 1163,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

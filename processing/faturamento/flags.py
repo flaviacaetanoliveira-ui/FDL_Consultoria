@@ -43,10 +43,19 @@ def apply_faturamento_flags(
 
     if "Receita_Bruta" in out.columns:
         rbn = to_numeric_br(out["Receita_Bruta"])
-        diff = (rbn - vtn).abs()
-        out["flag_divergencia_preco_lista_valor_total"] = (
-            rbn.notna() & vtn.notna() & (diff > DIVERGENCIA_VALOR_TOL)
-        )
+        desc_col = "Desconto proporcional total"
+        base_ok = rbn.notna() & vtn.notna()
+        if desc_col in out.columns:
+            dcn = to_numeric_br(out[desc_col])
+            residual = (rbn - dcn - vtn).abs()
+            out["flag_divergencia_preco_lista_valor_total"] = base_ok & (
+                dcn.notna() & (residual > DIVERGENCIA_VALOR_TOL)
+                | dcn.isna() & ((rbn - vtn).abs() > DIVERGENCIA_VALOR_TOL)
+            )
+        else:
+            out["flag_divergencia_preco_lista_valor_total"] = base_ok & (
+                (rbn - vtn).abs() > DIVERGENCIA_VALOR_TOL
+            )
     else:
         diff = (pln - vtn).abs()
         out["flag_divergencia_preco_lista_valor_total"] = (

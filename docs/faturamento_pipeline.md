@@ -16,7 +16,7 @@
 
 - **Pedidos:** CSV mais recente em `pedidos_dir` (glob `*.csv` por data de modificação).
 - **Custo:** Excel, aba `Planilha1`, colunas `Código` e `PREÇO DE CUSTO com IPI`.
-- **Colunas obrigatórias no CSV:** incluem `Quantidade`, `Preço de lista`, `Valor total`, frete, comissão, situação, NF, pedidos, SKU, plataforma.
+- **Colunas obrigatórias no CSV:** incluem `Quantidade`, `Preço de lista`, `Valor total`, frete, comissão, situação, pedidos, SKU, plataforma. O schema de validação ainda exige colunas de NF (`Existe Nota Fiscal gerada`, `Número da nota`); se o export não as trouxer, o normalizador cria-as **vazias** — ver [Pedidos ML e nota fiscal](#pedidos-ml-e-nota-fiscal).
 - **Base de imposto (v1):** usa a coluna `Valor total` (comportamento legado alinhado ao cálculo anterior).
 - Exemplo: [faturamento_params.example.v1.json](faturamento_params.example.v1.json).
 
@@ -30,6 +30,14 @@
 - O pipeline: lê custo uma vez, pedidos por empresa, join por **chave SKU normalizada** (texto, trim, sufixo `.0` tipo Excel, remoção de zeros à esquerda em códigos só numéricos). O valor original do pedido mantém-se na coluna **`Código`**; a chave usada no join aparece como **`SKU_Normalizado`**. Em seguida: auditar custo (SKU sem correspondência / duplicado na tabela), concatenar, aplicar cálculos v2 (`Receita_Bruta`, `Custo_Produto_Total`, etc.), flags NF.
 
 Exemplo: [faturamento_params.example.json](faturamento_params.example.json).
+
+### Pedidos ML e nota fiscal
+
+O export **original de pedidos** do Mercado Livre (lista que costuma incluir `Data`, `Situação`, `Código (SKU)`, `Número do pedido`, `Valor total`, etc.) **não traz, em geral, uma coluna explícita de número de nota fiscal**. A coluna **`Número`** nesse ficheiro **não** é tratada como NF: na fonte não está identificada como tal e o pipeline **não a mapeia** para `Número da nota`.
+
+- **Comportamento esperado:** `Número da nota` (e `Existe Nota Fiscal gerada`, se ausentes) podem existir no dataset materializado **vazios** — não é falha da app.
+- **Dado confiável de NF:** outro export ou fluxo (ex. **notas de saída**, **repasse** / tabela operacional após `integracao_notas_pedidos`), com cruzamento explícito, se o produto precisar de número de NF na linha de pedido.
+- **Coalesce no código:** só preenche `Número da nota` a partir de colunas **claramente nomeadas** como nota fiscal / NF no mesmo CSV (ex. `Número da nota fiscal`); não inventa valores.
 
 ## Variáveis de ambiente (alternativa aos paths no JSON v1)
 

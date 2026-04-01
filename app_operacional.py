@@ -2956,13 +2956,37 @@ def _faturamento_painel_missing_schema_columns(df: pd.DataFrame) -> list[str]:
 
 def _faturamento_compute_alert_bools(df: pd.DataFrame) -> pd.DataFrame:
     """Colunas auxiliares _ab_* para KPIs, filtros e texto de alertas."""
+    try:
+        from processing.faturamento.normalize import to_numeric_br as _fat_to_num
+    except Exception:  # noqa: BLE001
+        _fat_to_num = None
+
+    def _num(s: pd.Series) -> pd.Series:
+        if _fat_to_num is not None:
+            return _fat_to_num(s)
+        return pd.to_numeric(s, errors="coerce")
+
     out = df.copy()
     pl, vt = "Preço de lista", "Valor total"
-    pln = pd.to_numeric(out[pl], errors="coerce") if pl in out.columns else pd.Series(float("nan"), index=out.index)
-    vtn = pd.to_numeric(out[vt], errors="coerce") if vt in out.columns else pd.Series(float("nan"), index=out.index)
+    pln = _num(out[pl]) if pl in out.columns else pd.Series(float("nan"), index=out.index)
+    vtn = _num(out[vt]) if vt in out.columns else pd.Series(float("nan"), index=out.index)
     tol = _faturamento_divergencia_tol()
     out["_ab_pl_zero"] = pln.notna() & (pln == 0)
-    out["_ab_div"] = pln.notna() & vtn.notna() & ((pln - vtn).abs() > tol)
+    desc_col = "Desconto proporcional total"
+    if "Receita_Bruta" in out.columns:
+        rbn = _num(out["Receita_Bruta"])
+        base_ok = rbn.notna() & vtn.notna()
+        if desc_col in out.columns:
+            dcn = _num(out[desc_col])
+            residual = (rbn - dcn - vtn).abs()
+            out["_ab_div"] = base_ok & (
+                dcn.notna() & (residual > tol)
+                | dcn.isna() & ((rbn - vtn).abs() > tol)
+            )
+        else:
+            out["_ab_div"] = base_ok & ((rbn - vtn).abs() > tol)
+    else:
+        out["_ab_div"] = pln.notna() & vtn.notna() & ((pln - vtn).abs() > tol)
     situ = (
         out["Situação"].fillna("").astype(str).str.strip().str.casefold()
         if "Situação" in out.columns
@@ -2988,7 +3012,7 @@ def _faturamento_alertas_text(s: pd.Series) -> str:
     if bool(s.get("_ab_pl_zero")):
         parts.append("Preço lista zero")
     if bool(s.get("_ab_div")):
-        parts.append("Divergência preço x valor total")
+        parts.append("Divergência receita × valor (não explicada por desconto)")
     if bool(s.get("_ab_sem_nf_np")):
         parts.append("Sem NF não permitido")
     return " · ".join(parts)
@@ -3084,7 +3108,7 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
 
     _opt_alertas = (
         "Preço lista zero",
-        "Divergência preço x valor total",
+        "Divergência receita × valor (não explicada por desconto)",
         "Sem NF não permitido",
     )
 
@@ -3135,6 +3159,11 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
             key=f"fat_ms_alert_{_oid}",
             placeholder="Nenhum filtro por alerta",
         )
+        st.caption(
+            "Divergência **receita × valor pago**: só quando a diferença não fecha com "
+            "**Receita_Bruta − Desconto proporcional total − Valor total** (desconto comercial da fonte). "
+            "Sem coluna de desconto, mantém-se a comparação direta receita de lista vs. valor pago."
+        )
         if st.button("Limpar filtros", key=f"fat_clear_{_oid}"):
             for _k in _faturamento_filter_keys(_oid):
                 st.session_state.pop(_k, None)
@@ -3180,7 +3209,7 @@ def _painel_faturamento(df: pd.DataFrame, _load_info: dict[str, object], ts_proc
         m_a = pd.Series(False, index=filt.index)
         if "Preço lista zero" in sel_alerts:
             m_a = m_a | filt["_ab_pl_zero"]
-        if "Divergência preço x valor total" in sel_alerts:
+        if "Divergência receita × valor (não explicada por desconto)" in sel_alerts:
             m_a = m_a | filt["_ab_div"]
         if "Sem NF não permitido" in sel_alerts:
             m_a = m_a | filt["_ab_sem_nf_np"]

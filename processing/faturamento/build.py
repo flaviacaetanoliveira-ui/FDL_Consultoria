@@ -37,6 +37,38 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _strip_str_series(s: pd.Series) -> pd.Series:
+    t = s.fillna("").astype(str).str.strip()
+    return t.mask(t.str.lower().eq("nan"), "")
+
+
+def _coalesce_nota_fiscal_em_numero_da_nota(out: pd.DataFrame) -> pd.DataFrame:
+    """
+    Só copia valores de colunas cuja designação deixa claro que é nota fiscal (nunca a coluna genérica «Número»).
+
+    O export típico de **pedidos** do ML não traz NF explícita; nesse caso «Número da nota» fica vazio até haver
+    outra fonte (ex. notas / repasse). Isto não inventa dados: só alinha cabeçalhos alternativos **já nomeados** como NF.
+    """
+    col = "Número da nota"
+    if col not in out.columns:
+        return out
+    merged = _strip_str_series(out[col])
+    for alias in (
+        "Número da nota fiscal",
+        "Numero da nota fiscal",
+        "Nº da nota fiscal",
+        "Número NF",
+        "Numero NF",
+        "NF número",
+        "NF numero",
+    ):
+        if alias in out.columns and alias != col:
+            fb = _strip_str_series(out[alias])
+            merged = merged.where(merged.ne(""), fb)
+    out[col] = merged
+    return out
+
+
 def _normalize_pedidos_export(df: pd.DataFrame) -> pd.DataFrame:
     """Exports ML frequentes: «Código (SKU)»; colunas de NF por vezes ausentes."""
     out = df.copy()
@@ -46,6 +78,7 @@ def _normalize_pedidos_export(df: pd.DataFrame) -> pd.DataFrame:
         out["Existe Nota Fiscal gerada"] = ""
     if "Número da nota" not in out.columns:
         out["Número da nota"] = ""
+    out = _coalesce_nota_fiscal_em_numero_da_nota(out)
     return out
 
 

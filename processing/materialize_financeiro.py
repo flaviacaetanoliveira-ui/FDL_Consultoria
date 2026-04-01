@@ -138,11 +138,26 @@ def _atomic_replace(tmp: Path, final: Path) -> None:
     os.replace(tmp, final)
 
 
+def _dataframe_safe_for_parquet(df: Any) -> Any:
+    """
+    PyArrow infere às vezes colunas object como int64 se a maioria for numérica; valores com zeros
+    à esquerda (ex. CPF) falham. Uniformiza colunas object como texto antes de to_parquet.
+    """
+    import pandas as pd
+
+    out = df.copy()
+    for c in out.columns:
+        if out[c].dtype != object:
+            continue
+        out[c] = out[c].map(lambda v: "" if pd.isna(v) else str(v))
+    return out
+
+
 def _write_parquet(df: Any, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     try:
-        df.to_parquet(tmp, index=False, engine="pyarrow")
+        _dataframe_safe_for_parquet(df).to_parquet(tmp, index=False, engine="pyarrow")
         _atomic_replace(tmp, path)
     finally:
         if tmp.is_file():

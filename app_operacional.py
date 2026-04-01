@@ -4194,11 +4194,15 @@ def _render_frete_operacional_ui(
             picker_max = max(d_max_data, default_fim, today)
             if picker_max < picker_min:
                 picker_min, picker_max = picker_max, picker_min
-        
-            d_ini_val = max(picker_min, min(default_ini, picker_max))
-            d_fim_val = max(picker_min, min(default_fim, picker_max))
-            if d_ini_val > d_fim_val:
-                d_ini_val = d_fim_val
+
+            # Janela «últimos 30 dias» ancorada em hoje pode não cruzar as datas reais do CSV
+            # (ex.: export só 2025 com app em 2026 → recorte filtrado zerava KPIs e detalhamento).
+            d_ini_try = max(d_min_data, default_ini)
+            d_fim_try = min(d_max_data, default_fim)
+            if d_ini_try > d_fim_try:
+                d_ini_val, d_fim_val = d_min_data, d_max_data
+            else:
+                d_ini_val, d_fim_val = d_ini_try, d_fim_try
         
             estados: list[str] = []
             if "Estado" in work.columns:

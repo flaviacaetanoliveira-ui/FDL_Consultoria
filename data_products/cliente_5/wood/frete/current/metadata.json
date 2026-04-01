@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T17:33:25Z",
-  "source_signature": "20fff867088cc422263c22902b3fc889",
+  "generated_at": "2026-04-01T11:28:26Z",
+  "source_signature": "86f471387849ff43b85f79e30e247cb0",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_5",
   "empresa": "wood",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "wood",
   "cnpj": null,
-  "row_count": 3265,
+  "row_count": 3317,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -97,7 +97,7 @@
     "vendas_arquivo": "Wood - Vendas ML 2026.xlsx",
     "frete_arquivo": "Wood - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 3265,
+    "linhas": 3317,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

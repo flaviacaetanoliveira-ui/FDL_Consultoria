@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-03-31T17:32:27Z",
-  "source_signature": "ec0827037daa14458574bb209d7b09ef",
+  "generated_at": "2026-04-01T11:27:32Z",
+  "source_signature": "8a4a12aaad934e6783d0745397dabfd6",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_5",
   "empresa": "esquilo",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "esquilo",
   "cnpj": null,
-  "row_count": 3056,
+  "row_count": 3151,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -97,7 +97,7 @@
     "vendas_arquivo": "Esquilo - Vendas ML 2026.xlsx",
     "frete_arquivo": "Esquilo - Frete por Anúncio - Atualizado 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 3056,
+    "linhas": 3151,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

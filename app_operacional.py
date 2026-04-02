@@ -4049,35 +4049,15 @@ def _render_faturamento_dre_minimal(
 
     _fdl_ui_gap_tight()
 
-    _disp_nf = pd.DataFrame()
-    if not df_nf.empty:
-        _disp_nf = pd.DataFrame(
-            {
-                "Emissão NF": df_nf["Nota_Data_Emissao"].apply(
-                    lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "—"
-                ),
-                "Empresa": df_nf["empresa"].astype(str).replace("", "—"),
-                "NF": df_nf["Nota_Numero_Normalizado"].astype(str),
-                "Situação NF": df_nf["Nota_Situacao"].astype(str).replace("", "—"),
-                "Plataforma": _faturamento_nf_platform_display_series(df_nf).astype(str),
-                "Pedido / multiloja": df_nf["pedido_resumo"].astype(str),
-                "Produto (resumo)": df_nf["produto_resumo"].astype(str),
-                "Linhas pedido": df_nf["n_linhas_pedido"].astype(int),
-                "Valor da venda": pd.to_numeric(df_nf["valor_venda"], errors="coerce"),
-                "Valor faturado NF": pd.to_numeric(df_nf["valor_faturado_nf"], errors="coerce"),
-                "Diferença": pd.to_numeric(df_nf["diferenca"], errors="coerce"),
-                "Comissão": pd.to_numeric(df_nf["comissao"], errors="coerce"),
-                "Frete": pd.to_numeric(df_nf["frete"], errors="coerce"),
-                "Imposto": pd.to_numeric(df_nf["imposto"], errors="coerce"),
-                "Despesa fixa": pd.to_numeric(df_nf["despesa_fixa"], errors="coerce"),
-                "Resultado": pd.to_numeric(df_nf["resultado"], errors="coerce"),
-            }
-        )
-    if "org_id" in df_nf.columns:
-        _disp_nf.insert(1, "org_id", df_nf["org_id"].astype(str).replace("", "—"))
-
-    _cfg_nf: dict[str, NumberColumn | TextColumn] = {}
-    for c in (
+    _nf_table_cols_order = [
+        "Emissão NF",
+        "Empresa",
+        "Plataforma",
+        "NF",
+        "Situação",
+        "Pedido / multiloja",
+        "Produto",
+        "Linhas pedido",
         "Valor da venda",
         "Valor faturado NF",
         "Diferença",
@@ -4086,49 +4066,119 @@ def _render_faturamento_dre_minimal(
         "Imposto",
         "Despesa fixa",
         "Resultado",
-    ):
-        if c in _disp_nf.columns:
-            _cfg_nf[c] = NumberColumn(c, format="R$ %,.2f")
-    if "Linhas pedido" in _disp_nf.columns:
-        _cfg_nf["Linhas pedido"] = NumberColumn("Linhas pedido", format="%d")
-    for c in (
-        "Emissão NF",
-        "Empresa",
-        "org_id",
-        "NF",
-        "Situação NF",
-        "Plataforma",
-        "Pedido / multiloja",
-        "Produto (resumo)",
-    ):
-        if c in _disp_nf.columns:
-            _cfg_nf[c] = TextColumn(c, width="medium")
+    ]
+
+    _df_nf_table = df_nf
+    if not df_nf.empty and "Nota_Data_Emissao" in df_nf.columns:
+        _df_nf_table = df_nf.sort_values(
+            "Nota_Data_Emissao", ascending=False, na_position="last"
+        ).reset_index(drop=True)
+
+    _disp_nf_full = pd.DataFrame()
+    _disp_nf_ui = pd.DataFrame()
+    if not _df_nf_table.empty:
+        _plat_s = _faturamento_nf_platform_display_series(_df_nf_table).astype(str)
+        _disp_nf_full = pd.DataFrame(
+            {
+                "Emissão NF": _df_nf_table["Nota_Data_Emissao"].apply(
+                    lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "—"
+                ),
+                "Empresa": _df_nf_table["empresa"].astype(str).replace("", "—"),
+                "Plataforma": _plat_s,
+                "NF": _df_nf_table["Nota_Numero_Normalizado"].astype(str),
+                "Situação": _df_nf_table["Nota_Situacao"].astype(str).replace("", "—"),
+                "Pedido / multiloja": _faturamento_disp_texto_sem_none(_df_nf_table["pedido_resumo"]),
+                "Produto": _faturamento_disp_texto_sem_none(_df_nf_table["produto_resumo"]),
+                "Linhas pedido": _df_nf_table["n_linhas_pedido"].astype(int),
+                "Valor da venda": pd.to_numeric(_df_nf_table["valor_venda"], errors="coerce"),
+                "Valor faturado NF": pd.to_numeric(_df_nf_table["valor_faturado_nf"], errors="coerce"),
+                "Diferença": pd.to_numeric(_df_nf_table["diferenca"], errors="coerce"),
+                "Comissão": pd.to_numeric(_df_nf_table["comissao"], errors="coerce"),
+                "Frete": pd.to_numeric(_df_nf_table["frete"], errors="coerce"),
+                "Imposto": pd.to_numeric(_df_nf_table["imposto"], errors="coerce"),
+                "Despesa fixa": pd.to_numeric(_df_nf_table["despesa_fixa"], errors="coerce"),
+                "Resultado": pd.to_numeric(_df_nf_table["resultado"], errors="coerce"),
+            }
+        )
+        _disp_nf_full = _disp_nf_full[_nf_table_cols_order]
+        _disp_nf_ui = _disp_nf_full.copy()
+
+        def _fat_min_trunc_text_cell(v: object, max_len: int = 72) -> str:
+            t = str(v).strip()
+            if t in ("", "—", "nan") or len(t) <= max_len:
+                return t if t else "—"
+            return t[: max_len - 1] + "…"
+
+        _disp_nf_ui["Pedido / multiloja"] = _disp_nf_ui["Pedido / multiloja"].map(
+            lambda x: _fat_min_trunc_text_cell(x, 72)
+        )
+        _disp_nf_ui["Produto"] = _disp_nf_ui["Produto"].map(lambda x: _fat_min_trunc_text_cell(x, 72))
+
+    _cfg_nf: dict[str, NumberColumn | TextColumn] = {}
+    if "Valor da venda" in _disp_nf_ui.columns:
+        _cfg_nf["Valor da venda"] = NumberColumn("Valor da venda", format="R$ %,.2f")
+    if "Valor faturado NF" in _disp_nf_ui.columns:
+        _cfg_nf["Valor faturado NF"] = NumberColumn("Valor faturado NF", format="R$ %,.2f")
+    if "Diferença" in _disp_nf_ui.columns:
+        _cfg_nf["Diferença"] = NumberColumn(
+            "Diferença",
+            format="R$ %,.2f",
+            help="Valor da venda menos valor faturado na NF.",
+        )
+    for _mc in ("Comissão", "Frete", "Imposto", "Despesa fixa"):
+        if _mc in _disp_nf_ui.columns:
+            _cfg_nf[_mc] = NumberColumn(_mc, format="R$ %,.2f")
+    if "Resultado" in _disp_nf_ui.columns:
+        _cfg_nf["Resultado"] = NumberColumn(
+            "Resultado",
+            format="R$ %,.2f",
+            help="Resultado consolidado por NF (materializado / regra do painel).",
+        )
+    if "Linhas pedido" in _disp_nf_ui.columns:
+        _cfg_nf["Linhas pedido"] = NumberColumn(
+            "Linhas pedido",
+            format="%d",
+            help="Quantidade de linhas de pedido agregadas nesta NF.",
+        )
+
+    _txt_nf_specs: tuple[tuple[str, str, str | None], ...] = (
+        ("Emissão NF", "small", None),
+        ("Empresa", "medium", None),
+        ("Plataforma", "medium", None),
+        ("NF", "small", None),
+        ("Situação", "small", None),
+        ("Pedido / multiloja", "large", "Resumo de pedido ou multiloja (texto completo no CSV)."),
+        ("Produto", "large", "Resumo de produtos/itens (texto completo no CSV)."),
+    )
+    for _cn, _cw, _ch in _txt_nf_specs:
+        if _cn in _disp_nf_ui.columns:
+            _cfg_nf[_cn] = TextColumn(_cn, width=_cw, help=_ch) if _ch else TextColumn(_cn, width=_cw)
 
     st.subheader("Tabela por NF")
     st.caption(
-        f"**{len(_disp_nf)}** linha(s) · 1 linha por **NF** · ordenação por **emissão** (mais recente primeiro). "
-        "Mesmas linhas que o **CSV**."
+        f"**{len(_disp_nf_ui)}** linha(s) · 1 linha por **NF** · **emissão** mais recente primeiro. "
+        "**CSV** com as mesmas colunas e textos **completos** em Pedido / Produto."
     )
-    if _disp_nf.empty:
+    if _disp_nf_ui.empty:
         st.info(
             "Sem notas no recorte (confirme **período de emissão**, **empresa** e **plataforma**)."
         )
     else:
         st.dataframe(
-            _disp_nf,
+            _disp_nf_ui,
             use_container_width=True,
             hide_index=True,
-            height=min(520, 120 + 34 * min(len(_disp_nf), 14)),
+            height=min(520, 120 + 34 * min(len(_disp_nf_ui), 14)),
             column_config=_cfg_nf,
         )
 
     st.download_button(
         "Exportar CSV (recorte atual)",
-        _disp_nf.to_csv(index=False).encode("utf-8-sig") if not _disp_nf.empty else b"",
+        _disp_nf_full.to_csv(index=False).encode("utf-8-sig") if not _disp_nf_full.empty else b"",
         file_name="faturamento_recorte_minimo_nf.csv",
         mime="text/csv",
         key=f"fdl_fat_min_dl_{_oid}",
-        disabled=_disp_nf.empty,
+        disabled=_disp_nf_full.empty,
     )
 
 

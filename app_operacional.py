@@ -357,6 +357,44 @@ def _pd_to_datetime_pedido_br(series: pd.Series) -> pd.Series:
     return pd.to_datetime(series, errors="coerce", dayfirst=True)
 
 
+def _faturamento_series_bool_mask(series: pd.Series) -> pd.Series:
+    """
+    Flags booleanas do materializado: Parquet traz ``bool``; o CSV de app pode trazer ``\"True\"`` / ``\"False\"``.
+    ``astype(bool)`` em string ``\"False\"`` em pandas devolve **True** (string não vazia) — incorreto para visão NF.
+    """
+    s = series
+    if isinstance(s.dtype, pd.BooleanDtype):
+        return s.fillna(False).astype(bool)
+    if s.dtype == bool or pd.api.types.is_bool_dtype(s):
+        return s.fillna(False).astype(bool)
+    if pd.api.types.is_numeric_dtype(s):
+        return pd.to_numeric(s, errors="coerce").fillna(0).ne(0)
+    x = s.astype(str).str.strip().str.casefold()
+    return x.eq("true") | x.eq("1") | x.eq("yes") | x.eq("sim")
+
+
+def _faturamento_ts_nf_emissao_para_dia_civil(s: pd.Series) -> pd.Series:
+    """``Nota_Data_Emissao`` vem em ISO ``YYYY-MM-DD HH:MM:SS`` do join; **não** usar ``dayfirst=True`` em série (pandas infer quebra parte das linhas)."""
+    ts = pd.to_datetime(s, errors="coerce", dayfirst=False)
+    if ts.empty:
+        return ts
+    if getattr(ts.dt, "tz", None) is not None:
+        ts = ts.dt.tz_convert(_BR_TZ)
+    return ts.dt.normalize()
+
+
+def _faturamento_mask_nf_emissao_no_periodo(s: pd.Series, d_ini: date, d_fim: date) -> pd.Series:
+    """Intervalo inclusive no dia civil BR para data de emissão da NF."""
+    ts = _faturamento_ts_nf_emissao_para_dia_civil(s)
+    if ts.empty:
+        return pd.Series(False, index=ts.index)
+    dcal = ts.dt.date
+    ok = pd.notna(ts)
+    ge = pd.Series(dcal, index=ts.index) >= d_ini
+    le = pd.Series(dcal, index=ts.index) <= d_fim
+    return ok & ge & le
+
+
 def _faturamento_ts_pedido_para_dia_civil(s: pd.Series) -> pd.Series:
     """Converte coluna **Data** (texto BR, datetime64 ou tz-aware) para datetime64 naive em dia civil BR."""
     ts = pd.to_datetime(s, errors="coerce", dayfirst=True)
@@ -3203,6 +3241,46 @@ def _faturamento_atendido_mask(df: pd.DataFrame) -> pd.Series:
     return situ.eq("atendido")
 
 
+def _faturamento_admin_metadata_rowcount_message(path_final: str, row_count_loaded: int) -> str:
+    """
+    Compara ``faturamento_row_count_loaded`` com ``metadata.json`` na pasta ``current/`` (materializador).
+    Ajuda a detetar cache antigo ou ficheiro errado sem hardcodar contagens por cliente.
+    """
+    raw = (path_final or "").strip()
+    if not raw:
+        return "Sem path resolvido — nada a contrastar com metadata."
+    try:
+        p = Path(raw).expanduser()
+        if not p.is_absolute():
+            p = (_REPO_APP_ROOT / p).resolve()
+        else:
+            p = p.resolve()
+    except Exception:
+        return "Path resolvido inválido para leitura de metadata."
+    if not p.is_file():
+        return f"Ficheiro não existe no disco: `{p}`"
+    meta_path = p.parent / "metadata.json"
+    if not meta_path.is_file():
+        return f"**metadata.json** ausente em `{p.parent}` — confirme manualmente o artefato."
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        rc = meta.get("row_count")
+        try:
+            rc_i = int(rc) if rc is not None else None
+        except (TypeError, ValueError):
+            rc_i = None
+    except Exception as exc:
+        return f"**metadata.json** não legível: `{exc}`"
+    if rc_i is None:
+        return "**metadata.json** sem `row_count` numérico — confirme manualmente."
+    if rc_i == int(row_count_loaded):
+        return f"**OK:** `metadata.json` `row_count` = **{rc_i}** coincide com **faturamento_row_count_loaded**."
+    return (
+        f"**ATENÇÃO:** `metadata.json` indica **row_count={rc_i}** mas o carregamento reportou **{row_count_loaded}** linhas. "
+        "Possíveis causas: **cache Streamlit** (até TTL), ficheiro substituído após arranque, ou leitura de outro path."
+    )
+
+
 def _faturamento_materialized_fiscal_audit(df: pd.DataFrame) -> dict[str, object]:
     """Metadados sobre colunas fiscais do join notas (materializado V2)."""
     want = (
@@ -3447,7 +3525,7 @@ def _render_faturamento_dre_visao_geral(df: pd.DataFrame, load_info: dict[str, o
 
     with st.expander("Outras métricas e definições", expanded=False):
         _n_ic = (
-            int(df["faturamento_consolidado"].fillna(False).astype(bool).sum())
+            int(_faturamento_series_bool_mask(df["faturamento_consolidado"]).sum())
             if "faturamento_consolidado" in df.columns
             else 0
         )
@@ -3732,7 +3810,7 @@ def _faturamento_compute_alert_bools(df: pd.DataFrame) -> pd.DataFrame:
     atendido = situ == "atendido"
     sem_nf = nf.eq("não") | nf.eq("nao")
     if "faturamento_consolidado" in out.columns:
-        fc = out["faturamento_consolidado"].fillna(False).astype(bool)
+        fc = _faturamento_series_bool_mask(out["faturamento_consolidado"])
     else:
         fc = pd.Series(False, index=out.index)
     out["_ab_sem_nf_np"] = atendido & sem_nf & ~fc
@@ -3804,7 +3882,9 @@ def _render_faturamento_dre_recorte_global(
             st.session_state["fdl_fat_dre_d_fim"] = min(d_max, datetime.now(_BR_TZ).date())
     has_nf_emi = "Nota_Data_Emissao" in out.columns
     if has_nf_emi:
-        nf_d_min, nf_d_max, nf_ok_dates = _series_datetime_bounds_dates(out["Nota_Data_Emissao"])
+        nf_d_min, nf_d_max, nf_ok_dates = _series_datetime_bounds_dates(
+            out["Nota_Data_Emissao"], dayfirst=False
+        )
     else:
         nf_d_min = nf_d_max = datetime.now(_BR_TZ).date()
         nf_ok_dates = False
@@ -4030,14 +4110,14 @@ def _render_faturamento_dre_recorte_global(
 
     _pres = str(st.session_state.get("fdl_fat_dre_presenca_nf") or "Todos").strip()
     if _pres == "Com NF vinculada" and "faturamento_nota_vinculada" in sliced.columns:
-        sliced = sliced.loc[sliced["faturamento_nota_vinculada"].fillna(False).astype(bool)].copy()
+        sliced = sliced.loc[_faturamento_series_bool_mask(sliced["faturamento_nota_vinculada"])].copy()
     elif _pres == "Sem NF vinculada" and "faturamento_nota_vinculada" in sliced.columns:
-        sliced = sliced.loc[~sliced["faturamento_nota_vinculada"].fillna(False).astype(bool)].copy()
+        sliced = sliced.loc[~_faturamento_series_bool_mask(sliced["faturamento_nota_vinculada"])].copy()
 
     _emi_active = bool(st.session_state.get("fdl_fat_dre_nf_emi_use"))
     if _emi_active:
         if "faturamento_nota_vinculada" in sliced.columns:
-            sliced = sliced.loc[sliced["faturamento_nota_vinculada"].fillna(False).astype(bool)].copy()
+            sliced = sliced.loc[_faturamento_series_bool_mask(sliced["faturamento_nota_vinculada"])].copy()
         elif "Nota_Numero_Normalizado" in sliced.columns:
             nn = sliced["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
             sliced = sliced.loc[nn.ne("")].copy()
@@ -4051,11 +4131,7 @@ def _render_faturamento_dre_recorte_global(
             if d_nf < d_ni:
                 st.warning("A data final da **emissão da NF** não pode ser anterior à inicial.")
                 d_nf = d_ni
-            ts_nf = pd.to_datetime(sliced["Nota_Data_Emissao"], errors="coerce", dayfirst=True)
-            dd_nf = ts_nf.dt.normalize()
-            _ini_nf = pd.Timestamp(d_ni)
-            _fim_nf = pd.Timestamp(d_nf) + pd.Timedelta(days=1)
-            m_nf = ts_nf.notna() & (dd_nf >= _ini_nf) & (dd_nf < _fim_nf)
+            m_nf = _faturamento_mask_nf_emissao_no_periodo(sliced["Nota_Data_Emissao"], d_ni, d_nf)
             sliced = sliced.loc[m_nf].copy()
 
     sel_nf_sit = st.session_state.get("fdl_fat_dre_nf_sit") or []
@@ -4335,11 +4411,11 @@ def _painel_faturamento(
 
     filt = work.copy()
     if visao == "Consolidado":
-        filt = filt[filt["faturamento_consolidado"].fillna(False).astype(bool)]
+        filt = filt.loc[_faturamento_series_bool_mask(filt["faturamento_consolidado"])].copy()
     elif visao == "Com NF":
-        filt = filt[filt["faturamento_com_nf"].fillna(False).astype(bool)]
+        filt = filt.loc[_faturamento_series_bool_mask(filt["faturamento_com_nf"])].copy()
     elif visao == "Sem NF permitido":
-        filt = filt[filt["faturamento_sem_nf"].fillna(False).astype(bool)]
+        filt = filt.loc[_faturamento_series_bool_mask(filt["faturamento_sem_nf"])].copy()
 
     if not use_modulo_recorte and has_usable_dates:
         if d_fim < d_ini:
@@ -4399,7 +4475,11 @@ def _painel_faturamento(
     receita_sum = float(receita_s.fillna(0).sum())
     res_sum = float(pd.to_numeric(filt[res_col], errors="coerce").fillna(0).sum())
     margem_total = (res_sum / receita_sum) if receita_sum not in (0.0, -0.0) else float("nan")
-    n_cons = int(filt["faturamento_consolidado"].fillna(False).astype(bool).sum()) if "faturamento_consolidado" in filt.columns else 0
+    n_cons = (
+        int(_faturamento_series_bool_mask(filt["faturamento_consolidado"]).sum())
+        if "faturamento_consolidado" in filt.columns
+        else 0
+    )
     any_alert = filt["_ab_pl_zero"] | filt["_ab_div"] | filt["_ab_sem_nf_np"]
     n_alert = int(any_alert.sum())
 
@@ -5817,9 +5897,34 @@ elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in 
         _lay = str(faturamento_info.get("faturamento_data_layout", ""))
         _src = str(faturamento_info.get("faturamento_resolution_source", ""))
         _pf = str(faturamento_info.get("faturamento_path_final_resolved", ""))[:500]
+        _pf_full = str(faturamento_info.get("faturamento_path_final_resolved", "")).strip()
+        _n_loaded = faturamento_info.get("faturamento_row_count_loaded")
         st.caption(
             f"Faturamento: layout **{_lay}** · origem `{_src}` · alvo=`{_t_disp}` · path=`{_pf}`"
         )
+        with st.expander("Admin — ficheiro lido e validação", expanded=False):
+            st.markdown(
+                "| Campo | Valor |\n| --- | --- |\n"
+                f"| **faturamento_resolution_source** | `{_src}` |\n"
+                f"| **faturamento_row_count_loaded** | `{_n_loaded}` |\n"
+            )
+            st.code(_pf_full or "(vazio)", language="text")
+            st.caption("**faturamento_path_final_resolved** (completo, acima).")
+            _slug = str(_materialized_cliente_slug()).strip()
+            _expect_marker = f"data_products/{_slug}/faturamento/current/dataset_faturamento_app.csv".casefold()
+            _norm = _pf_full.replace("\\", "/").casefold()
+            _expect_pq = f"data_products/{_slug}/faturamento/current/dataset.parquet".casefold()
+            if _slug and (_expect_marker in _norm or _expect_pq in _norm):
+                st.success(
+                    f"Path alinha ao V2 canónico em `data_products/{_slug}/faturamento/current/` "
+                    "(CSV ou Parquet, conforme existir no disco)."
+                )
+            elif _pf_full:
+                st.warning(
+                    "O path **não** contém o sufixo canónico esperado para o slug atual — confirme **FDL_MATERIALIZED_CLIENTE_SLUG** e **FDL_FATURAMENTO_MATERIALIZED_PATH**."
+                )
+            if _n_loaded is not None:
+                st.markdown(_faturamento_admin_metadata_rowcount_message(_pf_full, int(_n_loaded)))
         _cnt = faturamento_info.get("faturamento_status_custo_counts")
         if isinstance(_cnt, dict) and _cnt:
             st.caption(

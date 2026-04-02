@@ -36,11 +36,9 @@ from faturamento_dre_recorte import (
     faturamento_recorte_state_from_session,
 )
 from faturamento_dre_recorte_minimo import (
-    FatMinFiscalConferenciaStats,
     _min_cal_limits,
-    apply_recorte_minimo,
-    compute_comercial_conferencia_stats,
-    compute_fiscal_nf_conferencia_stats,
+    build_nf_grain_dataframe,
+    compute_nf_panel_kpis,
     faturamento_min_series_nf_emissao_bounds_dates,
     faturamento_recorte_min_state_from_session,
 )
@@ -3693,16 +3691,17 @@ def _render_faturamento_dre_minimal(
     org_display_name: str,
 ) -> None:
     """
-    Etapa 1 — empresa, plataforma, período de venda (comercial) + período emissão NF (fiscal);
-    KPIs comerciais e KPI fiscal separados; tabela e CSV só no recorte comercial.
+    Etapa 1 — painel **NF-first**: único período = **emissão da NF**; **plataforma** (opcional) restringe linhas
+    de pedido no enriquecimento; KPIs e tabela derivam do mesmo ``df_nf``.
     """
     _oid = str(org_id)
     _ = org_display_name, ts_proc, load_info
     st.caption(
-        "**Universo (Etapa 1):** entram **todas** as situações de pedido do materializado "
-        "(ex.: Atendido, Cancelado, Em aberto). **Não** há filtro por situação nesta vista. "
-        "**Empresa** e **Plataforma** atuam no eixo **comercial** (venda); há também **período da venda** (**Data**) "
-        "e **período emissão NF** (fiscal). O KPI **Vl. Nota Fiscal** segue o período de **emissão**, não a plataforma."
+        "**Universo (Etapa 1):** **único período** = **emissão da NF**. O painel lista **uma linha por NF** válida nesse intervalo. "
+        "**Valor faturado** = líquido da NF **uma vez**; **valor da venda**, comissão, frete, imposto e resultado = "
+        "**soma nas linhas de pedido** ligadas a essas NFs (filtros **Empresa** e **Plataforma**). "
+        "A coluna **Data** do pedido **não** filtra o painel. "
+        "**NF** só aparece se existir linha de pedido no materializado com join à nota."
     )
     if df.empty:
         st.info(
@@ -3722,34 +3721,6 @@ def _render_faturamento_dre_minimal(
             st.warning("Não foi possível apresentar o faturamento. Contacte o suporte.")
         return
 
-    has_data = "Data" in df.columns
-    if has_data:
-        d_min, d_max, ok_dates = _series_datetime_bounds_dates(df["Data"])
-    else:
-        d_min = d_max = datetime.now(_BR_TZ).date()
-        ok_dates = False
-    cal_min, cal_max = _min_cal_limits(d_min, d_max) if ok_dates else (d_min, d_max)
-
-    _sig_k = "fdl_fat_min_data_bounds_sig"
-    if ok_dates:
-        _bs = (d_min.isoformat(), d_max.isoformat())
-        if st.session_state.get(_sig_k) != _bs:
-            st.session_state[_sig_k] = _bs
-            st.session_state["fdl_fat_min_d_ini"] = d_min
-            st.session_state["fdl_fat_min_d_fim"] = min(d_max, datetime.now(_BR_TZ).date())
-        if "fdl_fat_min_d_ini" not in st.session_state:
-            st.session_state["fdl_fat_min_d_ini"] = d_min
-        if "fdl_fat_min_d_fim" not in st.session_state:
-            st.session_state["fdl_fat_min_d_fim"] = min(d_max, datetime.now(_BR_TZ).date())
-        st.session_state["fdl_fat_min_d_ini"] = min(
-            max(_safe_streamlit_date(st.session_state["fdl_fat_min_d_ini"], d_min), cal_min),
-            cal_max,
-        )
-        st.session_state["fdl_fat_min_d_fim"] = min(
-            max(_safe_streamlit_date(st.session_state["fdl_fat_min_d_fim"], d_max), cal_min),
-            cal_max,
-        )
-
     nf_min, nf_max, ok_nf_dates = faturamento_min_series_nf_emissao_bounds_dates(df)
     nf_cal_min, nf_cal_max = _min_cal_limits(nf_min, nf_max) if ok_nf_dates else (nf_min, nf_max)
     _nf_sig_k = "fdl_fat_min_nf_bounds_sig"
@@ -3758,12 +3729,8 @@ def _render_faturamento_dre_minimal(
         _nf_bs = (nf_min.isoformat(), nf_max.isoformat())
         if st.session_state.get(_nf_sig_k) != _nf_bs:
             st.session_state[_nf_sig_k] = _nf_bs
-            if ok_dates:
-                _nfi = _safe_streamlit_date(st.session_state.get("fdl_fat_min_d_ini"), nf_min)
-                _nff = _safe_streamlit_date(st.session_state.get("fdl_fat_min_d_fim"), nf_max)
-            else:
-                _nfi = nf_min
-                _nff = min(nf_max, _today)
+            _nfi = nf_min
+            _nff = min(nf_max, _today)
             _nfi = min(max(_nfi, nf_cal_min), nf_cal_max)
             _nff = min(max(_nff, nf_cal_min), nf_cal_max)
             if _nff < _nfi:
@@ -3771,12 +3738,8 @@ def _render_faturamento_dre_minimal(
             st.session_state["fdl_fat_min_nf_d_ini"] = _nfi
             st.session_state["fdl_fat_min_nf_d_fim"] = _nff
         if "fdl_fat_min_nf_d_ini" not in st.session_state:
-            if ok_dates:
-                _nfi = _safe_streamlit_date(st.session_state.get("fdl_fat_min_d_ini"), nf_min)
-                _nff = _safe_streamlit_date(st.session_state.get("fdl_fat_min_d_fim"), nf_max)
-            else:
-                _nfi = nf_min
-                _nff = min(nf_max, _today)
+            _nfi = nf_min
+            _nff = min(nf_max, _today)
             _nfi = min(max(_nfi, nf_cal_min), nf_cal_max)
             _nff = min(max(_nff, nf_cal_min), nf_cal_max)
             if _nff < _nfi:
@@ -3817,31 +3780,9 @@ def _render_faturamento_dre_minimal(
             )
         _multiselect_stable("fdl_fat_min_plat", "Plataforma", plats)
         st.caption(
-            "**Plataforma** restringe só o eixo **comercial** (tabela, CSV e KPIs de venda). "
-            "Não entra no total do KPI **Vl. Nota Fiscal**."
+            "**Plataforma:** restringe as **linhas de pedido** usadas no enriquecimento (venda, comissão, frete, etc.) "
+            "entre as NFs já filtradas por **emissão**."
         )
-        if ok_dates:
-            r0 = st.columns((1, 1))
-            with r0[0]:
-                st.date_input(
-                    "Período da venda — início",
-                    min_value=cal_min,
-                    max_value=cal_max,
-                    format="DD/MM/YYYY",
-                    key="fdl_fat_min_d_ini",
-                    help=_FATURAMENTO_HELP_PERIODO_DATA,
-                )
-            with r0[1]:
-                st.date_input(
-                    "Período da venda — fim",
-                    min_value=cal_min,
-                    max_value=cal_max,
-                    format="DD/MM/YYYY",
-                    key="fdl_fat_min_d_fim",
-                    help=_FATURAMENTO_HELP_PERIODO_DATA,
-                )
-        elif has_data:
-            st.caption("Coluna **Data** sem valores utilizáveis — período indisponível.")
         if ok_nf_dates:
             r_nf = st.columns((1, 1))
             with r_nf[0]:
@@ -3865,14 +3806,11 @@ def _render_faturamento_dre_minimal(
         elif "Nota_Data_Emissao" in df.columns:
             st.caption("Coluna **Nota_Data_Emissao** sem datas utilizáveis — período de emissão indisponível.")
         else:
-            st.caption("Sem coluna **Nota_Data_Emissao** no materializado — KPI **Vl. Nota Fiscal (emissão)** indisponível.")
+            st.caption("Sem coluna **Nota_Data_Emissao** no materializado — painel **NF-first** indisponível.")
         if st.button("Limpar filtros desta vista", key="fdl_fat_min_reset"):
             for _k in (
                 "fdl_fat_min_emp",
                 "fdl_fat_min_plat",
-                "fdl_fat_min_d_ini",
-                "fdl_fat_min_d_fim",
-                "fdl_fat_min_data_bounds_sig",
                 "fdl_fat_min_nf_d_ini",
                 "fdl_fat_min_nf_d_fim",
                 "fdl_fat_min_nf_bounds_sig",
@@ -3881,14 +3819,6 @@ def _render_faturamento_dre_minimal(
             st.rerun()
 
     _min_state = faturamento_recorte_min_state_from_session(st.session_state)
-    df_recorte, _wrn = apply_recorte_minimo(df, _min_state)
-    for _m in _wrn:
-        st.warning(_m)
-
-    st.caption(
-        f"**Recorte comercial (venda):** **{len(df_recorte)}** linha(s) para **KPIs comerciais**, **tabela** e **CSV** "
-        f"(**{len(df)}** linhas no carregamento deste escopo antes destes filtros)."
-    )
     _nf_kpi_ini = _safe_streamlit_date(st.session_state.get("fdl_fat_min_nf_d_ini"), nf_min)
     _nf_kpi_fim = _safe_streamlit_date(st.session_state.get("fdl_fat_min_nf_d_fim"), nf_max)
     if ok_nf_dates:
@@ -3896,195 +3826,125 @@ def _render_faturamento_dre_minimal(
         _nf_kpi_fim = min(max(_nf_kpi_fim, nf_cal_min), nf_cal_max)
         if _nf_kpi_fim < _nf_kpi_ini:
             _nf_kpi_fim = _nf_kpi_ini
-    _fiscal_conf = (
-        compute_fiscal_nf_conferencia_stats(
-            df,
-            empresas_sel=_min_state.empresas,
-            nf_d_ini=_nf_kpi_ini,
-            nf_d_fim=_nf_kpi_fim,
-        )
-        if ok_nf_dates
-        else FatMinFiscalConferenciaStats(0, 0.0)
+
+    df_nf, _wrn_nf = build_nf_grain_dataframe(
+        df,
+        _min_state,
+        ok_nf_dates=ok_nf_dates,
+        nf_d_ini=_nf_kpi_ini,
+        nf_d_fim=_nf_kpi_fim,
     )
+    for _m in _wrn_nf:
+        st.warning(_m)
 
-    work = _faturamento_compute_alert_bools(df_recorte)
-    pl_col, res_col = "Preço de lista", "Resultado"
-    custo_prod_col = _faturamento_painel_custo_produto_col(list(work.columns))
-    assert custo_prod_col is not None
-
-    agg = _faturamento_agg_recorte(work)
-    _k1, _k2, _k3, _k4, _k5 = st.columns(5)
-    with _k1:
-        st.metric("Receita bruta", _fmt_brl_ptbr_celula(agg["receita_bruta"]))
-    with _k2:
-        st.metric(
-            "Receita líquida (venda)",
-            _fmt_brl_ptbr_celula(agg["receita_liquida"]),
-            help="Eixo **comercial**: mesmo critério do recorte por **Data** da venda (Σ valor líquido alinhado ao pedido / rateio no recorte).",
-        )
-    with _k3:
-        st.metric("Comissão", _fmt_brl_ptbr_celula(agg["comissao_plataforma"]))
-    with _k4:
-        st.metric("Frete", _fmt_brl_ptbr_celula(agg["frete"]))
-    with _k5:
-        st.metric("Resultado", _fmt_brl_ptbr_celula(agg["resultado"]))
+    _kp = compute_nf_panel_kpis(df_nf)
     st.caption(
-        "**Comercial:** receita bruta, receita líquida (venda), comissão, frete e resultado usam o recorte de **venda** "
-        "(empresa, plataforma, **Data**)."
+        f"**Painel NF-first:** **{_kp['n_nf']}** nota(s) · **{len(df)}** linhas no carregamento antes dos filtros."
     )
 
-    _comm_conf = compute_comercial_conferencia_stats(df_recorte)
-    _diff_conf = (
-        (_comm_conf.valor_venda - _fiscal_conf.valor_nota_fiscal) if ok_nf_dates else None
-    )
-    with st.container(border=True):
-        st.subheader("Conferência venda × NF")
-        st.caption(
-            "**Comercial** (1–3): período **Período da venda** → coluna **`Data`** · "
-            "**Valor da venda** = Σ (**Quantidade** × **Preço de lista**) — sem **Total dos Produtos** nem **Valor total**.\n\n"
-            "**Fiscal** (4–5): período **Período emissão NF** → **`Nota_Data_Emissao`** · "
-            "**Valor da nota fiscal** = Σ **`Nota_Valor_Liquido_Total`** uma vez por NF "
-            "(exclui **`Nota_Situacao`** com **cancel** / **deneg** / **inutil**) · só filtro **Empresa** (sem **Plataforma**).\n\n"
-            "**Diferença** (6): normal quando venda e emissão não coincidem no tempo."
+    _r_a, _r_b = st.columns((1, 1))
+    with _r_a:
+        st.metric("Valor da venda", _fmt_brl_ptbr_celula(_kp["valor_venda"]))
+    with _r_b:
+        st.metric(
+            "Valor faturado (NF)",
+            _fmt_brl_ptbr_celula(_kp["valor_faturado_nf"]) if ok_nf_dates else "—",
+            help="Σ **Nota_Valor_Liquido_Total** uma vez por NF no período de **emissão**.",
         )
-        m1, m2, m3 = st.columns(3)
-        with m1:
-            st.metric("Valor da venda", _fmt_brl_ptbr_celula(_comm_conf.valor_venda))
-        with m2:
-            st.metric("Linhas de pedido", _fmt_int_ptbr(_comm_conf.linhas_pedido))
-        with m3:
-            st.metric("Pedidos multiloja distintos", _fmt_int_ptbr(_comm_conf.pedidos_multiloja_distintos))
-        m4, m5, m6 = st.columns(3)
-        with m4:
-            st.metric(
-                "NFs válidas distintas",
-                _fmt_int_ptbr(_fiscal_conf.n_nf_distintas) if ok_nf_dates else "—",
-            )
-        with m5:
-            st.metric(
-                "Valor da nota fiscal",
-                _fmt_brl_ptbr_celula(_fiscal_conf.valor_nota_fiscal) if ok_nf_dates else "—",
-                help=_FATURAMENTO_HELP_VL_NF_FISCAL_KPI_MIN,
-            )
-        with m6:
-            st.metric(
-                "Diferença (venda − NF)",
-                _fmt_brl_ptbr_celula(_diff_conf) if _diff_conf is not None else "—",
-                help="Valor da venda (eixo **Data**) menos valor da NF (eixo **emissão**).",
-            )
+    _r_c, _r_d, _r_e, _r_f = st.columns(4)
+    with _r_c:
+        st.metric(
+            "Diferença (venda − NF)",
+            _fmt_brl_ptbr_celula(_kp["diferenca"]) if ok_nf_dates else "—",
+        )
+    with _r_d:
+        st.metric("Comissão", _fmt_brl_ptbr_celula(_kp["comissao"]))
+    with _r_e:
+        st.metric("Frete", _fmt_brl_ptbr_celula(_kp["frete"]))
+    with _r_f:
+        st.metric("Imposto", _fmt_brl_ptbr_celula(_kp["imposto"]))
+    st.metric("Resultado", _fmt_brl_ptbr_celula(_kp["resultado"]))
 
     _fdl_ui_gap_tight()
 
-    if "Data" in work.columns:
-        _sort_dt = _faturamento_ts_pedido_para_dia_civil(work["Data"])
-        work_show = (
-            work.assign(_fdl_sort_dt=_sort_dt)
-            .sort_values("_fdl_sort_dt", ascending=False, na_position="last")
-            .drop(columns=["_fdl_sort_dt"])
+    _disp_nf = pd.DataFrame()
+    if not df_nf.empty:
+        _disp_nf = pd.DataFrame(
+            {
+                "Emissão NF": df_nf["Nota_Data_Emissao"].apply(
+                    lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "—"
+                ),
+                "Empresa": df_nf["empresa"].astype(str).replace("", "—"),
+                "NF": df_nf["Nota_Numero_Normalizado"].astype(str),
+                "Situação NF": df_nf["Nota_Situacao"].astype(str).replace("", "—"),
+                "Plataforma": df_nf["plataforma_resumo"].astype(str),
+                "Pedido / multiloja": df_nf["pedido_resumo"].astype(str),
+                "Produto (resumo)": df_nf["produto_resumo"].astype(str),
+                "Linhas pedido": df_nf["n_linhas_pedido"].astype(int),
+                "Valor da venda": pd.to_numeric(df_nf["valor_venda"], errors="coerce"),
+                "Valor faturado NF": pd.to_numeric(df_nf["valor_faturado_nf"], errors="coerce"),
+                "Diferença": pd.to_numeric(df_nf["diferenca"], errors="coerce"),
+                "Comissão": pd.to_numeric(df_nf["comissao"], errors="coerce"),
+                "Frete": pd.to_numeric(df_nf["frete"], errors="coerce"),
+                "Imposto": pd.to_numeric(df_nf["imposto"], errors="coerce"),
+                "Resultado": pd.to_numeric(df_nf["resultado"], errors="coerce"),
+            }
         )
-    else:
-        work_show = work.sort_values(res_col, ascending=True, na_position="last")
+    if "org_id" in df_nf.columns:
+        _disp_nf.insert(1, "org_id", df_nf["org_id"].astype(str).replace("", "—"))
 
-    prod_col = _faturamento_resolve_produto_column(list(work_show.columns))
-    _ix = work_show.index
-    if "empresa" in work_show.columns:
-        _em = work_show["empresa"].fillna("").astype(str).str.strip()
-        empresa_s = _em.mask(_em.eq(""), "—")
-    elif "org_id" in work_show.columns:
-        empresa_s = work_show["org_id"].astype(str).str.strip()
-    else:
-        empresa_s = pd.Series("—", index=_ix)
-    pedido_s = _faturamento_pedido_display_series(work_show)
-    _data_s = (
-        _faturamento_disp_data_pedidos(work_show["Data"])
-        if "Data" in work_show.columns
-        else pd.Series("—", index=_ix)
-    )
-    _prod_s = work_show[prod_col].astype(str) if prod_col else pd.Series("", index=_ix)
-    _qtd_s = (
-        pd.to_numeric(work_show["Quantidade"], errors="coerce")
-        if "Quantidade" in work_show.columns
-        else pd.Series(float("nan"), index=_ix)
-    )
-    _vl_v = _faturamento_dre_vl_venda_series(work_show, pl_col)
-    _vl_nf = _faturamento_dre_vl_nota_fiscal_series(work_show)
-    _nf_s = _faturamento_dre_nf_coluna_display(work_show)
-    _fr_s = _faturamento_dre_frete_display_series(work_show)
-    _main_cols: list[tuple[str, pd.Series]] = [
-        ("Data", _data_s),
-        ("Empresa", empresa_s),
-        ("Plataforma", work_show["Nome da plataforma"]),
-        ("Pedido", pedido_s),
-        ("NF", _nf_s),
-        ("Produto", _prod_s),
-        ("SKU", work_show["Código"]),
-        ("Qtd", _qtd_s),
-        ("Vl. Venda", _vl_v),
-        ("Vl. Nota Fiscal", _vl_nf),
-        ("Frete", _fr_s),
-        ("Comissão", pd.to_numeric(work_show["Taxa de Comissão"], errors="coerce")),
-        ("Custo Total", pd.to_numeric(work_show[custo_prod_col], errors="coerce")),
-        ("Despesa fixa", pd.to_numeric(work_show["Despesas Fixas"], errors="coerce")),
-        ("Imposto", pd.to_numeric(work_show["Imposto"], errors="coerce")),
-        ("Resultado", pd.to_numeric(work_show[res_col], errors="coerce")),
-    ]
-    disp = pd.DataFrame(dict(_main_cols))
-    disp["Alertas"] = work_show.apply(_faturamento_alertas_text, axis=1)
-    disp = disp.reset_index(drop=True)
-
-    _cfg: dict[str, NumberColumn | TextColumn] = {}
+    _cfg_nf: dict[str, NumberColumn | TextColumn] = {}
     for c in (
-        "Vl. Venda",
-        "Vl. Nota Fiscal",
-        "Frete",
+        "Valor da venda",
+        "Valor faturado NF",
+        "Diferença",
         "Comissão",
-        "Custo Total",
-        "Despesa fixa",
+        "Frete",
         "Imposto",
         "Resultado",
     ):
-        if c in disp.columns:
-            _hc = _FATURAMENTO_HELP_VL_NF_COL_MIN_TABLE if c == "Vl. Nota Fiscal" else None
-            _cfg[c] = (
-                NumberColumn(c, format="R$ %,.2f", help=_hc)
-                if _hc
-                else NumberColumn(c, format="R$ %,.2f")
-            )
-    if "Qtd" in disp.columns:
-        _cfg["Qtd"] = NumberColumn("Qtd", format="%.2f")
-    for c in ("Data", "Empresa", "Plataforma", "Pedido", "NF", "Produto", "SKU", "Alertas"):
-        if c in disp.columns:
-            _tc_kw: dict[str, str | bool] = {"width": "large" if c == "Alertas" else "medium"}
-            if c == "Data":
-                _tc_kw["help"] = _FATURAMENTO_HELP_PERIODO_DATA
-            elif c == "NF":
-                _tc_kw["help"] = "N.º a partir do join com notas de saída; se vazio, texto do pedido quando existir."
-            _cfg[c] = TextColumn(c, **_tc_kw)
+        if c in _disp_nf.columns:
+            _cfg_nf[c] = NumberColumn(c, format="R$ %,.2f")
+    if "Linhas pedido" in _disp_nf.columns:
+        _cfg_nf["Linhas pedido"] = NumberColumn("Linhas pedido", format="%d")
+    for c in (
+        "Emissão NF",
+        "Empresa",
+        "org_id",
+        "NF",
+        "Situação NF",
+        "Plataforma",
+        "Pedido / multiloja",
+        "Produto (resumo)",
+    ):
+        if c in _disp_nf.columns:
+            _cfg_nf[c] = TextColumn(c, width="medium")
 
-    st.subheader("Tabela por venda")
+    st.subheader("Tabela por NF")
     st.caption(
-        f"**{len(disp)}** linhas · mesmas linhas que o **CSV** abaixo. Ordenação por **Data** da venda (mais recente primeiro)."
+        f"**{len(_disp_nf)}** linha(s) · 1 linha por **NF** · ordenação por **emissão** (mais recente primeiro). "
+        "Mesmas linhas que o **CSV**."
     )
-    st.dataframe(
-        disp,
-        use_container_width=True,
-        hide_index=True,
-        height=min(520, 120 + 34 * min(len(disp), 14)),
-        column_config=_cfg,
-    )
+    if _disp_nf.empty:
+        st.info(
+            "Sem notas no recorte (confirme **período de emissão**, **empresa** e **plataforma**)."
+        )
+    else:
+        st.dataframe(
+            _disp_nf,
+            use_container_width=True,
+            hide_index=True,
+            height=min(520, 120 + 34 * min(len(_disp_nf), 14)),
+            column_config=_cfg_nf,
+        )
 
-    _export = disp.copy()
-    _export["Situação do pedido"] = work_show["Situação"].astype(str).reset_index(drop=True)
     st.download_button(
         "Exportar CSV (recorte atual)",
-        _export.to_csv(index=False).encode("utf-8-sig"),
-        file_name="faturamento_recorte_minimo.csv",
+        _disp_nf.to_csv(index=False).encode("utf-8-sig") if not _disp_nf.empty else b"",
+        file_name="faturamento_recorte_minimo_nf.csv",
         mime="text/csv",
         key=f"fdl_fat_min_dl_{_oid}",
-    )
-    st.caption(
-        "O CSV inclui a coluna **Situação do pedido** para auditoria (todas as situações podem aparecer nesta Etapa 1). "
-        "Reflete só o **recorte comercial**; o KPI **Vl. Nota Fiscal (emissão)** não é a soma deste ficheiro."
+        disabled=_disp_nf.empty,
     )
 
 

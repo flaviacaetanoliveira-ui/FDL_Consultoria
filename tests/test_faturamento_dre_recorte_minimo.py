@@ -1,4 +1,4 @@
-"""Recorte mínimo Etapa 1 — empresa, plataforma, período venda."""
+"""Recorte mínimo Etapa 1 — ``apply_recorte_minimo`` (venda); ``build_nf_grain`` (só emissão NF no painel)."""
 
 from __future__ import annotations
 
@@ -9,8 +9,10 @@ import pandas as pd
 from faturamento_dre_recorte_minimo import (
     FaturamentoRecorteMinState,
     apply_recorte_minimo,
+    build_nf_grain_dataframe,
     compute_comercial_conferencia_stats,
     compute_fiscal_nf_conferencia_stats,
+    compute_nf_panel_kpis,
     compute_vl_nota_fiscal_fiscal_kpi,
     faturamento_min_series_nf_emissao_bounds_dates,
 )
@@ -154,6 +156,47 @@ def test_compute_fiscal_nf_conferencia_counts_distinct_nf() -> None:
     )
     assert stt.n_nf_distintas == 1
     assert stt.valor_nota_fiscal == 100.0
+
+
+def test_build_nf_grain_one_nf_two_order_lines() -> None:
+    df = pd.DataFrame(
+        {
+            "empresa": ["A", "A"],
+            "org_id": ["o1", "o1"],
+            "Nota_Numero_Normalizado": ["NF1", "NF1"],
+            "Nota_Valor_Liquido_Total": [100.0, 100.0],
+            "Nota_Data_Emissao": pd.to_datetime(["2025-06-10", "2025-06-10"]),
+            "Nota_Situacao": ["Autorizada", "Autorizada"],
+            "Data": pd.to_datetime(["2025-06-01", "2025-06-02"]),
+            "Quantidade": [2.0, 1.0],
+            "Preço de lista": [10.0, 5.0],
+            "Nome da plataforma": ["ML", "ML"],
+            "Número do pedido multiloja": ["P1", "P1"],
+            "Taxa de Comissão": [1.0, 2.0],
+            "Frete_Plataforma": [0.5, 0.5],
+            "Imposto": [3.0, 3.0],
+            "Resultado": [10.0, -5.0],
+            "Descrição": ["X", "Y"],
+            "faturamento_nota_vinculada": [True, True],
+        }
+    )
+    st = FaturamentoRecorteMinState((), (), date(2025, 1, 1), date(2030, 1, 1))
+    out, w = build_nf_grain_dataframe(
+        df,
+        st,
+        ok_nf_dates=True,
+        nf_d_ini=date(2025, 6, 1),
+        nf_d_fim=date(2025, 6, 30),
+    )
+    assert not w
+    assert len(out) == 1
+    assert float(out.iloc[0]["valor_faturado_nf"]) == 100.0
+    assert float(out.iloc[0]["valor_venda"]) == 25.0
+    assert int(out.iloc[0]["n_linhas_pedido"]) == 2
+    kp = compute_nf_panel_kpis(out)
+    assert kp["n_nf"] == 1
+    assert kp["valor_faturado_nf"] == 100.0
+    assert kp["valor_venda"] == 25.0
 
 
 def test_compute_comercial_conferencia_qtd_x_pl() -> None:

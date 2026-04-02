@@ -10,6 +10,12 @@
 
 from __future__ import annotations
 
+import os
+
+# O mesmo secrets.toml do repo pode apontar outro cliente (ex.: cliente_2). Este entrypoint é só Flávio:
+# o V2 canónico do faturamento vive em data_products/cliente_5/faturamento/current/.
+os.environ["FDL_MATERIALIZED_CLIENTE_SLUG"] = "cliente_5"
+
 from fdl_streamlit_bootstrap import run_operacional_app
 
 run_operacional_app(

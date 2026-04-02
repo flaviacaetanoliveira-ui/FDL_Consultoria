@@ -349,13 +349,21 @@ def _safe_streamlit_date(value: object, fallback: date) -> date:
     return fallback
 
 
-def _series_datetime_bounds_dates(series: pd.Series) -> tuple[date, date, bool]:
+def _pd_to_datetime_pedido_br(series: pd.Series) -> pd.Series:
+    """
+    Datas do export ML / pedidos em **DD/MM/AAAA**. Sem ``dayfirst=True``, o pandas trata
+    datas ambíguas como MM/DD (ex.: 05/02/2026 → 2 mai em vez de 5 fev), quebrando filtro por período e totais.
+    """
+    return pd.to_datetime(series, errors="coerce", dayfirst=True)
+
+
+def _series_datetime_bounds_dates(series: pd.Series, *, dayfirst: bool = True) -> tuple[date, date, bool]:
     """
     Min/max em dia civil a partir de coluna parseável como datetime.
     Não chama .min().date() sobre série só NaT (evita NaT/erros em limites).
     Devolve (d_min, d_max, tem_alguma_data_parseável).
     """
-    t = pd.to_datetime(series, errors="coerce")
+    t = pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
     t = t[t.notna()]
     if t.empty:
         d = datetime.now(_BR_TZ).date()
@@ -3988,7 +3996,7 @@ def _render_faturamento_dre_recorte_global(
         if d_fim_g < d_ini_g:
             st.warning("A data final da **venda** não pode ser anterior à inicial.")
             d_fim_g = d_ini_g
-        d_cmp = pd.to_datetime(sliced["Data"], errors="coerce")
+        d_cmp = _pd_to_datetime_pedido_br(sliced["Data"])
         dd = d_cmp.dt.normalize()
         _ini_ts = pd.Timestamp(d_ini_g)
         _fim_ts = pd.Timestamp(d_fim_g) + pd.Timedelta(days=1)
@@ -4020,7 +4028,7 @@ def _render_faturamento_dre_recorte_global(
             if d_nf < d_ni:
                 st.warning("A data final da **emissão da NF** não pode ser anterior à inicial.")
                 d_nf = d_ni
-            ts_nf = pd.to_datetime(sliced["Nota_Data_Emissao"], errors="coerce")
+            ts_nf = pd.to_datetime(sliced["Nota_Data_Emissao"], errors="coerce", dayfirst=True)
             dd_nf = ts_nf.dt.normalize()
             _ini_nf = pd.Timestamp(d_ni)
             _fim_nf = pd.Timestamp(d_nf) + pd.Timedelta(days=1)
@@ -4314,7 +4322,7 @@ def _painel_faturamento(
         if d_fim < d_ini:
             st.warning("A data final não pode ser anterior à inicial.")
             d_fim = d_ini
-        d_cmp = pd.to_datetime(filt["Data"], errors="coerce")
+        d_cmp = _pd_to_datetime_pedido_br(filt["Data"])
         dd = d_cmp.dt.normalize()
         _ini_ts = pd.Timestamp(d_ini)
         _fim_ts = pd.Timestamp(d_fim) + pd.Timedelta(days=1)
@@ -4350,7 +4358,15 @@ def _painel_faturamento(
             m_a = m_a | filt["_ab_sem_nf_np"]
         filt = filt.loc[m_a].copy()
 
-    filt = filt.sort_values(res_col, ascending=True, na_position="last")
+    if "Data" in filt.columns:
+        _sort_dt = _pd_to_datetime_pedido_br(filt["Data"])
+        filt = (
+            filt.assign(_fdl_sort_dt=_sort_dt)
+            .sort_values("_fdl_sort_dt", ascending=False, na_position="last")
+            .drop(columns=["_fdl_sort_dt"])
+        )
+    else:
+        filt = filt.sort_values(res_col, ascending=True, na_position="last")
 
     receita_s = _faturamento_painel_receita_series(filt, pl_col)
     receita_sum = float(receita_s.fillna(0).sum())
@@ -4529,7 +4545,7 @@ def _painel_faturamento(
 
         st.subheader("Tabela principal")
         st.caption(
-            f"{len(disp)} linhas · **Resultado** ascendente. "
+            f"{len(disp)} linhas · ordenação por **Data da venda** (mais recente primeiro). "
             "**Vl. Venda** = comercial (**Vl_Venda** ou equivalente). **Vl. Nota Fiscal** = "
             "**Nota_Valor_Liquido_Rateado** quando há join fiscal; senão **Valor total** do pedido. "
             "**Frete** = **Frete_Plataforma** ou **Custo de Frete**. "
@@ -4667,7 +4683,7 @@ def _painel_faturamento(
 
         st.subheader("Tabela principal")
         st.caption(
-            f"{len(disp)} linhas · **Resultado** ascendente. "
+            f"{len(disp)} linhas · ordenação por **Data da venda** (mais recente primeiro). "
             "À esquerda: operação do dia; à direita: NF, quantidade e composição de custos/taxas (**Ref. ML** no fim). "
             f"**{_FATURAMENTO_UI_VALOR_NOTA_FISCAL}** = **Valor total** (convenção; ver ajuda da coluna — não é NF-e legal). "
             "**N.º da nota** vazio: esperado sem integração fiscal. "

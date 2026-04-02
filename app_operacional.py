@@ -3700,6 +3700,7 @@ def _render_faturamento_dre_minimal(
         "**Universo (Etapa 1):** **único período** = **emissão da NF**. O painel lista **uma linha por NF** válida nesse intervalo. "
         "**Valor faturado** = líquido da NF **uma vez**; **valor da venda**, comissão, frete, imposto e resultado = "
         "**soma nas linhas de pedido** ligadas a essas NFs (filtros **Empresa** e **Plataforma**). "
+        "**Despesa fixa** = **5%** do **valor da venda** agregado a cada NF (não sobre o valor faturado da nota). "
         "A coluna **Data** do pedido **não** filtra o painel. "
         "**NF** só aparece se existir linha de pedido no materializado com join à nota."
     )
@@ -3863,7 +3864,23 @@ def _render_faturamento_dre_minimal(
         st.metric("Frete", _fmt_brl_ptbr_celula(_kp["frete"]))
     with _r_f:
         st.metric("Imposto", _fmt_brl_ptbr_celula(_kp["imposto"]))
-    st.metric("Resultado", _fmt_brl_ptbr_celula(_kp["resultado"]))
+    _r_g, _r_h = st.columns(2)
+    with _r_g:
+        st.metric(
+            "Despesa fixa",
+            _fmt_brl_ptbr_celula(_kp["despesa_fixa"]),
+            help="**5%** do **Valor da venda** (Σ Quantidade × Preço de lista) agregado à NF, por nota.",
+        )
+    with _r_h:
+        st.metric(
+            "Resultado",
+            _fmt_brl_ptbr_celula(_kp["resultado"]),
+            help=(
+                "Soma do **Resultado** das linhas de pedido da NF; se existir coluna **Despesas Fixas** no "
+                "materializado, o painel **recompõe** o total: Σ Resultado + Σ Despesas Fixas (linhas) − "
+                "**Despesa fixa** (5% sobre o valor de venda agregado), para alinhar ao corte único por NF."
+            ),
+        )
 
     _fdl_ui_gap_tight()
 
@@ -3887,6 +3904,7 @@ def _render_faturamento_dre_minimal(
                 "Comissão": pd.to_numeric(df_nf["comissao"], errors="coerce"),
                 "Frete": pd.to_numeric(df_nf["frete"], errors="coerce"),
                 "Imposto": pd.to_numeric(df_nf["imposto"], errors="coerce"),
+                "Despesa fixa": pd.to_numeric(df_nf["despesa_fixa"], errors="coerce"),
                 "Resultado": pd.to_numeric(df_nf["resultado"], errors="coerce"),
             }
         )
@@ -3901,6 +3919,7 @@ def _render_faturamento_dre_minimal(
         "Comissão",
         "Frete",
         "Imposto",
+        "Despesa fixa",
         "Resultado",
     ):
         if c in _disp_nf.columns:

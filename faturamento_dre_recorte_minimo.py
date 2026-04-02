@@ -25,6 +25,10 @@ from faturamento_dre_recorte import (
     _fdl_fr_ts_nf_emissao_para_dia_civil,
 )
 
+# Painel NF-first: despesa fixa explícita = esta alíquota × valor da venda agregado à NF
+# (Σ Quantidade × Preço de lista nas linhas ligadas à nota).
+NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA = 0.05
+
 
 def _min_cal_limits(d_min: date, d_max: date) -> tuple[date, date]:
     today = datetime.now(_BR_TZ).date()
@@ -202,6 +206,12 @@ def build_nf_grain_dataframe(
     **NF sem linha de pedido no materializado:** não aparece (o dataset é grão pedido; não há nota órfã).
     **Vários pedidos por NF:** agregados na mesma linha NF (somas comerciais; texto ``pedido_resumo``).
     **Várias NFs por pedido:** várias linhas em ``df_nf`` (uma por NF).
+
+    **Despesa fixa (produto):** ``despesa_fixa`` = ``NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA`` × ``valor_venda``
+    (por NF). Se o materializado tiver ``Despesas Fixas`` por linha, ``resultado`` é recomposto:
+    Σ ``Resultado`` + Σ ``Despesas Fixas`` (linhas) − ``despesa_fixa``, para alinhar o lucro ao corte de **5%**
+    sobre o valor de venda **agregado** à NF (em vez de só somar ``Resultado`` com alíquotas mensais por linha).
+    Sem coluna ``Despesas Fixas``, mantém-se Σ ``Resultado``.
     """
     warn: list[str] = []
     cols_out = [
@@ -216,6 +226,7 @@ def build_nf_grain_dataframe(
         "comissao",
         "frete",
         "imposto",
+        "despesa_fixa",
         "resultado",
         "plataforma_resumo",
         "pedido_resumo",
@@ -285,6 +296,7 @@ def build_nf_grain_dataframe(
 
     gcols = _nf_grain_groupby_keys(df_linked)
     rows: list[dict[str, object]] = []
+    has_desp_fix_col = "Despesas Fixas" in df_linked.columns
 
     qcol, pl_col = "Quantidade", "Preço de lista"
     has_qpl = qcol in df_linked.columns and pl_col in df_linked.columns
@@ -311,7 +323,15 @@ def build_nf_grain_dataframe(
         com = float(pd.to_numeric(gr["Taxa de Comissão"], errors="coerce").fillna(0.0).sum()) if "Taxa de Comissão" in gr.columns else 0.0
         fre = float(_nf_grain_frete_numeric(gr).sum())
         imp = float(pd.to_numeric(gr["Imposto"], errors="coerce").fillna(0.0).sum()) if "Imposto" in gr.columns else 0.0
-        res = float(pd.to_numeric(gr["Resultado"], errors="coerce").fillna(0.0).sum()) if "Resultado" in gr.columns else 0.0
+        desp_fix = float(NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA * v_venda)
+        res_raw = (
+            float(pd.to_numeric(gr["Resultado"], errors="coerce").fillna(0.0).sum()) if "Resultado" in gr.columns else 0.0
+        )
+        if has_desp_fix_col:
+            df_lin_sum = float(pd.to_numeric(gr["Despesas Fixas"], errors="coerce").fillna(0.0).sum())
+            res = res_raw + df_lin_sum - desp_fix
+        else:
+            res = res_raw
 
         emi = pd.to_datetime(gr["Nota_Data_Emissao"], errors="coerce", dayfirst=False)
         emi_first = emi.min()
@@ -394,6 +414,7 @@ def build_nf_grain_dataframe(
                 "comissao": com,
                 "frete": fre,
                 "imposto": imp,
+                "despesa_fixa": desp_fix,
                 "resultado": res,
                 "plataforma_resumo": plat_res,
                 "pedido_resumo": ped_res,
@@ -417,6 +438,7 @@ def compute_nf_panel_kpis(df_nf: pd.DataFrame) -> dict[str, float | int]:
         "comissao": 0.0,
         "frete": 0.0,
         "imposto": 0.0,
+        "despesa_fixa": 0.0,
         "resultado": 0.0,
         "n_nf": 0,
     }
@@ -431,6 +453,7 @@ def compute_nf_panel_kpis(df_nf: pd.DataFrame) -> dict[str, float | int]:
         "comissao": float(pd.to_numeric(df_nf["comissao"], errors="coerce").fillna(0.0).sum()),
         "frete": float(pd.to_numeric(df_nf["frete"], errors="coerce").fillna(0.0).sum()),
         "imposto": float(pd.to_numeric(df_nf["imposto"], errors="coerce").fillna(0.0).sum()),
+        "despesa_fixa": float(pd.to_numeric(df_nf["despesa_fixa"], errors="coerce").fillna(0.0).sum()),
         "resultado": float(pd.to_numeric(df_nf["resultado"], errors="coerce").fillna(0.0).sum()),
         "n_nf": int(len(df_nf)),
     }

@@ -9,6 +9,7 @@ No **painel mínimo** (uma linha por NF, mesma base para KPIs e tabela):
 - O **único** filtro de tempo é o **período de emissão da NF** (`Nota_Data_Emissao`).
 - **Empresa** e **Plataforma** (opcional) refinam o universo.
 - **Não** há filtro por **Data** de venda no painel: as linhas de pedido ligadas às NFs do recorte entram no enriquecimento (venda, comissão, frete, custo, resultado) **sem** interseção com período de venda.
+- **Despesa fixa (painel):** **5%** sobre o **valor da venda** agregado à NF — Σ (`Quantidade` × `Preço de lista`) nas linhas de pedido ligadas à nota. Exposta em KPI e tabela; o **Resultado** no painel recompõe o total quando o materializado traz `Despesas Fixas` por linha (ver docstring de `build_nf_grain_dataframe`).
 - Implementação: `build_nf_grain_dataframe` em `faturamento_dre_recorte_minimo.py`.
 
 As secções seguintes descrevem o recorte em **grão pedido** e combinações com dois eixos temporais, úteis para **`apply_recorte_minimo`**, testes e evoluções do módulo **fora** deste painel mínimo.

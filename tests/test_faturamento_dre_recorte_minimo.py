@@ -9,6 +9,8 @@ import pandas as pd
 from faturamento_dre_recorte_minimo import (
     FaturamentoRecorteMinState,
     apply_recorte_minimo,
+    compute_comercial_conferencia_stats,
+    compute_fiscal_nf_conferencia_stats,
     compute_vl_nota_fiscal_fiscal_kpi,
     faturamento_min_series_nf_emissao_bounds_dates,
 )
@@ -141,3 +143,28 @@ def test_faturamento_min_nf_bounds() -> None:
     assert ok is True
     assert lo == date(2025, 6, 10)
     assert hi == date(2025, 6, 15)
+
+
+def test_compute_fiscal_nf_conferencia_counts_distinct_nf() -> None:
+    stt = compute_fiscal_nf_conferencia_stats(
+        _df_fiscal(),
+        empresas_sel=(),
+        nf_d_ini=date(2025, 6, 1),
+        nf_d_fim=date(2025, 6, 30),
+    )
+    assert stt.n_nf_distintas == 1
+    assert stt.valor_nota_fiscal == 100.0
+
+
+def test_compute_comercial_conferencia_qtd_x_pl() -> None:
+    df = pd.DataFrame(
+        {
+            "Quantidade": [2, 1],
+            "Preço de lista": [10.5, 3.0],
+            "Número do pedido multiloja": ["ML1", "ML1"],
+        }
+    )
+    stt = compute_comercial_conferencia_stats(df)
+    assert stt.valor_venda == 24.0
+    assert stt.linhas_pedido == 2
+    assert stt.pedidos_multiloja_distintos == 1

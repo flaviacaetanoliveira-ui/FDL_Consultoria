@@ -36,9 +36,11 @@ from faturamento_dre_recorte import (
     faturamento_recorte_state_from_session,
 )
 from faturamento_dre_recorte_minimo import (
+    FatMinFiscalConferenciaStats,
     _min_cal_limits,
     apply_recorte_minimo,
-    compute_vl_nota_fiscal_fiscal_kpi,
+    compute_comercial_conferencia_stats,
+    compute_fiscal_nf_conferencia_stats,
     faturamento_min_series_nf_emissao_bounds_dates,
     faturamento_recorte_min_state_from_session,
 )
@@ -460,7 +462,7 @@ def _faturamento_period_calendar_limits(d_min: date, d_max: date) -> tuple[date,
 
 
 # Convenção de produto (Faturamento & DRE):
-# - Vista mínima: KPI **Vl. Nota Fiscal** = fiscal (emissão, total por NF); ver ``compute_vl_nota_fiscal_fiscal_kpi``.
+# - Vista mínima: bloco **Conferência venda × NF** usa ``compute_comercial_conferencia_stats`` / ``compute_fiscal_nf_conferencia_stats``.
 # - Vista completa / agregados comerciais: «receita líquida» pode usar Σ ``Nota_Valor_Liquido_Rateado`` ou ``Valor total``.
 _FATURAMENTO_UI_VALOR_NOTA_FISCAL = "Valor Nota Fiscal"
 _FATURAMENTO_HELP_VALOR_NOTA_FISCAL = (
@@ -3887,11 +3889,6 @@ def _render_faturamento_dre_minimal(
         f"**Recorte comercial (venda):** **{len(df_recorte)}** linha(s) para **KPIs comerciais**, **tabela** e **CSV** "
         f"(**{len(df)}** linhas no carregamento deste escopo antes destes filtros)."
     )
-    st.caption(
-        "**Vl. Nota Fiscal** (KPI abaixo): total **fiscal** por NF no **período emissão NF**, após filtro **Empresa** "
-        "(sem **Plataforma** e sem **Data** de venda)."
-    )
-
     _nf_kpi_ini = _safe_streamlit_date(st.session_state.get("fdl_fat_min_nf_d_ini"), nf_min)
     _nf_kpi_fim = _safe_streamlit_date(st.session_state.get("fdl_fat_min_nf_d_fim"), nf_max)
     if ok_nf_dates:
@@ -3899,15 +3896,15 @@ def _render_faturamento_dre_minimal(
         _nf_kpi_fim = min(max(_nf_kpi_fim, nf_cal_min), nf_cal_max)
         if _nf_kpi_fim < _nf_kpi_ini:
             _nf_kpi_fim = _nf_kpi_ini
-    _vl_nf_fiscal = (
-        compute_vl_nota_fiscal_fiscal_kpi(
+    _fiscal_conf = (
+        compute_fiscal_nf_conferencia_stats(
             df,
             empresas_sel=_min_state.empresas,
             nf_d_ini=_nf_kpi_ini,
             nf_d_fim=_nf_kpi_fim,
         )
         if ok_nf_dates
-        else 0.0
+        else FatMinFiscalConferenciaStats(0, 0.0)
     )
 
     work = _faturamento_compute_alert_bools(df_recorte)
@@ -3935,11 +3932,46 @@ def _render_faturamento_dre_minimal(
         "**Comercial:** receita bruta, receita líquida (venda), comissão, frete e resultado usam o recorte de **venda** "
         "(empresa, plataforma, **Data**)."
     )
-    st.metric(
-        "Vl. Nota Fiscal (emissão)",
-        _fmt_brl_ptbr_celula(_vl_nf_fiscal) if ok_nf_dates else "—",
-        help=_FATURAMENTO_HELP_VL_NF_FISCAL_KPI_MIN,
+
+    _comm_conf = compute_comercial_conferencia_stats(df_recorte)
+    _diff_conf = (
+        (_comm_conf.valor_venda - _fiscal_conf.valor_nota_fiscal) if ok_nf_dates else None
     )
+    with st.container(border=True):
+        st.subheader("Conferência venda × NF")
+        st.caption(
+            "**Comercial** (1–3): período **Período da venda** → coluna **`Data`** · "
+            "**Valor da venda** = Σ (**Quantidade** × **Preço de lista**) — sem **Total dos Produtos** nem **Valor total**.\n\n"
+            "**Fiscal** (4–5): período **Período emissão NF** → **`Nota_Data_Emissao`** · "
+            "**Valor da nota fiscal** = Σ **`Nota_Valor_Liquido_Total`** uma vez por NF "
+            "(exclui **`Nota_Situacao`** com **cancel** / **deneg** / **inutil**) · só filtro **Empresa** (sem **Plataforma**).\n\n"
+            "**Diferença** (6): normal quando venda e emissão não coincidem no tempo."
+        )
+        m1, m2, m3 = st.columns(3)
+        with m1:
+            st.metric("Valor da venda", _fmt_brl_ptbr_celula(_comm_conf.valor_venda))
+        with m2:
+            st.metric("Linhas de pedido", _fmt_int_ptbr(_comm_conf.linhas_pedido))
+        with m3:
+            st.metric("Pedidos multiloja distintos", _fmt_int_ptbr(_comm_conf.pedidos_multiloja_distintos))
+        m4, m5, m6 = st.columns(3)
+        with m4:
+            st.metric(
+                "NFs válidas distintas",
+                _fmt_int_ptbr(_fiscal_conf.n_nf_distintas) if ok_nf_dates else "—",
+            )
+        with m5:
+            st.metric(
+                "Valor da nota fiscal",
+                _fmt_brl_ptbr_celula(_fiscal_conf.valor_nota_fiscal) if ok_nf_dates else "—",
+                help=_FATURAMENTO_HELP_VL_NF_FISCAL_KPI_MIN,
+            )
+        with m6:
+            st.metric(
+                "Diferença (venda − NF)",
+                _fmt_brl_ptbr_celula(_diff_conf) if _diff_conf is not None else "—",
+                help="Valor da venda (eixo **Data**) menos valor da NF (eixo **emissão**).",
+            )
 
     _fdl_ui_gap_tight()
 

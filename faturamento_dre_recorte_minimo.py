@@ -82,6 +82,97 @@ def _nf_fiscal_situacao_invalida(series: pd.Series) -> pd.Series:
     )
 
 
+@dataclass(frozen=True)
+class FatMinComercialConferenciaStats:
+    """Recorte comercial (``df_recorte``): venda = Qtd × Preço de lista."""
+
+    valor_venda: float
+    linhas_pedido: int
+    pedidos_multiloja_distintos: int
+
+
+@dataclass(frozen=True)
+class FatMinFiscalConferenciaStats:
+    """Eixo fiscal: emissão + NF válida, uma vez por NF (``Nota_Valor_Liquido_Total``)."""
+
+    n_nf_distintas: int
+    valor_nota_fiscal: float
+
+
+def compute_comercial_conferencia_stats(df_recorte: pd.DataFrame) -> FatMinComercialConferenciaStats:
+    if df_recorte.empty:
+        return FatMinComercialConferenciaStats(0.0, 0, 0)
+    qcol, pl_col = "Quantidade", "Preço de lista"
+    if qcol not in df_recorte.columns or pl_col not in df_recorte.columns:
+        return FatMinComercialConferenciaStats(0.0, int(len(df_recorte)), 0)
+    qtd = pd.to_numeric(df_recorte[qcol], errors="coerce").fillna(0.0)
+    pl = pd.to_numeric(df_recorte[pl_col], errors="coerce").fillna(0.0)
+    valor_venda = float((qtd * pl).sum())
+    n_lin = int(len(df_recorte))
+    ml_col = "Número do pedido multiloja"
+    if ml_col not in df_recorte.columns:
+        return FatMinComercialConferenciaStats(valor_venda, n_lin, 0)
+    ml = df_recorte[ml_col].fillna("").astype(str).str.strip()
+    n_ml = int(ml[ml.ne("")].nunique())
+    return FatMinComercialConferenciaStats(valor_venda, n_lin, n_ml)
+
+
+def compute_fiscal_nf_conferencia_stats(
+    df_raw: pd.DataFrame,
+    *,
+    empresas_sel: tuple[str, ...],
+    nf_d_ini: date,
+    nf_d_fim: date,
+) -> FatMinFiscalConferenciaStats:
+    """
+    NFs distintas e soma de ``Nota_Valor_Liquido_Total`` (uma vez por NF) com ``Nota_Data_Emissao`` no intervalo,
+    após filtro **Empresa**; sem plataforma / sem ``Data`` venda. Exclui cancelada / denegada / inutilizada.
+    """
+    if df_raw.empty or nf_d_fim < nf_d_ini:
+        return FatMinFiscalConferenciaStats(0, 0.0)
+    need = {"Nota_Data_Emissao", "Nota_Valor_Liquido_Total", "Nota_Numero_Normalizado"}
+    if not need.issubset(df_raw.columns):
+        return FatMinFiscalConferenciaStats(0, 0.0)
+
+    sliced = df_raw.copy()
+    emp_opts = _fdl_fr_etiquetas_empresa_recorte(sliced)
+    if emp_opts and empresas_sel:
+        sliced = _fdl_fr_filtrar_por_etiquetas_empresa(sliced, list(empresas_sel))
+    if sliced.empty:
+        return FatMinFiscalConferenciaStats(0, 0.0)
+
+    nn = sliced["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
+    mask_nf = nn.ne("")
+    if "faturamento_nota_vinculada" in sliced.columns:
+        mask_nf = mask_nf | _fdl_fr_faturamento_series_bool_mask(sliced["faturamento_nota_vinculada"])
+    sliced = sliced.loc[mask_nf].copy()
+    if sliced.empty:
+        return FatMinFiscalConferenciaStats(0, 0.0)
+
+    if "Nota_Situacao" in sliced.columns:
+        sliced = sliced.loc[~_nf_fiscal_situacao_invalida(sliced["Nota_Situacao"])].copy()
+    if sliced.empty:
+        return FatMinFiscalConferenciaStats(0, 0.0)
+
+    m_period = _fdl_fr_mask_nf_emissao_no_periodo(sliced["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
+    sliced = sliced.loc[m_period].copy()
+    if sliced.empty:
+        return FatMinFiscalConferenciaStats(0, 0.0)
+
+    gb_keys: list[str] = []
+    if "org_id" in sliced.columns:
+        gb_keys.append("org_id")
+    gb_keys.append("Nota_Numero_Normalizado")
+
+    total = 0.0
+    n_gr = 0
+    for _, gr in sliced.groupby(gb_keys, sort=False):
+        n_gr += 1
+        vals = pd.to_numeric(gr["Nota_Valor_Liquido_Total"], errors="coerce").dropna()
+        total += float(vals.iloc[0]) if not vals.empty else 0.0
+    return FatMinFiscalConferenciaStats(n_gr, total)
+
+
 def compute_vl_nota_fiscal_fiscal_kpi(
     df_raw: pd.DataFrame,
     *,
@@ -94,48 +185,9 @@ def compute_vl_nota_fiscal_fiscal_kpi(
     com ``Nota_Data_Emissao`` no intervalo, após filtro **Empresa** (sem plataforma / sem ``Data`` venda).
     Exclui situações cancelada / denegada / inutilizada (mesmo critério textual do pipeline de notas).
     """
-    if df_raw.empty or nf_d_fim < nf_d_ini:
-        return 0.0
-    need = {"Nota_Data_Emissao", "Nota_Valor_Liquido_Total", "Nota_Numero_Normalizado"}
-    if not need.issubset(df_raw.columns):
-        return 0.0
-
-    sliced = df_raw.copy()
-    emp_opts = _fdl_fr_etiquetas_empresa_recorte(sliced)
-    if emp_opts and empresas_sel:
-        sliced = _fdl_fr_filtrar_por_etiquetas_empresa(sliced, list(empresas_sel))
-    if sliced.empty:
-        return 0.0
-
-    nn = sliced["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
-    mask_nf = nn.ne("")
-    if "faturamento_nota_vinculada" in sliced.columns:
-        mask_nf = mask_nf | _fdl_fr_faturamento_series_bool_mask(sliced["faturamento_nota_vinculada"])
-    sliced = sliced.loc[mask_nf].copy()
-    if sliced.empty:
-        return 0.0
-
-    if "Nota_Situacao" in sliced.columns:
-        sliced = sliced.loc[~_nf_fiscal_situacao_invalida(sliced["Nota_Situacao"])].copy()
-    if sliced.empty:
-        return 0.0
-
-    m_period = _fdl_fr_mask_nf_emissao_no_periodo(sliced["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
-    sliced = sliced.loc[m_period].copy()
-    if sliced.empty:
-        return 0.0
-
-    gb_keys: list[str] = []
-    if "org_id" in sliced.columns:
-        gb_keys.append("org_id")
-    gb_keys.append("Nota_Numero_Normalizado")
-
-    total = 0.0
-    for _, gr in sliced.groupby(gb_keys, sort=False):
-        vals = pd.to_numeric(gr["Nota_Valor_Liquido_Total"], errors="coerce").dropna()
-        if not vals.empty:
-            total += float(vals.iloc[0])
-    return total
+    return compute_fiscal_nf_conferencia_stats(
+        df_raw, empresas_sel=empresas_sel, nf_d_ini=nf_d_ini, nf_d_fim=nf_d_fim
+    ).valor_nota_fiscal
 
 
 def apply_recorte_minimo(

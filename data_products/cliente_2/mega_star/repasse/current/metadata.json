@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-02T11:03:12Z",
-  "source_signature": "4f247a74a201dedcfb31c952ef5c75ce",
+  "generated_at": "2026-04-02T17:01:02Z",
+  "source_signature": "1e9c40091ea26287510ae3d0e2613fa5",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_star",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_star",
   "cnpj": null,
-  "row_count": 857,
+  "row_count": 1490,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -33,7 +33,7 @@
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
-    "linhas": 857,
+    "linhas": 1490,
     "arquivos_contas_lidos": 5,
     "col_situacao": "Situação",
     "col_numero": "Número"

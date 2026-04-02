@@ -12,6 +12,23 @@ No **painel mínimo** (uma linha por NF, mesma base para KPIs e tabela):
 - **Despesa fixa (painel):** **5%** sobre o **valor da venda** agregado à NF — Σ (`Quantidade` × `Preço de lista`) nas linhas de pedido ligadas à nota. Exposta em KPI e tabela; o **Resultado** no painel recompõe o total quando o materializado traz `Despesas Fixas` por linha (ver docstring de `build_nf_grain_dataframe`).
 - Implementação: `build_nf_grain_dataframe` em `faturamento_dre_recorte_minimo.py`.
 
+### Premissa para modelagem da tabela final em grão NF (materializado)
+
+**Regra de negócio:** não há cenário em que a **mesma NF** tenha pedidos em **plataformas diferentes**. Pode haver **vários pedidos** (e várias linhas de item) ligados à mesma NF, mas todos na **mesma plataforma**.
+
+**Implicações para a planilha/tabela final única (1 linha por NF):**
+
+- **Plataforma** é um **campo único e confiável por NF** (valor escalar por linha), não um resumo “multi-plataforma” por nota.
+- Com esta premissa, um **filtro por plataforma** no consumo do materializado NF-first reduz-se a um **filtro direto nessa coluna** (sem agregação cruzada nem artefacto NF × plataforma só por causa de plataformas mistas na mesma nota).
+
+**O que continua a precisar de tratamento (vários pedidos na mesma NF):**
+
+| Tópico | Tratamento alinhado ao modelo atual |
+|--------|-------------------------------------|
+| **Representação de vários pedidos** | Campo **resumo** (ex.: um identificador quando há um só pedido; texto do tipo “N pedidos” ou lista compacta quando há vários), à parte das chaves `org_id` + `Nota_Numero_Normalizado`. |
+| **Agregação dos campos do pedido** | Métricas **comerciais por linha de pedido**: **somar** sobre todas as linhas ligadas à NF (`Quantidade` × `Preço de lista`, comissão, frete, imposto, `Resultado`, `Despesas Fixas` para recomposição, etc.). |
+| **Evitar duplicidade nos valores fiscais** | Campos **da nota** (`Nota_Valor_Liquido_Total`, datas/situação de emissão): usar **um valor por NF** (ex.: primeiro não nulo / dedupe por chave NF), **não** multiplicar pela contagem de linhas de pedido. |
+
 As secções seguintes descrevem o recorte em **grão pedido** e combinações com dois eixos temporais, úteis para **`apply_recorte_minimo`**, testes e evoluções do módulo **fora** deste painel mínimo.
 
 ## Organização em dois blocos lógicos

@@ -232,6 +232,7 @@ def build_nf_grain_dataframe(
         "pedido_resumo",
         "n_linhas_pedido",
         "produto_resumo",
+        "faturamento_nota_vinculada",
     ]
     if df_raw.empty or not ok_nf_dates or nf_d_fim < nf_d_ini:
         return pd.DataFrame(columns=cols_out), tuple(warn)
@@ -401,6 +402,11 @@ def build_nf_grain_dataframe(
         else:
             prod_res = "—"
 
+        if "faturamento_nota_vinculada" in gr.columns:
+            vinc = bool(_fdl_fr_faturamento_series_bool_mask(gr["faturamento_nota_vinculada"]).any())
+        else:
+            vinc = True
+
         rows.append(
             {
                 "org_id": oid_s,
@@ -420,6 +426,7 @@ def build_nf_grain_dataframe(
                 "pedido_resumo": ped_res,
                 "n_linhas_pedido": int(len(gr)),
                 "produto_resumo": prod_res,
+                "faturamento_nota_vinculada": vinc,
             }
         )
 

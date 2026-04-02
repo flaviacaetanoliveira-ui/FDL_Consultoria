@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-02T11:03:16Z",
-  "source_signature": "bbb6cbcf41b74432b62d11f0c042accd",
+  "generated_at": "2026-04-02T17:01:03Z",
+  "source_signature": "d08d91237a8073edde96eb26fd7c63c3",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_star",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_star",
   "cnpj": null,
-  "row_count": 1004,
+  "row_count": 1032,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -23,7 +23,7 @@
     "Tarifa de venda e impostos (BRL)",
     "Receita por envio (BRL)",
     "Tarifas de envio (BRL)",
-    "Custo do envio (BRL)",
+    "Descontos e bônus",
     "Cancelamentos e reembolsos (BRL)",
     "Total (BRL)",
     "Mês de faturamento das suas tarifas",
@@ -97,7 +97,7 @@
     "vendas_arquivo": "Mega Star - Vendas ML 2026.xlsx",
     "frete_arquivo": "Mega Star - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 1004,
+    "linhas": 1032,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

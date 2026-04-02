@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-02T11:00:07Z",
-  "source_signature": "d73652c03d481e2aa0717eb3cf43e888",
+  "generated_at": "2026-04-02T17:00:04Z",
+  "source_signature": "fe10bd5c98bf08e5f524966e8110bb02",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "gama_home",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "gama_home",
   "cnpj": null,
-  "row_count": 281,
+  "row_count": 303,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -23,7 +23,6 @@
     "Tarifa de venda e impostos (BRL)",
     "Receita por envio (BRL)",
     "Tarifas de envio (BRL)",
-    "Custo do envio (BRL)",
     "Cancelamentos e reembolsos (BRL)",
     "Total (BRL)",
     "Mês de faturamento das suas tarifas",
@@ -98,7 +97,7 @@
     "vendas_arquivo": "Gama Home - Vendas ML 2026.xlsx",
     "frete_arquivo": "Gama Home - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 281,
+    "linhas": 303,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

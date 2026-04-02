@@ -185,6 +185,7 @@ def test_build_nf_grain_one_nf_two_order_lines() -> None:
     assert float(out.iloc[0]["despesa_fixa"]) == 1.25
     assert float(out.iloc[0]["resultado"]) == 5.0
     assert int(out.iloc[0]["n_linhas_pedido"]) == 2
+    assert bool(out.iloc[0]["faturamento_nota_vinculada"])
     kp = compute_nf_panel_kpis(out)
     assert kp["n_nf"] == 1
     assert kp["valor_faturado_nf"] == 100.0

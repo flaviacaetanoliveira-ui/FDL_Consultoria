@@ -494,6 +494,18 @@ def _materialize_faturamento(
             meta[k] = loader_meta[k]
     _write_parquet(df_out, out_dir / "dataset.parquet")
     _write_faturamento_app_mirror_csv(df, out_dir / "dataset_faturamento_app.csv")
+
+    from processing.faturamento.nf_materializado import (
+        SCHEMA_VERSION_NF_FIRST,
+        build_nf_materializado_dataframe,
+    )
+
+    df_nf = build_nf_materializado_dataframe(df)
+    _write_parquet(_dataframe_safe_for_parquet(df_nf), out_dir / "dataset_faturamento_nf.parquet")
+    meta["dataset_faturamento_nf_parquet"] = "dataset_faturamento_nf.parquet"
+    meta["nf_first_row_count"] = int(len(df_nf))
+    meta["schema_version_nf_first"] = SCHEMA_VERSION_NF_FIRST
+
     _write_metadata(out_dir / "metadata.json", meta)
 
 

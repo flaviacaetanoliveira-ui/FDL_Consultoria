@@ -32,9 +32,11 @@ from reportlab.pdfgen import canvas
 from carregamento_bases import PIPELINE_DATA_REVISION
 from etapa4b_integracao_contas_receber import BASE_DIR, carregar_tabela_final_operacional
 from faturamento_dre_recorte import (
+    _fdl_fr_mask_nf_emissao_no_periodo,
     apply_recorte_modulo,
     faturamento_recorte_state_from_session,
 )
+from processing.faturamento.nf_materializado import nf_first_contract_dataframe_valid
 from faturamento_dre_recorte_minimo import (
     _min_cal_limits,
     build_nf_grain_dataframe,
@@ -1214,6 +1216,33 @@ def _load_faturamento_materialized_dataframe(path_s: str, url_s: str) -> pd.Data
     )
 
 
+def _faturamento_nf_parquet_path_from_materialized_path(path_s: str) -> Path | None:
+    """``dataset_faturamento_nf.parquet`` ao lado do CSV/Parquet linha (mesmo ``current/``)."""
+    if not (path_s or "").strip():
+        return None
+    try:
+        p = Path(path_s).expanduser()
+        if not p.is_absolute():
+            p = (_REPO_APP_ROOT / p).resolve()
+        if not p.is_file():
+            return None
+        cand = p.parent / "dataset_faturamento_nf.parquet"
+        return cand if cand.is_file() else None
+    except OSError:
+        return None
+
+
+def _faturamento_nf_parquet_stat_token(path_s: str) -> str:
+    nf = _faturamento_nf_parquet_path_from_materialized_path(path_s)
+    if nf is None:
+        return "nf_absent"
+    try:
+        stt = nf.stat()
+        return f"{nf.resolve()}|mtime_ns={stt.st_mtime_ns}|size={stt.st_size}"
+    except OSError:
+        return "nf_unstat"
+
+
 def _faturamento_ts_for_path(path: Path) -> str:
     try:
         return _ts_br_from_mtime_ns(int(path.stat().st_mtime_ns))
@@ -1308,7 +1337,35 @@ def _load_faturamento_data(
             "faturamento_path_final_resolved": path_final or (path_s or url_s).strip(),
             "faturamento_row_count_loaded": n_loaded,
             "linhas": int(len(df_scoped)),
+            "faturamento_nf_first": False,
+            "faturamento_nf_df": None,
         }
+        if path_s:
+            nf_p = _faturamento_nf_parquet_path_from_materialized_path(path_s)
+            if nf_p is not None:
+                try:
+                    df_nf0 = pd.read_parquet(nf_p, engine="pyarrow")
+                    if nf_first_contract_dataframe_valid(df_nf0):
+                        if scope_consolidado and layout_effective == "v2":
+                            df_nf_scoped, _nfw = _faturamento_apply_layout_scope_consolidado_v2(
+                                df_nf0, allowed_org_ids=aids
+                            )
+                        else:
+                            df_nf_scoped, _nfw = _faturamento_apply_layout_scope(
+                                df_nf0, layout_effective=layout_effective, org_id=active_org_id
+                            )
+                        info["faturamento_nf_df"] = df_nf_scoped
+                        info["faturamento_nf_first"] = True
+                        info["faturamento_nf_first_path"] = str(nf_p.resolve())
+                        info["faturamento_nf_first_row_count_loaded"] = int(len(df_nf0))
+                    else:
+                        info["faturamento_nf_first_skip"] = "contract_columns_incompletos"
+                except Exception as ex_nf:
+                    info["faturamento_nf_first_error"] = str(ex_nf).strip() or ex_nf.__class__.__name__
+            else:
+                info["faturamento_nf_first_skip"] = "ficheiro_ausente"
+        else:
+            info["faturamento_nf_first_skip"] = "sem_path_local"
         info.update(_faturamento_materialized_fiscal_audit(df_scoped))
         if resolution_source == "explicit" and not bool(info.get("faturamento_fiscal_join_complete")):
             v2_alt = _faturamento_v2_canonical_dataset_path_str()
@@ -1389,6 +1446,9 @@ def _faturamento_load_cache_signature(
             str(_precomputed_path_str()).strip(),
             str(_strict_materialized()),
             _faturamento_materialized_source_stat_token(),
+            _faturamento_nf_parquet_stat_token(
+                str(_faturamento_resolve_materialized_target().get("path_s") or "").strip()
+            ),
         ]
     )
 
@@ -3682,6 +3742,37 @@ def _render_faturamento_dre_bloco_por_empresa(
     )
 
 
+def _faturamento_nf_platform_display_series(df_nf: pd.DataFrame) -> pd.Series:
+    if "plataforma" in df_nf.columns:
+        return df_nf["plataforma"].fillna("").astype(str)
+    return df_nf["plataforma_resumo"].fillna("").astype(str) if "plataforma_resumo" in df_nf.columns else pd.Series("", index=df_nf.index)
+
+
+def _faturamento_nf_apply_minimal_recorte(
+    df_nf: pd.DataFrame,
+    *,
+    empresas_sel: tuple[str, ...],
+    plataformas_sel: tuple[str, ...],
+    nf_d_ini: date,
+    nf_d_fim: date,
+    ok_nf_dates: bool,
+) -> pd.DataFrame:
+    if df_nf.empty:
+        return df_nf
+    out = df_nf.copy()
+    emp_opts = _faturamento_dre_etiquetas_empresa_recorte(out)
+    sel_emp = [str(x).strip() for x in empresas_sel if str(x).strip()]
+    if emp_opts and sel_emp:
+        out = out.loc[out["empresa"].astype(str).isin(sel_emp)].copy()
+    sel_plat = [str(x).strip() for x in plataformas_sel if str(x).strip()]
+    if sel_plat and "plataforma" in out.columns:
+        out = out.loc[out["plataforma"].astype(str).str.strip().isin(sel_plat)].copy()
+    if ok_nf_dates and nf_d_fim >= nf_d_ini and "Nota_Data_Emissao" in out.columns:
+        m = _fdl_fr_mask_nf_emissao_no_periodo(out["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
+        out = out.loc[m].copy()
+    return out
+
+
 def _render_faturamento_dre_minimal(
     df: pd.DataFrame,
     load_info: dict[str, object],
@@ -3696,6 +3787,15 @@ def _render_faturamento_dre_minimal(
     """
     _oid = str(org_id)
     _ = org_display_name, ts_proc, load_info
+    df_nf_pre = load_info.get("faturamento_nf_df")
+    use_nf_materializado = (
+        bool(load_info.get("faturamento_nf_first"))
+        and isinstance(df_nf_pre, pd.DataFrame)
+        and nf_first_contract_dataframe_valid(df_nf_pre)
+    )
+    if use_nf_materializado and df_nf_pre.empty and not df.empty:
+        use_nf_materializado = False
+
     st.caption(
         "**Universo (Etapa 1):** **único período** = **emissão da NF**. O painel lista **uma linha por NF** válida nesse intervalo. "
         "**Valor faturado** = líquido da NF **uma vez**; **valor da venda**, comissão, frete, imposto e resultado = "
@@ -3704,25 +3804,39 @@ def _render_faturamento_dre_minimal(
         "A coluna **Data** do pedido **não** filtra o painel. "
         "**NF** só aparece se existir linha de pedido no materializado com join à nota."
     )
-    if df.empty:
+    if use_nf_materializado and _is_admin_mode() and load_info.get("faturamento_nf_first_path"):
+        st.caption(
+            f"**Admin:** painel em **materializado NF-first** (`dataset_faturamento_nf.parquet`): "
+            f"`{load_info.get('faturamento_nf_first_path')}`"
+        )
+
+    if df.empty and not use_nf_materializado:
         st.info(
             "Sem dados de faturamento para este escopo. Confirme **materialização**, **slug** do cliente "
             "e o **escopo** (empresa ativa / consolidado) na barra lateral."
         )
         return
 
-    missing = _faturamento_painel_missing_schema_columns(df)
-    if missing:
-        if _is_admin_mode():
-            st.warning(
-                "Estrutura de faturamento incompleta para a vista mínima. "
-                f"Faltam: {', '.join(missing[:12])}{'…' if len(missing) > 12 else ''}."
-            )
-        else:
-            st.warning("Não foi possível apresentar o faturamento. Contacte o suporte.")
-        return
+    if not use_nf_materializado:
+        missing = _faturamento_painel_missing_schema_columns(df)
+        if missing:
+            if _is_admin_mode():
+                st.warning(
+                    "Estrutura de faturamento incompleta para a vista mínima. "
+                    f"Faltam: {', '.join(missing[:12])}{'…' if len(missing) > 12 else ''}."
+                )
+            else:
+                st.warning("Não foi possível apresentar o faturamento. Contacte o suporte.")
+            return
 
-    nf_min, nf_max, ok_nf_dates = faturamento_min_series_nf_emissao_bounds_dates(df)
+    _df_bounds = df_nf_pre if use_nf_materializado else df
+    if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame) and df_nf_pre.empty:
+        st.info(
+            "Sem notas no **materializado NF-first** para este escopo. Confirme materialização "
+            "(`dataset_faturamento_nf.parquet`) e **escopo** (org / consolidado)."
+        )
+        return
+    nf_min, nf_max, ok_nf_dates = faturamento_min_series_nf_emissao_bounds_dates(_df_bounds)
     nf_cal_min, nf_cal_max = _min_cal_limits(nf_min, nf_max) if ok_nf_dates else (nf_min, nf_max)
     _nf_sig_k = "fdl_fat_min_nf_bounds_sig"
     _today = datetime.now(_BR_TZ).date()
@@ -3756,10 +3870,17 @@ def _render_faturamento_dre_minimal(
             nf_cal_max,
         )
 
-    emp_opts = _faturamento_dre_etiquetas_empresa_recorte(df)
-    plats = sorted(
-        {str(x).strip() for x in df["Nome da plataforma"].dropna().unique() if str(x).strip()}
-    )
+    emp_opts = _faturamento_dre_etiquetas_empresa_recorte(_df_bounds)
+    if use_nf_materializado and "plataforma" in _df_bounds.columns:
+        plats = sorted(
+            {str(x).strip() for x in _df_bounds["plataforma"].dropna().unique() if str(x).strip()}
+        )
+    elif "Nome da plataforma" in df.columns:
+        plats = sorted(
+            {str(x).strip() for x in df["Nome da plataforma"].dropna().unique() if str(x).strip()}
+        )
+    else:
+        plats = []
 
     with st.container(border=True):
         st.subheader("Filtros")
@@ -3781,8 +3902,13 @@ def _render_faturamento_dre_minimal(
             )
         _multiselect_stable("fdl_fat_min_plat", "Plataforma", plats)
         st.caption(
-            "**Plataforma:** restringe as **linhas de pedido** usadas no enriquecimento (venda, comissão, frete, etc.) "
-            "entre as NFs já filtradas por **emissão**."
+            "**Plataforma:** "
+            + (
+                "filtra **notas** pela plataforma já consolidada no grão NF (materializado)."
+                if use_nf_materializado
+                else "restringe as **linhas de pedido** usadas no enriquecimento (venda, comissão, frete, etc.) "
+                "entre as NFs já filtradas por **emissão**."
+            )
         )
         if ok_nf_dates:
             r_nf = st.columns((1, 1))
@@ -3804,10 +3930,10 @@ def _render_faturamento_dre_minimal(
                     key="fdl_fat_min_nf_d_fim",
                     help=_FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN,
                 )
-        elif "Nota_Data_Emissao" in df.columns:
+        elif "Nota_Data_Emissao" in _df_bounds.columns:
             st.caption("Coluna **Nota_Data_Emissao** sem datas utilizáveis — período de emissão indisponível.")
         else:
-            st.caption("Sem coluna **Nota_Data_Emissao** no materializado — painel **NF-first** indisponível.")
+            st.caption("Sem coluna **Nota_Data_Emissao** — período de emissão indisponível.")
         if st.button("Limpar filtros desta vista", key="fdl_fat_min_reset"):
             for _k in (
                 "fdl_fat_min_emp",
@@ -3828,20 +3954,34 @@ def _render_faturamento_dre_minimal(
         if _nf_kpi_fim < _nf_kpi_ini:
             _nf_kpi_fim = _nf_kpi_ini
 
-    df_nf, _wrn_nf = build_nf_grain_dataframe(
-        df,
-        _min_state,
-        ok_nf_dates=ok_nf_dates,
-        nf_d_ini=_nf_kpi_ini,
-        nf_d_fim=_nf_kpi_fim,
-    )
+    if use_nf_materializado:
+        df_nf = _faturamento_nf_apply_minimal_recorte(
+            df_nf_pre,
+            empresas_sel=_min_state.empresas,
+            plataformas_sel=_min_state.plataformas,
+            nf_d_ini=_nf_kpi_ini,
+            nf_d_fim=_nf_kpi_fim,
+            ok_nf_dates=ok_nf_dates,
+        )
+        _wrn_nf = ()
+    else:
+        df_nf, _wrn_nf = build_nf_grain_dataframe(
+            df,
+            _min_state,
+            ok_nf_dates=ok_nf_dates,
+            nf_d_ini=_nf_kpi_ini,
+            nf_d_fim=_nf_kpi_fim,
+        )
     for _m in _wrn_nf:
         st.warning(_m)
 
     _kp = compute_nf_panel_kpis(df_nf)
-    st.caption(
-        f"**Painel NF-first:** **{_kp['n_nf']}** nota(s) · **{len(df)}** linhas no carregamento antes dos filtros."
+    _base_desc = (
+        f"**{len(df_nf_pre)}** nota(s) no **materializado NF-first**"
+        if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame)
+        else f"**{len(df)}** linhas no carregamento (grão pedido)"
     )
+    st.caption(f"**Painel NF-first:** **{_kp['n_nf']}** nota(s) no recorte · base: {_base_desc}.")
 
     _r_a, _r_b = st.columns((1, 1))
     with _r_a:
@@ -3876,9 +4016,13 @@ def _render_faturamento_dre_minimal(
             "Resultado",
             _fmt_brl_ptbr_celula(_kp["resultado"]),
             help=(
-                "Soma do **Resultado** das linhas de pedido da NF; se existir coluna **Despesas Fixas** no "
-                "materializado, o painel **recompõe** o total: Σ Resultado + Σ Despesas Fixas (linhas) − "
-                "**Despesa fixa** (5% sobre o valor de venda agregado), para alinhar ao corte único por NF."
+                "Valores já consolidados no **materializado NF-first** (contrato de **Resultado** / **Despesa fixa**)."
+                if use_nf_materializado
+                else (
+                    "Soma do **Resultado** das linhas de pedido da NF; se existir coluna **Despesas Fixas** no "
+                    "materializado linha, o painel **recompõe** o total: Σ Resultado + Σ Despesas Fixas (linhas) − "
+                    "**Despesa fixa** (5% sobre o valor de venda agregado), para alinhar ao corte único por NF."
+                )
             ),
         )
 
@@ -3894,7 +4038,7 @@ def _render_faturamento_dre_minimal(
                 "Empresa": df_nf["empresa"].astype(str).replace("", "—"),
                 "NF": df_nf["Nota_Numero_Normalizado"].astype(str),
                 "Situação NF": df_nf["Nota_Situacao"].astype(str).replace("", "—"),
-                "Plataforma": df_nf["plataforma_resumo"].astype(str),
+                "Plataforma": _faturamento_nf_platform_display_series(df_nf).astype(str),
                 "Pedido / multiloja": df_nf["pedido_resumo"].astype(str),
                 "Produto (resumo)": df_nf["produto_resumo"].astype(str),
                 "Linhas pedido": df_nf["n_linhas_pedido"].astype(int),
@@ -6269,6 +6413,13 @@ elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in 
 
     if not faturamento_df.empty:
         faturamento_df = _filtrar_df_col_empresa_por_contexto(faturamento_df)
+
+    _nf_ctx = faturamento_info.get("faturamento_nf_df")
+    if isinstance(_nf_ctx, pd.DataFrame):
+        faturamento_info = {
+            **faturamento_info,
+            "faturamento_nf_df": _filtrar_df_col_empresa_por_contexto(_nf_ctx),
+        }
 
     faturamento_info = {**faturamento_info, "linhas": int(len(faturamento_df))}
     if not str(faturamento_info.get("faturamento_escopo") or "").strip():

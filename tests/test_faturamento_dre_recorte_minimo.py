@@ -31,56 +31,46 @@ def _df() -> pd.DataFrame:
 
 def test_empty_empresa_and_plat_is_all_rows() -> None:
     df = _df()
-    st = FaturamentoRecorteMinState(
-        empresas=(),
-        plataformas=(),
-        data_venda_ini=date(2024, 1, 1),
-        data_venda_fim=date(2030, 1, 1),
+    st = FaturamentoRecorteMinState(empresas=(), plataformas=())
+    out, w = apply_recorte_minimo(
+        df, st, data_venda_ini=date(2024, 1, 1), data_venda_fim=date(2030, 1, 1)
     )
-    out, w = apply_recorte_minimo(df, st)
     assert len(out) == 3 and not w
 
 
 def test_empresa_filter() -> None:
     df = _df()
-    st = FaturamentoRecorteMinState(
-        empresas=("B",),
-        plataformas=(),
-        data_venda_ini=date(2024, 1, 1),
-        data_venda_fim=date(2030, 1, 1),
+    st = FaturamentoRecorteMinState(empresas=("B",), plataformas=())
+    out, _ = apply_recorte_minimo(
+        df, st, data_venda_ini=date(2024, 1, 1), data_venda_fim=date(2030, 1, 1)
     )
-    out, _ = apply_recorte_minimo(df, st)
     assert len(out) == 1 and out.iloc[0]["empresa"] == "B"
 
 
 def test_plat_filter() -> None:
     df = _df()
-    st = FaturamentoRecorteMinState(
-        empresas=(),
-        plataformas=("Shopee",),
-        data_venda_ini=date(2024, 1, 1),
-        data_venda_fim=date(2030, 1, 1),
+    st = FaturamentoRecorteMinState(empresas=(), plataformas=("Shopee",))
+    out, _ = apply_recorte_minimo(
+        df, st, data_venda_ini=date(2024, 1, 1), data_venda_fim=date(2030, 1, 1)
     )
-    out, _ = apply_recorte_minimo(df, st)
     assert len(out) == 1
 
 
 def test_date_window() -> None:
     df = _df()
-    st = FaturamentoRecorteMinState(
-        empresas=(),
-        plataformas=(),
-        data_venda_ini=date(2025, 1, 15),
-        data_venda_fim=date(2025, 2, 1),
+    st = FaturamentoRecorteMinState(empresas=(), plataformas=())
+    out, _ = apply_recorte_minimo(
+        df, st, data_venda_ini=date(2025, 1, 15), data_venda_fim=date(2025, 2, 1)
     )
-    out, _ = apply_recorte_minimo(df, st)
     assert len(out) == 1
 
 
 def test_all_situacoes_preserved_without_situacao_filter() -> None:
     df = _df()
-    st = FaturamentoRecorteMinState((), (), date(2024, 1, 1), date(2030, 1, 1))
-    out, _ = apply_recorte_minimo(df, st)
+    st = FaturamentoRecorteMinState((), ())
+    out, _ = apply_recorte_minimo(
+        df, st, data_venda_ini=date(2024, 1, 1), data_venda_fim=date(2030, 1, 1)
+    )
     assert set(out["Situação"].astype(str)) == {"Atendido", "Cancelado"}
 
 
@@ -180,7 +170,7 @@ def test_build_nf_grain_one_nf_two_order_lines() -> None:
             "faturamento_nota_vinculada": [True, True],
         }
     )
-    st = FaturamentoRecorteMinState((), (), date(2025, 1, 1), date(2030, 1, 1))
+    st = FaturamentoRecorteMinState((), ())
     out, w = build_nf_grain_dataframe(
         df,
         st,

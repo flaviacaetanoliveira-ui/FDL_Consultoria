@@ -2,7 +2,7 @@
 Recorte mínimo (Etapa 1) — Faturamento & DRE: painel **NF-first**.
 
 Universo: NFs válidas no **período de emissão**; comercial/custos nas **linhas de pedido** ligadas
-(``build_nf_grain_dataframe``). ``apply_recorte_minimo`` mantém-se para outros usos / testes.
+(``build_nf_grain_dataframe``). ``apply_recorte_minimo`` (grão pedido) aceita janela de **Data** venda só por argumento opcional, não pelo state da sessão.
 """
 
 from __future__ import annotations
@@ -35,12 +35,10 @@ def _min_cal_limits(d_min: date, d_max: date) -> tuple[date, date]:
 
 @dataclass(frozen=True)
 class FaturamentoRecorteMinState:
+    """Estado do painel NF-first e filtros comuns (empresa, plataforma). Sem eixo **Data** venda."""
+
     empresas: tuple[str, ...]
     plataformas: tuple[str, ...]
-    data_venda_ini: object | None
-    data_venda_fim: object | None
-    nf_emissao_ini: object | None = None
-    nf_emissao_fim: object | None = None
 
 
 def faturamento_recorte_min_state_from_session(ss: Mapping[str, Any]) -> FaturamentoRecorteMinState:
@@ -53,10 +51,6 @@ def faturamento_recorte_min_state_from_session(ss: Mapping[str, Any]) -> Faturam
     return FaturamentoRecorteMinState(
         empresas=_tup("fdl_fat_min_emp"),
         plataformas=_tup("fdl_fat_min_plat"),
-        data_venda_ini=ss.get("fdl_fat_min_d_ini"),
-        data_venda_fim=ss.get("fdl_fat_min_d_fim"),
-        nf_emissao_ini=ss.get("fdl_fat_min_nf_d_ini"),
-        nf_emissao_fim=ss.get("fdl_fat_min_nf_d_fim"),
     )
 
 
@@ -462,9 +456,14 @@ def compute_vl_nota_fiscal_fiscal_kpi(
 def apply_recorte_minimo(
     df_raw: pd.DataFrame,
     state: FaturamentoRecorteMinState,
+    *,
+    data_venda_ini: object | None = None,
+    data_venda_fim: object | None = None,
 ) -> tuple[pd.DataFrame, tuple[str, ...]]:
     """
-    Ordem: empresa → plataforma → período (**Data** venda).
+    Recorte em **grão pedido**: empresa → plataforma → período opcional (**Data** venda).
+
+    O painel NF-first não usa esta função; datas de venda ficam como argumentos para testes / reuso.
 
     Limites de data para ``_safe_streamlit_date`` vêm do ``df_raw`` completo (antes dos filtros),
     para o calendário não encolher só porque se filtrou empresa.
@@ -491,8 +490,8 @@ def apply_recorte_minimo(
         sliced = sliced[sliced["Nome da plataforma"].isin(sel_plat)].copy()
 
     if ok_dates and not sliced.empty:
-        d_ini = _fdl_fr_safe_streamlit_date(state.data_venda_ini, d_min)
-        d_fim = _fdl_fr_safe_streamlit_date(state.data_venda_fim, d_max)
+        d_ini = _fdl_fr_safe_streamlit_date(data_venda_ini, d_min)
+        d_fim = _fdl_fr_safe_streamlit_date(data_venda_fim, d_max)
         if d_fim < d_ini:
             warn.append("A data final da **venda** não pode ser anterior à inicial.")
             d_fim = d_ini

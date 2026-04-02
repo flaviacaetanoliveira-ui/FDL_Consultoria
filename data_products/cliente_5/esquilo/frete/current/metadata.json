@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-01T11:53:43Z",
-  "source_signature": "8a4a12aaad934e6783d0745397dabfd6",
+  "generated_at": "2026-04-02T11:06:37Z",
+  "source_signature": "b4aeeb896a765bbe24b18fda4d1f8a07",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_5",
   "empresa": "esquilo",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "esquilo",
   "cnpj": null,
-  "row_count": 3151,
+  "row_count": 17732,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -85,19 +85,23 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo",
   "org_id": "esquilo",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Vendas_ML\\2026\\Esquilo - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Esquilo - Frete por Anúncio - Atualizado 06032026.xlsx"
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Vendas_ML\\2026\\Esquilo - Vendas ML 2026.xlsx",
+    "vendas_paths": [
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Vendas_ML\\2026\\Esquilo - Vendas ML 2026.xlsx",
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Vendas_ML\\2025\\Esquilo - Vendas ML 2025.xlsx"
+    ],
+    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Esquilo - Frete por Anúncio - Atualizado 06032026.xlsx"
   },
   "loader_meta": {
-    "vendas_arquivo": "Esquilo - Vendas ML 2026.xlsx",
+    "vendas_arquivo": "Esquilo - Vendas ML 2026.xlsx, Esquilo - Vendas ML 2025.xlsx",
     "frete_arquivo": "Esquilo - Frete por Anúncio - Atualizado 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 3151,
+    "linhas": 17732,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

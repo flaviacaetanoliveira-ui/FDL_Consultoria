@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-01T11:55:20Z",
-  "source_signature": "ca7667d384f7a0a7605fb1a648e1322d",
+  "generated_at": "2026-04-02T11:08:41Z",
+  "source_signature": "83e11ce82969981e6f6f57128ac23e83",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "bp_ramiro",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "bp_ramiro",
   "cnpj": null,
-  "row_count": 1163,
+  "row_count": 4735,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -70,6 +70,7 @@
     "Reclamação aberta",
     "Reclamação encerrada",
     "Em mediação",
+    "Custo do envio (BRL)",
     "Frete cobrado",
     "Qtd × preço unit. produto (ML)",
     "_data_venda_dt",
@@ -82,19 +83,23 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro",
   "org_id": "bp_ramiro",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro\\Vendas_ML\\2026\\BP Ramiro - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro\\BP Ramiro - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro\\Vendas_ML\\2026\\BP Ramiro - Vendas ML 2026.xlsx",
+    "vendas_paths": [
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro\\Vendas_ML\\2026\\BP Ramiro - Vendas ML 2026.xlsx",
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro\\Vendas_ML\\2025\\BP Ramiro - Vendas ML 2025.xlsx"
+    ],
+    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\BP Ramiro\\BP Ramiro - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
-    "vendas_arquivo": "BP Ramiro - Vendas ML 2026.xlsx",
+    "vendas_arquivo": "BP Ramiro - Vendas ML 2026.xlsx, BP Ramiro - Vendas ML 2025.xlsx",
     "frete_arquivo": "BP Ramiro - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 1163,
+    "linhas": 4735,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

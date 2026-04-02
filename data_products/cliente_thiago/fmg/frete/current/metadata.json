@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-01T11:56:08Z",
-  "source_signature": "68ac774254ff8b8cb505e8cb2f2ab2cc",
+  "generated_at": "2026-04-02T11:09:38Z",
+  "source_signature": "79e2a851f46220494ad632487a126af1",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "fmg",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "fmg",
   "cnpj": null,
-  "row_count": 2696,
+  "row_count": 7928,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -71,6 +71,8 @@
     "Reclamação aberta",
     "Reclamação encerrada",
     "Em mediação",
+    "Custo do envio (BRL)",
+    "Unidades.2",
     "Frete cobrado",
     "Qtd × preço unit. produto (ML)",
     "_data_venda_dt",
@@ -83,19 +85,23 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
   "org_id": "fmg",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG\\Vendas_ML\\FMG - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG\\FMG - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG\\Vendas_ML\\FMG - Vendas ML 2026.xlsx",
+    "vendas_paths": [
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG\\Vendas_ML\\FMG - Vendas ML 2026.xlsx",
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG\\Vendas_ML\\FMG - Vendas ML 2025.xlsx"
+    ],
+    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG\\FMG - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
-    "vendas_arquivo": "FMG - Vendas ML 2026.xlsx",
+    "vendas_arquivo": "FMG - Vendas ML 2026.xlsx, FMG - Vendas ML 2025.xlsx",
     "frete_arquivo": "FMG - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 2696,
+    "linhas": 7928,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

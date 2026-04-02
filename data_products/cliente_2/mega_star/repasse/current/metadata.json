@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-01T14:21:03Z",
-  "source_signature": "6875e8f5f6d573fa81ad1ac3a12ba27b",
+  "generated_at": "2026-04-02T11:03:12Z",
+  "source_signature": "4f247a74a201dedcfb31c952ef5c75ce",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_star",
@@ -30,11 +30,11 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
   "loader_info": {
-    "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
+    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
     "linhas": 857,
-    "arquivos_contas_lidos": 4,
+    "arquivos_contas_lidos": 5,
     "col_situacao": "Situação",
     "col_numero": "Número"
   },

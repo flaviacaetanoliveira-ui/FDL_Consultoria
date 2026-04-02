@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-01T14:23:13Z",
-  "source_signature": "e3738c145f0ff9c45123bbd7e8b6e380",
+  "generated_at": "2026-04-02T11:00:07Z",
+  "source_signature": "d73652c03d481e2aa0717eb3cf43e888",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "gama_home",
@@ -83,16 +83,16 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home",
   "org_id": "gama_home",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Vendas_ML\\2026\\Gama Home - Vendas ML 2026.xlsx",
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Vendas_ML\\2026\\Gama Home - Vendas ML 2026.xlsx",
     "vendas_paths": [
-      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Vendas_ML\\2026\\Gama Home - Vendas ML 2026.xlsx"
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Vendas_ML\\2026\\Gama Home - Vendas ML 2026.xlsx"
     ],
-    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Gama Home - Frete por Anúncio 06032026.xlsx"
+    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Gama Home - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Gama Home - Vendas ML 2026.xlsx",

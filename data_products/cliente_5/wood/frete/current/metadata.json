@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-01T11:54:43Z",
-  "source_signature": "86f471387849ff43b85f79e30e247cb0",
+  "generated_at": "2026-04-02T11:08:03Z",
+  "source_signature": "2f66077848da21c321384c26f41215f1",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_5",
   "empresa": "wood",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "wood",
   "cnpj": null,
-  "row_count": 3317,
+  "row_count": 15382,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -85,19 +85,23 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
   "org_id": "wood",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Vendas_ML\\2026\\Wood - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Wood - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Vendas_ML\\2026\\Wood - Vendas ML 2026.xlsx",
+    "vendas_paths": [
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Vendas_ML\\2026\\Wood - Vendas ML 2026.xlsx",
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Vendas_ML\\2025\\Wood - Vendas ML 2025.xlsx"
+    ],
+    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Wood - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
-    "vendas_arquivo": "Wood - Vendas ML 2026.xlsx",
+    "vendas_arquivo": "Wood - Vendas ML 2026.xlsx, Wood - Vendas ML 2025.xlsx",
     "frete_arquivo": "Wood - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 3317,
+    "linhas": 15382,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

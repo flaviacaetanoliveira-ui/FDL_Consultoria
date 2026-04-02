@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-01T11:54:35Z",
-  "source_signature": "cd5c46fe285405987b2e1614fcb4f440",
+  "generated_at": "2026-04-02T11:07:34Z",
+  "source_signature": "c0e60c2870c4de5c5bf3a3309173da4b",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_5",
   "empresa": "wood",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "wood",
   "cnpj": null,
-  "row_count": 14446,
+  "row_count": 14483,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -30,10 +30,10 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
   "loader_info": {
-    "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
-    "linhas": 14446,
+    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
+    "linhas": 14483,
     "arquivos_contas_lidos": 3,
     "col_situacao": "Situação",
     "col_numero": "Número"

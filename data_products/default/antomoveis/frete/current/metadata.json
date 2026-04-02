@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-01T11:58:15Z",
-  "source_signature": "2b5508424317ef57ad59daa85a0667db",
+  "generated_at": "2026-04-02T11:13:05Z",
+  "source_signature": "1d71b3e1ee35337cbc3fcf00565c57f7",
   "pipeline_revision": "phase1-v1",
   "cliente": "default",
   "empresa": "antomoveis",
@@ -8,7 +8,7 @@
   "cliente_id": "default",
   "empresa_id": "antomoveis",
   "cnpj": null,
-  "row_count": 616,
+  "row_count": 4987,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -23,7 +23,7 @@
     "Tarifa de venda e impostos (BRL)",
     "Receita por envio (BRL)",
     "Tarifas de envio (BRL)",
-    "Custo do envio (BRL)",
+    "Descontos e bônus",
     "Cancelamentos e reembolsos (BRL)",
     "Total (BRL)",
     "Mês de faturamento das suas tarifas",
@@ -71,6 +71,7 @@
     "Reclamação aberta",
     "Reclamação encerrada",
     "Em mediação",
+    "Custo do envio (BRL)",
     "Frete cobrado",
     "Qtd × preço unit. produto (ML)",
     "_data_venda_dt",
@@ -83,19 +84,23 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
   "org_id": "antomoveis",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Vendas - Mercado Livre\\Anto Móveis - Vendas ML 2026.xlsx",
-    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Anto Móveis - Frete por Anúncio 06032026.xlsx"
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Vendas_ML\\2026\\Anto Móveis - Vendas ML 2026.xlsx",
+    "vendas_paths": [
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Vendas_ML\\2026\\Anto Móveis - Vendas ML 2026.xlsx",
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Vendas_ML\\2025\\Anto Móveis - Vendas ML 2025.xlsx"
+    ],
+    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Anto Móveis - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
-    "vendas_arquivo": "Anto Móveis - Vendas ML 2026.xlsx",
+    "vendas_arquivo": "Anto Móveis - Vendas ML 2026.xlsx, Anto Móveis - Vendas ML 2025.xlsx",
     "frete_arquivo": "Anto Móveis - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 616,
+    "linhas": 4987,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

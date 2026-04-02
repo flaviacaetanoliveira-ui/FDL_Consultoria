@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-01T15:05:20Z",
-  "source_signature": "44f8ee73c1640b4c293dc58fb6834dec",
+  "generated_at": "2026-04-02T11:04:42Z",
+  "source_signature": "d0b5991a8c81884eee87dcbe0b9313db",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "moveis_eap",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "moveis_eap",
   "cnpj": null,
-  "row_count": 6145,
+  "row_count": 6166,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -23,7 +23,7 @@
     "Tarifa de venda e impostos (BRL)",
     "Receita por envio (BRL)",
     "Tarifas de envio (BRL)",
-    "Custo do envio (BRL)",
+    "Descontos e bônus",
     "Cancelamentos e reembolsos (BRL)",
     "Total (BRL)",
     "Mês de faturamento das suas tarifas",
@@ -70,6 +70,7 @@
     "Reclamação aberta",
     "Reclamação encerrada",
     "Em mediação",
+    "Custo do envio (BRL)",
     "Frete cobrado",
     "Qtd × preço unit. produto (ML)",
     "_data_venda_dt",
@@ -82,23 +83,23 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP",
   "org_id": "moveis_eap",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Vendas_ML\\2026\\Moveis EAP - Vendas ML 2026.xlsx",
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Vendas_ML\\2026\\Moveis EAP - Vendas ML 2026.xlsx",
     "vendas_paths": [
-      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Vendas_ML\\2026\\Moveis EAP - Vendas ML 2026.xlsx",
-      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Vendas_ML\\2025\\Moveis EAP - Vendas ML 2025.xlsx"
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Vendas_ML\\2026\\Moveis EAP - Vendas ML 2026.xlsx",
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Vendas_ML\\2025\\Moveis EAP - Vendas ML 2025.xlsx"
     ],
-    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Moveis EAP - Frete por Anúncio 06032026.xlsx"
+    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Moveis EAP - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Moveis EAP - Vendas ML 2026.xlsx, Moveis EAP - Vendas ML 2025.xlsx",
     "frete_arquivo": "Moveis EAP - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 6145,
+    "linhas": 6166,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

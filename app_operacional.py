@@ -378,13 +378,13 @@ def _faturamento_period_calendar_limits(d_min: date, d_max: date) -> tuple[date,
 
 
 # Convenção de produto (Faturamento & DRE):
-# - «Valor Nota Fiscal» na UI **não** é o valor legal da NF-e; fonte técnica = coluna ``Valor total`` até integração fiscal.
+# - Com materializado V2 + notas: «Valor Nota Fiscal» nos KPIs = Σ ``Nota_Valor_Liquido_Rateado`` (valor líquido da NF rateado).
+# - Sem essa coluna (legado): fallback Σ ``Valor total`` (pedido) para o mesmo rótulo.
 # - Período padrão: coluna ``Data``. ``Data do faturamento`` é secundária / futura.
-# - NF vazia no fluxo por pedidos ML é esperada; não indica falha da tela.
 _FATURAMENTO_UI_VALOR_NOTA_FISCAL = "Valor Nota Fiscal"
 _FATURAMENTO_HELP_VALOR_NOTA_FISCAL = (
-    "Convenção do módulo: valores da coluna **Valor total** do materializado (pedidos). "
-    "**Não** equivalem ao valor fiscal da NF-e sem integração com documentos fiscais."
+    "Materializado V2 com notas: soma de **Nota_Valor_Liquido_Rateado** (valor líquido da nota de saída, rateado por linha). "
+    "Sem join fiscal: fallback à coluna **Valor total** do pedido."
 )
 _FATURAMENTO_HELP_PERIODO_DATA = (
     "Eixo oficial do período: coluna **Data** (pedido / export ML). "
@@ -920,7 +920,10 @@ def _faturamento_v2_canonical_dataset_path_str() -> str:
 
 def _faturamento_resolve_materialized_target() -> dict[str, str]:
     """
-    Ordem: explícito (path/URL) → V2 canônico (se layout não for só v1) → derivado V1 do repasse.
+    Ordem: explícito (path/URL) → **V2 canônico** (se existir em disco) → derivado V1 do repasse.
+
+    Sem path explícito, o ficheiro em ``data_products/<slug>/faturamento/current/`` tem prioridade
+    sobre o CSV «irmão do repasse» (V1 por empresa), para carregar join fiscal (``Nota_Data_Emissao``, etc.).
 
     Devolve chaves: path_s, url_s, resolution_source, path_final_resolved, layout_declared.
     """
@@ -944,16 +947,15 @@ def _faturamento_resolve_materialized_target() -> dict[str, str]:
             "path_final_resolved": final or mp.strip() or mu.strip(),
             "layout_declared": declared,
         }
-    if declared != "v1":
-        v2s = _faturamento_v2_canonical_dataset_path_str()
-        if v2s:
-            return {
-                "path_s": v2s,
-                "url_s": "",
-                "resolution_source": "v2_canonical",
-                "path_final_resolved": v2s,
-                "layout_declared": declared,
-            }
+    v2s = _faturamento_v2_canonical_dataset_path_str()
+    if v2s:
+        return {
+            "path_s": v2s,
+            "url_s": "",
+            "resolution_source": "v2_canonical",
+            "path_final_resolved": v2s,
+            "layout_declared": declared,
+        }
     for anchor in (_repasse_materialized_path_str(), _precomputed_path_str()):
         d = _derive_faturamento_materialized_from_repasse_anchor(anchor)
         if d:
@@ -1132,7 +1134,7 @@ def _load_faturamento_data(
     allowed_org_ids: frozenset[str] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, object], str]:
     """
-    Carrega dataset materializado (path/URL explícitos → V2 canônico → V1 derivado),
+    Carrega dataset materializado (path/URL explícitos → V2 canônico em disco → V1 irmão do repasse),
     classifica layout (v1/v2) e aplica escopo por ``org_id`` (empresa ativa) ou,
     em modo consolidado, todas as orgs permitidas ao utilizador quando o layout é v2.
     """
@@ -1213,6 +1215,15 @@ def _load_faturamento_data(
             "faturamento_row_count_loaded": n_loaded,
             "linhas": int(len(df_scoped)),
         }
+        info.update(_faturamento_materialized_fiscal_audit(df_scoped))
+        if resolution_source == "explicit" and not bool(info.get("faturamento_fiscal_join_complete")):
+            v2_alt = _faturamento_v2_canonical_dataset_path_str()
+            if v2_alt:
+                info["faturamento_note_v2_canonical_available"] = (
+                    "O path/URL explícito atual não inclui colunas completas do join fiscal "
+                    "(ex.: Nota_Data_Emissao, Nota_Valor_Liquido_Rateado). "
+                    f"Existe materializado em **{v2_alt}** — remova o path explícito ou aponte para esse ficheiro."
+                )
         if scope_warn:
             info["faturamento_scope_note"] = scope_warn
         info["faturamento_escopo"] = (
@@ -3157,6 +3168,25 @@ def _faturamento_atendido_mask(df: pd.DataFrame) -> pd.Series:
     return situ.eq("atendido")
 
 
+def _faturamento_materialized_fiscal_audit(df: pd.DataFrame) -> dict[str, object]:
+    """Metadados sobre colunas fiscais do join notas (materializado V2)."""
+    want = (
+        "Nota_Data_Emissao",
+        "Nota_Valor_Liquido_Rateado",
+        "Nota_Valor_Liquido_Total",
+        "Nota_Situacao",
+        "Nota_Numero_Normalizado",
+        "faturamento_nota_vinculada",
+    )
+    present = [c for c in want if c in df.columns]
+    return {
+        "faturamento_fiscal_columns_present": present,
+        "faturamento_fiscal_join_complete": bool(
+            "Nota_Data_Emissao" in df.columns and "Nota_Valor_Liquido_Rateado" in df.columns
+        ),
+    }
+
+
 def _faturamento_agg_recorte(df: pd.DataFrame) -> dict[str, Any]:
     """
     Agregações numéricas do recorte (Visão Geral, KPIs). Independente de Streamlit.
@@ -3164,9 +3194,9 @@ def _faturamento_agg_recorte(df: pd.DataFrame) -> dict[str, Any]:
     Definições do módulo (totais no recorte):
 
     * **Receita bruta (venda comercial)** = Σ ``Vl_Venda`` se existir; senão Σ ``Receita_Bruta`` / preço×qtd.
-    * **Valor Nota Fiscal** (UI; coluna ``Valor total``) = Σ ``Valor total`` quando existe; caso contrário fallback Σ RB − Σ desconto.
-    * **Desconto comercial** = receita bruta − valor nota fiscal (equivale a Σ ``Desconto proporcional total``
-      quando RB − Desconto − Valor total fecha linha a linha, como no pipeline).
+    * **Valor Nota Fiscal** (KPI) = Σ ``Nota_Valor_Liquido_Rateado`` quando o materializado traz join fiscal; senão
+      Σ ``Valor total`` (pedido) ou fallback RB − desconto.
+    * **Desconto comercial** = receita bruta − Σ ``Valor total`` quando existe; senão Σ ``Desconto proporcional total``.
 
     O **resultado** soma só valores numéricos de ``Resultado`` (linhas sem custo OK ficam vazias no materializado).
 
@@ -3199,17 +3229,26 @@ def _faturamento_agg_recorte(df: pd.DataFrame) -> dict[str, Any]:
     desc_col = "Desconto proporcional total"
     has_vt = "Valor total" in df.columns
     has_desc = desc_col in df.columns
+    has_nvlr = "Nota_Valor_Liquido_Rateado" in df.columns
     vt_sum = float(_faturamento_num_col(df, "Valor total").sum()) if has_vt else None
     desc_sum = float(_faturamento_num_col(df, desc_col).sum()) if has_desc else None
 
     if vt_sum is not None:
-        out["receita_liquida"] = vt_sum
         out["desconto_comercial"] = float(out["receita_bruta"] - vt_sum)
     elif desc_sum is not None:
         out["desconto_comercial"] = desc_sum
-        out["receita_liquida"] = float(out["receita_bruta"] - desc_sum)
     else:
         out["desconto_comercial"] = 0.0
+
+    if has_nvlr:
+        out["receita_liquida"] = float(
+            pd.to_numeric(df["Nota_Valor_Liquido_Rateado"], errors="coerce").fillna(0.0).sum()
+        )
+    elif vt_sum is not None:
+        out["receita_liquida"] = vt_sum
+    elif desc_sum is not None:
+        out["receita_liquida"] = float(out["receita_bruta"] - desc_sum)
+    else:
         out["receita_liquida"] = float(out["receita_bruta"])
 
     if has_vt and has_desc and vt_sum is not None and desc_sum is not None:
@@ -3330,9 +3369,15 @@ def _render_faturamento_dre_visao_geral(df: pd.DataFrame, load_info: dict[str, o
 
     with st.container(border=True):
         st.caption("**Indicadores principais**")
-        st.caption(
-            f"**{_FATURAMENTO_UI_VALOR_NOTA_FISCAL}** = soma de **Valor total** (convenção do módulo; não é valor fiscal da NF-e sem integração específica)."
-        )
+        if "Nota_Valor_Liquido_Rateado" in df.columns:
+            st.caption(
+                f"**{_FATURAMENTO_UI_VALOR_NOTA_FISCAL}** = soma de **Nota_Valor_Liquido_Rateado** "
+                "(valor líquido da nota de saída, rateado por linha; join pedidos↔notas)."
+            )
+        else:
+            st.caption(
+                f"**{_FATURAMENTO_UI_VALOR_NOTA_FISCAL}** = soma de **Valor total** do pedido (materializado sem coluna fiscal de nota; reprocesse V2 com notas)."
+            )
         rp = st.columns(5)
         with rp[0]:
             st.metric("Receita bruta", _fmt_brl_ptbr_celula(agg["receita_bruta"]))
@@ -3402,10 +3447,10 @@ def _render_faturamento_dre_visao_geral(df: pd.DataFrame, load_info: dict[str, o
             else:
                 st.metric("Outras despesas", "—")
         st.caption(
-            "**Definições:** receita bruta = Σ **Receita_Bruta** (inclui frete de transportadora própria quando o CSV traz modalidade "
-            "de envio; validar com financeiro). **Valor Nota Fiscal** = convenção do módulo: Σ **Valor total** — **não** é valor fiscal da NF-e "
-            "sem integração específica. Desconto comercial = receita bruta − essa soma. **NF vazia** no fluxo por pedidos ML: esperado. "
-            "Com export consistente, RB − desconto proporcional ≈ Valor total linha a linha (ajuste se RB incluir frete TP)."
+            "**Definições:** receita bruta = Σ **Vl_Venda** / **Receita_Bruta** conforme materializado. "
+            "**Desconto comercial** = receita bruta − Σ **Valor total** (quando existir). "
+            "**Valor Nota Fiscal** (este bloco) = Σ **Nota_Valor_Liquido_Rateado** com join fiscal; sem essa coluna, o KPI usa Σ **Valor total**."
+            " **NF vazia** no fluxo ML: esperado sem vínculo."
         )
         _plug = agg.get("diag_plug_rb_desc_vt")
         if (
@@ -4006,6 +4051,42 @@ def _faturamento_filter_keys(org_id: str) -> list[str]:
     ]
 
 
+def _faturamento_dre_vl_venda_series(df: pd.DataFrame, pl_col: str) -> pd.Series:
+    """Vl. Venda comercial: coluna ``Vl_Venda`` ou mesma lógica da receita bruta do painel."""
+    if "Vl_Venda" in df.columns:
+        return pd.to_numeric(df["Vl_Venda"], errors="coerce")
+    return _faturamento_painel_receita_series(df, pl_col)
+
+
+def _faturamento_dre_vl_nota_fiscal_series(df: pd.DataFrame) -> pd.Series:
+    """Valor líquido fiscal por linha: nota rateada; senão ``Valor total`` do pedido (legado)."""
+    if "Nota_Valor_Liquido_Rateado" in df.columns:
+        return pd.to_numeric(df["Nota_Valor_Liquido_Rateado"], errors="coerce")
+    if "Valor total" in df.columns:
+        return pd.to_numeric(df["Valor total"], errors="coerce")
+    return pd.Series(float("nan"), index=df.index)
+
+
+def _faturamento_dre_nf_coluna_display(df: pd.DataFrame) -> pd.Series:
+    """Uma coluna NF: join ``Nota_Numero_Normalizado``, fallback «Número da nota» do pedido."""
+    best = pd.Series("", index=df.index, dtype=object)
+    if "Nota_Numero_Normalizado" in df.columns:
+        best = df["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
+    if "Número da nota" in df.columns:
+        ml = df["Número da nota"].fillna("").astype(str).str.strip()
+        best = best.mask(best.eq(""), ml)
+    return _faturamento_disp_texto_sem_none(best.astype(str))
+
+
+def _faturamento_dre_frete_display_series(df: pd.DataFrame) -> pd.Series:
+    """Um frete para leitura principal: plataforma; senão custo total de frete."""
+    if "Frete_Plataforma" in df.columns:
+        return pd.to_numeric(df["Frete_Plataforma"], errors="coerce")
+    if "Custo de Frete" in df.columns:
+        return pd.to_numeric(df["Custo de Frete"], errors="coerce")
+    return pd.Series(float("nan"), index=df.index)
+
+
 _FATURAMENTO_PAINEL_EM_CONSTRUCAO = False
 
 
@@ -4325,143 +4406,253 @@ def _painel_faturamento(
         empresa_s = pd.Series("—", index=_ix)
     pedido_s = _faturamento_pedido_display_series(filt)
 
-    _core: list[tuple[str, pd.Series]] = [
-        (
-            "Data",
+    if mvp_rotulos_bloco_dre:
+        _data_s = (
             _faturamento_disp_data_pedidos(filt["Data"])
             if "Data" in filt.columns
-            else pd.Series("—", index=_ix),
-        ),
-        ("Empresa", empresa_s),
-        ("Plataforma", filt["Nome da plataforma"]),
-        ("Pedido", pedido_s),
-        ("SKU", filt["Código"]),
-        ("Produto", filt[prod_col].astype(str) if prod_col else pd.Series("", index=_ix)),
-        ("Receita bruta", receita_linha),
-        (_FATURAMENTO_UI_VALOR_NOTA_FISCAL, pd.to_numeric(filt["Valor total"], errors="coerce")),
-        ("Resultado", pd.to_numeric(filt[res_col], errors="coerce")),
-        ("Resultado %", rpct * 100.0),
-    ]
-    if "Status_Custo" in filt.columns:
-        _core.append(("Status custo", filt["Status_Custo"].astype(str)))
-    disp = pd.DataFrame(dict(_core))
-    disp["Alertas"] = filt.apply(_faturamento_alertas_text, axis=1)
-
-    _tail: list[tuple[str, pd.Series]] = [
-        ("Situação do pedido", filt["Situação"].astype(str)),
-        ("N.º do pedido", _faturamento_disp_texto_sem_none(filt["Número do pedido"])),
-        ("N.º pedido multiloja", _faturamento_disp_texto_sem_none(filt["Número do pedido multiloja"])),
-        (
-            "Data do faturamento",
-            _faturamento_disp_data_pedidos(filt["Data do faturamento"])
-            if "Data do faturamento" in filt.columns
-            else pd.Series("—", index=_ix),
-        ),
-        ("NF emitida?", _faturamento_disp_texto_sem_none(filt["Existe Nota Fiscal gerada"])),
-        ("N.º da nota", _faturamento_disp_texto_sem_none(filt["Número da nota"])),
-    ]
-    if "Quantidade" in filt.columns:
-        _tail.append(("Quantidade", pd.to_numeric(filt["Quantidade"], errors="coerce")))
-    _tail.append(("Custo do produto", pd.to_numeric(filt[custo_prod_col], errors="coerce")))
-    if "Frete Mercado Envios" in filt.columns and "Frete transportadora própria" in filt.columns:
-        _tail.append(("Frete Mercado Envios", pd.to_numeric(filt["Frete Mercado Envios"], errors="coerce")))
-        _tail.append(
-            ("Frete transp. própria", pd.to_numeric(filt["Frete transportadora própria"], errors="coerce"))
+            else pd.Series("—", index=_ix)
         )
-        _tail.append(("Custo frete (total)", pd.to_numeric(filt["Custo de Frete"], errors="coerce")))
-    else:
-        _tail.append(("Frete", pd.to_numeric(filt["Custo de Frete"], errors="coerce")))
-    _tail.extend(
-        [
-            ("Comissão Plataforma", pd.to_numeric(filt["Taxa de Comissão"], errors="coerce")),
+        _prod_s = filt[prod_col].astype(str) if prod_col else pd.Series("", index=_ix)
+        _qtd_s = (
+            pd.to_numeric(filt["Quantidade"], errors="coerce")
+            if "Quantidade" in filt.columns
+            else pd.Series(float("nan"), index=_ix)
+        )
+        _vl_v = _faturamento_dre_vl_venda_series(filt, pl_col)
+        _vl_nf = _faturamento_dre_vl_nota_fiscal_series(filt)
+        _nf_s = _faturamento_dre_nf_coluna_display(filt)
+        _fr_s = _faturamento_dre_frete_display_series(filt)
+        _main_cols: list[tuple[str, pd.Series]] = [
+            ("Data", _data_s),
+            ("Empresa", empresa_s),
+            ("Plataforma", filt["Nome da plataforma"]),
+            ("Pedido", pedido_s),
+            ("NF", _nf_s),
+            ("Produto", _prod_s),
+            ("SKU", filt["Código"]),
+            ("Qtd", _qtd_s),
+            ("Vl. Venda", _vl_v),
+            ("Vl. Nota Fiscal", _vl_nf),
+            ("Frete", _fr_s),
+            ("Comissão", pd.to_numeric(filt["Taxa de Comissão"], errors="coerce")),
+            ("Custo Total", pd.to_numeric(filt[custo_prod_col], errors="coerce")),
+            ("Despesa fixa", pd.to_numeric(filt["Despesas Fixas"], errors="coerce")),
             ("Imposto", pd.to_numeric(filt["Imposto"], errors="coerce")),
-            ("Despesas fixas", pd.to_numeric(filt["Despesas Fixas"], errors="coerce")),
+            ("Resultado", pd.to_numeric(filt[res_col], errors="coerce")),
         ]
-    )
-    _tail.append(
-        (
-            "Ref. ML (col. Número)",
-            _faturamento_disp_texto_sem_none(filt["Número"])
-            if "Número" in filt.columns
-            else pd.Series("—", index=_ix),
+        disp = pd.DataFrame(dict(_main_cols))
+        disp["Alertas"] = filt.apply(_faturamento_alertas_text, axis=1)
+
+        _extra_export: dict[str, pd.Series] = {}
+        if "Resultado_Pct" in filt.columns:
+            _extra_export["Resultado %"] = rpct * 100.0
+        if "Status_Custo" in filt.columns:
+            _extra_export["Status custo"] = filt["Status_Custo"].astype(str)
+        _extra_export["Receita bruta (auditoria)"] = receita_linha
+        if "Valor total" in filt.columns:
+            _extra_export["Valor total (pedido)"] = pd.to_numeric(filt["Valor total"], errors="coerce")
+        _extra_export["Situação do pedido"] = filt["Situação"].astype(str)
+        _extra_export["N.º do pedido"] = _faturamento_disp_texto_sem_none(filt["Número do pedido"])
+        _extra_export["N.º pedido multiloja"] = _faturamento_disp_texto_sem_none(filt["Número do pedido multiloja"])
+        if "Data do faturamento" in filt.columns:
+            _extra_export["Data do faturamento"] = _faturamento_disp_data_pedidos(filt["Data do faturamento"])
+        _extra_export["NF emitida? (pedido)"] = _faturamento_disp_texto_sem_none(filt["Existe Nota Fiscal gerada"])
+        if "Frete Mercado Envios" in filt.columns and "Frete transportadora própria" in filt.columns:
+            _extra_export["Frete Mercado Envios"] = pd.to_numeric(filt["Frete Mercado Envios"], errors="coerce")
+            _extra_export["Frete transp. própria"] = pd.to_numeric(filt["Frete transportadora própria"], errors="coerce")
+            _extra_export["Custo frete (total)"] = pd.to_numeric(filt["Custo de Frete"], errors="coerce")
+        if "Número" in filt.columns:
+            _extra_export["Ref. ML (col. Número)"] = _faturamento_disp_texto_sem_none(filt["Número"])
+        if "Base_Imposto" in filt.columns:
+            _extra_export["Base imposto"] = pd.to_numeric(filt["Base_Imposto"], errors="coerce")
+        if "Nota_Situacao" in filt.columns:
+            _extra_export["Situação da NF"] = filt["Nota_Situacao"].fillna("").astype(str)
+        if "Nota_Data_Emissao" in filt.columns:
+            _extra_export["Data emissão NF"] = _faturamento_disp_data_pedidos(filt["Nota_Data_Emissao"])
+        _export = pd.concat([disp, pd.DataFrame(_extra_export)], axis=1)
+
+        _cfg = {}
+        for c in (
+            "Vl. Venda",
+            "Vl. Nota Fiscal",
+            "Frete",
+            "Comissão",
+            "Custo Total",
+            "Despesa fixa",
+            "Imposto",
+            "Resultado",
+        ):
+            if c in disp.columns:
+                _hc = (
+                    _FATURAMENTO_HELP_VALOR_NOTA_FISCAL
+                    if c == "Vl. Nota Fiscal"
+                    else None
+                )
+                _cfg[c] = (
+                    NumberColumn(c, format="R$ %,.2f", help=_hc)
+                    if _hc
+                    else NumberColumn(c, format="R$ %,.2f")
+                )
+        if "Qtd" in disp.columns:
+            _cfg["Qtd"] = NumberColumn("Qtd", format="%.2f")
+        for c in ("Data", "Empresa", "Plataforma", "Pedido", "NF", "Produto", "SKU", "Alertas"):
+            if c in disp.columns:
+                _tc_kw: dict[str, str | bool] = {"width": "large" if c == "Alertas" else "medium"}
+                if c == "Data":
+                    _tc_kw["help"] = _FATURAMENTO_HELP_PERIODO_DATA
+                elif c == "NF":
+                    _tc_kw["help"] = "N.º a partir do join com notas de saída; se vazio, texto do pedido quando existir."
+                _cfg[c] = TextColumn(c, **_tc_kw)
+
+        st.subheader("Tabela principal")
+        st.caption(
+            f"{len(disp)} linhas · **Resultado** ascendente. "
+            "**Vl. Venda** = comercial (**Vl_Venda** ou equivalente). **Vl. Nota Fiscal** = "
+            "**Nota_Valor_Liquido_Rateado** quando há join fiscal; senão **Valor total** do pedido. "
+            "**Frete** = **Frete_Plataforma** ou **Custo de Frete**. "
+            "O **CSV exportado** inclui colunas extra (pedido, frete detalhado, base fiscal, etc.)."
         )
-    )
-    disp = pd.concat([disp, pd.DataFrame(dict(_tail))], axis=1)
+    else:
+        _core: list[tuple[str, pd.Series]] = [
+            (
+                "Data",
+                _faturamento_disp_data_pedidos(filt["Data"])
+                if "Data" in filt.columns
+                else pd.Series("—", index=_ix),
+            ),
+            ("Empresa", empresa_s),
+            ("Plataforma", filt["Nome da plataforma"]),
+            ("Pedido", pedido_s),
+            ("SKU", filt["Código"]),
+            ("Produto", filt[prod_col].astype(str) if prod_col else pd.Series("", index=_ix)),
+            ("Receita bruta", receita_linha),
+            (_FATURAMENTO_UI_VALOR_NOTA_FISCAL, pd.to_numeric(filt["Valor total"], errors="coerce")),
+            ("Resultado", pd.to_numeric(filt[res_col], errors="coerce")),
+            ("Resultado %", rpct * 100.0),
+        ]
+        if "Status_Custo" in filt.columns:
+            _core.append(("Status custo", filt["Status_Custo"].astype(str)))
+        disp = pd.DataFrame(dict(_core))
+        disp["Alertas"] = filt.apply(_faturamento_alertas_text, axis=1)
 
-    _cfg: dict[str, NumberColumn | TextColumn] = {}
-    money_cols = (
-        "Receita bruta",
-        _FATURAMENTO_UI_VALOR_NOTA_FISCAL,
-        "Custo do produto",
-        "Frete Mercado Envios",
-        "Frete transp. própria",
-        "Custo frete (total)",
-        "Frete",
-        "Comissão Plataforma",
-        "Imposto",
-        "Despesas fixas",
-        "Resultado",
-    )
-    for c in money_cols:
-        if c in disp.columns:
-            if c == _FATURAMENTO_UI_VALOR_NOTA_FISCAL:
-                _cfg[c] = NumberColumn(
-                    c,
-                    format="R$ %,.2f",
-                    help=_FATURAMENTO_HELP_VALOR_NOTA_FISCAL,
-                )
-            elif c == "Custo frete (total)":
-                _cfg[c] = NumberColumn(
-                    c,
-                    format="R$ %,.2f",
-                    help="Soma ME + transportadora própria; continua a entrar no **Resultado**.",
-                )
-            else:
-                _cfg[c] = NumberColumn(c, format="R$ %,.2f")
-    if "Resultado %" in disp.columns:
-        _cfg["Resultado %"] = NumberColumn("Resultado %", format="%.2f%%")
-    if "Quantidade" in disp.columns:
-        _cfg["Quantidade"] = NumberColumn("Quantidade", format="%.2f")
-    if "Status custo" in disp.columns:
-        _cfg["Status custo"] = TextColumn("Status custo", width="small")
-    for c in (
-        "Data",
-        "Empresa",
-        "Plataforma",
-        "Pedido",
-        "SKU",
-        "Produto",
-        "Alertas",
-        "Situação do pedido",
-        "N.º do pedido",
-        "N.º pedido multiloja",
-        "Data do faturamento",
-        "Ref. ML (col. Número)",
-        "NF emitida?",
-        "N.º da nota",
-    ):
-        if c in disp.columns:
-            _tc_kw: dict[str, str] = {"width": "large" if c == "Alertas" else "medium"}
-            if c == "Data":
-                _tc_kw["help"] = _FATURAMENTO_HELP_PERIODO_DATA
-            elif c == "Data do faturamento":
-                _tc_kw["help"] = (
-                    "Campo secundário / futuro (competência fiscal). Pode estar vazio ou inconsistente; "
-                    "o período do módulo usa a coluna **Data**."
-                )
-            elif c == "N.º da nota":
-                _tc_kw["help"] = _FATURAMENTO_HELP_NUMERO_NF_COL
-            _cfg[c] = TextColumn(c, **_tc_kw)
+        _tail: list[tuple[str, pd.Series]] = [
+            ("Situação do pedido", filt["Situação"].astype(str)),
+            ("N.º do pedido", _faturamento_disp_texto_sem_none(filt["Número do pedido"])),
+            ("N.º pedido multiloja", _faturamento_disp_texto_sem_none(filt["Número do pedido multiloja"])),
+            (
+                "Data do faturamento",
+                _faturamento_disp_data_pedidos(filt["Data do faturamento"])
+                if "Data do faturamento" in filt.columns
+                else pd.Series("—", index=_ix),
+            ),
+            ("NF emitida?", _faturamento_disp_texto_sem_none(filt["Existe Nota Fiscal gerada"])),
+            ("N.º da nota", _faturamento_disp_texto_sem_none(filt["Número da nota"])),
+        ]
+        if "Quantidade" in filt.columns:
+            _tail.append(("Quantidade", pd.to_numeric(filt["Quantidade"], errors="coerce")))
+        _tail.append(("Custo do produto", pd.to_numeric(filt[custo_prod_col], errors="coerce")))
+        if "Frete Mercado Envios" in filt.columns and "Frete transportadora própria" in filt.columns:
+            _tail.append(("Frete Mercado Envios", pd.to_numeric(filt["Frete Mercado Envios"], errors="coerce")))
+            _tail.append(
+                ("Frete transp. própria", pd.to_numeric(filt["Frete transportadora própria"], errors="coerce"))
+            )
+            _tail.append(("Custo frete (total)", pd.to_numeric(filt["Custo de Frete"], errors="coerce")))
+        else:
+            _tail.append(("Frete", pd.to_numeric(filt["Custo de Frete"], errors="coerce")))
+        _tail.extend(
+            [
+                ("Comissão Plataforma", pd.to_numeric(filt["Taxa de Comissão"], errors="coerce")),
+                ("Imposto", pd.to_numeric(filt["Imposto"], errors="coerce")),
+                ("Despesas fixas", pd.to_numeric(filt["Despesas Fixas"], errors="coerce")),
+            ]
+        )
+        _tail.append(
+            (
+                "Ref. ML (col. Número)",
+                _faturamento_disp_texto_sem_none(filt["Número"])
+                if "Número" in filt.columns
+                else pd.Series("—", index=_ix),
+            )
+        )
+        disp = pd.concat([disp, pd.DataFrame(dict(_tail))], axis=1)
+        _export = disp.copy()
 
-    st.subheader("Tabela principal")
-    st.caption(
-        f"{len(disp)} linhas · **Resultado** ascendente. "
-        "À esquerda: operação do dia; à direita: NF, quantidade e composição de custos/taxas (**Ref. ML** no fim). "
-        f"**{_FATURAMENTO_UI_VALOR_NOTA_FISCAL}** = **Valor total** (convenção; ver ajuda da coluna — não é NF-e legal). "
-        "**N.º da nota** vazio: esperado sem integração fiscal. "
-        "Frete repartido (ME / transp. própria) quando o CSV tiver modalidade; total em **Custo frete (total)**. "
-        "**Pedido** = multiloja se existir, senão n.º do pedido."
-    )
+        _cfg = {}
+        money_cols = (
+            "Receita bruta",
+            _FATURAMENTO_UI_VALOR_NOTA_FISCAL,
+            "Custo do produto",
+            "Frete Mercado Envios",
+            "Frete transp. própria",
+            "Custo frete (total)",
+            "Frete",
+            "Comissão Plataforma",
+            "Imposto",
+            "Despesas fixas",
+            "Resultado",
+        )
+        for c in money_cols:
+            if c in disp.columns:
+                if c == _FATURAMENTO_UI_VALOR_NOTA_FISCAL:
+                    _cfg[c] = NumberColumn(
+                        c,
+                        format="R$ %,.2f",
+                        help=_FATURAMENTO_HELP_VALOR_NOTA_FISCAL,
+                    )
+                elif c == "Custo frete (total)":
+                    _cfg[c] = NumberColumn(
+                        c,
+                        format="R$ %,.2f",
+                        help="Soma ME + transportadora própria; continua a entrar no **Resultado**.",
+                    )
+                else:
+                    _cfg[c] = NumberColumn(c, format="R$ %,.2f")
+        if "Resultado %" in disp.columns:
+            _cfg["Resultado %"] = NumberColumn("Resultado %", format="%.2f%%")
+        if "Quantidade" in disp.columns:
+            _cfg["Quantidade"] = NumberColumn("Quantidade", format="%.2f")
+        if "Status custo" in disp.columns:
+            _cfg["Status custo"] = TextColumn("Status custo", width="small")
+        for c in (
+            "Data",
+            "Empresa",
+            "Plataforma",
+            "Pedido",
+            "SKU",
+            "Produto",
+            "Alertas",
+            "Situação do pedido",
+            "N.º do pedido",
+            "N.º pedido multiloja",
+            "Data do faturamento",
+            "Ref. ML (col. Número)",
+            "NF emitida?",
+            "N.º da nota",
+        ):
+            if c in disp.columns:
+                _tc_kw = {"width": "large" if c == "Alertas" else "medium"}
+                if c == "Data":
+                    _tc_kw["help"] = _FATURAMENTO_HELP_PERIODO_DATA
+                elif c == "Data do faturamento":
+                    _tc_kw["help"] = (
+                        "Campo secundário / futuro (competência fiscal). Pode estar vazio ou inconsistente; "
+                        "o período do módulo usa a coluna **Data**."
+                    )
+                elif c == "N.º da nota":
+                    _tc_kw["help"] = _FATURAMENTO_HELP_NUMERO_NF_COL
+                _cfg[c] = TextColumn(c, **_tc_kw)
+
+        st.subheader("Tabela principal")
+        st.caption(
+            f"{len(disp)} linhas · **Resultado** ascendente. "
+            "À esquerda: operação do dia; à direita: NF, quantidade e composição de custos/taxas (**Ref. ML** no fim). "
+            f"**{_FATURAMENTO_UI_VALOR_NOTA_FISCAL}** = **Valor total** (convenção; ver ajuda da coluna — não é NF-e legal). "
+            "**N.º da nota** vazio: esperado sem integração fiscal. "
+            "Frete repartido (ME / transp. própria) quando o CSV tiver modalidade; total em **Custo frete (total)**. "
+            "**Pedido** = multiloja se existir, senão n.º do pedido."
+        )
+        _export = disp.copy()
+
     st.dataframe(
         disp,
         use_container_width=True,
@@ -4469,10 +4660,19 @@ def _painel_faturamento(
         height=440,
         column_config=_cfg,
     )
-    _export = disp.copy()
     if "SKU_Normalizado" in filt.columns:
         _export["SKU_Normalizado"] = filt["SKU_Normalizado"].astype(str)
-        st.caption("O **CSV exportado** inclui a coluna **SKU_Normalizado** (chave de join), útil para cruzar com a planilha de custo.")
+    if mvp_rotulos_bloco_dre:
+        st.caption(
+            "O **CSV exportado** inclui as colunas da tabela principal e **campos adicionais** "
+            "(Resultado %, pedido, frete detalhado, base imposto, dados fiscais da NF quando existirem"
+            + (", **SKU_Normalizado**" if "SKU_Normalizado" in filt.columns else "")
+            + ")."
+        )
+    elif "SKU_Normalizado" in filt.columns:
+        st.caption(
+            "O **CSV exportado** inclui a coluna **SKU_Normalizado** (chave de join), útil para cruzar com a planilha de custo."
+        )
     st.download_button(
         "Exportar CSV (filtrado)",
         _export.to_csv(index=False).encode("utf-8-sig"),
@@ -5568,11 +5768,13 @@ elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in 
             )
         st.caption(
             "**V2 canónico:** `data_products/<FDL_MATERIALIZED_CLIENTE_SLUG>/faturamento/current/` — com **CSV e Parquet**, "
-            "o app lê o **CSV** primeiro. O **slug** tem de ser o da materialização (ex. **cliente_5**); com **cliente_2** "
-            "no secrets e dados só em `cliente_5/`, o ficheiro não é encontrado nesse passo."
+            "o app lê o **CSV** primeiro. Sem path explícito, este ficheiro tem **prioridade** sobre o CSV «irmão do repasse» "
+            "(join fiscal: Nota_Data_Emissao, etc.). O **slug** tem de bater com a materialização (ex. **cliente_5**)."
         )
         if faturamento_info.get("faturamento_scope_note"):
             st.caption(str(faturamento_info["faturamento_scope_note"]))
+        if faturamento_info.get("faturamento_note_v2_canonical_available"):
+            st.info(str(faturamento_info["faturamento_note_v2_canonical_available"]))
         with st.expander("Debug — `faturamento_info` (materializado)", expanded=False):
             try:
                 st.json(json.loads(json.dumps(faturamento_info, default=str)))

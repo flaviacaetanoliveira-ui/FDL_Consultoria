@@ -56,9 +56,10 @@ FDL_PRODUCT_AREA_FINANCEIRO = "financeiro"
 FDL_PRODUCT_AREA_FATURAMENTO_DRE = "faturamento_dre"
 
 # Filtros globais / escopo de carga (MVP)
-SESSION_FAT_DRE_ESCOPO_KEY = "fdl_fat_dre_escopo"
 FAT_DRE_ESCOPO_EMPRESA = "empresa_ativa"
 FAT_DRE_ESCOPO_CONSOLIDADO = "consolidado"
+# Carga Faturamento & DRE: consolidado não usa org da sidebar; chave de cache estável.
+FAT_DRE_CACHE_ACTIVE_ORG_PLACEHOLDER = "_fdl_fat_dre_consolidado_load"
 
 # Select "Visão" no painel Faturamento: rótulo explícito vs. legado em sessão.
 _FAT_PAINEL_VISAO_COM_NF = "Com NF (pedido)"
@@ -306,13 +307,6 @@ if (
     and st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY) == FDL_PRODUCT_AREA_FATURAMENTO_DRE
 ):
     st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FINANCEIRO
-
-if (
-    "faturamento" in _enabled_modules
-    and st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY) == FDL_PRODUCT_AREA_FATURAMENTO_DRE
-):
-    if SESSION_FAT_DRE_ESCOPO_KEY not in st.session_state:
-        st.session_state[SESSION_FAT_DRE_ESCOPO_KEY] = FAT_DRE_ESCOPO_EMPRESA
 
 _fdl_global_trace("03: após definir vista financeiro (session_state)")
 
@@ -3639,33 +3633,14 @@ def _faturamento_dre_filtrar_por_etiquetas_empresa(df: pd.DataFrame, labels: lis
 def _faturamento_dre_default_empresa_labels(
     df: pd.DataFrame, org_id: str, org_display_name: str
 ) -> list[str]:
-    """Rótulos iniciais do multiselect **Empresa** (recorte comercial) ≈ empresa ativa."""
+    """Rótulos iniciais do multiselect **Empresa**: vazio = todas quando há várias marcas na base."""
+    _ = org_id, org_display_name
     opts = _faturamento_dre_etiquetas_empresa_recorte(df)
     if not opts:
         return []
     if len(opts) == 1:
         return list(opts)
-    oid = str(org_id).strip()
-    picked: list[str] = []
-    if "org_id" in df.columns:
-        m = df["org_id"].astype(str).str.strip() == oid
-        if m.any() and "empresa" in df.columns:
-            picked = sorted(
-                {str(x).strip() for x in df.loc[m, "empresa"].dropna().unique() if str(x).strip()}
-            )
-        elif m.any() and oid in opts:
-            picked = [oid]
-    if not picked and "empresa" in df.columns and org_display_name:
-        dn = str(org_display_name).strip().casefold()
-        m2 = df["empresa"].fillna("").astype(str).str.strip().str.casefold() == dn
-        if m2.any():
-            picked = sorted(
-                {str(x).strip() for x in df.loc[m2, "empresa"].dropna().unique() if str(x).strip()}
-            )
-    picked = [p for p in picked if p in opts]
-    if picked:
-        return picked
-    return [opts[0]]
+    return []
 
 
 def _render_faturamento_dre_bloco_por_empresa(
@@ -4213,17 +4188,10 @@ def _render_faturamento_dre_recorte_global(
         )
         with st.container(border=True):
             st.caption("**Recorte comercial**")
-            _escopo_car = st.session_state.get(SESSION_FAT_DRE_ESCOPO_KEY, FAT_DRE_ESCOPO_EMPRESA)
-            if emp_opts and _escopo_car == FAT_DRE_ESCOPO_EMPRESA:
+            if emp_opts:
                 st.caption(
-                    "**Escopo empresa ativa:** a base **já é só** da organização escolhida na barra lateral. "
-                    "Se o filtro **Empresa** mostra **uma** opção, não está «travado»: o carregamento veio filtrado por org; "
-                    "aqui você **refina** rótulos de empresa dentro desse conjunto."
-                )
-            elif emp_opts and _escopo_car == FAT_DRE_ESCOPO_CONSOLIDADO and len(emp_opts) > 1:
-                st.caption(
-                    "**Escopo consolidado:** use o multiselect **Empresa** para comparar ou isolar marcas. "
-                    "**Vazio** = todas as empresas presentes nesta base."
+                    "A carga do módulo é **consolidada** (orgs permitidas a si); a **Empresa** na barra lateral **não** corta esse universo. "
+                    "Use o multiselect **Empresa** abaixo para Esquilo, Wood, ambas ou **vazio** = todas as marcas na base."
                 )
             if emp_opts:
                 if "fdl_fat_dre_emp" not in st.session_state:
@@ -4247,8 +4215,8 @@ def _render_faturamento_dre_recorte_global(
                     emp_opts,
                     key="fdl_fat_dre_emp",
                     help=(
-                        "Padrão: rótulos da **empresa ativa** quando aplicável. **Vazio** = todas as empresas **desta base** "
-                        "(que, em **Empresa ativa** na sidebar, já está limitada a uma org)."
+                        "**Recorte principal** deste módulo. **Vazio** = todas as marcas na base carregada. "
+                        "Uma ou mais opções isolam/comparam dentro do consolidado (independente da empresa selecionada na sidebar)."
                     ),
                     placeholder="Todas",
                 )
@@ -6164,21 +6132,17 @@ if _fv == "frete":
     info = frete_info
     _fdl_global_trace("frete: dados carregados")
 elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in _enabled_modules:
-    _fat_consolidado = (
-        st.session_state.get(SESSION_FAT_DRE_ESCOPO_KEY, FAT_DRE_ESCOPO_EMPRESA)
-        == FAT_DRE_ESCOPO_CONSOLIDADO
-    )
     _allowed_org_key = ",".join(sorted(o.org_id for o in _app_ctx.organizations))
     _fdl_global_trace("faturamento_dre: a carregar _load_faturamento_dataframe_cached")
     with st.spinner("A carregar dados de Faturamento…"):
         faturamento_df, faturamento_info, ts_proc = _load_faturamento_dataframe_cached(
             _faturamento_load_cache_signature(
-                _active_org.org_id,
-                consolidado=_fat_consolidado,
+                FAT_DRE_CACHE_ACTIVE_ORG_PLACEHOLDER,
+                consolidado=True,
                 allowed_org_ids_key=_allowed_org_key,
             ),
-            _active_org.org_id,
-            _fat_consolidado,
+            FAT_DRE_CACHE_ACTIVE_ORG_PLACEHOLDER,
+            True,
             _allowed_org_key,
         )
     fc = str(faturamento_info.get("faturamento_consume", "")).strip()
@@ -6225,7 +6189,7 @@ elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in 
         if faturamento_info.get("faturamento_escopo") == FAT_DRE_ESCOPO_CONSOLIDADO:
             st.caption(
                 "**Consolidado:** conjunto = todas as organizações permitidas ao utilizador (intersecção com `org_id` no ficheiro). "
-                "A **Empresa** na barra lateral não restringe este conjunto; use **Empresa ativa** no escopo para uma única org."
+                "A **Empresa** na barra lateral não restringe este conjunto; o recorte por marca é o multiselect **Empresa** no módulo."
             )
         st.caption(
             "**V2 canónico:** `data_products/<FDL_MATERIALIZED_CLIENTE_SLUG>/faturamento/current/` — com **CSV e Parquet**, "
@@ -6273,11 +6237,8 @@ elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in 
         faturamento_df = _filtrar_df_col_empresa_por_contexto(faturamento_df)
 
     faturamento_info = {**faturamento_info, "linhas": int(len(faturamento_df))}
-    _fat_escopo_ui = (
-        FAT_DRE_ESCOPO_CONSOLIDADO if _fat_consolidado else FAT_DRE_ESCOPO_EMPRESA
-    )
     if not str(faturamento_info.get("faturamento_escopo") or "").strip():
-        faturamento_info = {**faturamento_info, "faturamento_escopo": _fat_escopo_ui}
+        faturamento_info = {**faturamento_info, "faturamento_escopo": FAT_DRE_ESCOPO_CONSOLIDADO}
     tabela_geral = pd.DataFrame()
     info = faturamento_info
     _fdl_global_trace(f"faturamento_dre: após filtro empresa ({len(faturamento_df)} linhas)")
@@ -6441,33 +6402,10 @@ with st.sidebar:
                 on_click=_sb_nav_set_faturamento_dre,
             )
             if _sb_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE:
-                if SESSION_FAT_DRE_ESCOPO_KEY not in st.session_state:
-                    st.session_state[SESSION_FAT_DRE_ESCOPO_KEY] = FAT_DRE_ESCOPO_EMPRESA
-                st.radio(
-                    "Escopo de carregamento",
-                    options=[FAT_DRE_ESCOPO_EMPRESA, FAT_DRE_ESCOPO_CONSOLIDADO],
-                    format_func=lambda x: (
-                        "Empresa ativa (acima)"
-                        if x == FAT_DRE_ESCOPO_EMPRESA
-                        else "Consolidado (orgs permitidas)"
-                    ),
-                    key=SESSION_FAT_DRE_ESCOPO_KEY,
-                    help=(
-                        "**Empresa ativa**: carrega faturamento **só** da org selecionada acima — o filtro **Empresa** "
-                        "no módulo refina **dentro** dessa base. **Consolidado**: carrega **todas** as orgs permitidas ao "
-                        "utilizador; o multiselect **Empresa** no recorte permite comparar ou isolar marcas."
-                    ),
+                st.caption(
+                    "Carga **sempre consolidada** (orgs permitidas). O recorte por marca é o multiselect **Empresa** no módulo "
+                    "(vazio = todas)."
                 )
-                _esc_fat = st.session_state.get(SESSION_FAT_DRE_ESCOPO_KEY, FAT_DRE_ESCOPO_EMPRESA)
-                if _esc_fat == FAT_DRE_ESCOPO_EMPRESA:
-                    st.caption(
-                        "A base do módulo **já vem** só da org da sidebar. O dropdown **Empresa** no recorte **não** troca "
-                        "de organização — só refina rótulos **dentro** do que foi carregado."
-                    )
-                else:
-                    st.caption(
-                        "A base inclui **várias orgs** (permitidas a si). No recorte, **Empresa** escolhe **quais** entram na análise."
-                    )
 
     with st.container(border=True):
         st.caption("Financeiro")

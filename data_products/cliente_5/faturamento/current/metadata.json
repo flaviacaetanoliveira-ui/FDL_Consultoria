@@ -270,5 +270,8 @@
       "notas_vazio": false,
       "notas_nf_distintas": 2746
     }
-  ]
+  ],
+  "dataset_faturamento_nf_parquet": "dataset_faturamento_nf.parquet",
+  "nf_first_row_count": 5975,
+  "schema_version_nf_first": 1
 }

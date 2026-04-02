@@ -35,6 +35,11 @@ from faturamento_dre_recorte import (
     apply_recorte_modulo,
     faturamento_recorte_state_from_session,
 )
+from faturamento_dre_recorte_minimo import (
+    _min_cal_limits,
+    apply_recorte_minimo,
+    faturamento_recorte_min_state_from_session,
+)
 from fdl_paths import resolve_pasta_vendas_ml
 from operacional_app_context import (
     SESSION_ACTIVE_ORG_KEY,
@@ -3688,6 +3693,271 @@ def _render_faturamento_dre_bloco_por_empresa(
     )
 
 
+def _render_faturamento_dre_minimal(
+    df: pd.DataFrame,
+    load_info: dict[str, object],
+    ts_proc: str,
+    *,
+    org_id: str,
+    org_display_name: str,
+) -> None:
+    """
+    Etapa 1 — empresa, plataforma, período de venda; KPIs; tabela; CSV.
+    Um único ``df_recorte`` alimenta métricas, grelha e exportação.
+    """
+    _oid = str(org_id)
+    _ = org_display_name, ts_proc, load_info
+    st.caption(
+        "**Universo (Etapa 1):** entram **todas** as situações de pedido do materializado "
+        "(ex.: Atendido, Cancelado, Em aberto). **Não** há filtro por situação nesta vista — "
+        "apenas **Empresa**, **Plataforma** e **período da venda** (coluna **Data**)."
+    )
+    if df.empty:
+        st.info(
+            "Sem dados de faturamento para este escopo. Confirme **materialização**, **slug** do cliente "
+            "e o **escopo** (empresa ativa / consolidado) na barra lateral."
+        )
+        return
+
+    missing = _faturamento_painel_missing_schema_columns(df)
+    if missing:
+        if _is_admin_mode():
+            st.warning(
+                "Estrutura de faturamento incompleta para a vista mínima. "
+                f"Faltam: {', '.join(missing[:12])}{'…' if len(missing) > 12 else ''}."
+            )
+        else:
+            st.warning("Não foi possível apresentar o faturamento. Contacte o suporte.")
+        return
+
+    has_data = "Data" in df.columns
+    if has_data:
+        d_min, d_max, ok_dates = _series_datetime_bounds_dates(df["Data"])
+    else:
+        d_min = d_max = datetime.now(_BR_TZ).date()
+        ok_dates = False
+    cal_min, cal_max = _min_cal_limits(d_min, d_max) if ok_dates else (d_min, d_max)
+
+    _sig_k = "fdl_fat_min_data_bounds_sig"
+    if ok_dates:
+        _bs = (d_min.isoformat(), d_max.isoformat())
+        if st.session_state.get(_sig_k) != _bs:
+            st.session_state[_sig_k] = _bs
+            st.session_state["fdl_fat_min_d_ini"] = d_min
+            st.session_state["fdl_fat_min_d_fim"] = min(d_max, datetime.now(_BR_TZ).date())
+        if "fdl_fat_min_d_ini" not in st.session_state:
+            st.session_state["fdl_fat_min_d_ini"] = d_min
+        if "fdl_fat_min_d_fim" not in st.session_state:
+            st.session_state["fdl_fat_min_d_fim"] = min(d_max, datetime.now(_BR_TZ).date())
+        st.session_state["fdl_fat_min_d_ini"] = min(
+            max(_safe_streamlit_date(st.session_state["fdl_fat_min_d_ini"], d_min), cal_min),
+            cal_max,
+        )
+        st.session_state["fdl_fat_min_d_fim"] = min(
+            max(_safe_streamlit_date(st.session_state["fdl_fat_min_d_fim"], d_max), cal_min),
+            cal_max,
+        )
+
+    emp_opts = _faturamento_dre_etiquetas_empresa_recorte(df)
+    plats = sorted(
+        {str(x).strip() for x in df["Nome da plataforma"].dropna().unique() if str(x).strip()}
+    )
+
+    with st.container(border=True):
+        st.subheader("Filtros")
+        if emp_opts:
+            if "fdl_fat_min_emp" not in st.session_state:
+                st.session_state["fdl_fat_min_emp"] = []
+            else:
+                prev_e = st.session_state["fdl_fat_min_emp"]
+                if isinstance(prev_e, list):
+                    st.session_state["fdl_fat_min_emp"] = [x for x in prev_e if x in emp_opts]
+                else:
+                    st.session_state["fdl_fat_min_emp"] = []
+            st.multiselect(
+                "Empresa",
+                emp_opts,
+                key="fdl_fat_min_emp",
+                help="**Vazio** = todas as empresas neste carregamento. Uma ou mais marcas para refinar.",
+                placeholder="Todas",
+            )
+        _multiselect_stable("fdl_fat_min_plat", "Plataforma", plats)
+        if ok_dates:
+            r0 = st.columns((1, 1))
+            with r0[0]:
+                st.date_input(
+                    "Período da venda — início",
+                    min_value=cal_min,
+                    max_value=cal_max,
+                    format="DD/MM/YYYY",
+                    key="fdl_fat_min_d_ini",
+                    help=_FATURAMENTO_HELP_PERIODO_DATA,
+                )
+            with r0[1]:
+                st.date_input(
+                    "Período da venda — fim",
+                    min_value=cal_min,
+                    max_value=cal_max,
+                    format="DD/MM/YYYY",
+                    key="fdl_fat_min_d_fim",
+                    help=_FATURAMENTO_HELP_PERIODO_DATA,
+                )
+        elif has_data:
+            st.caption("Coluna **Data** sem valores utilizáveis — período indisponível.")
+        if st.button("Limpar filtros desta vista", key="fdl_fat_min_reset"):
+            for _k in (
+                "fdl_fat_min_emp",
+                "fdl_fat_min_plat",
+                "fdl_fat_min_d_ini",
+                "fdl_fat_min_d_fim",
+                "fdl_fat_min_data_bounds_sig",
+            ):
+                st.session_state.pop(_k, None)
+            st.rerun()
+
+    _min_state = faturamento_recorte_min_state_from_session(st.session_state)
+    df_recorte, _wrn = apply_recorte_minimo(df, _min_state)
+    for _m in _wrn:
+        st.warning(_m)
+
+    st.caption(
+        f"**Recorte ativo:** **{len(df_recorte)}** linha(s) no mesmo conjunto usado para **KPIs**, **tabela** e **CSV** "
+        f"(**{len(df)}** linhas no carregamento deste escopo antes destes filtros)."
+    )
+
+    work = _faturamento_compute_alert_bools(df_recorte)
+    pl_col, res_col = "Preço de lista", "Resultado"
+    custo_prod_col = _faturamento_painel_custo_produto_col(list(work.columns))
+    assert custo_prod_col is not None
+
+    agg = _faturamento_agg_recorte(work)
+    _k1, _k2, _k3, _k4, _k5 = st.columns(5)
+    with _k1:
+        st.metric("Receita bruta", _fmt_brl_ptbr_celula(agg["receita_bruta"]))
+    with _k2:
+        st.metric("Receita líquida / Vl. Nota Fiscal", _fmt_brl_ptbr_celula(agg["receita_liquida"]))
+    with _k3:
+        st.metric("Comissão", _fmt_brl_ptbr_celula(agg["comissao_plataforma"]))
+    with _k4:
+        st.metric("Frete", _fmt_brl_ptbr_celula(agg["frete"]))
+    with _k5:
+        st.metric("Resultado", _fmt_brl_ptbr_celula(agg["resultado"]))
+    st.caption(_FATURAMENTO_HELP_VALOR_NOTA_FISCAL)
+
+    _fdl_ui_gap_tight()
+
+    if "Data" in work.columns:
+        _sort_dt = _faturamento_ts_pedido_para_dia_civil(work["Data"])
+        work_show = (
+            work.assign(_fdl_sort_dt=_sort_dt)
+            .sort_values("_fdl_sort_dt", ascending=False, na_position="last")
+            .drop(columns=["_fdl_sort_dt"])
+        )
+    else:
+        work_show = work.sort_values(res_col, ascending=True, na_position="last")
+
+    prod_col = _faturamento_resolve_produto_column(list(work_show.columns))
+    _ix = work_show.index
+    if "empresa" in work_show.columns:
+        _em = work_show["empresa"].fillna("").astype(str).str.strip()
+        empresa_s = _em.mask(_em.eq(""), "—")
+    elif "org_id" in work_show.columns:
+        empresa_s = work_show["org_id"].astype(str).str.strip()
+    else:
+        empresa_s = pd.Series("—", index=_ix)
+    pedido_s = _faturamento_pedido_display_series(work_show)
+    _data_s = (
+        _faturamento_disp_data_pedidos(work_show["Data"])
+        if "Data" in work_show.columns
+        else pd.Series("—", index=_ix)
+    )
+    _prod_s = work_show[prod_col].astype(str) if prod_col else pd.Series("", index=_ix)
+    _qtd_s = (
+        pd.to_numeric(work_show["Quantidade"], errors="coerce")
+        if "Quantidade" in work_show.columns
+        else pd.Series(float("nan"), index=_ix)
+    )
+    _vl_v = _faturamento_dre_vl_venda_series(work_show, pl_col)
+    _vl_nf = _faturamento_dre_vl_nota_fiscal_series(work_show)
+    _nf_s = _faturamento_dre_nf_coluna_display(work_show)
+    _fr_s = _faturamento_dre_frete_display_series(work_show)
+    _main_cols: list[tuple[str, pd.Series]] = [
+        ("Data", _data_s),
+        ("Empresa", empresa_s),
+        ("Plataforma", work_show["Nome da plataforma"]),
+        ("Pedido", pedido_s),
+        ("NF", _nf_s),
+        ("Produto", _prod_s),
+        ("SKU", work_show["Código"]),
+        ("Qtd", _qtd_s),
+        ("Vl. Venda", _vl_v),
+        ("Vl. Nota Fiscal", _vl_nf),
+        ("Frete", _fr_s),
+        ("Comissão", pd.to_numeric(work_show["Taxa de Comissão"], errors="coerce")),
+        ("Custo Total", pd.to_numeric(work_show[custo_prod_col], errors="coerce")),
+        ("Despesa fixa", pd.to_numeric(work_show["Despesas Fixas"], errors="coerce")),
+        ("Imposto", pd.to_numeric(work_show["Imposto"], errors="coerce")),
+        ("Resultado", pd.to_numeric(work_show[res_col], errors="coerce")),
+    ]
+    disp = pd.DataFrame(dict(_main_cols))
+    disp["Alertas"] = work_show.apply(_faturamento_alertas_text, axis=1)
+    disp = disp.reset_index(drop=True)
+
+    _cfg: dict[str, NumberColumn | TextColumn] = {}
+    for c in (
+        "Vl. Venda",
+        "Vl. Nota Fiscal",
+        "Frete",
+        "Comissão",
+        "Custo Total",
+        "Despesa fixa",
+        "Imposto",
+        "Resultado",
+    ):
+        if c in disp.columns:
+            _hc = _FATURAMENTO_HELP_VALOR_NOTA_FISCAL if c == "Vl. Nota Fiscal" else None
+            _cfg[c] = (
+                NumberColumn(c, format="R$ %,.2f", help=_hc)
+                if _hc
+                else NumberColumn(c, format="R$ %,.2f")
+            )
+    if "Qtd" in disp.columns:
+        _cfg["Qtd"] = NumberColumn("Qtd", format="%.2f")
+    for c in ("Data", "Empresa", "Plataforma", "Pedido", "NF", "Produto", "SKU", "Alertas"):
+        if c in disp.columns:
+            _tc_kw: dict[str, str | bool] = {"width": "large" if c == "Alertas" else "medium"}
+            if c == "Data":
+                _tc_kw["help"] = _FATURAMENTO_HELP_PERIODO_DATA
+            elif c == "NF":
+                _tc_kw["help"] = "N.º a partir do join com notas de saída; se vazio, texto do pedido quando existir."
+            _cfg[c] = TextColumn(c, **_tc_kw)
+
+    st.subheader("Tabela por venda")
+    st.caption(
+        f"**{len(disp)}** linhas · mesmas linhas que o **CSV** abaixo. Ordenação por **Data** da venda (mais recente primeiro)."
+    )
+    st.dataframe(
+        disp,
+        use_container_width=True,
+        hide_index=True,
+        height=min(520, 120 + 34 * min(len(disp), 14)),
+        column_config=_cfg,
+    )
+
+    _export = disp.copy()
+    _export["Situação do pedido"] = work_show["Situação"].astype(str).reset_index(drop=True)
+    st.download_button(
+        "Exportar CSV (recorte atual)",
+        _export.to_csv(index=False).encode("utf-8-sig"),
+        file_name="faturamento_recorte_minimo.csv",
+        mime="text/csv",
+        key=f"fdl_fat_min_dl_{_oid}",
+    )
+    st.caption(
+        "O CSV inclui a coluna **Situação do pedido** para auditoria (todas as situações podem aparecer nesta Etapa 1)."
+    )
+
+
 def _faturamento_disp_texto_sem_none(s: pd.Series, *, placeholder: str = "—") -> pd.Series:
     """Evita que None/NaN apareçam como o texto «None» no ``st.dataframe`` (colunas opcionais do CSV de pedidos)."""
 
@@ -6304,7 +6574,7 @@ if _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in _e
     _render_financeiro_header(
         segment="Painel",
         title="Faturamento & DRE",
-        subtitle="Recorte global → Visão geral → Detalhamento operacional (MVP).",
+        subtitle="Etapa 1 — filtros mínimos, KPIs e tabela por venda (mesmo recorte no CSV).",
         kicker_area="Faturamento & DRE",
         compact_spacing=True,
     )
@@ -6332,21 +6602,13 @@ if _fv == "repasse" and _fdl_product_area == FDL_PRODUCT_AREA_FINANCEIRO:
         st.exception(exc)
 elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in _enabled_modules:
     try:
-        _fdl_global_trace("faturamento_dre: recorte + visão geral + detalhamento operacional")
-        _df_fat_recorte = _render_faturamento_dre_recorte_global(
+        _fdl_global_trace("faturamento_dre: vista mínima Etapa 1")
+        _render_faturamento_dre_minimal(
             faturamento_df,
-            org_id=_active_org.org_id,
-            org_display_name=_active_org.display_name,
-        )
-        _render_faturamento_dre_visao_geral(_df_fat_recorte, faturamento_info)
-        _fdl_ui_gap_tight()
-        st.divider()
-        _fdl_ui_gap_tight()
-        _render_faturamento_dre_bloco_por_empresa(
-            _df_fat_recorte,
             faturamento_info,
             ts_proc,
-            _active_org.org_id,
+            org_id=_active_org.org_id,
+            org_display_name=_active_org.display_name,
         )
         _fdl_global_trace("faturamento_dre: painel concluído")
     except Exception as exc:

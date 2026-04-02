@@ -3804,11 +3804,32 @@ def _render_faturamento_dre_minimal(
         "A coluna **Data** do pedido **não** filtra o painel. "
         "**NF** só aparece se existir linha de pedido no materializado com join à nota."
     )
+    if use_nf_materializado:
+        st.caption(
+            "**Fonte do painel:** **materializado NF-first** — leitura de **`dataset_faturamento_nf.parquet`**; "
+            "filtros (emissão, empresa, plataforma) aplicados em memória sobre essa tabela."
+        )
+    else:
+        st.caption(
+            "**Fonte do painel:** **agregação ao vivo** a partir do materializado em **grão linha** "
+            "(ex. `dataset_faturamento_app.csv`). Com **`dataset_faturamento_nf.parquet`** na mesma pasta, "
+            "o painel passa a consumir a tabela final NF."
+        )
     if use_nf_materializado and _is_admin_mode() and load_info.get("faturamento_nf_first_path"):
         st.caption(
-            f"**Admin:** painel em **materializado NF-first** (`dataset_faturamento_nf.parquet`): "
-            f"`{load_info.get('faturamento_nf_first_path')}`"
+            f"**Admin:** path do Parquet NF-first: `{load_info.get('faturamento_nf_first_path')}`"
         )
+    elif _is_admin_mode() and (
+        load_info.get("faturamento_nf_first_skip") or load_info.get("faturamento_nf_first_error")
+    ):
+        _sk = load_info.get("faturamento_nf_first_skip")
+        _e = load_info.get("faturamento_nf_first_error")
+        _parts = ["**Admin:** NF-first não ativo."]
+        if _sk:
+            _parts.append(f"Motivo: `{_sk}`.")
+        if _e:
+            _parts.append(f"Erro: `{_e}`.")
+        st.caption(" ".join(_parts))
 
     if df.empty and not use_nf_materializado:
         st.info(

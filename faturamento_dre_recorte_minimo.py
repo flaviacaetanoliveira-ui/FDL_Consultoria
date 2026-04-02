@@ -1,7 +1,8 @@
 """
 Recorte mínimo (Etapa 1) — Faturamento & DRE: empresa, plataforma, período de venda.
 
-Sem filtro fiscal, sem situação de pedido (todo o materializado entra salvo os três eixos).
+O KPI fiscal **Vl. Nota Fiscal** (painel mínimo) usa período de **emissão** e agregação por NF;
+o ``apply_recorte_minimo`` continua só no eixo comercial (venda).
 """
 
 from __future__ import annotations
@@ -16,9 +17,12 @@ from faturamento_dre_recorte import (
     _BR_TZ,
     _fdl_fr_etiquetas_empresa_recorte,
     _fdl_fr_filtrar_por_etiquetas_empresa,
+    _fdl_fr_faturamento_series_bool_mask,
+    _fdl_fr_mask_nf_emissao_no_periodo,
     _fdl_fr_mask_venda_no_periodo,
     _fdl_fr_safe_streamlit_date,
     _fdl_fr_series_datetime_bounds_dates,
+    _fdl_fr_ts_nf_emissao_para_dia_civil,
 )
 
 
@@ -35,6 +39,8 @@ class FaturamentoRecorteMinState:
     plataformas: tuple[str, ...]
     data_venda_ini: object | None
     data_venda_fim: object | None
+    nf_emissao_ini: object | None = None
+    nf_emissao_fim: object | None = None
 
 
 def faturamento_recorte_min_state_from_session(ss: Mapping[str, Any]) -> FaturamentoRecorteMinState:
@@ -49,7 +55,87 @@ def faturamento_recorte_min_state_from_session(ss: Mapping[str, Any]) -> Faturam
         plataformas=_tup("fdl_fat_min_plat"),
         data_venda_ini=ss.get("fdl_fat_min_d_ini"),
         data_venda_fim=ss.get("fdl_fat_min_d_fim"),
+        nf_emissao_ini=ss.get("fdl_fat_min_nf_d_ini"),
+        nf_emissao_fim=ss.get("fdl_fat_min_nf_d_fim"),
     )
+
+
+def faturamento_min_series_nf_emissao_bounds_dates(df_raw: pd.DataFrame) -> tuple[date, date, bool]:
+    """Retorna (mín, máx, ok) dos dias civis de ``Nota_Data_Emissao`` (ISO / ``dayfirst=False``)."""
+    if df_raw.empty or "Nota_Data_Emissao" not in df_raw.columns:
+        d = datetime.now(_BR_TZ).date()
+        return d, d, False
+    ts = _fdl_fr_ts_nf_emissao_para_dia_civil(df_raw["Nota_Data_Emissao"])
+    t = ts[ts.notna()]
+    if t.empty:
+        d = datetime.now(_BR_TZ).date()
+        return d, d, False
+    return t.min().date(), t.max().date(), True
+
+
+def _nf_fiscal_situacao_invalida(series: pd.Series) -> pd.Series:
+    ss = series.fillna("").astype(str).str.strip().str.lower()
+    return (
+        ss.str.contains("cancel", na=False)
+        | ss.str.contains("deneg", na=False)
+        | ss.str.contains("inutil", na=False)
+    )
+
+
+def compute_vl_nota_fiscal_fiscal_kpi(
+    df_raw: pd.DataFrame,
+    *,
+    empresas_sel: tuple[str, ...],
+    nf_d_ini: date,
+    nf_d_fim: date,
+) -> float:
+    """
+    Soma do valor líquido **por nota** (``Nota_Valor_Liquido_Total`` uma vez por NF),
+    com ``Nota_Data_Emissao`` no intervalo, após filtro **Empresa** (sem plataforma / sem ``Data`` venda).
+    Exclui situações cancelada / denegada / inutilizada (mesmo critério textual do pipeline de notas).
+    """
+    if df_raw.empty or nf_d_fim < nf_d_ini:
+        return 0.0
+    need = {"Nota_Data_Emissao", "Nota_Valor_Liquido_Total", "Nota_Numero_Normalizado"}
+    if not need.issubset(df_raw.columns):
+        return 0.0
+
+    sliced = df_raw.copy()
+    emp_opts = _fdl_fr_etiquetas_empresa_recorte(sliced)
+    if emp_opts and empresas_sel:
+        sliced = _fdl_fr_filtrar_por_etiquetas_empresa(sliced, list(empresas_sel))
+    if sliced.empty:
+        return 0.0
+
+    nn = sliced["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
+    mask_nf = nn.ne("")
+    if "faturamento_nota_vinculada" in sliced.columns:
+        mask_nf = mask_nf | _fdl_fr_faturamento_series_bool_mask(sliced["faturamento_nota_vinculada"])
+    sliced = sliced.loc[mask_nf].copy()
+    if sliced.empty:
+        return 0.0
+
+    if "Nota_Situacao" in sliced.columns:
+        sliced = sliced.loc[~_nf_fiscal_situacao_invalida(sliced["Nota_Situacao"])].copy()
+    if sliced.empty:
+        return 0.0
+
+    m_period = _fdl_fr_mask_nf_emissao_no_periodo(sliced["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
+    sliced = sliced.loc[m_period].copy()
+    if sliced.empty:
+        return 0.0
+
+    gb_keys: list[str] = []
+    if "org_id" in sliced.columns:
+        gb_keys.append("org_id")
+    gb_keys.append("Nota_Numero_Normalizado")
+
+    total = 0.0
+    for _, gr in sliced.groupby(gb_keys, sort=False):
+        vals = pd.to_numeric(gr["Nota_Valor_Liquido_Total"], errors="coerce").dropna()
+        if not vals.empty:
+            total += float(vals.iloc[0])
+    return total
 
 
 def apply_recorte_minimo(

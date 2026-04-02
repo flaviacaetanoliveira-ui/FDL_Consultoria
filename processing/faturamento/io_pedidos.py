@@ -50,18 +50,20 @@ def load_latest_pedidos_csv(pedidos_dir: Path) -> tuple[pd.DataFrame, dict[str, 
 
 def load_all_pedidos_csv_concatenated(pedidos_dir: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
     """
-    Lê **todos** os ``*.csv`` do diretório (nome ordenado, case-insensitive) e concatena.
+    Lê **todos** os ``*.csv`` sob o diretório (incluindo subpastas), ordenados por caminho estável.
 
     Usado no faturamento **schema_version 2** para não perder meses quando existem vários exports
-    (ex.: Jan, Fev, Mar) na mesma pasta — ``load_latest_pedidos_csv`` só devolvia o mais recente por mtime.
-    Cada linha fica com ``pedidos_arquivo`` = nome do ficheiro de origem.
+    (ex.: Jan, Fev, Mar na mesma pasta **ou** em subpastas por mês/ano) — ``load_latest_pedidos_csv``
+    só devolvia um ficheiro por mtime. Cada linha fica com ``pedidos_arquivo`` = nome do ficheiro de origem.
     """
     pedidos_dir = pedidos_dir.expanduser().resolve()
     if not pedidos_dir.is_dir():
         raise FileNotFoundError(f"Diretório de pedidos não encontrado: {pedidos_dir}")
-    # Ordem estável por nome (não por mtime). A coluna ``Data`` de cada linha é a referência operacional;
-    # nomes «Jan / Fev / Mar» podem não coincidir com ordem alfabética em todos os idiomas.
-    files = sorted(pedidos_dir.glob("*.csv"), key=lambda p: p.name.lower())
+    # rglob: alinhado a ``io_notas_saida`` e exports ML com um CSV por pasta (ex.: 2026/01/, 2026/02/).
+    files = sorted(
+        (p for p in pedidos_dir.rglob("*.csv") if p.is_file()),
+        key=lambda p: str(p.relative_to(pedidos_dir)).casefold(),
+    )
     if not files:
         raise FileNotFoundError(f"Nenhum *.csv em {pedidos_dir}")
     frames: list[pd.DataFrame] = []

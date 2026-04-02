@@ -3727,6 +3727,8 @@ def _faturamento_dre_global_filter_keys() -> list[str]:
         "fdl_fat_dre_nf_emi_ini",
         "fdl_fat_dre_nf_emi_fim",
         "fdl_fat_dre_nf_sit",
+        "fdl_fat_dre_data_bounds_sig",
+        "fdl_fat_dre_nf_bounds_sig",
     ]
 
 
@@ -3758,6 +3760,13 @@ def _render_faturamento_dre_recorte_global(
     cal_min, cal_max = (
         _faturamento_period_calendar_limits(d_min, d_max) if ok_dates else (d_min, d_max)
     )
+    _fat_dre_bounds_sig_key = "fdl_fat_dre_data_bounds_sig"
+    if ok_dates:
+        _bs = (d_min.isoformat(), d_max.isoformat())
+        if st.session_state.get(_fat_dre_bounds_sig_key) != _bs:
+            st.session_state[_fat_dre_bounds_sig_key] = _bs
+            st.session_state["fdl_fat_dre_d_ini"] = d_min
+            st.session_state["fdl_fat_dre_d_fim"] = min(d_max, datetime.now(_BR_TZ).date())
     has_nf_emi = "Nota_Data_Emissao" in out.columns
     if has_nf_emi:
         nf_d_min, nf_d_max, nf_ok_dates = _series_datetime_bounds_dates(out["Nota_Data_Emissao"])
@@ -3767,6 +3776,13 @@ def _render_faturamento_dre_recorte_global(
     nf_cal_min, nf_cal_max = (
         _faturamento_period_calendar_limits(nf_d_min, nf_d_max) if nf_ok_dates else (nf_d_min, nf_d_max)
     )
+    _fat_dre_nf_bounds_sig_key = "fdl_fat_dre_nf_bounds_sig"
+    if nf_ok_dates:
+        _nf_bs = (nf_d_min.isoformat(), nf_d_max.isoformat())
+        if st.session_state.get(_fat_dre_nf_bounds_sig_key) != _nf_bs:
+            st.session_state[_fat_dre_nf_bounds_sig_key] = _nf_bs
+            st.session_state["fdl_fat_dre_nf_emi_ini"] = nf_d_min
+            st.session_state["fdl_fat_dre_nf_emi_fim"] = min(nf_d_max, datetime.now(_BR_TZ).date())
     sits = sorted({str(x).strip() for x in out["Situação"].dropna().unique() if str(x).strip()})
     plats = sorted(
         {str(x).strip() for x in out["Nome da plataforma"].dropna().unique() if str(x).strip()}
@@ -4044,6 +4060,7 @@ def _faturamento_filter_keys(org_id: str) -> list[str]:
         f"fat_visao_{oid}",
         f"fat_d_ini_{oid}",
         f"fat_d_fim_{oid}",
+        f"fat_d_bounds_sig_{oid}",
         f"fat_ms_plat_{oid}",
         f"fat_ms_sit_{oid}",
         f"fat_busca_{oid}",
@@ -4207,6 +4224,12 @@ def _painel_faturamento(
                 cal_min, cal_max = _faturamento_period_calendar_limits(d_min, d_max)
                 k_ini = f"fat_d_ini_{_oid}"
                 k_fim = f"fat_d_fim_{_oid}"
+                _sig_k = f"fat_d_bounds_sig_{_oid}"
+                _sig = (d_min.isoformat(), d_max.isoformat())
+                if st.session_state.get(_sig_k) != _sig:
+                    st.session_state[_sig_k] = _sig
+                    st.session_state[k_ini] = d_min
+                    st.session_state[k_fim] = min(d_max, datetime.now(_BR_TZ).date())
                 if k_ini not in st.session_state:
                     st.session_state[k_ini] = d_min
                 if k_fim not in st.session_state:

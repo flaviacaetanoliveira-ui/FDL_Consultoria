@@ -51,6 +51,10 @@ SESSION_FAT_DRE_ESCOPO_KEY = "fdl_fat_dre_escopo"
 FAT_DRE_ESCOPO_EMPRESA = "empresa_ativa"
 FAT_DRE_ESCOPO_CONSOLIDADO = "consolidado"
 
+# Select "Visão" no painel Faturamento: rótulo explícito vs. legado em sessão.
+_FAT_PAINEL_VISAO_COM_NF = "Com NF (pedido)"
+_FAT_PAINEL_VISAO_COM_NF_LEGACY = "Com NF"
+
 from operacional_data_config import DATASET_EMPRESA
 from operacional_frete import (
     FRETE_ML_COL,
@@ -3919,6 +3923,18 @@ def _render_faturamento_dre_recorte_global(
         )
         with st.container(border=True):
             st.caption("**Recorte comercial**")
+            _escopo_car = st.session_state.get(SESSION_FAT_DRE_ESCOPO_KEY, FAT_DRE_ESCOPO_EMPRESA)
+            if emp_opts and _escopo_car == FAT_DRE_ESCOPO_EMPRESA:
+                st.caption(
+                    "**Escopo empresa ativa:** a base **já é só** da organização escolhida na barra lateral. "
+                    "Se o filtro **Empresa** mostra **uma** opção, não está «travado»: o carregamento veio filtrado por org; "
+                    "aqui você **refina** rótulos de empresa dentro desse conjunto."
+                )
+            elif emp_opts and _escopo_car == FAT_DRE_ESCOPO_CONSOLIDADO and len(emp_opts) > 1:
+                st.caption(
+                    "**Escopo consolidado:** use o multiselect **Empresa** para comparar ou isolar marcas. "
+                    "**Vazio** = todas as empresas presentes nesta base."
+                )
             if emp_opts:
                 if "fdl_fat_dre_emp" not in st.session_state:
                     st.session_state["fdl_fat_dre_emp"] = _faturamento_dre_default_empresa_labels(
@@ -3940,7 +3956,10 @@ def _render_faturamento_dre_recorte_global(
                     "Empresa",
                     emp_opts,
                     key="fdl_fat_dre_emp",
-                    help="Padrão: **empresa ativa**. Vazio = todas as empresas visíveis nesta base.",
+                    help=(
+                        "Padrão: rótulos da **empresa ativa** quando aplicável. **Vazio** = todas as empresas **desta base** "
+                        "(que, em **Empresa ativa** na sidebar, já está limitada a uma org)."
+                    ),
                     placeholder="Todas",
                 )
             if "fdl_fat_dre_sit" not in st.session_state:
@@ -4007,7 +4026,7 @@ def _render_faturamento_dre_recorte_global(
                 options=list(_pres_opts),
                 key="fdl_fat_dre_presenca_nf",
                 help="Refinamento comercial alinhado a **faturamento_nota_vinculada** (join pedidos↔notas). "
-                "A **Visão** da tabela (Consolidado / Com NF / …) continua separada, abaixo.",
+                "A **Visão** da tabela (Consolidado / Com NF (pedido) / …) continua separada, abaixo.",
             )
 
         with st.container(border=True):
@@ -4320,10 +4339,27 @@ def _painel_faturamento(
         else:
             st.caption("Período, visão, critérios e busca para refinar o recorte.")
         _fdl_ui_gap_section()
+        _k_visao = f"fat_visao_{_oid}"
+        if st.session_state.get(_k_visao) == _FAT_PAINEL_VISAO_COM_NF_LEGACY:
+            st.session_state[_k_visao] = _FAT_PAINEL_VISAO_COM_NF
+        _fat_visao_opts = (
+            "Todos",
+            "Consolidado",
+            _FAT_PAINEL_VISAO_COM_NF,
+            "Sem NF permitido",
+        )
         visao = st.selectbox(
             "Visão",
-            ("Todos", "Consolidado", "Com NF", "Sem NF permitido"),
-            key=f"fat_visao_{_oid}",
+            _fat_visao_opts,
+            key=_k_visao,
+            help=(
+                "**Consolidado**: linhas com `faturamento_consolidado` (com NF permitido **ou** sem NF permitido). "
+                "Não é “soma contábil” entre empresas. "
+                f"**{_FAT_PAINEL_VISAO_COM_NF}**: coluna `faturamento_com_nf` — critério do **export de pedidos** "
+                "(ex.: “Existe Nota Fiscal gerada”); **não** é o mesmo que **nota vinculada** na base fiscal "
+                "(`faturamento_nota_vinculada`), filtrada em “Com / sem nota” acima. "
+                "**Sem NF permitido**: `faturamento_sem_nf`."
+            ),
         )
         if not use_modulo_recorte:
             r0 = st.columns((1.15, 1.15))
@@ -4412,7 +4448,7 @@ def _painel_faturamento(
     filt = work.copy()
     if visao == "Consolidado":
         filt = filt.loc[_faturamento_series_bool_mask(filt["faturamento_consolidado"])].copy()
-    elif visao == "Com NF":
+    elif visao == _FAT_PAINEL_VISAO_COM_NF:
         filt = filt.loc[_faturamento_series_bool_mask(filt["faturamento_com_nf"])].copy()
     elif visao == "Sem NF permitido":
         filt = filt.loc[_faturamento_series_bool_mask(filt["faturamento_sem_nf"])].copy()
@@ -6162,7 +6198,22 @@ with st.sidebar:
                         else "Consolidado (orgs permitidas)"
                     ),
                     key=SESSION_FAT_DRE_ESCOPO_KEY,
+                    help=(
+                        "**Empresa ativa**: carrega faturamento **só** da org selecionada acima — o filtro **Empresa** "
+                        "no módulo refina **dentro** dessa base. **Consolidado**: carrega **todas** as orgs permitidas ao "
+                        "utilizador; o multiselect **Empresa** no recorte permite comparar ou isolar marcas."
+                    ),
                 )
+                _esc_fat = st.session_state.get(SESSION_FAT_DRE_ESCOPO_KEY, FAT_DRE_ESCOPO_EMPRESA)
+                if _esc_fat == FAT_DRE_ESCOPO_EMPRESA:
+                    st.caption(
+                        "A base do módulo **já vem** só da org da sidebar. O dropdown **Empresa** no recorte **não** troca "
+                        "de organização — só refina rótulos **dentro** do que foi carregado."
+                    )
+                else:
+                    st.caption(
+                        "A base inclui **várias orgs** (permitidas a si). No recorte, **Empresa** escolhe **quais** entram na análise."
+                    )
 
     with st.container(border=True):
         st.caption("Financeiro")

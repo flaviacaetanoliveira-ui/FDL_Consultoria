@@ -357,14 +357,41 @@ def _pd_to_datetime_pedido_br(series: pd.Series) -> pd.Series:
     return pd.to_datetime(series, errors="coerce", dayfirst=True)
 
 
+def _faturamento_ts_pedido_para_dia_civil(s: pd.Series) -> pd.Series:
+    """Converte coluna **Data** (texto BR, datetime64 ou tz-aware) para datetime64 naive em dia civil BR."""
+    ts = pd.to_datetime(s, errors="coerce", dayfirst=True)
+    if ts.empty:
+        return ts
+    if getattr(ts.dt, "tz", None) is not None:
+        ts = ts.dt.tz_convert(_BR_TZ)
+    return ts.dt.normalize()
+
+
+def _faturamento_mask_venda_no_periodo(s: pd.Series, d_ini: date, d_fim: date) -> pd.Series:
+    """
+    Linhas cuja **Data** (venda) cai entre ``d_ini`` e ``d_fim`` inclusive, em dia civil.
+    Evita comparações ``Timestamp`` vs meia-noite que falham com Parquet tz-aware ou tipos mistos.
+    """
+    ts = _faturamento_ts_pedido_para_dia_civil(s)
+    if ts.empty:
+        return pd.Series(False, index=ts.index)
+    dcal = ts.dt.date
+    ok = pd.notna(ts)
+    ge = pd.Series(dcal, index=ts.index) >= d_ini
+    le = pd.Series(dcal, index=ts.index) <= d_fim
+    return ok & ge & le
+
+
 def _series_datetime_bounds_dates(series: pd.Series, *, dayfirst: bool = True) -> tuple[date, date, bool]:
     """
     Min/max em dia civil a partir de coluna parseável como datetime.
     Não chama .min().date() sobre série só NaT (evita NaT/erros em limites).
     Devolve (d_min, d_max, tem_alguma_data_parseável).
     """
-    t = pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
-    t = t[t.notna()]
+    ts = pd.to_datetime(series, errors="coerce", dayfirst=dayfirst)
+    if getattr(ts.dt, "tz", None) is not None:
+        ts = ts.dt.tz_convert(_BR_TZ)
+    t = ts[ts.notna()]
     if t.empty:
         d = datetime.now(_BR_TZ).date()
         return d, d, False
@@ -3996,11 +4023,7 @@ def _render_faturamento_dre_recorte_global(
         if d_fim_g < d_ini_g:
             st.warning("A data final da **venda** não pode ser anterior à inicial.")
             d_fim_g = d_ini_g
-        d_cmp = _pd_to_datetime_pedido_br(sliced["Data"])
-        dd = d_cmp.dt.normalize()
-        _ini_ts = pd.Timestamp(d_ini_g)
-        _fim_ts = pd.Timestamp(d_fim_g) + pd.Timedelta(days=1)
-        m_d = d_cmp.notna() & (dd >= _ini_ts) & (dd < _fim_ts)
+        m_d = _faturamento_mask_venda_no_periodo(sliced["Data"], d_ini_g, d_fim_g)
         sliced = sliced.loc[m_d].copy()
     if sel_plat_g and "Nome da plataforma" in sliced.columns:
         sliced = sliced[sliced["Nome da plataforma"].isin(sel_plat_g)].copy()
@@ -4322,12 +4345,16 @@ def _painel_faturamento(
         if d_fim < d_ini:
             st.warning("A data final não pode ser anterior à inicial.")
             d_fim = d_ini
-        d_cmp = _pd_to_datetime_pedido_br(filt["Data"])
-        dd = d_cmp.dt.normalize()
-        _ini_ts = pd.Timestamp(d_ini)
-        _fim_ts = pd.Timestamp(d_fim) + pd.Timedelta(days=1)
-        m_d = d_cmp.notna() & (dd >= _ini_ts) & (dd < _fim_ts)
-        filt = filt.loc[m_d].copy()
+        filt = filt.loc[_faturamento_mask_venda_no_periodo(filt["Data"], d_ini, d_fim)].copy()
+
+    if use_modulo_recorte and "Data" in filt.columns:
+        _dm, _dx, _ok_dt = _series_datetime_bounds_dates(filt["Data"])
+        if _ok_dt:
+            _di = _safe_streamlit_date(st.session_state.get("fdl_fat_dre_d_ini"), _dm)
+            _df = _safe_streamlit_date(st.session_state.get("fdl_fat_dre_d_fim"), _dx)
+            if _df < _di:
+                _df = _di
+            filt = filt.loc[_faturamento_mask_venda_no_periodo(filt["Data"], _di, _df)].copy()
 
     if not use_modulo_recorte and sel_plat:
         filt = filt[filt["Nome da plataforma"].isin(sel_plat)]
@@ -4359,7 +4386,7 @@ def _painel_faturamento(
         filt = filt.loc[m_a].copy()
 
     if "Data" in filt.columns:
-        _sort_dt = _pd_to_datetime_pedido_br(filt["Data"])
+        _sort_dt = _faturamento_ts_pedido_para_dia_civil(filt["Data"])
         filt = (
             filt.assign(_fdl_sort_dt=_sort_dt)
             .sort_values("_fdl_sort_dt", ascending=False, na_position="last")

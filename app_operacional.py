@@ -29,6 +29,8 @@ from openpyxl.styles import numbers as oxl_number_formats
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
+import comercial_pedidos_analise as cpa
+
 from carregamento_bases import PIPELINE_DATA_REVISION
 from etapa4b_integracao_contas_receber import BASE_DIR, carregar_tabela_final_operacional
 from faturamento_dre_recorte import (
@@ -58,6 +60,7 @@ from operacional_app_context import (
 SESSION_FDL_PRODUCT_AREA_KEY = "fdl_product_area"
 FDL_PRODUCT_AREA_FINANCEIRO = "financeiro"
 FDL_PRODUCT_AREA_FATURAMENTO_DRE = "faturamento_dre"
+FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS = "comercial_pedidos"
 
 # Filtros globais / escopo de carga (MVP)
 FAT_DRE_ESCOPO_EMPRESA = "empresa_ativa"
@@ -306,9 +309,9 @@ if st.session_state["op_financeiro_view"] not in ("repasse", "frete"):
 if st.session_state["op_financeiro_view"] not in _enabled_modules:
     st.session_state["op_financeiro_view"] = "repasse" if "repasse" in _enabled_modules else "frete"
 
-if (
-    "faturamento" not in _enabled_modules
-    and st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY) == FDL_PRODUCT_AREA_FATURAMENTO_DRE
+if "faturamento" not in _enabled_modules and st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY) in (
+    FDL_PRODUCT_AREA_FATURAMENTO_DRE,
+    FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS,
 ):
     st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FINANCEIRO
 
@@ -514,6 +517,10 @@ def _sb_nav_set_frete() -> None:
 
 def _sb_nav_set_faturamento_dre() -> None:
     st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FATURAMENTO_DRE
+
+
+def _sb_nav_set_comercial_pedidos() -> None:
+    st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS
 
 
 def _sb_logout_click() -> None:
@@ -4421,6 +4428,196 @@ def _fdl_fat_min_aside(
     st.markdown(f'<div class="{cls}">{html_body}</div>', unsafe_allow_html=True)
 
 
+def _render_comercial_pedidos_analise(
+    df: pd.DataFrame,
+    load_info: dict[str, object],
+    ts_proc: str,
+) -> None:
+    """Vista comercial: atendidos, coluna Data, sem NF — lógica em ``comercial_pedidos_analise``."""
+    _ = load_info, ts_proc
+    if df.empty:
+        st.info(
+            "Sem dados de pedidos para este escopo. Confirme **materialização** e o módulo **faturamento**."
+        )
+        return
+    if not cpa.data_column(df):
+        if _is_admin_mode():
+            st.warning(
+                "Falta a coluna **Data** na base de faturamento — a vista Comercial & pedidos precisa dela para filtros e tendência."
+            )
+        else:
+            st.warning("Dados incompletos para a vista comercial. Contacte o suporte.")
+        return
+
+    df_atend = cpa.filter_atendidos(df)
+    if df_atend.empty:
+        st.info("Não há linhas com **Situação = atendido** neste carregamento.")
+        return
+
+    d_min, d_max = cpa.bounds_dates_atendidos(df)
+    _today = datetime.now(_BR_TZ).date()
+    _sig_k = "fdl_cp_bounds_sig"
+    if d_min is not None and d_max is not None:
+        _bs = (d_min.isoformat(), d_max.isoformat())
+        if st.session_state.get(_sig_k) != _bs:
+            st.session_state[_sig_k] = _bs
+            _di = d_min
+            _df = min(d_max, _today)
+            if _df < _di:
+                _df = _di
+            st.session_state["fdl_cp_d_ini"] = _di
+            st.session_state["fdl_cp_d_fim"] = _df
+        if "fdl_cp_d_ini" not in st.session_state:
+            _di = d_min
+            _df = min(d_max, _today)
+            if _df < _di:
+                _df = _di
+            st.session_state["fdl_cp_d_ini"] = _di
+            st.session_state["fdl_cp_d_fim"] = _df
+        st.session_state["fdl_cp_d_ini"] = _safe_streamlit_date(st.session_state["fdl_cp_d_ini"], d_min)
+        st.session_state["fdl_cp_d_fim"] = _safe_streamlit_date(st.session_state["fdl_cp_d_fim"], d_max)
+        _d_ini_ui = st.session_state["fdl_cp_d_ini"]
+        _d_fim_ui = st.session_state["fdl_cp_d_fim"]
+        if _d_fim_ui < _d_ini_ui:
+            st.session_state["fdl_cp_d_fim"] = _d_ini_ui
+            _d_fim_ui = _d_ini_ui
+    else:
+        _d_ini_ui = None
+        _d_fim_ui = None
+
+    emp_opts = _faturamento_dre_etiquetas_empresa_recorte(df_atend)
+    plats = sorted(
+        {str(x).strip() for x in df_atend["Nome da plataforma"].dropna().unique() if str(x).strip()}
+    ) if "Nome da plataforma" in df_atend.columns else []
+
+    with st.container(border=True):
+        st.subheader("Filtros")
+        st.caption(
+            "Universo fixo: **pedidos atendidos** apenas. Valores comerciais = **Preço de lista × Quantidade**; **sem** nota fiscal."
+        )
+        if emp_opts:
+            if "fdl_cp_emp" not in st.session_state:
+                st.session_state["fdl_cp_emp"] = []
+            else:
+                prev_e = st.session_state["fdl_cp_emp"]
+                if isinstance(prev_e, list):
+                    st.session_state["fdl_cp_emp"] = [x for x in prev_e if x in emp_opts]
+                else:
+                    st.session_state["fdl_cp_emp"] = []
+            st.multiselect(
+                "Empresa",
+                emp_opts,
+                key="fdl_cp_emp",
+                help="**Vazio** = todas. Recorte por marca (mesma coluna que Faturamento & DRE).",
+                placeholder="Todas",
+            )
+        _multiselect_stable("fdl_cp_plat", "Plataforma", plats)
+        if d_min is not None and d_max is not None:
+            r_d = st.columns((1, 1))
+            with r_d[0]:
+                st.date_input(
+                    "Período — início (Data do pedido)",
+                    min_value=d_min,
+                    max_value=d_max,
+                    format="DD/MM/YYYY",
+                    key="fdl_cp_d_ini",
+                )
+            with r_d[1]:
+                st.date_input(
+                    "Período — fim (Data do pedido)",
+                    min_value=d_min,
+                    max_value=d_max,
+                    format="DD/MM/YYYY",
+                    key="fdl_cp_d_fim",
+                )
+        else:
+            st.caption("Datas de **Data** indisponíveis no recorte atendido.")
+        if st.button("Limpar filtros desta vista", key="fdl_cp_reset"):
+            for _k in ("fdl_cp_emp", "fdl_cp_plat", "fdl_cp_d_ini", "fdl_cp_d_fim", "fdl_cp_bounds_sig"):
+                st.session_state.pop(_k, None)
+            st.rerun()
+
+    emp_sel = tuple(str(x).strip() for x in (st.session_state.get("fdl_cp_emp") or []) if str(x).strip())
+    plat_sel = tuple(str(x).strip() for x in (st.session_state.get("fdl_cp_plat") or []) if str(x).strip())
+
+    if d_min is not None and d_max is not None:
+        d_ini_f = _safe_streamlit_date(st.session_state.get("fdl_cp_d_ini"), d_min)
+        d_fim_f = _safe_streamlit_date(st.session_state.get("fdl_cp_d_fim"), d_max)
+        if d_fim_f < d_ini_f:
+            d_fim_f = d_ini_f
+    else:
+        d_ini_f, d_fim_f = None, None
+
+    filtrado = cpa.filter_ui(
+        df_atend,
+        empresas_sel=emp_sel,
+        plataformas_sel=plat_sel,
+        d_ini=d_ini_f,
+        d_fim=d_fim_f,
+    )
+    period_end_trend = d_fim_f if d_fim_f is not None else (_today if d_max is None else min(d_max, _today))
+
+    _fdl_ui_gap_section()
+    st.subheader("KPIs")
+    kpis = cpa.compute_kpis(filtrado)
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        st.metric("Valor comercial (lista)", _fmt_brl_ptbr_celula(float(kpis["valor_comercial_lista"])))
+    with k2:
+        st.metric("Quantidade (unidades)", _fmt_int_ptbr(int(round(float(kpis["quantidade_total"])))))
+    with k3:
+        st.metric(
+            "Pedidos atendidos (distintos)",
+            _fmt_int_ptbr(int(kpis["pedidos_atendidos_distintos"])),
+            help="Contagem de **pedidos** únicos (chave multiloja/org), não de linhas.",
+        )
+    with k4:
+        st.metric("SKUs distintos", _fmt_int_ptbr(int(kpis["skus_distintos"])))
+
+    abc_v = cpa.compute_abc_valor(filtrado)
+    abc_q = cpa.compute_abc_quantidade(filtrado)
+
+    _fdl_ui_gap_section()
+    st.subheader("ABC — valor (Pareto 80 / 95 %)")
+    if abc_v.empty:
+        st.caption("Sem SKU com código no recorte.")
+    else:
+        st.dataframe(abc_v, use_container_width=True, hide_index=True, height=min(420, 40 + len(abc_v) * 36))
+
+    _fdl_ui_gap_section()
+    st.subheader("ABC — quantidade (Pareto 80 / 95 %)")
+    if abc_q.empty:
+        st.caption("Sem quantidade por SKU no recorte.")
+    else:
+        st.dataframe(abc_q, use_container_width=True, hide_index=True, height=min(420, 40 + len(abc_q) * 36))
+
+    _fdl_ui_gap_section()
+    st.subheader("Tendência (3 meses) e sugestão de compra")
+    _triple = cpa.three_month_calendar_bounds(period_end_trend)[2]
+    st.caption(
+        f"Janela fixa de calendário: **{_triple[0][1]:02d}/{_triple[0][0]}** a **{_triple[2][1]:02d}/{_triple[2][0]}** "
+        f"(M−2, M−1, M relativos ao **mês do fim** do período filtrado: "
+        f"{period_end_trend.day:02d}/{period_end_trend.month:02d}/{period_end_trend.year}). "
+        "Mesmos filtros **Empresa** e **Plataforma**; datas da tendência **não** repetem o intervalo acima."
+    )
+    df_trend = cpa.filter_trend_window(
+        df_atend,
+        empresas_sel=emp_sel,
+        plataformas_sel=plat_sel,
+        period_end=period_end_trend,
+    )
+    trend_tbl = cpa.compute_trend_and_suggestion(df_trend, abc_v, period_end=period_end_trend)
+    if trend_tbl.empty:
+        st.caption("Sem linhas com SKU e quantidade na janela de tendência.")
+    else:
+        st.dataframe(
+            trend_tbl,
+            use_container_width=True,
+            hide_index=True,
+            height=min(520, 40 + min(len(trend_tbl), 18) * 36),
+        )
+
+
 def _render_faturamento_dre_minimal(
     df: pd.DataFrame,
     load_info: dict[str, object],
@@ -6975,7 +7172,11 @@ _admin_mode = _is_admin_mode()
 
 _fv = st.session_state["op_financeiro_view"]
 _fdl_product_area = str(st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY, FDL_PRODUCT_AREA_FINANCEIRO))
-if _fdl_product_area not in (FDL_PRODUCT_AREA_FINANCEIRO, FDL_PRODUCT_AREA_FATURAMENTO_DRE):
+if _fdl_product_area not in (
+    FDL_PRODUCT_AREA_FINANCEIRO,
+    FDL_PRODUCT_AREA_FATURAMENTO_DRE,
+    FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS,
+):
     _fdl_product_area = FDL_PRODUCT_AREA_FINANCEIRO
     st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = _fdl_product_area
 _fdl_global_trace(f"rerun: area={_fdl_product_area} vista={_fv}")
@@ -7021,7 +7222,10 @@ if _fv == "frete":
     tabela_geral = pd.DataFrame()
     info = frete_info
     _fdl_global_trace("frete: dados carregados")
-elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in _enabled_modules:
+elif _fdl_product_area in (
+    FDL_PRODUCT_AREA_FATURAMENTO_DRE,
+    FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS,
+) and "faturamento" in _enabled_modules:
     _allowed_org_key = ",".join(sorted(o.org_id for o in _app_ctx.organizations))
     _fdl_global_trace("faturamento_dre: a carregar _load_faturamento_dataframe_cached")
     with st.spinner("A carregar dados de Faturamento…"):
@@ -7217,7 +7421,8 @@ if _bootstrap_debug_enabled() and _admin_mode:
             if _fv == "repasse"
             else (
                 len(faturamento_df)
-                if _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE
+                if _fdl_product_area
+                in (FDL_PRODUCT_AREA_FATURAMENTO_DRE, FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS)
                 else "— (vista frete)"
             )
         )
@@ -7302,6 +7507,17 @@ with st.sidebar:
                 st.caption(
                     "Carga **sempre consolidada** (orgs permitidas). O recorte por marca é o multiselect **Empresa** no módulo "
                     "(vazio = todas)."
+                )
+            st.button(
+                "Comercial & pedidos",
+                key="fdl_mod_comercial_pedidos",
+                use_container_width=True,
+                type="primary" if _sb_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS else "secondary",
+                on_click=_sb_nav_set_comercial_pedidos,
+            )
+            if _sb_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS:
+                st.caption(
+                    "Pedidos **atendidos** apenas; **Data** do pedido; sem NF. Mesma carga consolidada que Faturamento & DRE."
                 )
 
     with st.container(border=True):
@@ -7413,6 +7629,14 @@ if _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in _e
         kicker_area="Faturamento & DRE",
         compact_spacing=True,
     )
+elif _fdl_product_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS and "faturamento" in _enabled_modules:
+    _render_financeiro_header(
+        segment="Comercial",
+        title="Comercial & pedidos",
+        subtitle="KPIs, ABC e tendência sobre pedidos atendidos (Preço de lista × Quantidade); sem NF.",
+        kicker_area="Comercial & pedidos",
+        compact_spacing=True,
+    )
 elif _fv == "repasse":
     _render_financeiro_header(
         segment="Repasse",
@@ -7449,6 +7673,15 @@ elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in 
     except Exception as exc:
         _fdl_global_trace(f"faturamento_dre: ERRO no painel — {exc.__class__.__name__}")
         st.error("Erro ao renderizar **Faturamento & DRE**.")
+        st.exception(exc)
+elif _fdl_product_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS and "faturamento" in _enabled_modules:
+    try:
+        _fdl_global_trace("comercial_pedidos: painel")
+        _render_comercial_pedidos_analise(faturamento_df, faturamento_info, ts_proc)
+        _fdl_global_trace("comercial_pedidos: painel concluído")
+    except Exception as exc:
+        _fdl_global_trace(f"comercial_pedidos: ERRO — {exc.__class__.__name__}")
+        st.error("Erro ao renderizar **Comercial & pedidos**.")
         st.exception(exc)
 elif _fv == "frete":
     try:

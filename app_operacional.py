@@ -528,6 +528,98 @@ def _sb_logout_click() -> None:
     st.rerun()
 
 
+def _fdl_sidebar_inject_layout_css() -> None:
+    """Tipografia e navegação da sidebar (gerencial vs operacional, estados ativos)."""
+    st.markdown(
+        dedent(
+            """
+            <style>
+            [data-testid="stSidebar"] .block-container {
+              padding-top: 0.65rem;
+              padding-bottom: 1rem;
+            }
+            .fdl-sb-brand {
+              margin: 0.15rem 0 0.2rem 0;
+              padding: 0 0.15rem;
+            }
+            .fdl-sb-product {
+              font-size: 1.22rem;
+              font-weight: 700;
+              letter-spacing: -0.03em;
+              color: #0f172a;
+              line-height: 1.2;
+              margin: 0 0 0.2rem 0;
+            }
+            .fdl-sb-tagline {
+              font-size: 0.74rem;
+              font-weight: 400;
+              color: #9ca3af;
+              line-height: 1.45;
+              margin: 0 0 0.85rem 0;
+            }
+            .fdl-sb-client-label {
+              display: block;
+              font-size: 0.62rem;
+              font-weight: 600;
+              text-transform: uppercase;
+              letter-spacing: 0.06em;
+              color: #b4bcc6;
+              margin-bottom: 0.2rem;
+            }
+            .fdl-sb-client-name {
+              font-size: 0.88rem;
+              font-weight: 500;
+              color: #64748b;
+              line-height: 1.35;
+              word-break: break-word;
+            }
+            .fdl-sb-divider {
+              height: 1px;
+              background: linear-gradient(90deg, transparent, #e5e7eb 12%, #e5e7eb 88%, transparent);
+              margin: 0.5rem 0 0.15rem 0;
+            }
+            .fdl-sb-section-label {
+              font-size: 0.62rem;
+              font-weight: 600;
+              text-transform: uppercase;
+              letter-spacing: 0.085em;
+              color: #9ca3af;
+              margin: 1.15rem 0 0.5rem 0;
+              padding: 0 0.1rem;
+            }
+            .fdl-sb-section-label--first {
+              margin-top: 0.35rem;
+            }
+            .fdl-sb-org-hint {
+              font-size: 0.68rem;
+              font-weight: 400;
+              color: #b4bcc6;
+              line-height: 1.4;
+              margin: -0.15rem 0 0.55rem 0;
+              padding: 0 0.1rem;
+            }
+            [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"] {
+              font-weight: 600 !important;
+              border-left: 3px solid #0f172a !important;
+              box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+            }
+            [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"] {
+              font-weight: 500 !important;
+              color: #374151 !important;
+              border-color: #e5e7eb !important;
+              background-color: #ffffff !important;
+            }
+            [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"]:hover {
+              border-color: #d1d5db !important;
+              background-color: #f9fafb !important;
+            }
+            </style>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
+
+
 def _now_ts_br_str() -> str:
     """Carimbo para UI em Brasília (Streamlit Cloud costuma usar UTC — o dia «salta» para o utilizador BR)."""
     return datetime.now(_BR_TZ).strftime("%Y-%m-%d %H:%M:%S")
@@ -8080,6 +8172,10 @@ if _bootstrap_debug_enabled() and _admin_mode:
                 st.caption(f"{_i}. {_line}")
 
 with st.sidebar:
+    _fdl_sidebar_inject_layout_css()
+    _sb_view = st.session_state.get("op_financeiro_view", "repasse")
+    _sb_area = st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY, FDL_PRODUCT_AREA_FINANCEIRO)
+
     st.write("")
     _sp_l, _sp_c, _sp_r = st.columns([0.35, 3.3, 0.35])
     with _sp_c:
@@ -8087,32 +8183,81 @@ with st.sidebar:
         _has_logo = _logo_file.is_file()
         if _has_logo:
             st.image(str(_logo_file), use_container_width=True)
-        else:
-            st.markdown(
-                '<p style="margin:0.4rem 0 0.35rem 0;font-size:1.05rem;font-weight:700;'
-                'letter-spacing:-0.02em;color:#111827;">FDL Analytics</p>',
-                unsafe_allow_html=True,
-            )
+
     _cli_raw = str(st.session_state.get("cliente", "") or _app_ctx.display_name or "").strip()
     if not _cli_raw:
         _u = str(st.session_state.get("usuario", "") or "").strip()
         _cli_raw = _u.split("@", 1)[0] if "@" in _u else (_u or "Conta")
     _cli_nome = html.escape(_cli_raw)
-    st.caption("Cliente")
     st.markdown(
-        f'<div style="font-size:1.38rem;font-weight:700;line-height:1.2;color:#111827;'
-        f'padding:0.15rem 0 0.55rem 0;border-bottom:1px solid #e5e7eb;margin-bottom:0.45rem;">'
-        f"{_cli_nome}</div>",
+        '<div class="fdl-sb-brand">'
+        '<div class="fdl-sb-product">FDL Analytics</div>'
+        '<div class="fdl-sb-tagline">Operação e análise gerencial</div>'
+        '<span class="fdl-sb-client-label">Conta</span>'
+        f'<div class="fdl-sb-client-name">{_cli_nome}</div>'
+        "</div>"
+        '<div class="fdl-sb-divider" aria-hidden="true"></div>',
         unsafe_allow_html=True,
     )
-    st.write("")
-    st.divider()
 
     _empresas_usuario = list(st.session_state["empresas_permitidas"])
     _nomes_nav = nomes_permitidos_com_registro(_empresas_usuario)
 
-    if _nomes_nav:
-        with st.container(border=True):
+    _has_gerencial = "faturamento" in _enabled_modules
+    _has_operacional = "repasse" in _enabled_modules or "frete" in _enabled_modules
+    _first_nav_section = True
+
+    _lbl_repasse = "Conciliação de Repasse"
+    _lbl_frete = "Conciliação de Frete"
+    _lbl_fat_dre = "Faturamento & DRE"
+
+    if _has_gerencial:
+        _sec_cls = (
+            "fdl-sb-section-label fdl-sb-section-label--first"
+            if _first_nav_section
+            else "fdl-sb-section-label"
+        )
+        st.markdown(f'<p class="{_sec_cls}">Gerencial</p>', unsafe_allow_html=True)
+        _first_nav_section = False
+        st.button(
+            _lbl_fat_dre,
+            key="fdl_mod_faturamento_dre",
+            use_container_width=True,
+            type="primary" if _sb_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE else "secondary",
+            on_click=_sb_nav_set_faturamento_dre,
+            help=(
+                "Visão de negócio. Carga consolidada das organizações permitidas; escolha uma ou mais "
+                "marcas (ou todas) no filtro **Empresa** dentro do painel."
+            ),
+        )
+        st.button(
+            "Comercial & pedidos",
+            key="fdl_mod_comercial_pedidos",
+            use_container_width=True,
+            type="primary" if _sb_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS else "secondary",
+            on_click=_sb_nav_set_comercial_pedidos,
+            help=(
+                "Análise comercial sobre pedidos atendidos (Data, Preço de lista × Quantidade), sem NF. "
+                "Filtros no painel; base consolidada como Faturamento & DRE."
+            ),
+        )
+
+    if _has_operacional:
+        _sec_cls = (
+            "fdl-sb-section-label fdl-sb-section-label--first"
+            if _first_nav_section
+            else "fdl-sb-section-label"
+        )
+        st.markdown(f'<p class="{_sec_cls}">Operacional</p>', unsafe_allow_html=True)
+        _first_nav_section = False
+
+        if _sb_area == FDL_PRODUCT_AREA_FINANCEIRO and _nomes_nav:
+            st.markdown(
+                '<p class="fdl-sb-org-hint">'
+                "Contexto para <strong>Repasse</strong> e <strong>Frete</strong>. "
+                "Nos painéis gerenciais, use o filtro dentro do módulo.</p>",
+                unsafe_allow_html=True,
+            )
             _org_idx = 0
             for i, n in enumerate(_nomes_nav):
                 _o = organizacao_por_nome_cadastrado(n)
@@ -8120,54 +8265,18 @@ with st.sidebar:
                     _org_idx = i
                     break
             _sel_nome = st.selectbox(
-                "Empresa",
+                "Empresa ativa",
                 options=_nomes_nav,
                 index=_org_idx,
                 key="operacional_empresa_ativa_select",
                 label_visibility="visible",
+                help="Organização usada para carregar e filtrar Repasse e Frete.",
             )
             _chosen_org = organizacao_por_nome_cadastrado(_sel_nome)
             if _chosen_org and _chosen_org.org_id != _app_ctx.active_org_id:
                 st.session_state[SESSION_ACTIVE_ORG_KEY] = _chosen_org.org_id
                 st.rerun()
 
-    _sb_view = st.session_state.get("op_financeiro_view", "repasse")
-    _sb_area = st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY, FDL_PRODUCT_AREA_FINANCEIRO)
-    st.caption("Módulos")
-
-    _lbl_repasse = "Conciliação de Repasse"
-    _lbl_frete = "Conciliação de Frete"
-    _lbl_fat_dre = "Faturamento & DRE"
-
-    if "faturamento" in _enabled_modules:
-        with st.container(border=True):
-            st.caption("Faturamento & DRE")
-            st.button(
-                _lbl_fat_dre,
-                key="fdl_mod_faturamento_dre",
-                use_container_width=True,
-                type="primary" if _sb_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE else "secondary",
-                on_click=_sb_nav_set_faturamento_dre,
-            )
-            if _sb_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE:
-                st.caption(
-                    "Carga **sempre consolidada** (orgs permitidas). O recorte por marca é o multiselect **Empresa** no módulo "
-                    "(vazio = todas)."
-                )
-            st.button(
-                "Comercial & pedidos",
-                key="fdl_mod_comercial_pedidos",
-                use_container_width=True,
-                type="primary" if _sb_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS else "secondary",
-                on_click=_sb_nav_set_comercial_pedidos,
-            )
-            if _sb_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS:
-                st.caption(
-                    "Pedidos **atendidos** apenas; **Data** do pedido; sem NF. Mesma carga consolidada que Faturamento & DRE."
-                )
-
-    with st.container(border=True):
-        st.caption("Financeiro")
         if "repasse" in _enabled_modules:
             st.button(
                 _lbl_repasse,

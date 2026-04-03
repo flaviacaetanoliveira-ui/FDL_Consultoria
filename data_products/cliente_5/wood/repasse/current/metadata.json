@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-02T11:07:34Z",
-  "source_signature": "c0e60c2870c4de5c5bf3a3309173da4b",
+  "generated_at": "2026-04-03T11:13:42Z",
+  "source_signature": "1c313736a77a18b75b13b0adf4069719",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_5",
   "empresa": "wood",
@@ -34,7 +34,7 @@
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
     "linhas": 14483,
-    "arquivos_contas_lidos": 3,
+    "arquivos_contas_lidos": 4,
     "col_situacao": "Situação",
     "col_numero": "Número"
   },

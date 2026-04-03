@@ -4008,19 +4008,41 @@ def _fdl_fat_min_inject_ui_styles() -> None:
             <style>
             .fdl-fat-min-aside {
               color: #6b7280;
-              font-size: 0.8125rem;
+              font-size: 0.78rem;
               line-height: 1.5;
-              margin: 0 0 12px 0;
+              margin: 0 0 11px 0;
               max-width: 58rem;
             }
             .fdl-fat-min-aside strong { color: #4b5563; font-weight: 600; }
-            .fdl-fat-min-aside--tight { margin-bottom: 6px; }
-            .fdl-fat-min-table-cap {
-              color: #6b7280;
-              font-size: 0.78rem;
+            .fdl-fat-min-aside--tight { margin-bottom: 5px; }
+            .fdl-fat-min-aside--recorte {
+              font-size: 0.74rem;
+              color: #9ca3af;
               line-height: 1.45;
-              margin: 0 0 14px 0;
+              margin: 0 0 8px 0;
+            }
+            .fdl-fat-min-aside--recorte strong { color: #6b7280; font-weight: 600; }
+            .fdl-fat-min-table-cap {
+              color: #9ca3af;
+              font-size: 0.7rem;
+              line-height: 1.42;
+              margin: 0 0 12px 0;
               max-width: 58rem;
+            }
+            .fdl-fat-min-vsp-sm {
+              display: block;
+              height: 0.5rem;
+              min-height: 0.5rem;
+            }
+            .fdl-fat-min-vsp-md {
+              display: block;
+              height: 1rem;
+              min-height: 1rem;
+            }
+            .fdl-fat-min-vsp-lg {
+              display: block;
+              height: 1.35rem;
+              min-height: 1.35rem;
             }
             </style>
             """
@@ -4029,8 +4051,21 @@ def _fdl_fat_min_inject_ui_styles() -> None:
     )
 
 
-def _fdl_fat_min_aside(html_body: str, *, tight: bool = False) -> None:
-    cls = "fdl-fat-min-aside" + (" fdl-fat-min-aside--tight" if tight else "")
+def _fdl_fat_min_vsp(*, size: str = "md") -> None:
+    st.markdown(
+        f'<div class="fdl-fat-min-vsp-{size}" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _fdl_fat_min_aside(
+    html_body: str, *, tight: bool = False, recorte: bool = False
+) -> None:
+    cls = "fdl-fat-min-aside"
+    if tight:
+        cls += " fdl-fat-min-aside--tight"
+    if recorte:
+        cls += " fdl-fat-min-aside--recorte"
     st.markdown(f'<div class="{cls}">{html_body}</div>', unsafe_allow_html=True)
 
 
@@ -4227,6 +4262,7 @@ def _render_faturamento_dre_minimal(
             st.rerun()
 
     _fdl_ui_gap_section()
+    _fdl_fat_min_vsp(size="md")
 
     _min_state = faturamento_recorte_min_state_from_session(st.session_state)
     _nf_kpi_ini = _safe_streamlit_date(st.session_state.get("fdl_fat_min_nf_d_ini"), nf_min)
@@ -4265,10 +4301,11 @@ def _render_faturamento_dre_minimal(
         else f"<strong>{len(df)}</strong> linhas no carregamento (grão pedido)"
     )
     _fdl_fat_min_aside(
-        f"Recorte: <strong>{_kp['n_nf']}</strong> nota(s) · base: {_base_desc_html}",
-        tight=True,
+        f"Painel NF-first · recorte: <strong>{_kp['n_nf']}</strong> nota(s) · base: {_base_desc_html}",
+        recorte=True,
     )
     _fdl_ui_gap_tight()
+    _fdl_fat_min_vsp(size="md")
 
     _render_fdl_fat_dre_nf_kpi_cards(
         kp=_kp,
@@ -4277,6 +4314,9 @@ def _render_faturamento_dre_minimal(
     )
 
     _fdl_ui_gap_section()
+    _fdl_fat_min_vsp(size="lg")
+    st.divider()
+    _fdl_fat_min_vsp(size="sm")
 
     _nf_table_cols_order = [
         "Emissão NF",
@@ -4356,7 +4396,7 @@ def _render_faturamento_dre_minimal(
         _cfg_nf["Diferença"] = NumberColumn(
             "Diferença",
             format="R$ %,.2f",
-            width="small",
+            width="medium",
             help="Valor da venda menos valor faturado na NF.",
         )
     for _mc in ("Comissão", "Frete", "Imposto", "Despesa fixa"):
@@ -4379,11 +4419,11 @@ def _render_faturamento_dre_minimal(
 
     _txt_nf_specs: tuple[tuple[str, str, str | None], ...] = (
         ("Emissão NF", "small", None),
-        ("Empresa", "medium", None),
-        ("Plataforma", "small", None),
+        ("Empresa", "large", None),
+        ("Plataforma", "medium", None),
         ("NF", "small", None),
-        ("Situação", "medium", None),
-        ("Pedido / multiloja", "medium", "Resumo de pedido ou multiloja (texto completo no CSV)."),
+        ("Situação", "small", None),
+        ("Pedido / multiloja", "large", "Resumo de pedido ou multiloja (texto completo no CSV)."),
         ("Produto", "large", "Resumo de produtos/itens (texto completo no CSV)."),
     )
     for _cn, _cw, _ch in _txt_nf_specs:
@@ -4391,9 +4431,10 @@ def _render_faturamento_dre_minimal(
             _cfg_nf[_cn] = TextColumn(_cn, width=_cw, help=_ch) if _ch else TextColumn(_cn, width=_cw)
 
     st.subheader("Tabela por NF")
+    _fdl_fat_min_vsp(size="sm")
     st.markdown(
-        f'<div class="fdl-fat-min-table-cap">{len(_disp_nf_ui)} linha(s) · 1 por NF · emissão mais recente primeiro. '
-        f"CSV com as mesmas colunas; Pedido e Produto com texto completo.</div>",
+        f'<div class="fdl-fat-min-table-cap">{len(_disp_nf_ui)} linha(s) · uma por NF · emissão decrescente. '
+        f"Export CSV: mesmas colunas; Pedido e Produto sem truncar.</div>",
         unsafe_allow_html=True,
     )
     if _disp_nf_ui.empty:
@@ -4406,13 +4447,14 @@ def _render_faturamento_dre_minimal(
             use_container_width=True,
             hide_index=True,
             height=min(
-                580,
-                152 + 40 * min(len(_disp_nf_ui), 16),
+                620,
+                176 + 42 * min(len(_disp_nf_ui), 17),
             ),
             column_config=_cfg_nf,
         )
 
-    _fdl_ui_gap_tight()
+    _fdl_ui_gap_section()
+    _fdl_fat_min_vsp(size="sm")
 
     st.download_button(
         "Exportar CSV (recorte atual)",

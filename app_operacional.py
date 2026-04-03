@@ -4077,7 +4077,8 @@ def _render_fdl_fat_dre_nf_gerencial(
     _inner = (
         '<div class="fdl-fat-dre-title">DRE gerencial</div>'
         '<div class="fdl-fat-dre-sub">Totais do painel · leitura gerencial</div>'
-        '<div class="fdl-fat-dre-block-h">Ponte comercial × fiscal</div>'
+        '<div class="fdl-fat-dre-block-h fdl-fat-dre-block-h--a">Ponte comercial × fiscal</div>'
+        '<div class="fdl-fat-dre-a-shell">'
         + _dre_row(
             "Receita de venda (lista)",
             rec_venda,
@@ -4098,9 +4099,9 @@ def _render_fdl_fat_dre_nf_gerencial(
             bridge=True,
             title="Receita lista − faturado NF (totais do recorte).",
         )
-        + '<p class="fdl-fat-dre-foot fdl-fat-dre-foot--inline">'
+        + '<p class="fdl-fat-dre-foot-a-note">'
         "Ref. fiscal 1× por NF — não soma à receita de lista."
-        "</p>"
+        "</p></div>"
         '<div class="fdl-fat-dre-block-h fdl-fat-dre-block-h--enc">Encargos</div>'
         + _dre_row("Comissão", enc_com, encargo=True, title="Σ comissão no recorte.")
         + _dre_row("Frete", enc_fre, encargo=True, title="Σ frete no recorte.")
@@ -4204,81 +4205,105 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               margin: 14px 0 5px 0;
             }
             .fdl-fat-dre-block-h:first-of-type { margin-top: 0; }
+            .fdl-fat-dre-block-h--a {
+              margin-bottom: 8px;
+            }
+            .fdl-fat-dre-a-shell {
+              border: 1px solid #e8ecf1;
+              border-radius: 10px;
+              padding: 6px 14px 8px 14px;
+              margin: 0 0 4px 0;
+              background: #fefefe;
+            }
             .fdl-fat-dre-block-h--enc {
-              margin-top: 16px;
-              margin-bottom: 7px;
+              margin-top: 14px;
+              margin-bottom: 8px;
             }
             .fdl-fat-dre-row {
               display: grid;
-              grid-template-columns: minmax(0, 1fr) minmax(7.5rem, max-content);
-              column-gap: 1.35rem;
+              grid-template-columns: minmax(0, 1fr) minmax(8rem, max-content);
+              column-gap: 1.4rem;
               align-items: baseline;
               padding: 8px 0;
               border-bottom: 1px solid #f0f1f3;
               font-size: 0.875rem;
               color: #374151;
             }
+            .fdl-fat-dre-a-shell .fdl-fat-dre-row--lead {
+              border-radius: 6px;
+            }
             .fdl-fat-dre-row--lead {
-              padding: 11px 0 12px 0;
-              margin-bottom: 2px;
-              border-bottom: 2px solid #e2e5ea;
-              background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+              padding: 12px 2px 13px 2px;
+              margin-bottom: 0;
+              border-bottom: 2px solid #d8dde4;
+              background: linear-gradient(180deg, #ffffff 0%, #f7f8fa 100%);
             }
             .fdl-fat-dre-row--lead .fdl-fat-dre-lab {
               font-weight: 600;
-              font-size: 0.93rem;
-              color: #111827;
-              letter-spacing: -0.015em;
+              font-size: 0.96rem;
+              color: #0f172a;
+              letter-spacing: -0.018em;
             }
             .fdl-fat-dre-row--lead .fdl-fat-dre-val {
               font-weight: 700;
-              font-size: 1.05rem;
-              color: #111827;
+              font-size: 1.08rem;
+              color: #0f172a;
             }
             .fdl-fat-dre-row--ref {
-              margin-top: 4px;
-              padding-top: 6px;
-              padding-bottom: 7px;
+              margin-top: 0;
+              padding-top: 5px;
+              padding-bottom: 6px;
               border-top: none;
-              border-bottom: 1px dashed #e5e8ed;
-              background: #fcfcfd;
+              border-bottom: 1px dotted #e2e6ec;
+              background: transparent;
             }
             .fdl-fat-dre-row--ref .fdl-fat-dre-lab {
-              color: #b0b8c4;
+              color: #c5ccd6;
               font-weight: 400;
-              font-size: 0.68rem;
+              font-size: 0.625rem;
               font-style: italic;
-              letter-spacing: 0.02em;
+              letter-spacing: 0.03em;
             }
             .fdl-fat-dre-row--ref .fdl-fat-dre-val {
-              color: #b0b8c4;
+              color: #c5ccd6;
               font-weight: 400;
-              font-size: 0.68rem;
+              font-size: 0.625rem;
             }
             .fdl-fat-dre-row--bridge {
-              margin-top: 6px;
-              padding: 10px 12px 11px 12px;
-              border-bottom: 2px solid #d1d5db;
-              background: #f1f3f5;
-              border-radius: 7px;
+              margin-top: 5px;
+              margin-bottom: 2px;
+              padding: 11px 12px 12px 12px;
+              border-bottom: none;
+              background: #eef0f3;
+              border-radius: 8px;
+              border: 1px solid #e0e4ea;
             }
             .fdl-fat-dre-row--bridge .fdl-fat-dre-lab {
               font-weight: 600;
-              font-size: 0.89rem;
-              color: #1f2937;
-            }
-            .fdl-fat-dre-row--bridge .fdl-fat-dre-val {
-              font-weight: 600;
-              font-size: 0.93rem;
+              font-size: 0.9rem;
               color: #111827;
             }
+            .fdl-fat-dre-row--bridge .fdl-fat-dre-val {
+              font-weight: 700;
+              font-size: 0.95rem;
+              color: #0f172a;
+            }
+            .fdl-fat-dre-foot-a-note {
+              font-size: 0.55rem;
+              color: #d8dee6;
+              line-height: 1.32;
+              margin: 6px 0 0 0;
+              padding: 5px 0 2px 10px;
+              border-left: 2px solid #eef2f6;
+              max-width: none;
+            }
             .fdl-fat-dre-row--enc {
-              padding: 10px 2px;
-              border-bottom: 1px solid #f4f5f6;
+              padding: 11px 4px;
+              border-bottom: 1px solid #f1f2f4;
             }
             .fdl-fat-dre-row--enc-last {
-              border-bottom: 1px solid #dde1e8;
-              padding-bottom: 11px;
+              border-bottom: 1px solid #e2e6ed;
+              padding-bottom: 12px;
             }
             .fdl-fat-dre-lab {
               min-width: 0;
@@ -4293,9 +4318,10 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               justify-self: end;
             }
             .fdl-fat-dre-val--out {
-              color: #4b5563;
+              color: #525a63;
               font-weight: 600;
-              letter-spacing: 0.03em;
+              letter-spacing: 0.02em;
+              font-variant-numeric: tabular-nums;
             }
             .fdl-fat-dre-foot {
               font-size: 0.63rem;
@@ -4309,63 +4335,63 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               margin-bottom: 2px;
             }
             .fdl-fat-dre-foot--final {
-              margin-top: 22px;
+              margin-top: 30px;
               margin-bottom: 0;
-              padding-top: 2px;
-              font-size: 0.52rem;
-              color: #c5ccd6;
-              line-height: 1.36;
+              padding-top: 4px;
+              font-size: 0.47rem;
+              color: #dde2e9;
+              line-height: 1.34;
             }
             .fdl-fat-dre-close {
-              margin-top: 11px;
+              margin-top: 12px;
               border-radius: 12px;
-              border: 1px solid #c5cad3;
-              background: linear-gradient(180deg, #fcfcfd 0%, #f6f7f9 100%);
+              border: 1px solid #bfc6d0;
+              background: linear-gradient(165deg, #fdfdfd 0%, #f4f5f7 55%, #f0f1f4 100%);
               overflow: hidden;
               box-shadow:
-                0 1px 2px rgba(15, 23, 42, 0.04),
-                0 4px 14px rgba(15, 23, 42, 0.06);
+                0 1px 3px rgba(15, 23, 42, 0.035),
+                0 6px 18px rgba(15, 23, 42, 0.055);
             }
             .fdl-fat-dre-row--result {
               display: grid;
-              grid-template-columns: minmax(0, 1fr) minmax(7.5rem, max-content);
-              column-gap: 1.35rem;
+              grid-template-columns: minmax(0, 1fr) minmax(8rem, max-content);
+              column-gap: 1.4rem;
               align-items: baseline;
-              padding: 14px 17px;
-              border-bottom: 1px solid #d9dde3;
+              padding: 17px 20px;
+              border-bottom: 1px solid #cdd2d9;
               background: transparent;
             }
             .fdl-fat-dre-row--result .fdl-fat-dre-lab {
               font-weight: 600;
-              font-size: 0.94rem;
+              font-size: 0.95rem;
               color: #111827;
-              letter-spacing: -0.01em;
+              letter-spacing: -0.012em;
             }
             .fdl-fat-dre-row--result .fdl-fat-dre-val {
               font-weight: 700;
-              font-size: 1.15rem;
-              color: #111827;
+              font-size: 1.2rem;
+              color: #0f172a;
               font-variant-numeric: tabular-nums;
               text-align: right;
               justify-self: end;
             }
             .fdl-fat-dre-row--margem {
               display: grid;
-              grid-template-columns: minmax(0, 1fr) minmax(7.5rem, max-content);
-              column-gap: 1.35rem;
+              grid-template-columns: minmax(0, 1fr) minmax(8rem, max-content);
+              column-gap: 1.4rem;
               align-items: baseline;
-              padding: 11px 17px 13px 17px;
-              background: rgba(255, 255, 255, 0.55);
+              padding: 13px 20px 15px 20px;
+              background: rgba(255, 255, 255, 0.62);
             }
             .fdl-fat-dre-row--margem .fdl-fat-dre-lab {
               font-weight: 500;
-              font-size: 0.82rem;
-              color: #6b7280;
+              font-size: 0.83rem;
+              color: #64748b;
             }
             .fdl-fat-dre-row--margem .fdl-fat-dre-val {
               font-weight: 600;
-              font-size: 0.97rem;
-              color: #374151;
+              font-size: 1rem;
+              color: #334155;
               font-variant-numeric: tabular-nums;
               text-align: right;
               justify-self: end;

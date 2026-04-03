@@ -3083,6 +3083,40 @@ def _fmt_int_ptbr(n: int) -> str:
     return f"{int(n):,}".replace(",", ".")
 
 
+def _fmt_pct_ptbr_1(x: object) -> str:
+    """Percentual pt-BR com uma casa decimal (ex.: 12,3%). ``x`` já em escala 0–100."""
+    if x is None:
+        return "—"
+    try:
+        if pd.isna(x):
+            return "—"
+    except TypeError:
+        pass
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return "—"
+    if math.isnan(v):
+        return "—"
+    return f"{v:.1f}".replace(".", ",") + "%"
+
+
+def _comercial_fmt_qtd_display(x: object) -> str:
+    """Quantidade para tabela comercial: inteiro com milhar pt-BR; senão uma casa decimal."""
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return "—"
+    try:
+        if pd.isna(v):
+            return "—"
+    except TypeError:
+        pass
+    if math.isnan(v):
+        return "—"
+    if abs(v - round(v)) < 1e-6:
+        return _fmt_int_ptbr(int(round(v)))
+    return f"{v:.1f}".replace(".", ",")
 
 
 def _format_frete_anuncio_tabela_display(df: pd.DataFrame) -> pd.DataFrame:
@@ -4429,7 +4463,7 @@ def _fdl_fat_min_aside(
 
 
 def _fdl_cp_inject_panel_styles() -> None:
-    """CSS compartilhado com KPIs Faturamento (fdl-fat-kpi-*) + blocos Comercial & pedidos."""
+    """CSS compartilhado com KPIs Faturamento (fdl-fat-kpi-*) + refinamento Comercial & pedidos."""
     st.markdown(
         dedent(
             """
@@ -4502,37 +4536,97 @@ def _fdl_cp_inject_panel_styles() -> None:
               font-size: 1.08rem;
               font-weight: 600;
             }
-            .fdl-cp-title-main {
-              font-size: 1.2rem;
-              font-weight: 700;
-              color: #111827;
-              margin: 0 0 4px 0;
-              letter-spacing: -0.02em;
+            .fdl-cp-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-card {
+              display: flex;
+              flex-direction: column;
+              align-items: stretch;
             }
-            .fdl-cp-title-sub {
-              font-size: 0.8rem;
+            .fdl-cp-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-label {
+              font-size: 0.7rem;
               font-weight: 500;
-              color: #6b7280;
-              margin: 0 0 14px 0;
-              line-height: 1.45;
-            }
-            .fdl-cp-title-sec {
-              font-size: 1.02rem;
-              font-weight: 600;
-              color: #4b5563;
-              margin: 0 0 3px 0;
-            }
-            .fdl-cp-title-sec-note {
-              font-size: 0.74rem;
               color: #9ca3af;
               margin: 0 0 12px 0;
+              letter-spacing: 0.01em;
             }
-            .fdl-cp-title-decision {
-              font-size: 1.08rem;
+            .fdl-cp-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-card--secondary .fdl-fat-kpi-label {
+              font-size: 0.66rem;
+              margin-bottom: 10px;
+            }
+            .fdl-cp-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-value {
+              text-align: right;
+              align-self: stretch;
+            }
+            .fdl-cp-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-card--primary .fdl-fat-kpi-value {
+              font-size: 1.72rem;
+              font-weight: 700;
+              letter-spacing: -0.03em;
+            }
+            .fdl-cp-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-card--primary.fdl-fat-kpi-card--accent .fdl-fat-kpi-value {
+              font-size: 1.85rem;
+              color: #0f172a;
+            }
+            .fdl-cp-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-card--secondary .fdl-fat-kpi-value {
+              font-size: 1.12rem;
+              font-weight: 600;
+              color: #1e293b;
+            }
+            .fdl-cp-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-card--primary {
+              padding: 20px 22px;
+            }
+            .fdl-cp-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-card--secondary {
+              padding: 13px 15px;
+            }
+            .fdl-cp-filtros-h {
+              font-size: 1.05rem;
+              font-weight: 600;
+              color: #111827;
+              margin: 0 0 6px 0;
+              letter-spacing: -0.02em;
+            }
+            .fdl-cp-caption {
+              font-size: 0.76rem;
+              font-weight: 400;
+              color: #9ca3af;
+              line-height: 1.5;
+              margin: 0 0 10px 0;
+            }
+            .fdl-cp-caption strong { color: #6b7280; font-weight: 500; }
+            .fdl-cp-title-main {
+              font-size: 1.28rem;
               font-weight: 700;
               color: #0f172a;
               margin: 0 0 6px 0;
-              letter-spacing: -0.02em;
+              letter-spacing: -0.03em;
+              line-height: 1.25;
+            }
+            .fdl-cp-title-sub {
+              font-size: 0.76rem;
+              font-weight: 400;
+              color: #9ca3af;
+              margin: 0 0 16px 0;
+              line-height: 1.5;
+            }
+            .fdl-cp-title-sec {
+              font-size: 0.98rem;
+              font-weight: 600;
+              color: #64748b;
+              margin: 0 0 4px 0;
+              letter-spacing: -0.01em;
+            }
+            .fdl-cp-title-sec-note {
+              font-size: 0.72rem;
+              font-weight: 400;
+              color: #b4bcc6;
+              margin: 0 0 12px 0;
+              line-height: 1.45;
+            }
+            .fdl-cp-title-decision {
+              font-size: 1.12rem;
+              font-weight: 700;
+              color: #0f172a;
+              margin: 0 0 4px 0;
+              letter-spacing: -0.025em;
+              line-height: 1.25;
             }
             .fdl-cp-exec {
               background: #fafafa;
@@ -4542,11 +4636,11 @@ def _fdl_cp_inject_panel_styles() -> None:
               margin: 0 0 16px 0;
             }
             .fdl-cp-exec-h {
-              font-size: 0.7rem;
+              font-size: 0.65rem;
               font-weight: 600;
               text-transform: uppercase;
-              letter-spacing: 0.06em;
-              color: #6b7280;
+              letter-spacing: 0.07em;
+              color: #9ca3af;
               margin: 0 0 10px 0;
             }
             .fdl-cp-exec-row {
@@ -4554,34 +4648,38 @@ def _fdl_cp_inject_panel_styles() -> None:
               flex-wrap: wrap;
               gap: 10px 22px;
               margin-bottom: 10px;
-              font-size: 0.88rem;
-              color: #374151;
-              line-height: 1.5;
+              font-size: 0.84rem;
+              font-weight: 400;
+              color: #64748b;
+              line-height: 1.55;
             }
-            .fdl-cp-exec-row strong { color: #111827; font-weight: 600; }
+            .fdl-cp-exec-row strong { color: #0f172a; font-weight: 600; font-variant-numeric: tabular-nums; }
             .fdl-cp-exec-top {
-              font-size: 0.82rem;
-              color: #4b5563;
+              font-size: 0.78rem;
+              font-weight: 400;
+              color: #64748b;
               margin: 8px 0 0 0;
               padding-top: 10px;
               border-top: 1px solid #e5e7eb;
+              line-height: 1.55;
             }
-            .fdl-cp-exec-top strong { color: #111827; }
+            .fdl-cp-exec-top strong { color: #0f172a; font-weight: 600; }
             .fdl-cp-trend-summary {
               display: flex;
               flex-wrap: wrap;
-              gap: 8px 18px;
+              gap: 8px 20px;
               align-items: baseline;
-              font-size: 0.82rem;
-              color: #4b5563;
+              font-size: 0.78rem;
+              font-weight: 400;
+              color: #64748b;
               margin: 0 0 14px 0;
-              padding: 10px 12px;
+              padding: 11px 14px;
               background: #f9fafb;
               border-radius: 8px;
               border: 1px solid #e5e7eb;
             }
             .fdl-cp-trend-summary span strong {
-              color: #111827;
+              color: #0f172a;
               font-weight: 600;
               font-variant-numeric: tabular-nums;
             }
@@ -4644,7 +4742,7 @@ def _render_comercial_pedidos_kpi_cards(kpis: dict[str, float | int]) -> None:
         ]
     )
     st.markdown(
-        f'<div class="fdl-fat-kpi-shell">'
+        f'<div class="fdl-fat-kpi-shell fdl-cp-kpi-shell">'
         f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--primary">{primary}</div>'
         f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--secondary">{secondary}</div>'
         f"</div>",
@@ -4652,15 +4750,94 @@ def _render_comercial_pedidos_kpi_cards(kpis: dict[str, float | int]) -> None:
     )
 
 
-def _comercial_abc_valor_display_df(abc_v: pd.DataFrame) -> pd.DataFrame:
-    """Cópia só para exibição: Part % e Acum % em percentagem 0–100."""
+def _comercial_abc_valor_table_styler(abc_v: pd.DataFrame):
+    """Tabela ABC valor só para UI: moeda e % pt-BR, alinhamento, sem alterar ``abc_v`` de origem."""
     if abc_v.empty:
-        return abc_v
-    out = abc_v.copy()
-    for c in ("Part %", "Acum %"):
-        if c in out.columns:
-            out[c] = (pd.to_numeric(out[c], errors="coerce").fillna(0.0) * 100.0).round(2)
-    return out
+        try:
+            return abc_v.style.hide(axis="index")
+        except Exception:
+            return abc_v.style
+    d = abc_v.copy()
+    if "Valor comercial (lista)" in d.columns:
+        d["Valor comercial (lista)"] = d["Valor comercial (lista)"].map(
+            lambda x: _fmt_brl_ptbr_celula(x) or "—"
+        )
+    if "Part %" in d.columns:
+        part_raw = pd.to_numeric(d["Part %"], errors="coerce").fillna(0.0) * 100.0
+        d["Part %"] = part_raw.map(_fmt_pct_ptbr_1)
+    if "Acum %" in d.columns:
+        acum_raw = pd.to_numeric(d["Acum %"], errors="coerce").fillna(0.0) * 100.0
+        d["Acum %"] = acum_raw.map(_fmt_pct_ptbr_1)
+    sty = d.style.hide(axis="index")
+    _right = [c for c in ("Valor comercial (lista)", "Part %", "Acum %") if c in d.columns]
+    if _right:
+        sty = sty.set_properties(
+            subset=_right,
+            **{"text-align": "right", "font-variant-numeric": "tabular-nums"},
+        )
+    if "Produto" in d.columns:
+        sty = sty.set_properties(
+            subset=["Produto"],
+            **{
+                "text-align": "left",
+                "max-width": "24rem",
+                "white-space": "nowrap",
+                "overflow": "hidden",
+                "text-overflow": "ellipsis",
+            },
+        )
+    if "SKU" in d.columns:
+        sty = sty.set_properties(
+            subset=["SKU"],
+            **{"text-align": "left", "font-variant-numeric": "tabular-nums"},
+        )
+    if "Classe" in d.columns:
+        sty = sty.set_properties(subset=["Classe"], **{"text-align": "center", "font-weight": "600"})
+    return sty
+
+
+def _comercial_abc_quantidade_table_styler(abc_q: pd.DataFrame):
+    """Tabela ABC quantidade só para UI: qtd e % pt-BR."""
+    if abc_q.empty:
+        try:
+            return abc_q.style.hide(axis="index")
+        except Exception:
+            return abc_q.style
+    d = abc_q.copy()
+    if "Quantidade" in d.columns:
+        d["Quantidade"] = d["Quantidade"].map(_comercial_fmt_qtd_display)
+    if "Part %" in d.columns:
+        pr = pd.to_numeric(d["Part %"], errors="coerce").fillna(0.0) * 100.0
+        d["Part %"] = pr.map(_fmt_pct_ptbr_1)
+    if "Acum %" in d.columns:
+        ar = pd.to_numeric(d["Acum %"], errors="coerce").fillna(0.0) * 100.0
+        d["Acum %"] = ar.map(_fmt_pct_ptbr_1)
+    sty = d.style.hide(axis="index")
+    _right = [c for c in ("Quantidade", "Part %", "Acum %") if c in d.columns]
+    if _right:
+        sty = sty.set_properties(
+            subset=_right,
+            **{"text-align": "right", "font-variant-numeric": "tabular-nums"},
+        )
+    if "Produto" in d.columns:
+        sty = sty.set_properties(
+            subset=["Produto"],
+            **{
+                "text-align": "left",
+                "max-width": "20rem",
+                "white-space": "nowrap",
+                "overflow": "hidden",
+                "text-overflow": "ellipsis",
+            },
+        )
+    if "SKU" in d.columns:
+        sty = sty.set_properties(
+            subset=["SKU"],
+            **{"text-align": "left", "font-variant-numeric": "tabular-nums"},
+        )
+    if "Classe" in d.columns:
+        sty = sty.set_properties(subset=["Classe"], **{"text-align": "center", "font-weight": "600"})
+    return sty
 
 
 def _comercial_abc_valor_exec_html(abc_v: pd.DataFrame) -> str:
@@ -4688,18 +4865,18 @@ def _comercial_abc_valor_exec_html(abc_v: pd.DataFrame) -> str:
                 vs = "—"
             top_lines.append(f"<strong>{html.escape(lab)}</strong> · {html.escape(vs)}")
     top_html = "<br/>".join(top_lines) if top_lines else "—"
-    share_s = f"{share_a_pct:.1f}".replace(".", ",")
+    share_disp = _fmt_pct_ptbr_1(share_a_pct)
     return (
         '<div class="fdl-cp-exec">'
         '<div class="fdl-cp-exec-h">Leitura executiva</div>'
         '<div class="fdl-cp-exec-row">'
-        f"<span>Classe <strong>A</strong> concentra <strong>{html.escape(share_s)}%</strong> "
+        f"<span>Classe <strong>A</strong> concentra <strong>{html.escape(share_disp)}</strong> "
         "da receita comercial (lista) no recorte.</span>"
         "</div>"
         '<div class="fdl-cp-exec-row">'
-        f"<span>SKUs <strong>A</strong>: <strong>{n_a}</strong></span>"
-        f"<span>· <strong>B</strong>: <strong>{n_b}</strong></span>"
-        f"<span>· <strong>C</strong>: <strong>{n_c}</strong></span>"
+        f"<span>SKUs <strong>A</strong>: <strong>{html.escape(_fmt_int_ptbr(n_a))}</strong></span>"
+        f"<span>· <strong>B</strong>: <strong>{html.escape(_fmt_int_ptbr(n_b))}</strong></span>"
+        f"<span>· <strong>C</strong>: <strong>{html.escape(_fmt_int_ptbr(n_c))}</strong></span>"
         "</div>"
         '<div class="fdl-cp-exec-top">'
         "<strong>Top 3 por valor comercial</strong><br/>"
@@ -4717,11 +4894,12 @@ def _comercial_trend_summary_html(trend_tbl: pd.DataFrame) -> str:
     decr = int(vc.get("decrescente", 0))
     est = int(vc.get("estável", 0))
     ins = int(vc.get("insuficiente para tendência", 0))
+    _ni = _fmt_int_ptbr
     parts = [
-        f"<span><strong>{cresc}</strong> crescente</span>",
-        f"<span><strong>{decr}</strong> decrescente</span>",
-        f"<span><strong>{est}</strong> estável</span>",
-        f"<span><strong>{ins}</strong> volume insuficiente</span>",
+        f"<span><strong>{html.escape(_ni(cresc))}</strong> crescente</span>",
+        f"<span><strong>{html.escape(_ni(decr))}</strong> decrescente</span>",
+        f"<span><strong>{html.escape(_ni(est))}</strong> estável</span>",
+        f"<span><strong>{html.escape(_ni(ins))}</strong> volume insuficiente</span>",
     ]
     if "Sugestão de compra" in trend_tbl.columns:
         s = trend_tbl["Sugestão de compra"].fillna("").astype(str).str.strip().str.casefold()
@@ -4729,42 +4907,60 @@ def _comercial_trend_summary_html(trend_tbl: pd.DataFrame) -> str:
         n_red = int(s.str.contains("reduzir", na=False).sum())
         n_caut = int(s.str.contains("evitar", na=False).sum())
         parts.append(
-            f"<span><strong>{n_prio}</strong> priorizar · <strong>{n_red}</strong> reduzir · "
-            f"<strong>{n_caut}</strong> cautela</span>"
+            f"<span><strong>{html.escape(_ni(n_prio))}</strong> priorizar · "
+            f"<strong>{html.escape(_ni(n_red))}</strong> reduzir · "
+            f"<strong>{html.escape(_ni(n_caut))}</strong> cautela</span>"
         )
     return '<div class="fdl-cp-trend-summary">' + "".join(parts) + "</div>"
 
 
 def _cp_trend_cell_style(v: object) -> str:
+    _ta = "text-align: left; font-variant-numeric: tabular-nums; "
     t = str(v).strip().casefold()
     if t == "crescente":
-        return "background-color: #f0fdf4; color: #14532d; font-weight: 600"
+        return _ta + "background-color: #f0fdf4; color: #14532d; font-weight: 600"
     if t == "decrescente":
-        return "background-color: #fef2f2; color: #7f1d1d; font-weight: 600"
+        return _ta + "background-color: #fef2f2; color: #7f1d1d; font-weight: 600"
     if t == "estável":
-        return "background-color: #f3f4f6; color: #1f2937; font-weight: 600"
+        return _ta + "background-color: #f3f4f6; color: #1f2937; font-weight: 600"
     if t == "insuficiente para tendência":
-        return "background-color: #fafafa; color: #6b7280; font-weight: 500"
-    return "font-weight: 500"
+        return _ta + "background-color: #fafafa; color: #6b7280; font-weight: 500"
+    return _ta + "font-weight: 500"
 
 
 def _cp_sug_cell_style(v: object) -> str:
+    _ta = "text-align: left; font-weight: 500; "
     s = str(v).strip().casefold()
     if "priorizar" in s:
-        return "background-color: #f0fdf4; color: #14532d; font-weight: 600"
+        return _ta + "background-color: #f0fdf4; color: #14532d; font-weight: 600"
     if "reduzir" in s:
-        return "background-color: #fef2f2; color: #7f1d1d; font-weight: 600"
+        return _ta + "background-color: #fef2f2; color: #7f1d1d; font-weight: 600"
     if "evitar" in s:
-        return "background-color: #fffbeb; color: #92400e; font-weight: 600"
+        return _ta + "background-color: #fffbeb; color: #92400e; font-weight: 600"
     if "manter" in s:
-        return "background-color: #f9fafb; color: #374151; font-weight: 600"
+        return _ta + "background-color: #f9fafb; color: #374151; font-weight: 600"
     if "testar" in s:
-        return "background-color: #f8fafc; color: #334155; font-weight: 600"
-    return "font-weight: 500"
+        return _ta + "background-color: #f8fafc; color: #334155; font-weight: 600"
+    return _ta + "color: #374151"
 
 
 def _comercial_trend_styler(trend_tbl: pd.DataFrame):
-    sty = trend_tbl.style
+    """Formatação pt-BR nas colunas numéricas + realce existente em Tendência / Sugestão."""
+    if trend_tbl.empty:
+        try:
+            return trend_tbl.style.hide(axis="index")
+        except Exception:
+            return trend_tbl.style
+
+    df = trend_tbl.copy()
+    qty_cols = [c for c in df.columns if str(c).startswith("Qtd mês")]
+    val_cols = [c for c in df.columns if str(c).startswith("Valor lista")]
+    for c in qty_cols:
+        df[c] = df[c].map(_comercial_fmt_qtd_display)
+    for c in val_cols:
+        df[c] = df[c].map(lambda x: _fmt_brl_ptbr_celula(x) or "—")
+
+    sty = df.style
     try:
         sty = sty.hide(axis="index")
     except (TypeError, ValueError, AttributeError):
@@ -4772,8 +4968,6 @@ def _comercial_trend_styler(trend_tbl: pd.DataFrame):
             sty = sty.hide_index()
         except Exception:
             pass
-    if trend_tbl.empty:
-        return sty
 
     def _elem_map(sty_obj: object, fn: object, subset: list[str]) -> object:
         m = getattr(sty_obj, "map", None) or getattr(sty_obj, "applymap", None)
@@ -4781,9 +4975,31 @@ def _comercial_trend_styler(trend_tbl: pd.DataFrame):
             return sty_obj
         return m(fn, subset=subset)
 
-    if "Tendência" in trend_tbl.columns:
+    _right = [c for c in qty_cols + val_cols if c in df.columns]
+    if _right:
+        sty = sty.set_properties(
+            subset=_right,
+            **{"text-align": "right", "font-variant-numeric": "tabular-nums"},
+        )
+    if "Produto" in df.columns:
+        sty = sty.set_properties(
+            subset=["Produto"],
+            **{
+                "text-align": "left",
+                "max-width": "17rem",
+                "white-space": "nowrap",
+                "overflow": "hidden",
+                "text-overflow": "ellipsis",
+            },
+        )
+    if "SKU" in df.columns:
+        sty = sty.set_properties(
+            subset=["SKU"],
+            **{"text-align": "left", "font-variant-numeric": "tabular-nums"},
+        )
+    if "Tendência" in df.columns:
         sty = _elem_map(sty, _cp_trend_cell_style, ["Tendência"])
-    if "Sugestão de compra" in trend_tbl.columns:
+    if "Sugestão de compra" in df.columns:
         sty = _elem_map(sty, _cp_sug_cell_style, ["Sugestão de compra"])
     return sty
 
@@ -4851,9 +5067,11 @@ def _render_comercial_pedidos_analise(
     ) if "Nome da plataforma" in df_atend.columns else []
 
     with st.container(border=True):
-        st.subheader("Filtros")
-        st.caption(
-            "Universo fixo: **pedidos atendidos** apenas. Valores comerciais = **Preço de lista × Quantidade**; **sem** nota fiscal."
+        st.markdown('<p class="fdl-cp-filtros-h">Filtros</p>', unsafe_allow_html=True)
+        st.markdown(
+            '<p class="fdl-cp-caption">Universo fixo: <strong>pedidos atendidos</strong> apenas. '
+            "Valores comerciais = <strong>Preço de lista × Quantidade</strong>; <strong>sem</strong> nota fiscal.</p>",
+            unsafe_allow_html=True,
         )
         if emp_opts:
             if "fdl_cp_emp" not in st.session_state:
@@ -4891,7 +5109,10 @@ def _render_comercial_pedidos_analise(
                     key="fdl_cp_d_fim",
                 )
         else:
-            st.caption("Datas de **Data** indisponíveis no recorte atendido.")
+            st.markdown(
+                '<p class="fdl-cp-caption">Datas de <strong>Data</strong> indisponíveis no recorte atendido.</p>',
+                unsafe_allow_html=True,
+            )
         if st.button("Limpar filtros desta vista", key="fdl_cp_reset"):
             for _k in ("fdl_cp_emp", "fdl_cp_plat", "fdl_cp_d_ini", "fdl_cp_d_fim", "fdl_cp_bounds_sig"):
                 st.session_state.pop(_k, None)
@@ -4933,28 +5154,25 @@ def _render_comercial_pedidos_analise(
             unsafe_allow_html=True,
         )
         if abc_v.empty:
-            st.caption("Sem SKU com código no recorte.")
+            st.markdown(
+                '<p class="fdl-cp-caption">Sem SKU com código no recorte.</p>',
+                unsafe_allow_html=True,
+            )
         else:
             st.markdown(_comercial_abc_valor_exec_html(abc_v), unsafe_allow_html=True)
-            abc_v_disp = _comercial_abc_valor_display_df(abc_v)
-            _abc_cfg: dict[str, object] = {}
-            if "Valor comercial (lista)" in abc_v_disp.columns:
-                _abc_cfg["Valor comercial (lista)"] = NumberColumn(
-                    "Valor comercial (lista)",
-                    format="R$ %.2f",
-                    min_value=0.0,
-                )
-            if "Part %" in abc_v_disp.columns:
-                _abc_cfg["Part %"] = NumberColumn("Part % (%)", format="%.2f", min_value=0.0)
-            if "Acum %" in abc_v_disp.columns:
-                _abc_cfg["Acum %"] = NumberColumn("Acum % (%)", format="%.2f", min_value=0.0)
-            if "Classe" in abc_v_disp.columns:
-                _abc_cfg["Classe"] = TextColumn("Classe", width="small")
+            _abc_cfg: dict[str, object] = {
+                "SKU": TextColumn("SKU", width="small"),
+                "Produto": TextColumn("Produto", width="large"),
+                "Valor comercial (lista)": TextColumn("Valor (lista)", width="medium"),
+                "Part %": TextColumn("Part. %", width="small"),
+                "Acum %": TextColumn("Acum. %", width="small"),
+                "Classe": TextColumn("Classe", width="small"),
+            }
+            _abc_cfg = {k: v for k, v in _abc_cfg.items() if k in abc_v.columns}
             st.dataframe(
-                abc_v_disp,
+                _comercial_abc_valor_table_styler(abc_v),
                 use_container_width=True,
-                hide_index=True,
-                height=min(440, 44 + len(abc_v_disp) * 36),
+                height=min(440, 44 + len(abc_v) * 36),
                 column_config=_abc_cfg or None,
             )
 
@@ -4965,27 +5183,24 @@ def _render_comercial_pedidos_analise(
         unsafe_allow_html=True,
     )
     if abc_q.empty:
-        st.caption("Sem quantidade por SKU no recorte.")
+        st.markdown(
+            '<p class="fdl-cp-caption">Sem quantidade por SKU no recorte.</p>',
+            unsafe_allow_html=True,
+        )
     else:
-        abc_q_disp = abc_q.copy()
-        if "Part %" in abc_q_disp.columns:
-            abc_q_disp["Part %"] = (pd.to_numeric(abc_q_disp["Part %"], errors="coerce").fillna(0.0) * 100.0).round(2)
-        if "Acum %" in abc_q_disp.columns:
-            abc_q_disp["Acum %"] = (pd.to_numeric(abc_q_disp["Acum %"], errors="coerce").fillna(0.0) * 100.0).round(2)
-        _q_cfg: dict[str, object] = {}
-        if "Quantidade" in abc_q_disp.columns:
-            _q_cfg["Quantidade"] = NumberColumn("Quantidade", format="%.0f", min_value=0.0)
-        if "Part %" in abc_q_disp.columns:
-            _q_cfg["Part %"] = NumberColumn("Part % (%)", format="%.2f", min_value=0.0)
-        if "Acum %" in abc_q_disp.columns:
-            _q_cfg["Acum %"] = NumberColumn("Acum % (%)", format="%.2f", min_value=0.0)
-        if "Classe" in abc_q_disp.columns:
-            _q_cfg["Classe"] = TextColumn("Classe", width="small")
+        _q_cfg: dict[str, object] = {
+            "SKU": TextColumn("SKU", width="small"),
+            "Produto": TextColumn("Produto", width="medium"),
+            "Quantidade": TextColumn("Qtd", width="small"),
+            "Part %": TextColumn("Part. %", width="small"),
+            "Acum %": TextColumn("Acum. %", width="small"),
+            "Classe": TextColumn("Classe", width="small"),
+        }
+        _q_cfg = {k: v for k, v in _q_cfg.items() if k in abc_q.columns}
         st.dataframe(
-            abc_q_disp,
+            _comercial_abc_quantidade_table_styler(abc_q),
             use_container_width=True,
-            hide_index=True,
-            height=min(320, 36 + min(len(abc_q_disp), 12) * 34),
+            height=min(320, 36 + min(len(abc_q), 12) * 34),
             column_config=_q_cfg or None,
         )
 
@@ -4993,15 +5208,19 @@ def _render_comercial_pedidos_analise(
     with st.container(border=True):
         st.markdown(
             '<p class="fdl-cp-title-decision">Decisão de compra e tendência</p>'
-            '<p class="fdl-cp-title-sub" style="margin-bottom:12px;">Últimos três meses calendário fechados · mesma classificação e sugestões já calculadas</p>',
+            '<p class="fdl-cp-title-sub">Últimos três meses calendário fechados · mesma classificação e sugestões já calculadas</p>',
             unsafe_allow_html=True,
         )
         _triple = cpa.three_closed_months_trend_bounds(period_end_trend, as_of=_today)[2]
-        st.caption(
-            f"Janela: **{_triple[0][1]:02d}/{_triple[0][0]}** a **{_triple[2][1]:02d}/{_triple[2][0]}** · "
-            f"referência **hoje** {_today.day:02d}/{_today.month:02d}/{_today.year} · fim do filtro "
-            f"{period_end_trend.day:02d}/{period_end_trend.month:02d}/{period_end_trend.year}. "
-            "Sem mês civil em aberto. Mesmos filtros **Empresa** e **Plataforma**."
+        _tw0 = f"{_triple[0][1]:02d}/{_triple[0][0]}"
+        _tw1 = f"{_triple[2][1]:02d}/{_triple[2][0]}"
+        _tref = f"{_today.day:02d}/{_today.month:02d}/{_today.year}"
+        _tfim = f"{period_end_trend.day:02d}/{period_end_trend.month:02d}/{period_end_trend.year}"
+        st.markdown(
+            f'<p class="fdl-cp-caption">Janela: <strong>{html.escape(_tw0)}</strong> a <strong>{html.escape(_tw1)}</strong> · '
+            f'referência <strong>hoje</strong> {html.escape(_tref)} · fim do filtro {html.escape(_tfim)}. '
+            "Sem mês civil em aberto. Mesmos filtros <strong>Empresa</strong> e <strong>Plataforma</strong>.</p>",
+            unsafe_allow_html=True,
         )
         df_trend = cpa.filter_trend_window(
             df_atend,
@@ -5014,13 +5233,34 @@ def _render_comercial_pedidos_analise(
             df_trend, abc_v, period_end=period_end_trend, as_of=_today
         )
         if trend_tbl.empty:
-            st.caption("Sem linhas com SKU e quantidade na janela de tendência.")
+            st.markdown(
+                '<p class="fdl-cp-caption">Sem linhas com SKU e quantidade na janela de tendência.</p>',
+                unsafe_allow_html=True,
+            )
         else:
             st.markdown(_comercial_trend_summary_html(trend_tbl), unsafe_allow_html=True)
+            _tr_cfg: dict[str, object] = {}
+            if "SKU" in trend_tbl.columns:
+                _tr_cfg["SKU"] = TextColumn("SKU", width="small")
+            if "Produto" in trend_tbl.columns:
+                _tr_cfg["Produto"] = TextColumn("Produto", width="medium")
+            for _c in trend_tbl.columns:
+                if _c in _tr_cfg:
+                    continue
+                _cs = str(_c)
+                if _cs.startswith("Qtd mês"):
+                    _tr_cfg[_c] = TextColumn(_cs.replace("Qtd mês ", "Qtd "), width="small")
+                elif _cs.startswith("Valor lista"):
+                    _tr_cfg[_c] = TextColumn(_cs.replace("Valor lista ", "R$ "), width="small")
+            if "Tendência" in trend_tbl.columns:
+                _tr_cfg["Tendência"] = TextColumn("Tendência", width="medium")
+            if "Sugestão de compra" in trend_tbl.columns:
+                _tr_cfg["Sugestão de compra"] = TextColumn("Sugestão", width="large")
             st.dataframe(
                 _comercial_trend_styler(trend_tbl),
                 use_container_width=True,
                 height=min(540, 48 + min(len(trend_tbl), 20) * 36),
+                column_config=_tr_cfg or None,
             )
 
 

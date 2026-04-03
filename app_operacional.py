@@ -4428,6 +4428,366 @@ def _fdl_fat_min_aside(
     st.markdown(f'<div class="{cls}">{html_body}</div>', unsafe_allow_html=True)
 
 
+def _fdl_cp_inject_panel_styles() -> None:
+    """CSS compartilhado com KPIs Faturamento (fdl-fat-kpi-*) + blocos Comercial & pedidos."""
+    st.markdown(
+        dedent(
+            """
+            <style>
+            .fdl-fat-kpi-shell {
+              font-family: var(--font, "Source Sans Pro", sans-serif);
+              margin: 0 0 18px 0;
+            }
+            .fdl-fat-kpi-row {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 14px;
+              margin-bottom: 16px;
+            }
+            .fdl-fat-kpi-row--secondary {
+              gap: 10px;
+              margin-bottom: 0;
+            }
+            .fdl-fat-kpi-card {
+              flex: 1 1 0;
+              min-width: 148px;
+              background: #ffffff;
+              border: 1px solid #e5e7eb;
+              border-radius: 12px;
+              padding: 14px 16px;
+              box-sizing: border-box;
+              box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            }
+            .fdl-fat-kpi-card--primary {
+              padding: 18px 20px;
+              min-width: 160px;
+            }
+            .fdl-fat-kpi-card--primary.fdl-fat-kpi-card--accent {
+              background: #f9fafb;
+              border-color: #d1d5db;
+              box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+            }
+            .fdl-fat-kpi-card--secondary {
+              padding: 12px 14px;
+              min-width: 120px;
+            }
+            .fdl-fat-kpi-label {
+              font-size: 0.72rem;
+              font-weight: 500;
+              color: #6b7280;
+              line-height: 1.35;
+              margin: 0 0 10px 0;
+              letter-spacing: 0.02em;
+            }
+            .fdl-fat-kpi-card--secondary .fdl-fat-kpi-label {
+              font-size: 0.68rem;
+              margin-bottom: 8px;
+            }
+            .fdl-fat-kpi-value {
+              font-size: 1.45rem;
+              font-weight: 600;
+              color: #111827;
+              line-height: 1.15;
+              font-variant-numeric: tabular-nums;
+              letter-spacing: -0.02em;
+            }
+            .fdl-fat-kpi-card--primary .fdl-fat-kpi-value {
+              font-size: 1.55rem;
+              font-weight: 700;
+            }
+            .fdl-fat-kpi-card--primary.fdl-fat-kpi-card--accent .fdl-fat-kpi-value {
+              font-size: 1.68rem;
+            }
+            .fdl-fat-kpi-card--secondary .fdl-fat-kpi-value {
+              font-size: 1.08rem;
+              font-weight: 600;
+            }
+            .fdl-cp-title-main {
+              font-size: 1.2rem;
+              font-weight: 700;
+              color: #111827;
+              margin: 0 0 4px 0;
+              letter-spacing: -0.02em;
+            }
+            .fdl-cp-title-sub {
+              font-size: 0.8rem;
+              font-weight: 500;
+              color: #6b7280;
+              margin: 0 0 14px 0;
+              line-height: 1.45;
+            }
+            .fdl-cp-title-sec {
+              font-size: 1.02rem;
+              font-weight: 600;
+              color: #4b5563;
+              margin: 0 0 3px 0;
+            }
+            .fdl-cp-title-sec-note {
+              font-size: 0.74rem;
+              color: #9ca3af;
+              margin: 0 0 12px 0;
+            }
+            .fdl-cp-title-decision {
+              font-size: 1.08rem;
+              font-weight: 700;
+              color: #0f172a;
+              margin: 0 0 6px 0;
+              letter-spacing: -0.02em;
+            }
+            .fdl-cp-exec {
+              background: #fafafa;
+              border: 1px solid #e5e7eb;
+              border-radius: 10px;
+              padding: 14px 16px 12px 16px;
+              margin: 0 0 16px 0;
+            }
+            .fdl-cp-exec-h {
+              font-size: 0.7rem;
+              font-weight: 600;
+              text-transform: uppercase;
+              letter-spacing: 0.06em;
+              color: #6b7280;
+              margin: 0 0 10px 0;
+            }
+            .fdl-cp-exec-row {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px 22px;
+              margin-bottom: 10px;
+              font-size: 0.88rem;
+              color: #374151;
+              line-height: 1.5;
+            }
+            .fdl-cp-exec-row strong { color: #111827; font-weight: 600; }
+            .fdl-cp-exec-top {
+              font-size: 0.82rem;
+              color: #4b5563;
+              margin: 8px 0 0 0;
+              padding-top: 10px;
+              border-top: 1px solid #e5e7eb;
+            }
+            .fdl-cp-exec-top strong { color: #111827; }
+            .fdl-cp-trend-summary {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px 18px;
+              align-items: baseline;
+              font-size: 0.82rem;
+              color: #4b5563;
+              margin: 0 0 14px 0;
+              padding: 10px 12px;
+              background: #f9fafb;
+              border-radius: 8px;
+              border: 1px solid #e5e7eb;
+            }
+            .fdl-cp-trend-summary span strong {
+              color: #111827;
+              font-weight: 600;
+              font-variant-numeric: tabular-nums;
+            }
+            </style>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _render_comercial_pedidos_kpi_cards(kpis: dict[str, float | int]) -> None:
+    """Cards de KPI no mesmo espírito visual do painel Faturamento & DRE."""
+
+    def _card(
+        label: str,
+        value: str,
+        *,
+        tier: str,
+        accent: bool = False,
+        title: str | None = None,
+    ) -> str:
+        classes = f"fdl-fat-kpi-card fdl-fat-kpi-card--{tier}"
+        if accent:
+            classes += " fdl-fat-kpi-card--accent"
+        tattr = ""
+        if title:
+            tattr = f' title="{html.escape(title, quote=True)}"'
+        return (
+            f'<div class="{classes}"{tattr}>'
+            f'<div class="fdl-fat-kpi-label">{html.escape(label)}</div>'
+            f'<div class="fdl-fat-kpi-value">{html.escape(value)}</div>'
+            "</div>"
+        )
+
+    vcom = _fmt_brl_ptbr_celula(float(kpis["valor_comercial_lista"])) or "R$ 0,00"
+    qtd = _fmt_int_ptbr(int(round(float(kpis["quantidade_total"]))))
+    ped = _fmt_int_ptbr(int(kpis["pedidos_atendidos_distintos"]))
+    skus = _fmt_int_ptbr(int(kpis["skus_distintos"]))
+    primary = "".join(
+        [
+            _card(
+                "Valor comercial (lista)",
+                vcom,
+                tier="primary",
+                accent=True,
+                title="Soma Preço de lista × Quantidade no período filtrado (pedidos atendidos).",
+            ),
+        ]
+    )
+    secondary = "".join(
+        [
+            _card("Quantidade (unidades)", qtd, tier="secondary"),
+            _card(
+                "Pedidos atendidos (distintos)",
+                ped,
+                tier="secondary",
+                title="Pedidos únicos (multiloja/org), não linhas.",
+            ),
+            _card("SKUs distintos", skus, tier="secondary"),
+        ]
+    )
+    st.markdown(
+        f'<div class="fdl-fat-kpi-shell">'
+        f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--primary">{primary}</div>'
+        f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--secondary">{secondary}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _comercial_abc_valor_display_df(abc_v: pd.DataFrame) -> pd.DataFrame:
+    """Cópia só para exibição: Part % e Acum % em percentagem 0–100."""
+    if abc_v.empty:
+        return abc_v
+    out = abc_v.copy()
+    for c in ("Part %", "Acum %"):
+        if c in out.columns:
+            out[c] = (pd.to_numeric(out[c], errors="coerce").fillna(0.0) * 100.0).round(2)
+    return out
+
+
+def _comercial_abc_valor_exec_html(abc_v: pd.DataFrame) -> str:
+    """Leitura executiva derivada apenas do DataFrame ABC valor (sem alterar lógica)."""
+    if abc_v.empty or "Classe" not in abc_v.columns:
+        return ""
+    cls = abc_v["Classe"].astype(str).str.strip().str.upper()
+    part = pd.to_numeric(abc_v.get("Part %"), errors="coerce").fillna(0.0)
+    share_a = float(part.loc[cls.eq("A")].sum())
+    share_a_pct = share_a * 100.0
+    n_a = int(cls.eq("A").sum())
+    n_b = int(cls.eq("B").sum())
+    n_c = int(cls.eq("C").sum())
+    top_lines: list[str] = []
+    if "Produto" in abc_v.columns and "Valor comercial (lista)" in abc_v.columns:
+        top = abc_v.head(3)
+        for _, row in top.iterrows():
+            lab = str(row.get("Produto", "—")).strip() or "—"
+            if len(lab) > 56:
+                lab = lab[:53] + "…"
+            vl = row.get("Valor comercial (lista)")
+            try:
+                vs = _fmt_brl_ptbr_celula(float(vl)) or "—"
+            except (TypeError, ValueError):
+                vs = "—"
+            top_lines.append(f"<strong>{html.escape(lab)}</strong> · {html.escape(vs)}")
+    top_html = "<br/>".join(top_lines) if top_lines else "—"
+    share_s = f"{share_a_pct:.1f}".replace(".", ",")
+    return (
+        '<div class="fdl-cp-exec">'
+        '<div class="fdl-cp-exec-h">Leitura executiva</div>'
+        '<div class="fdl-cp-exec-row">'
+        f"<span>Classe <strong>A</strong> concentra <strong>{html.escape(share_s)}%</strong> "
+        "da receita comercial (lista) no recorte.</span>"
+        "</div>"
+        '<div class="fdl-cp-exec-row">'
+        f"<span>SKUs <strong>A</strong>: <strong>{n_a}</strong></span>"
+        f"<span>· <strong>B</strong>: <strong>{n_b}</strong></span>"
+        f"<span>· <strong>C</strong>: <strong>{n_c}</strong></span>"
+        "</div>"
+        '<div class="fdl-cp-exec-top">'
+        "<strong>Top 3 por valor comercial</strong><br/>"
+        f"{top_html}"
+        "</div></div>"
+    )
+
+
+def _comercial_trend_summary_html(trend_tbl: pd.DataFrame) -> str:
+    if trend_tbl.empty or "Tendência" not in trend_tbl.columns:
+        return ""
+    tnorm = trend_tbl["Tendência"].fillna("").astype(str).str.strip().str.casefold()
+    vc = tnorm.value_counts()
+    cresc = int(vc.get("crescente", 0))
+    decr = int(vc.get("decrescente", 0))
+    est = int(vc.get("estável", 0))
+    ins = int(vc.get("insuficiente para tendência", 0))
+    parts = [
+        f"<span><strong>{cresc}</strong> crescente</span>",
+        f"<span><strong>{decr}</strong> decrescente</span>",
+        f"<span><strong>{est}</strong> estável</span>",
+        f"<span><strong>{ins}</strong> volume insuficiente</span>",
+    ]
+    if "Sugestão de compra" in trend_tbl.columns:
+        s = trend_tbl["Sugestão de compra"].fillna("").astype(str).str.strip().str.casefold()
+        n_prio = int(s.str.contains("priorizar", na=False).sum())
+        n_red = int(s.str.contains("reduzir", na=False).sum())
+        n_caut = int(s.str.contains("evitar", na=False).sum())
+        parts.append(
+            f"<span><strong>{n_prio}</strong> priorizar · <strong>{n_red}</strong> reduzir · "
+            f"<strong>{n_caut}</strong> cautela</span>"
+        )
+    return '<div class="fdl-cp-trend-summary">' + "".join(parts) + "</div>"
+
+
+def _cp_trend_cell_style(v: object) -> str:
+    t = str(v).strip().casefold()
+    if t == "crescente":
+        return "background-color: #f0fdf4; color: #14532d; font-weight: 600"
+    if t == "decrescente":
+        return "background-color: #fef2f2; color: #7f1d1d; font-weight: 600"
+    if t == "estável":
+        return "background-color: #f3f4f6; color: #1f2937; font-weight: 600"
+    if t == "insuficiente para tendência":
+        return "background-color: #fafafa; color: #6b7280; font-weight: 500"
+    return "font-weight: 500"
+
+
+def _cp_sug_cell_style(v: object) -> str:
+    s = str(v).strip().casefold()
+    if "priorizar" in s:
+        return "background-color: #f0fdf4; color: #14532d; font-weight: 600"
+    if "reduzir" in s:
+        return "background-color: #fef2f2; color: #7f1d1d; font-weight: 600"
+    if "evitar" in s:
+        return "background-color: #fffbeb; color: #92400e; font-weight: 600"
+    if "manter" in s:
+        return "background-color: #f9fafb; color: #374151; font-weight: 600"
+    if "testar" in s:
+        return "background-color: #f8fafc; color: #334155; font-weight: 600"
+    return "font-weight: 500"
+
+
+def _comercial_trend_styler(trend_tbl: pd.DataFrame):
+    sty = trend_tbl.style
+    try:
+        sty = sty.hide(axis="index")
+    except (TypeError, ValueError, AttributeError):
+        try:
+            sty = sty.hide_index()
+        except Exception:
+            pass
+    if trend_tbl.empty:
+        return sty
+
+    def _elem_map(sty_obj: object, fn: object, subset: list[str]) -> object:
+        m = getattr(sty_obj, "map", None) or getattr(sty_obj, "applymap", None)
+        if m is None:
+            return sty_obj
+        return m(fn, subset=subset)
+
+    if "Tendência" in trend_tbl.columns:
+        sty = _elem_map(sty, _cp_trend_cell_style, ["Tendência"])
+    if "Sugestão de compra" in trend_tbl.columns:
+        sty = _elem_map(sty, _cp_sug_cell_style, ["Sugestão de compra"])
+    return sty
+
+
 def _render_comercial_pedidos_analise(
     df: pd.DataFrame,
     load_info: dict[str, object],
@@ -4557,69 +4917,111 @@ def _render_comercial_pedidos_analise(
     )
     period_end_trend = d_fim_f if d_fim_f is not None else (_today if d_max is None else min(d_max, _today))
 
+    _fdl_cp_inject_panel_styles()
     _fdl_ui_gap_section()
-    st.subheader("KPIs")
     kpis = cpa.compute_kpis(filtrado)
-    k1, k2, k3, k4 = st.columns(4)
-    with k1:
-        st.metric("Valor comercial (lista)", _fmt_brl_ptbr_celula(float(kpis["valor_comercial_lista"])))
-    with k2:
-        st.metric("Quantidade (unidades)", _fmt_int_ptbr(int(round(float(kpis["quantidade_total"])))))
-    with k3:
-        st.metric(
-            "Pedidos atendidos (distintos)",
-            _fmt_int_ptbr(int(kpis["pedidos_atendidos_distintos"])),
-            help="Contagem de **pedidos** únicos (chave multiloja/org), não de linhas.",
-        )
-    with k4:
-        st.metric("SKUs distintos", _fmt_int_ptbr(int(kpis["skus_distintos"])))
+    _render_comercial_pedidos_kpi_cards(kpis)
 
     abc_v = cpa.compute_abc_valor(filtrado)
     abc_q = cpa.compute_abc_quantidade(filtrado)
 
     _fdl_ui_gap_section()
-    st.subheader("ABC — valor (Pareto 80 / 95 %)")
-    if abc_v.empty:
-        st.caption("Sem SKU com código no recorte.")
-    else:
-        st.dataframe(abc_v, use_container_width=True, hide_index=True, height=min(420, 40 + len(abc_v) * 36))
+    with st.container(border=True):
+        st.markdown(
+            '<p class="fdl-cp-title-main">Receita comercial (ABC)</p>'
+            '<p class="fdl-cp-title-sub">Bloco principal · participação no faturamento comercial (Preço de lista × Quantidade) · Pareto 80% / 95%</p>',
+            unsafe_allow_html=True,
+        )
+        if abc_v.empty:
+            st.caption("Sem SKU com código no recorte.")
+        else:
+            st.markdown(_comercial_abc_valor_exec_html(abc_v), unsafe_allow_html=True)
+            abc_v_disp = _comercial_abc_valor_display_df(abc_v)
+            _abc_cfg: dict[str, object] = {}
+            if "Valor comercial (lista)" in abc_v_disp.columns:
+                _abc_cfg["Valor comercial (lista)"] = NumberColumn(
+                    "Valor comercial (lista)",
+                    format="R$ %.2f",
+                    min_value=0.0,
+                )
+            if "Part %" in abc_v_disp.columns:
+                _abc_cfg["Part %"] = NumberColumn("Part % (%)", format="%.2f", min_value=0.0)
+            if "Acum %" in abc_v_disp.columns:
+                _abc_cfg["Acum %"] = NumberColumn("Acum % (%)", format="%.2f", min_value=0.0)
+            if "Classe" in abc_v_disp.columns:
+                _abc_cfg["Classe"] = TextColumn("Classe", width="small")
+            st.dataframe(
+                abc_v_disp,
+                use_container_width=True,
+                hide_index=True,
+                height=min(440, 44 + len(abc_v_disp) * 36),
+                column_config=_abc_cfg or None,
+            )
 
     _fdl_ui_gap_section()
-    st.subheader("ABC — quantidade (Pareto 80 / 95 %)")
+    st.markdown(
+        '<p class="fdl-cp-title-sec">Giro em unidades (ABC)</p>'
+        '<p class="fdl-cp-title-sec-note">Complementar · mesmas classes A/B/C por quantidade vendida no período</p>',
+        unsafe_allow_html=True,
+    )
     if abc_q.empty:
         st.caption("Sem quantidade por SKU no recorte.")
     else:
-        st.dataframe(abc_q, use_container_width=True, hide_index=True, height=min(420, 40 + len(abc_q) * 36))
-
-    _fdl_ui_gap_section()
-    st.subheader("Tendência (3 meses) e sugestão de compra")
-    _triple = cpa.three_closed_months_trend_bounds(period_end_trend, as_of=_today)[2]
-    st.caption(
-        f"Três meses calendário **fechados** (sem o mês civil atual em aberto): **{_triple[0][1]:02d}/{_triple[0][0]}** a "
-        f"**{_triple[2][1]:02d}/{_triple[2][0]}**. "
-        f"Referência **hoje** ({_today.day:02d}/{_today.month:02d}/{_today.year}) e fim do período filtrado "
-        f"({period_end_trend.day:02d}/{period_end_trend.month:02d}/{period_end_trend.year}) — se o fim cair no mês em aberto, "
-        "o último mês da janela é o anterior. Mesmos filtros **Empresa** e **Plataforma**."
-    )
-    df_trend = cpa.filter_trend_window(
-        df_atend,
-        empresas_sel=emp_sel,
-        plataformas_sel=plat_sel,
-        period_end=period_end_trend,
-        as_of=_today,
-    )
-    trend_tbl = cpa.compute_trend_and_suggestion(
-        df_trend, abc_v, period_end=period_end_trend, as_of=_today
-    )
-    if trend_tbl.empty:
-        st.caption("Sem linhas com SKU e quantidade na janela de tendência.")
-    else:
+        abc_q_disp = abc_q.copy()
+        if "Part %" in abc_q_disp.columns:
+            abc_q_disp["Part %"] = (pd.to_numeric(abc_q_disp["Part %"], errors="coerce").fillna(0.0) * 100.0).round(2)
+        if "Acum %" in abc_q_disp.columns:
+            abc_q_disp["Acum %"] = (pd.to_numeric(abc_q_disp["Acum %"], errors="coerce").fillna(0.0) * 100.0).round(2)
+        _q_cfg: dict[str, object] = {}
+        if "Quantidade" in abc_q_disp.columns:
+            _q_cfg["Quantidade"] = NumberColumn("Quantidade", format="%.0f", min_value=0.0)
+        if "Part %" in abc_q_disp.columns:
+            _q_cfg["Part %"] = NumberColumn("Part % (%)", format="%.2f", min_value=0.0)
+        if "Acum %" in abc_q_disp.columns:
+            _q_cfg["Acum %"] = NumberColumn("Acum % (%)", format="%.2f", min_value=0.0)
+        if "Classe" in abc_q_disp.columns:
+            _q_cfg["Classe"] = TextColumn("Classe", width="small")
         st.dataframe(
-            trend_tbl,
+            abc_q_disp,
             use_container_width=True,
             hide_index=True,
-            height=min(520, 40 + min(len(trend_tbl), 18) * 36),
+            height=min(320, 36 + min(len(abc_q_disp), 12) * 34),
+            column_config=_q_cfg or None,
         )
+
+    _fdl_ui_gap_section()
+    with st.container(border=True):
+        st.markdown(
+            '<p class="fdl-cp-title-decision">Decisão de compra e tendência</p>'
+            '<p class="fdl-cp-title-sub" style="margin-bottom:12px;">Últimos três meses calendário fechados · mesma classificação e sugestões já calculadas</p>',
+            unsafe_allow_html=True,
+        )
+        _triple = cpa.three_closed_months_trend_bounds(period_end_trend, as_of=_today)[2]
+        st.caption(
+            f"Janela: **{_triple[0][1]:02d}/{_triple[0][0]}** a **{_triple[2][1]:02d}/{_triple[2][0]}** · "
+            f"referência **hoje** {_today.day:02d}/{_today.month:02d}/{_today.year} · fim do filtro "
+            f"{period_end_trend.day:02d}/{period_end_trend.month:02d}/{period_end_trend.year}. "
+            "Sem mês civil em aberto. Mesmos filtros **Empresa** e **Plataforma**."
+        )
+        df_trend = cpa.filter_trend_window(
+            df_atend,
+            empresas_sel=emp_sel,
+            plataformas_sel=plat_sel,
+            period_end=period_end_trend,
+            as_of=_today,
+        )
+        trend_tbl = cpa.compute_trend_and_suggestion(
+            df_trend, abc_v, period_end=period_end_trend, as_of=_today
+        )
+        if trend_tbl.empty:
+            st.caption("Sem linhas com SKU e quantidade na janela de tendência.")
+        else:
+            st.markdown(_comercial_trend_summary_html(trend_tbl), unsafe_allow_html=True)
+            st.dataframe(
+                _comercial_trend_styler(trend_tbl),
+                use_container_width=True,
+                height=min(540, 48 + min(len(trend_tbl), 20) * 36),
+            )
 
 
 def _render_faturamento_dre_minimal(

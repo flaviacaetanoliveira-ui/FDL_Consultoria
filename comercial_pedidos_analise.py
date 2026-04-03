@@ -8,7 +8,7 @@ Usado pela área «Comercial & pedidos» no app operacional; métricas baseadas 
 from __future__ import annotations
 
 import math
-from datetime import date
+from datetime import date, timedelta
 from typing import Literal
 
 import pandas as pd
@@ -230,27 +230,59 @@ def compute_abc_quantidade(df: pd.DataFrame) -> pd.DataFrame:
     return out[["SKU", "Produto", "Quantidade", "Part %", "Acum %", "Classe"]]
 
 
-def three_month_calendar_bounds(
+def last_completed_calendar_month(as_of: date) -> tuple[int, int]:
+    """Último mês calendário **inteiro** já encerrado relativamente a ``as_of`` (nunca o mês civil atual)."""
+    first = date(as_of.year, as_of.month, 1)
+    prev = first - timedelta(days=1)
+    return prev.year, prev.month
+
+
+def _year_month_before(y: int, m: int) -> tuple[int, int]:
+    t = pd.Timestamp(year=y, month=m, day=1) - pd.offsets.MonthBegin(1)
+    return int(t.year), int(t.month)
+
+
+def trend_end_month_closed(period_end: date, as_of: date) -> tuple[int, int]:
+    """
+    Último mês da janela de tendência: sempre **fechado** (nunca mês parcial / «em aberto»).
+
+    - ``last_closed``: último mês completo relativamente a ``as_of`` (ex.: em abril/2026 → março/2026).
+    - Se ``period_end`` cai no **mesmo mês civil** que ``as_of``, esse mês está em aberto → teto do período
+      passa a ser o mês **anterior** ao de ``period_end``.
+    - O teto final é o **mínimo** (mais restritivo) entre esse teto e ``last_closed``, para não ultrapassar
+      o fim do período filtrado nem usar meses futuros em relação a ``as_of``.
+    """
+    last_closed = last_completed_calendar_month(as_of)
+    pe_y, pe_m = period_end.year, period_end.month
+    if (pe_y, pe_m) == (as_of.year, as_of.month):
+        pe_cap_y, pe_cap_m = _year_month_before(pe_y, pe_m)
+    else:
+        pe_cap_y, pe_cap_m = pe_y, pe_m
+    return min((pe_cap_y, pe_cap_m), last_closed)
+
+
+def three_closed_months_trend_bounds(
     period_end: date,
+    *,
+    as_of: date,
 ) -> tuple[pd.Timestamp, pd.Timestamp, tuple[tuple[int, int], tuple[int, int], tuple[int, int]]]:
     """
-    Três meses calendário relativos ao **fim** do período filtrado:
-    **M-2, M-1, M** onde **M** é o mês de ``period_end``.
+    Três meses calendário **fechados** consecutivos terminando em ``trend_end_month_closed(period_end, as_of)``.
 
-    Retorna ``(início_M-2 00:00, fim_M 23:59:59, ((y2,m2),(y1,m1),(y0,m0)))``.
+    Retorna ``(início_M-2 00:00, fim_M 23:59:59, ((y2,m2),(y1,m1),(y0,m0)))`` com M0 = último mês fechado da janela.
     """
-    pe = pd.Timestamp(period_end)
-    m0_first = pd.Timestamp(year=pe.year, month=pe.month, day=1)
-    m_minus_1_first = m0_first - pd.offsets.MonthBegin(1)
-    m_minus_2_first = m0_first - pd.offsets.MonthBegin(2)
+    y0, m0 = trend_end_month_closed(period_end, as_of)
+    t_end = pd.Timestamp(year=y0, month=m0, day=1)
+    m_minus_1_first = t_end - pd.offsets.MonthBegin(1)
+    m_minus_2_first = t_end - pd.offsets.MonthBegin(2)
     start = m_minus_2_first.normalize()
-    end = (m0_first + pd.offsets.MonthEnd(0)).normalize() + pd.Timedelta(
+    end = (t_end + pd.offsets.MonthEnd(0)).normalize() + pd.Timedelta(
         hours=23, minutes=59, seconds=59
     )
     triple = (
         (m_minus_2_first.year, m_minus_2_first.month),
         (m_minus_1_first.year, m_minus_1_first.month),
-        (pe.year, pe.month),
+        (y0, m0),
     )
     return start, end, triple
 
@@ -261,8 +293,9 @@ def filter_trend_window(
     empresas_sel: tuple[str, ...],
     plataformas_sel: tuple[str, ...],
     period_end: date,
+    as_of: date,
 ) -> pd.DataFrame:
-    """Atendidos + empresa/plataforma + datas nos 3 meses (M, M-1, M-2) relativos a ``period_end``."""
+    """Atendidos + empresa/plataforma + datas nos 3 meses **fechados** da tendência (ver ``three_closed_months_trend_bounds``)."""
     if df_atendidos.empty:
         return df_atendidos
     out = df_atendidos
@@ -275,7 +308,7 @@ def filter_trend_window(
     dc = data_column(out)
     if not dc:
         return pd.DataFrame(columns=out.columns)
-    t0, t1, _months = three_month_calendar_bounds(period_end)
+    t0, t1, _months = three_closed_months_trend_bounds(period_end, as_of=as_of)
     ts = parse_data_pedido(out[dc])
     out = out.loc[(ts >= t0) & (ts <= t1)].copy()
     return out
@@ -286,10 +319,11 @@ def compute_trend_and_suggestion(
     abc_valor_df: pd.DataFrame,
     *,
     period_end: date,
+    as_of: date,
 ) -> pd.DataFrame:
     """
-    Por SKU: qtd e valor por mês (3 colunas cada), classificação de tendência e sugestão.
-    ``df_trend`` já limitado à janela de 3 meses; meses = M-2, M-1, M relativos a ``period_end``.
+    Por SKU: qtd e valor nos 3 meses **fechados** (M-2, M-1, último fechado), tendência e sugestão.
+    ``as_of`` define o que é «mês em aberto»; o mês civil atual nunca entra na classificação.
     """
     cols = [
         "SKU",
@@ -318,7 +352,7 @@ def compute_trend_and_suggestion(
     if work.empty:
         return pd.DataFrame(columns=cols)
 
-    _, _, month_triple = three_month_calendar_bounds(period_end)
+    _, _, month_triple = three_closed_months_trend_bounds(period_end, as_of=as_of)
     (y2, m2), (y1, m1), (y0, m0) = month_triple
 
     def _sum_in_month(sub: pd.DataFrame, y: int, m: int) -> tuple[float, float]:

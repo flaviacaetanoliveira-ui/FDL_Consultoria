@@ -4593,20 +4593,24 @@ def _render_comercial_pedidos_analise(
 
     _fdl_ui_gap_section()
     st.subheader("Tendência (3 meses) e sugestão de compra")
-    _triple = cpa.three_month_calendar_bounds(period_end_trend)[2]
+    _triple = cpa.three_closed_months_trend_bounds(period_end_trend, as_of=_today)[2]
     st.caption(
-        f"Janela fixa de calendário: **{_triple[0][1]:02d}/{_triple[0][0]}** a **{_triple[2][1]:02d}/{_triple[2][0]}** "
-        f"(M−2, M−1, M relativos ao **mês do fim** do período filtrado: "
-        f"{period_end_trend.day:02d}/{period_end_trend.month:02d}/{period_end_trend.year}). "
-        "Mesmos filtros **Empresa** e **Plataforma**; datas da tendência **não** repetem o intervalo acima."
+        f"Três meses calendário **fechados** (sem o mês civil atual em aberto): **{_triple[0][1]:02d}/{_triple[0][0]}** a "
+        f"**{_triple[2][1]:02d}/{_triple[2][0]}**. "
+        f"Referência **hoje** ({_today.day:02d}/{_today.month:02d}/{_today.year}) e fim do período filtrado "
+        f"({period_end_trend.day:02d}/{period_end_trend.month:02d}/{period_end_trend.year}) — se o fim cair no mês em aberto, "
+        "o último mês da janela é o anterior. Mesmos filtros **Empresa** e **Plataforma**."
     )
     df_trend = cpa.filter_trend_window(
         df_atend,
         empresas_sel=emp_sel,
         plataformas_sel=plat_sel,
         period_end=period_end_trend,
+        as_of=_today,
     )
-    trend_tbl = cpa.compute_trend_and_suggestion(df_trend, abc_v, period_end=period_end_trend)
+    trend_tbl = cpa.compute_trend_and_suggestion(
+        df_trend, abc_v, period_end=period_end_trend, as_of=_today
+    )
     if trend_tbl.empty:
         st.caption("Sem linhas com SKU e quantidade na janela de tendência.")
     else:

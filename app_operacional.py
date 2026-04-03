@@ -3922,7 +3922,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
             <style>
             .fdl-fat-kpi-shell {
               font-family: var(--font, "Source Sans Pro", sans-serif);
-              margin: 0 0 4px 0;
+              margin: 0 0 18px 0;
             }
             .fdl-fat-kpi-row {
               display: flex;
@@ -4000,6 +4000,40 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     )
 
 
+def _fdl_fat_min_inject_ui_styles() -> None:
+    """Textos auxiliares NF-first mais discretos (apenas UI)."""
+    st.markdown(
+        dedent(
+            """
+            <style>
+            .fdl-fat-min-aside {
+              color: #6b7280;
+              font-size: 0.8125rem;
+              line-height: 1.5;
+              margin: 0 0 12px 0;
+              max-width: 58rem;
+            }
+            .fdl-fat-min-aside strong { color: #4b5563; font-weight: 600; }
+            .fdl-fat-min-aside--tight { margin-bottom: 6px; }
+            .fdl-fat-min-table-cap {
+              color: #6b7280;
+              font-size: 0.78rem;
+              line-height: 1.45;
+              margin: 0 0 14px 0;
+              max-width: 58rem;
+            }
+            </style>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _fdl_fat_min_aside(html_body: str, *, tight: bool = False) -> None:
+    cls = "fdl-fat-min-aside" + (" fdl-fat-min-aside--tight" if tight else "")
+    st.markdown(f'<div class="{cls}">{html_body}</div>', unsafe_allow_html=True)
+
+
 def _render_faturamento_dre_minimal(
     df: pd.DataFrame,
     load_info: dict[str, object],
@@ -4012,6 +4046,7 @@ def _render_faturamento_dre_minimal(
     Etapa 1 — painel **NF-first**: único período = **emissão da NF**; **plataforma** (opcional) restringe linhas
     de pedido no enriquecimento; KPIs e tabela derivam do mesmo ``df_nf``.
     """
+    _fdl_fat_min_inject_ui_styles()
     _oid = str(org_id)
     _ = org_display_name, ts_proc, load_info
     df_nf_pre = load_info.get("faturamento_nf_df")
@@ -4023,40 +4058,35 @@ def _render_faturamento_dre_minimal(
     if use_nf_materializado and df_nf_pre.empty and not df.empty:
         use_nf_materializado = False
 
-    st.caption(
-        "**Universo (Etapa 1):** **único período** = **emissão da NF**. O painel lista **uma linha por NF** válida nesse intervalo. "
-        "**Valor faturado** = líquido da NF **uma vez**; **valor da venda**, comissão, frete, imposto e resultado = "
-        "**soma nas linhas de pedido** ligadas a essas NFs (filtros **Empresa** e **Plataforma**). "
-        "**Despesa fixa** = **5%** do **valor da venda** agregado a cada NF (não sobre o valor faturado da nota). "
-        "A coluna **Data** do pedido **não** filtra o painel. "
-        "**NF** só aparece se existir linha de pedido no materializado com join à nota."
+    _fdl_fat_min_aside(
+        "Universo (Etapa 1): período único = <strong>emissão da NF</strong>. Uma linha por NF válida no intervalo. "
+        "Valor faturado = líquido da NF uma vez; valor da venda, comissão, frete, imposto e resultado = soma nas "
+        "linhas de pedido ligadas a essas NFs (filtros Empresa e Plataforma). Despesa fixa = 5% do valor da venda "
+        "agregado a cada NF. A coluna Data do pedido não filtra o painel. NF só aparece com linha de pedido ligada à nota."
     )
     if use_nf_materializado:
-        st.caption(
-            "**Fonte do painel:** **materializado NF-first** — leitura de **`dataset_faturamento_nf.parquet`**; "
-            "filtros (emissão, empresa, plataforma) aplicados em memória sobre essa tabela."
+        _fdl_fat_min_aside(
+            "Fonte: materializado NF-first (<code>dataset_faturamento_nf.parquet</code>); filtros aplicados em memória."
         )
     else:
-        st.caption(
-            "**Fonte do painel:** **agregação ao vivo** a partir do materializado em **grão linha** "
-            "(ex. `dataset_faturamento_app.csv`). Com **`dataset_faturamento_nf.parquet`** na mesma pasta, "
-            "o painel passa a consumir a tabela final NF."
+        _fdl_fat_min_aside(
+            "Fonte: agregação ao vivo a partir do grão linha; com <code>dataset_faturamento_nf.parquet</code> na pasta, "
+            "o painel passa a consumir a tabela NF."
         )
     if use_nf_materializado and _is_admin_mode() and load_info.get("faturamento_nf_first_path"):
-        st.caption(
-            f"**Admin:** path do Parquet NF-first: `{load_info.get('faturamento_nf_first_path')}`"
-        )
+        _p = html.escape(str(load_info.get("faturamento_nf_first_path")))
+        _fdl_fat_min_aside(f"Admin — path Parquet NF-first: <code>{_p}</code>", tight=True)
     elif _is_admin_mode() and (
         load_info.get("faturamento_nf_first_skip") or load_info.get("faturamento_nf_first_error")
     ):
         _sk = load_info.get("faturamento_nf_first_skip")
         _e = load_info.get("faturamento_nf_first_error")
-        _parts = ["**Admin:** NF-first não ativo."]
+        _parts = ["Admin — NF-first não ativo."]
         if _sk:
-            _parts.append(f"Motivo: `{_sk}`.")
+            _parts.append(f"Motivo: <code>{html.escape(str(_sk))}</code>.")
         if _e:
-            _parts.append(f"Erro: `{_e}`.")
-        st.caption(" ".join(_parts))
+            _parts.append(f"Erro: <code>{html.escape(str(_e))}</code>.")
+        _fdl_fat_min_aside(" ".join(_parts), tight=True)
 
     if df.empty and not use_nf_materializado:
         st.info(
@@ -4149,14 +4179,14 @@ def _render_faturamento_dre_minimal(
                 placeholder="Todas",
             )
         _multiselect_stable("fdl_fat_min_plat", "Plataforma", plats)
-        st.caption(
-            "**Plataforma:** "
+        _fdl_fat_min_aside(
+            "Plataforma: "
             + (
-                "filtra **notas** pela plataforma já consolidada no grão NF (materializado)."
+                "filtra notas pela plataforma consolidada no grão NF (materializado)."
                 if use_nf_materializado
-                else "restringe as **linhas de pedido** usadas no enriquecimento (venda, comissão, frete, etc.) "
-                "entre as NFs já filtradas por **emissão**."
-            )
+                else "restringe linhas de pedido no enriquecimento (venda, comissão, frete, etc.) nas NFs já filtradas por emissão."
+            ),
+            tight=True,
         )
         if ok_nf_dates:
             r_nf = st.columns((1, 1))
@@ -4179,9 +4209,12 @@ def _render_faturamento_dre_minimal(
                     help=_FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN,
                 )
         elif "Nota_Data_Emissao" in _df_bounds.columns:
-            st.caption("Coluna **Nota_Data_Emissao** sem datas utilizáveis — período de emissão indisponível.")
+            _fdl_fat_min_aside(
+                "Nota_Data_Emissao sem datas utilizáveis — período de emissão indisponível.",
+                tight=True,
+            )
         else:
-            st.caption("Sem coluna **Nota_Data_Emissao** — período de emissão indisponível.")
+            _fdl_fat_min_aside("Sem coluna Nota_Data_Emissao — período de emissão indisponível.", tight=True)
         if st.button("Limpar filtros desta vista", key="fdl_fat_min_reset"):
             for _k in (
                 "fdl_fat_min_emp",
@@ -4192,6 +4225,8 @@ def _render_faturamento_dre_minimal(
             ):
                 st.session_state.pop(_k, None)
             st.rerun()
+
+    _fdl_ui_gap_section()
 
     _min_state = faturamento_recorte_min_state_from_session(st.session_state)
     _nf_kpi_ini = _safe_streamlit_date(st.session_state.get("fdl_fat_min_nf_d_ini"), nf_min)
@@ -4224,12 +4259,16 @@ def _render_faturamento_dre_minimal(
         st.warning(_m)
 
     _kp = compute_nf_panel_kpis(df_nf)
-    _base_desc = (
-        f"**{len(df_nf_pre)}** nota(s) no **materializado NF-first**"
+    _base_desc_html = (
+        f"<strong>{len(df_nf_pre)}</strong> nota(s) no materializado NF-first"
         if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame)
-        else f"**{len(df)}** linhas no carregamento (grão pedido)"
+        else f"<strong>{len(df)}</strong> linhas no carregamento (grão pedido)"
     )
-    st.caption(f"**Painel NF-first:** **{_kp['n_nf']}** nota(s) no recorte · base: {_base_desc}.")
+    _fdl_fat_min_aside(
+        f"Recorte: <strong>{_kp['n_nf']}</strong> nota(s) · base: {_base_desc_html}",
+        tight=True,
+    )
+    _fdl_ui_gap_tight()
 
     _render_fdl_fat_dre_nf_kpi_cards(
         kp=_kp,
@@ -4237,7 +4276,7 @@ def _render_faturamento_dre_minimal(
         use_nf_materializado=use_nf_materializado,
     )
 
-    _fdl_ui_gap_tight()
+    _fdl_ui_gap_section()
 
     _nf_table_cols_order = [
         "Emissão NF",
@@ -4306,38 +4345,45 @@ def _render_faturamento_dre_minimal(
 
     _cfg_nf: dict[str, NumberColumn | TextColumn] = {}
     if "Valor da venda" in _disp_nf_ui.columns:
-        _cfg_nf["Valor da venda"] = NumberColumn("Valor da venda", format="R$ %,.2f")
+        _cfg_nf["Valor da venda"] = NumberColumn(
+            "Valor da venda", format="R$ %,.2f", width="medium"
+        )
     if "Valor faturado NF" in _disp_nf_ui.columns:
-        _cfg_nf["Valor faturado NF"] = NumberColumn("Valor faturado NF", format="R$ %,.2f")
+        _cfg_nf["Valor faturado NF"] = NumberColumn(
+            "Valor faturado NF", format="R$ %,.2f", width="medium"
+        )
     if "Diferença" in _disp_nf_ui.columns:
         _cfg_nf["Diferença"] = NumberColumn(
             "Diferença",
             format="R$ %,.2f",
+            width="small",
             help="Valor da venda menos valor faturado na NF.",
         )
     for _mc in ("Comissão", "Frete", "Imposto", "Despesa fixa"):
         if _mc in _disp_nf_ui.columns:
-            _cfg_nf[_mc] = NumberColumn(_mc, format="R$ %,.2f")
+            _cfg_nf[_mc] = NumberColumn(_mc, format="R$ %,.2f", width="small")
     if "Resultado" in _disp_nf_ui.columns:
         _cfg_nf["Resultado"] = NumberColumn(
             "Resultado",
             format="R$ %,.2f",
+            width="medium",
             help="Resultado consolidado por NF (materializado / regra do painel).",
         )
     if "Linhas pedido" in _disp_nf_ui.columns:
         _cfg_nf["Linhas pedido"] = NumberColumn(
             "Linhas pedido",
             format="%d",
+            width="small",
             help="Quantidade de linhas de pedido agregadas nesta NF.",
         )
 
     _txt_nf_specs: tuple[tuple[str, str, str | None], ...] = (
         ("Emissão NF", "small", None),
         ("Empresa", "medium", None),
-        ("Plataforma", "medium", None),
+        ("Plataforma", "small", None),
         ("NF", "small", None),
-        ("Situação", "small", None),
-        ("Pedido / multiloja", "large", "Resumo de pedido ou multiloja (texto completo no CSV)."),
+        ("Situação", "medium", None),
+        ("Pedido / multiloja", "medium", "Resumo de pedido ou multiloja (texto completo no CSV)."),
         ("Produto", "large", "Resumo de produtos/itens (texto completo no CSV)."),
     )
     for _cn, _cw, _ch in _txt_nf_specs:
@@ -4345,9 +4391,10 @@ def _render_faturamento_dre_minimal(
             _cfg_nf[_cn] = TextColumn(_cn, width=_cw, help=_ch) if _ch else TextColumn(_cn, width=_cw)
 
     st.subheader("Tabela por NF")
-    st.caption(
-        f"**{len(_disp_nf_ui)}** linha(s) · 1 linha por **NF** · **emissão** mais recente primeiro. "
-        "**CSV** com as mesmas colunas e textos **completos** em Pedido / Produto."
+    st.markdown(
+        f'<div class="fdl-fat-min-table-cap">{len(_disp_nf_ui)} linha(s) · 1 por NF · emissão mais recente primeiro. '
+        f"CSV com as mesmas colunas; Pedido e Produto com texto completo.</div>",
+        unsafe_allow_html=True,
     )
     if _disp_nf_ui.empty:
         st.info(
@@ -4358,9 +4405,14 @@ def _render_faturamento_dre_minimal(
             _disp_nf_ui,
             use_container_width=True,
             hide_index=True,
-            height=min(520, 120 + 34 * min(len(_disp_nf_ui), 14)),
+            height=min(
+                580,
+                152 + 40 * min(len(_disp_nf_ui), 16),
+            ),
             column_config=_cfg_nf,
         )
+
+    _fdl_ui_gap_tight()
 
     st.download_button(
         "Exportar CSV (recorte atual)",

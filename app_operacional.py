@@ -4000,6 +4000,121 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     )
 
 
+def _fmt_brl_ptbr_encargo_dre(v: object) -> str:
+    """Total já somado no painel; só exibição como saída (−R$ …) na DRE gerencial."""
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return "—"
+    if math.isnan(x):
+        return "—"
+    s = _fmt_brl_ptbr_celula(abs(x))
+    if not s:
+        return "—"
+    if s.startswith("R$ "):
+        return "−" + s
+    return "−" + s
+
+
+def _render_fdl_fat_dre_nf_gerencial(
+    *,
+    kp: dict[str, float | int],
+    ok_nf_dates: bool,
+) -> None:
+    """
+    DRE gerencial do mesmo recorte que os KPIs: usa apenas totais de ``compute_nf_panel_kpis``.
+    Sem novos agregados; margem = Σ resultado ÷ Σ valor de venda (lista), como no painel.
+    """
+    vv = float(kp["valor_venda"])
+    res = float(kp["resultado"])
+    rec_venda = _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00"
+    vf_disp = (
+        (_fmt_brl_ptbr_celula(kp["valor_faturado_nf"]) or "—")
+        if ok_nf_dates
+        else "—"
+    )
+    dif_disp = (
+        (_fmt_brl_ptbr_celula(kp["diferenca"]) or "—") if ok_nf_dates else "—"
+    )
+    margem_s = _margem_sobre_venda_str(res, vv)
+    res_disp = _fmt_brl_ptbr_celula(kp["resultado"]) or "—"
+    enc_com = _fmt_brl_ptbr_encargo_dre(kp["comissao"])
+    enc_fre = _fmt_brl_ptbr_encargo_dre(kp["frete"])
+    enc_imp = _fmt_brl_ptbr_encargo_dre(kp["imposto"])
+    enc_df = _fmt_brl_ptbr_encargo_dre(kp["despesa_fixa"])
+
+    def _dre_row(
+        lab: str,
+        val: str,
+        *,
+        ref: bool = False,
+        title: str | None = None,
+    ) -> str:
+        cls = "fdl-fat-dre-row"
+        if ref:
+            cls += " fdl-fat-dre-row--ref"
+        tattr = f' title="{html.escape(title, quote=True)}"' if title else ""
+        return (
+            f'<div class="{cls}"{tattr}>'
+            f'<span class="fdl-fat-dre-lab">{html.escape(lab)}</span>'
+            f'<span class="fdl-fat-dre-val">{html.escape(val)}</span>'
+            "</div>"
+        )
+
+    _inner = (
+        '<div class="fdl-fat-dre-title">DRE gerencial</div>'
+        '<div class="fdl-fat-dre-sub">Totais do painel · leitura gerencial</div>'
+        '<div class="fdl-fat-dre-block-h">Ponte comercial × fiscal</div>'
+        + _dre_row(
+            "Receita de venda (lista)",
+            rec_venda,
+            title="Σ Quantidade × Preço de lista no recorte.",
+        )
+        + _dre_row(
+            "Faturado NF (ref. fiscal)",
+            vf_disp,
+            ref=True,
+            title=(
+                "Nota_Valor_Liquido_Total 1× por NF. Contraste com a receita em lista; não somar como segunda receita."
+            ),
+        )
+        + _dre_row(
+            "Diferença (venda − faturado NF)",
+            dif_disp,
+            title="Receita lista − faturado NF (totais do recorte).",
+        )
+        + '<p class="fdl-fat-dre-foot fdl-fat-dre-foot--inline">'
+        "Ref. fiscal 1× por NF — não soma à receita de lista."
+        "</p>"
+        '<div class="fdl-fat-dre-block-h">Encargos</div>'
+        + _dre_row("Comissão", enc_com, title="Σ comissão no recorte.")
+        + _dre_row("Frete", enc_fre, title="Σ frete no recorte.")
+        + _dre_row("Imposto", enc_imp, title="Σ imposto no recorte.")
+        + _dre_row(
+            "Despesa fixa",
+            enc_df,
+            title="Σ despesa fixa (5% sobre valor de venda por NF) no recorte.",
+        )
+        + '<div class="fdl-fat-dre-block-h">Fechamento</div>'
+        '<div class="fdl-fat-dre-close">'
+        '<div class="fdl-fat-dre-row--result">'
+        '<span class="fdl-fat-dre-lab">Resultado</span>'
+        f'<span class="fdl-fat-dre-val">{html.escape(res_disp)}</span>'
+        "</div>"
+        '<div class="fdl-fat-dre-row--margem">'
+        '<span class="fdl-fat-dre-lab">Margem sobre venda</span>'
+        f'<span class="fdl-fat-dre-val">{html.escape(margem_s)}</span>'
+        "</div></div>"
+        '<p class="fdl-fat-dre-foot fdl-fat-dre-foot--final">'
+        "Margem = resultado ÷ receita de venda (lista). Sem CMV nesta fase."
+        "</p>"
+    )
+    st.markdown(
+        f'<div class="fdl-fat-dre-wrap">{_inner}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def _fdl_fat_min_inject_ui_styles() -> None:
     """Textos auxiliares NF-first mais discretos (apenas UI)."""
     st.markdown(
@@ -4043,6 +4158,131 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               display: block;
               height: 1.35rem;
               min-height: 1.35rem;
+            }
+            .fdl-fat-dre-wrap {
+              max-width: min(48rem, 100%);
+              width: 100%;
+              margin: 0;
+              font-family: var(--font, "Source Sans Pro", sans-serif);
+            }
+            .fdl-fat-dre-title {
+              font-size: 0.94rem;
+              font-weight: 700;
+              color: #111827;
+              margin: 0 0 3px 0;
+              letter-spacing: -0.02em;
+            }
+            .fdl-fat-dre-sub {
+              font-size: 0.68rem;
+              color: #9ca3af;
+              margin: 0 0 10px 0;
+              line-height: 1.35;
+            }
+            .fdl-fat-dre-block-h {
+              font-size: 0.64rem;
+              font-weight: 600;
+              text-transform: uppercase;
+              letter-spacing: 0.07em;
+              color: #9ca3af;
+              margin: 14px 0 5px 0;
+            }
+            .fdl-fat-dre-block-h:first-of-type { margin-top: 0; }
+            .fdl-fat-dre-row {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) minmax(7.25rem, max-content);
+              column-gap: 1.25rem;
+              align-items: baseline;
+              padding: 8px 0;
+              border-bottom: 1px solid #f0f1f3;
+              font-size: 0.875rem;
+              color: #374151;
+            }
+            .fdl-fat-dre-row--ref .fdl-fat-dre-lab {
+              color: #6b7280;
+              font-weight: 500;
+              font-size: 0.82rem;
+            }
+            .fdl-fat-dre-row--ref .fdl-fat-dre-val {
+              color: #6b7280;
+              font-weight: 500;
+              font-size: 0.82rem;
+            }
+            .fdl-fat-dre-lab {
+              min-width: 0;
+              line-height: 1.38;
+            }
+            .fdl-fat-dre-val {
+              font-variant-numeric: tabular-nums;
+              text-align: right;
+              white-space: nowrap;
+              font-weight: 500;
+              color: #111827;
+              justify-self: end;
+            }
+            .fdl-fat-dre-foot {
+              font-size: 0.63rem;
+              color: #9ca3af;
+              line-height: 1.4;
+              margin: 3px 0 0 0;
+              max-width: 42rem;
+            }
+            .fdl-fat-dre-foot--inline {
+              margin-top: 2px;
+              margin-bottom: 2px;
+            }
+            .fdl-fat-dre-foot--final {
+              margin-top: 8px;
+              margin-bottom: 0;
+            }
+            .fdl-fat-dre-close {
+              margin-top: 8px;
+              border-radius: 10px;
+              border: 1px solid #e5e7eb;
+              background: #fafafa;
+              overflow: hidden;
+            }
+            .fdl-fat-dre-row--result {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) minmax(7.25rem, max-content);
+              column-gap: 1.25rem;
+              align-items: baseline;
+              padding: 11px 14px;
+              border-bottom: 1px solid #e8eaed;
+              background: #f9fafb;
+            }
+            .fdl-fat-dre-row--result .fdl-fat-dre-lab {
+              font-weight: 600;
+              font-size: 0.92rem;
+              color: #111827;
+            }
+            .fdl-fat-dre-row--result .fdl-fat-dre-val {
+              font-weight: 700;
+              font-size: 1.12rem;
+              color: #111827;
+              font-variant-numeric: tabular-nums;
+              text-align: right;
+              justify-self: end;
+            }
+            .fdl-fat-dre-row--margem {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) minmax(7.25rem, max-content);
+              column-gap: 1.25rem;
+              align-items: baseline;
+              padding: 9px 14px 11px 14px;
+              background: #f3f4f6;
+            }
+            .fdl-fat-dre-row--margem .fdl-fat-dre-lab {
+              font-weight: 500;
+              font-size: 0.8rem;
+              color: #6b7280;
+            }
+            .fdl-fat-dre-row--margem .fdl-fat-dre-val {
+              font-weight: 600;
+              font-size: 0.94rem;
+              color: #374151;
+              font-variant-numeric: tabular-nums;
+              text-align: right;
+              justify-self: end;
             }
             </style>
             """
@@ -4312,6 +4552,9 @@ def _render_faturamento_dre_minimal(
         ok_nf_dates=ok_nf_dates,
         use_nf_materializado=use_nf_materializado,
     )
+
+    _fdl_fat_min_vsp(size="md")
+    _render_fdl_fat_dre_nf_gerencial(kp=_kp, ok_nf_dates=ok_nf_dates)
 
     _fdl_ui_gap_section()
     _fdl_fat_min_vsp(size="lg")

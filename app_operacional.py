@@ -535,83 +535,120 @@ def _fdl_sidebar_inject_layout_css() -> None:
             """
             <style>
             [data-testid="stSidebar"] .block-container {
-              padding-top: 0.65rem;
-              padding-bottom: 1rem;
+              padding-top: 0.55rem;
+              padding-bottom: 1.1rem;
+            }
+            [data-testid="stSidebar"] div[data-testid="stButton"] {
+              margin-bottom: 0.5rem !important;
             }
             .fdl-sb-brand {
-              margin: 0.15rem 0 0.2rem 0;
-              padding: 0 0.15rem;
+              margin: 0.05rem 0 0.1rem 0;
+              padding: 0 0.1rem;
+            }
+            [data-testid="stSidebar"] [data-testid="stImage"] img {
+              max-height: 2.4rem;
+              width: auto !important;
+              object-fit: contain;
+              display: block;
+              margin: 0 auto 0.5rem auto;
+              opacity: 0.96;
             }
             .fdl-sb-product {
-              font-size: 1.22rem;
+              font-size: 1.18rem;
               font-weight: 700;
-              letter-spacing: -0.03em;
+              letter-spacing: -0.035em;
               color: #0f172a;
-              line-height: 1.2;
-              margin: 0 0 0.2rem 0;
+              line-height: 1.18;
+              margin: 0 0 0.28rem 0;
             }
             .fdl-sb-tagline {
-              font-size: 0.74rem;
-              font-weight: 400;
-              color: #9ca3af;
-              line-height: 1.45;
-              margin: 0 0 0.85rem 0;
+              font-size: 0.72rem;
+              font-weight: 500;
+              letter-spacing: 0.01em;
+              color: #94a3b8;
+              line-height: 1.4;
+              margin: 0 0 0.75rem 0;
             }
-            .fdl-sb-client-label {
+            .fdl-sb-tagline--after-logo {
+              margin-top: 0;
+              margin-bottom: 0.65rem;
+              text-align: center;
+            }
+            .fdl-sb-client-row {
+              margin: 0;
+              padding-top: 0.35rem;
+              border-top: 1px solid rgba(226, 232, 240, 0.85);
+            }
+            .fdl-sb-client-inline {
               display: block;
-              font-size: 0.62rem;
+              font-size: 0.72rem;
+              font-weight: 400;
+              line-height: 1.45;
+              color: #a8b0bd;
+              letter-spacing: 0.01em;
+            }
+            .fdl-sb-client-inline .fdl-sb-client-tag {
+              font-size: 0.6rem;
               font-weight: 600;
               text-transform: uppercase;
-              letter-spacing: 0.06em;
-              color: #b4bcc6;
-              margin-bottom: 0.2rem;
+              letter-spacing: 0.07em;
+              color: #cbd5e1;
+              margin-right: 0.35rem;
             }
-            .fdl-sb-client-name {
-              font-size: 0.88rem;
+            .fdl-sb-client-inline .fdl-sb-client-name {
               font-weight: 500;
-              color: #64748b;
-              line-height: 1.35;
-              word-break: break-word;
+              color: #94a3b8;
             }
             .fdl-sb-divider {
               height: 1px;
-              background: linear-gradient(90deg, transparent, #e5e7eb 12%, #e5e7eb 88%, transparent);
-              margin: 0.5rem 0 0.15rem 0;
+              background: linear-gradient(90deg, transparent, #e8ecf1 15%, #e8ecf1 85%, transparent);
+              margin: 0.65rem 0 0.1rem 0;
             }
             .fdl-sb-section-label {
-              font-size: 0.62rem;
+              font-size: 0.6rem;
               font-weight: 600;
               text-transform: uppercase;
-              letter-spacing: 0.085em;
-              color: #9ca3af;
-              margin: 1.15rem 0 0.5rem 0;
-              padding: 0 0.1rem;
+              letter-spacing: 0.09em;
+              color: #b4bcc6;
+              margin: 1.35rem 0 0.55rem 0;
+              padding: 0 0.15rem;
             }
             .fdl-sb-section-label--first {
-              margin-top: 0.35rem;
+              margin-top: 0.4rem;
             }
             .fdl-sb-org-hint {
-              font-size: 0.68rem;
+              font-size: 0.6rem;
               font-weight: 400;
-              color: #b4bcc6;
-              line-height: 1.4;
-              margin: -0.15rem 0 0.55rem 0;
-              padding: 0 0.1rem;
+              letter-spacing: 0.02em;
+              color: #cbd5e1;
+              line-height: 1.35;
+              margin: 0 0 0.45rem 0;
+              padding: 0 0.15rem;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"] {
               font-weight: 600 !important;
-              border-left: 3px solid #0f172a !important;
-              box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+              color: #0f172a !important;
+              background: linear-gradient(180deg, #fafbfc 0%, #f4f6f8 100%) !important;
+              border: 1px solid #e2e8f0 !important;
+              border-left: 2px solid #334155 !important;
+              border-radius: 10px !important;
+              box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+              padding-top: 0.5rem !important;
+              padding-bottom: 0.5rem !important;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"] {
               font-weight: 500 !important;
-              color: #374151 !important;
-              border-color: #e5e7eb !important;
-              background-color: #ffffff !important;
+              color: #64748b !important;
+              border-color: #eef1f4 !important;
+              background-color: rgba(255, 255, 255, 0.65) !important;
+              border-radius: 10px !important;
+              padding-top: 0.45rem !important;
+              padding-bottom: 0.45rem !important;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"]:hover {
-              border-color: #d1d5db !important;
-              background-color: #f9fafb !important;
+              border-color: #e2e8f0 !important;
+              background-color: #f8fafc !important;
+              color: #475569 !important;
             }
             </style>
             """
@@ -8177,10 +8214,10 @@ with st.sidebar:
     _sb_area = st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY, FDL_PRODUCT_AREA_FINANCEIRO)
 
     st.write("")
+    _logo_file = _REPO_APP_ROOT / "assets" / "fdl_analytics_logo.png"
+    _has_logo = _logo_file.is_file()
     _sp_l, _sp_c, _sp_r = st.columns([0.35, 3.3, 0.35])
     with _sp_c:
-        _logo_file = _REPO_APP_ROOT / "assets" / "fdl_analytics_logo.png"
-        _has_logo = _logo_file.is_file()
         if _has_logo:
             st.image(str(_logo_file), use_container_width=True)
 
@@ -8189,13 +8226,26 @@ with st.sidebar:
         _u = str(st.session_state.get("usuario", "") or "").strip()
         _cli_raw = _u.split("@", 1)[0] if "@" in _u else (_u or "Conta")
     _cli_nome = html.escape(_cli_raw)
+    _sb_tagline = "Inteligência para e-commerce"
+    if _has_logo:
+        _brand_inner = (
+            f'<div class="fdl-sb-tagline fdl-sb-tagline--after-logo">{html.escape(_sb_tagline)}</div>'
+            '<div class="fdl-sb-client-row"><div class="fdl-sb-client-inline">'
+            '<span class="fdl-sb-client-tag">Conta</span>'
+            f'<span class="fdl-sb-client-name">{_cli_nome}</span>'
+            "</div></div>"
+        )
+    else:
+        _brand_inner = (
+            '<div class="fdl-sb-product">FDL Analytics</div>'
+            f'<div class="fdl-sb-tagline">{html.escape(_sb_tagline)}</div>'
+            '<div class="fdl-sb-client-row"><div class="fdl-sb-client-inline">'
+            '<span class="fdl-sb-client-tag">Conta</span>'
+            f'<span class="fdl-sb-client-name">{_cli_nome}</span>'
+            "</div></div>"
+        )
     st.markdown(
-        '<div class="fdl-sb-brand">'
-        '<div class="fdl-sb-product">FDL Analytics</div>'
-        '<div class="fdl-sb-tagline">Operação e análise gerencial</div>'
-        '<span class="fdl-sb-client-label">Conta</span>'
-        f'<div class="fdl-sb-client-name">{_cli_nome}</div>'
-        "</div>"
+        f'<div class="fdl-sb-brand">{_brand_inner}</div>'
         '<div class="fdl-sb-divider" aria-hidden="true"></div>',
         unsafe_allow_html=True,
     )
@@ -8253,9 +8303,7 @@ with st.sidebar:
 
         if _sb_area == FDL_PRODUCT_AREA_FINANCEIRO and _nomes_nav:
             st.markdown(
-                '<p class="fdl-sb-org-hint">'
-                "Contexto para <strong>Repasse</strong> e <strong>Frete</strong>. "
-                "Nos painéis gerenciais, use o filtro dentro do módulo.</p>",
+                '<p class="fdl-sb-org-hint">Repasse e Frete · esta organização</p>',
                 unsafe_allow_html=True,
             )
             _org_idx = 0
@@ -8270,7 +8318,10 @@ with st.sidebar:
                 index=_org_idx,
                 key="operacional_empresa_ativa_select",
                 label_visibility="visible",
-                help="Organização usada para carregar e filtrar Repasse e Frete.",
+                help=(
+                    "Organização carregada para Repasse e Frete. "
+                    "Nos painéis gerenciais, o recorte por marca está no filtro Empresa dentro do módulo."
+                ),
             )
             _chosen_org = organizacao_por_nome_cadastrado(_sel_nome)
             if _chosen_org and _chosen_org.org_id != _app_ctx.active_org_id:

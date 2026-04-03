@@ -535,120 +535,194 @@ def _fdl_sidebar_inject_layout_css() -> None:
             """
             <style>
             [data-testid="stSidebar"] .block-container {
-              padding-top: 0.55rem;
-              padding-bottom: 1.1rem;
+              padding-top: 0.5rem;
+              padding-bottom: 1.35rem;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] {
-              margin-bottom: 0.5rem !important;
+              margin-bottom: 0.42rem !important;
+            }
+            .fdl-sb-brand-shell {
+              margin: 0.1rem 0 0.15rem 0;
+              padding: 0.65rem 0.55rem 0.55rem;
+              border-radius: 12px;
+              background: linear-gradient(
+                165deg,
+                rgba(248, 250, 252, 0.75) 0%,
+                rgba(255, 255, 255, 0.4) 48%,
+                rgba(248, 250, 252, 0.35) 100%
+              );
+              border: 1px solid rgba(226, 232, 240, 0.65);
+              box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
             }
             .fdl-sb-brand {
-              margin: 0.05rem 0 0.1rem 0;
-              padding: 0 0.1rem;
+              margin: 0;
+              padding: 0;
             }
             [data-testid="stSidebar"] [data-testid="stImage"] img {
-              max-height: 2.4rem;
+              max-height: 2.15rem;
               width: auto !important;
               object-fit: contain;
               display: block;
-              margin: 0 auto 0.5rem auto;
-              opacity: 0.96;
+              margin: 0 auto 0.45rem auto;
+              opacity: 0.98;
             }
             .fdl-sb-product {
-              font-size: 1.18rem;
+              font-size: 1.14rem;
               font-weight: 700;
-              letter-spacing: -0.035em;
+              letter-spacing: -0.04em;
               color: #0f172a;
-              line-height: 1.18;
-              margin: 0 0 0.28rem 0;
+              line-height: 1.15;
+              margin: 0 0 0.22rem 0;
             }
             .fdl-sb-tagline {
-              font-size: 0.72rem;
-              font-weight: 500;
-              letter-spacing: 0.01em;
-              color: #94a3b8;
-              line-height: 1.4;
-              margin: 0 0 0.75rem 0;
+              font-size: 0.6875rem;
+              font-weight: 600;
+              letter-spacing: 0.04em;
+              color: #7c8a9c;
+              line-height: 1.45;
+              margin: 0 0 0.65rem 0;
             }
             .fdl-sb-tagline--after-logo {
               margin-top: 0;
-              margin-bottom: 0.65rem;
+              margin-bottom: 0.55rem;
               text-align: center;
+              font-weight: 600;
+              letter-spacing: 0.055em;
             }
             .fdl-sb-client-row {
               margin: 0;
-              padding-top: 0.35rem;
-              border-top: 1px solid rgba(226, 232, 240, 0.85);
+              padding-top: 0.45rem;
+              border-top: 1px solid rgba(226, 232, 240, 0.75);
             }
-            .fdl-sb-client-inline {
-              display: block;
-              font-size: 0.72rem;
-              font-weight: 400;
-              line-height: 1.45;
-              color: #a8b0bd;
-              letter-spacing: 0.01em;
+            .fdl-sb-client-block {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              text-align: center;
+              gap: 0.2rem;
             }
-            .fdl-sb-client-inline .fdl-sb-client-tag {
-              font-size: 0.6rem;
+            .fdl-sb-brand-shell .fdl-sb-client-block {
+              align-items: stretch;
+              text-align: left;
+            }
+            .fdl-sb-client-tag {
+              font-size: 0.5625rem;
               font-weight: 600;
               text-transform: uppercase;
-              letter-spacing: 0.07em;
-              color: #cbd5e1;
-              margin-right: 0.35rem;
+              letter-spacing: 0.11em;
+              color: #c5cdd8;
+              line-height: 1.2;
             }
-            .fdl-sb-client-inline .fdl-sb-client-name {
-              font-weight: 500;
-              color: #94a3b8;
+            .fdl-sb-client-name {
+              font-size: 0.8125rem;
+              font-weight: 600;
+              letter-spacing: -0.01em;
+              color: #5c6b7e;
+              line-height: 1.35;
+              word-break: break-word;
             }
             .fdl-sb-divider {
               height: 1px;
-              background: linear-gradient(90deg, transparent, #e8ecf1 15%, #e8ecf1 85%, transparent);
-              margin: 0.65rem 0 0.1rem 0;
+              background: linear-gradient(90deg, transparent, #e2e8f0 12%, #e2e8f0 88%, transparent);
+              margin: 0.75rem 0 0.15rem 0;
             }
             .fdl-sb-section-label {
-              font-size: 0.6rem;
+              font-size: 0.6875rem;
               font-weight: 600;
-              text-transform: uppercase;
-              letter-spacing: 0.09em;
-              color: #b4bcc6;
-              margin: 1.35rem 0 0.55rem 0;
-              padding: 0 0.15rem;
+              text-transform: none;
+              letter-spacing: 0.035em;
+              color: #7c8796;
+              margin: 1.45rem 0 0.58rem 0;
+              padding: 0 0.2rem 0.38rem 0.2rem;
+              border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+              line-height: 1.25;
             }
             .fdl-sb-section-label--first {
-              margin-top: 0.4rem;
+              margin-top: 0.35rem;
             }
             .fdl-sb-org-hint {
-              font-size: 0.6rem;
-              font-weight: 400;
-              letter-spacing: 0.02em;
-              color: #cbd5e1;
-              line-height: 1.35;
-              margin: 0 0 0.45rem 0;
-              padding: 0 0.15rem;
+              font-size: 0.5625rem;
+              font-weight: 600;
+              letter-spacing: 0.14em;
+              text-transform: uppercase;
+              color: #d1d9e2;
+              line-height: 1.3;
+              margin: 0 0 0.38rem 0;
+              padding: 0 0.2rem;
+              text-align: center;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"] {
               font-weight: 600 !important;
               color: #0f172a !important;
-              background: linear-gradient(180deg, #fafbfc 0%, #f4f6f8 100%) !important;
+              background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%) !important;
               border: 1px solid #e2e8f0 !important;
-              border-left: 2px solid #334155 !important;
-              border-radius: 10px !important;
-              box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 1px 2px rgba(15, 23, 42, 0.05) !important;
-              padding-top: 0.5rem !important;
-              padding-bottom: 0.5rem !important;
+              border-left: 3px solid #1e293b !important;
+              border-radius: 11px !important;
+              box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.95) inset,
+                0 2px 6px rgba(15, 23, 42, 0.06) !important;
+              padding-top: 0.52rem !important;
+              padding-bottom: 0.52rem !important;
+              transition: box-shadow 0.15s ease, border-color 0.15s ease !important;
+            }
+            [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"]:hover {
+              box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.95) inset,
+                0 3px 10px rgba(15, 23, 42, 0.08) !important;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"] {
               font-weight: 500 !important;
-              color: #64748b !important;
-              border-color: #eef1f4 !important;
-              background-color: rgba(255, 255, 255, 0.65) !important;
-              border-radius: 10px !important;
-              padding-top: 0.45rem !important;
-              padding-bottom: 0.45rem !important;
+              color: #7a8794 !important;
+              border: 1px solid transparent !important;
+              background-color: rgba(255, 255, 255, 0.35) !important;
+              border-radius: 11px !important;
+              padding-top: 0.48rem !important;
+              padding-bottom: 0.48rem !important;
+              box-shadow: none !important;
+              transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"]:hover {
-              border-color: #e2e8f0 !important;
-              background-color: #f8fafc !important;
-              color: #475569 !important;
+              border-color: rgba(226, 232, 240, 0.95) !important;
+              background-color: rgba(248, 250, 252, 0.95) !important;
+              color: #52606d !important;
+            }
+            .fdl-sb-footer-rule {
+              height: 1px;
+              margin: 1.15rem 0 0;
+              background: linear-gradient(90deg, transparent, #e8ecf1 10%, #e8ecf1 90%, transparent);
+            }
+            .fdl-sb-footer {
+              margin: 0.55rem 0 0 0;
+              padding: 0 0.15rem;
+            }
+            .fdl-sb-footer-label {
+              font-size: 0.5625rem;
+              font-weight: 600;
+              text-transform: uppercase;
+              letter-spacing: 0.1em;
+              color: #c5cdd8;
+              margin: 0 0 0.2rem 0;
+              line-height: 1.2;
+            }
+            .fdl-sb-footer-ts {
+              font-size: 0.75rem;
+              font-weight: 500;
+              font-variant-numeric: tabular-nums;
+              color: #8b96a3;
+              margin: 0 0 0.35rem 0;
+              line-height: 1.35;
+              letter-spacing: 0.01em;
+            }
+            .fdl-sb-footer-admin {
+              font-size: 0.65rem;
+              font-weight: 400;
+              color: #b4bcc6;
+              margin: 0.15rem 0 0 0;
+              line-height: 1.4;
+              word-break: break-word;
+            }
+            .fdl-sb-footer-spacer {
+              height: 0.35rem;
             }
             </style>
             """
@@ -8226,11 +8300,11 @@ with st.sidebar:
         _u = str(st.session_state.get("usuario", "") or "").strip()
         _cli_raw = _u.split("@", 1)[0] if "@" in _u else (_u or "Conta")
     _cli_nome = html.escape(_cli_raw)
-    _sb_tagline = "Inteligência para e-commerce"
+    _sb_tagline = "Da operação ao insight"
     if _has_logo:
         _brand_inner = (
             f'<div class="fdl-sb-tagline fdl-sb-tagline--after-logo">{html.escape(_sb_tagline)}</div>'
-            '<div class="fdl-sb-client-row"><div class="fdl-sb-client-inline">'
+            '<div class="fdl-sb-client-row"><div class="fdl-sb-client-block">'
             '<span class="fdl-sb-client-tag">Conta</span>'
             f'<span class="fdl-sb-client-name">{_cli_nome}</span>'
             "</div></div>"
@@ -8239,13 +8313,15 @@ with st.sidebar:
         _brand_inner = (
             '<div class="fdl-sb-product">FDL Analytics</div>'
             f'<div class="fdl-sb-tagline">{html.escape(_sb_tagline)}</div>'
-            '<div class="fdl-sb-client-row"><div class="fdl-sb-client-inline">'
+            '<div class="fdl-sb-client-row"><div class="fdl-sb-client-block">'
             '<span class="fdl-sb-client-tag">Conta</span>'
             f'<span class="fdl-sb-client-name">{_cli_nome}</span>'
             "</div></div>"
         )
     st.markdown(
+        '<div class="fdl-sb-brand-shell">'
         f'<div class="fdl-sb-brand">{_brand_inner}</div>'
+        '</div>'
         '<div class="fdl-sb-divider" aria-hidden="true"></div>',
         unsafe_allow_html=True,
     )
@@ -8303,7 +8379,7 @@ with st.sidebar:
 
         if _sb_area == FDL_PRODUCT_AREA_FINANCEIRO and _nomes_nav:
             st.markdown(
-                '<p class="fdl-sb-org-hint">Repasse e Frete · esta organização</p>',
+                '<p class="fdl-sb-org-hint">Repasse · Frete</p>',
                 unsafe_allow_html=True,
             )
             _org_idx = 0
@@ -8319,8 +8395,8 @@ with st.sidebar:
                 key="operacional_empresa_ativa_select",
                 label_visibility="visible",
                 help=(
-                    "Organização carregada para Repasse e Frete. "
-                    "Nos painéis gerenciais, o recorte por marca está no filtro Empresa dentro do módulo."
+                    "Define qual organização carregar para conciliação de Repasse e Frete. "
+                    "Em Faturamento e Comercial, o recorte por marca fica no filtro Empresa do painel."
                 ),
             )
             _chosen_org = organizacao_por_nome_cadastrado(_sel_nome)
@@ -8349,18 +8425,28 @@ with st.sidebar:
                 on_click=_sb_nav_set_frete,
             )
 
+    st.markdown('<div class="fdl-sb-footer-rule" aria-hidden="true"></div>', unsafe_allow_html=True)
     _ts_parts = str(_sb_ts_display).strip().split(None, 1)
     _ts_d = _ts_parts[0] if _ts_parts else "—"
     _ts_t = _ts_parts[1] if len(_ts_parts) > 1 else ""
     _ts_line = f"{_ts_d} • {_ts_t}" if _ts_t else _ts_d
-    st.caption("Atualizado em")
-    st.caption(_ts_line)
+    st.markdown(
+        '<div class="fdl-sb-footer">'
+        '<p class="fdl-sb-footer-label">Atualizado em</p>'
+        f'<p class="fdl-sb-footer-ts">{html.escape(_ts_line)}</p>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
     if _admin_mode:
-        st.caption(_sidebar_version_display())
+        st.markdown(
+            f'<p class="fdl-sb-footer-admin">{html.escape(_sidebar_version_display())}</p>',
+            unsafe_allow_html=True,
+        )
 
     if _admin_mode and _data_source_mode() == "upload_zip":
         _render_cloud_data_loader()
 
+    st.markdown('<div class="fdl-sb-footer-spacer"></div>', unsafe_allow_html=True)
     st.divider()
 
     if _admin_mode and st.button(

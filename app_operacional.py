@@ -4197,15 +4197,25 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               font-size: 0.875rem;
               color: #374151;
             }
+            .fdl-fat-dre-row--ref {
+              margin-top: 6px;
+              padding-top: 8px;
+              padding-bottom: 9px;
+              border-top: 1px solid #f0f2f5;
+              border-bottom: 1px solid #eef0f3;
+              background: #fafbfc;
+            }
             .fdl-fat-dre-row--ref .fdl-fat-dre-lab {
-              color: #6b7280;
+              color: #9ca3af;
               font-weight: 500;
-              font-size: 0.82rem;
+              font-size: 0.74rem;
+              font-style: italic;
+              letter-spacing: 0.01em;
             }
             .fdl-fat-dre-row--ref .fdl-fat-dre-val {
-              color: #6b7280;
-              font-weight: 500;
-              font-size: 0.82rem;
+              color: #9ca3af;
+              font-weight: 400;
+              font-size: 0.74rem;
             }
             .fdl-fat-dre-lab {
               min-width: 0;
@@ -4231,33 +4241,38 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               margin-bottom: 2px;
             }
             .fdl-fat-dre-foot--final {
-              margin-top: 8px;
+              margin-top: 10px;
               margin-bottom: 0;
+              font-size: 0.58rem;
+              color: #b0b8c4;
+              line-height: 1.38;
             }
             .fdl-fat-dre-close {
-              margin-top: 8px;
-              border-radius: 10px;
-              border: 1px solid #e5e7eb;
-              background: #fafafa;
+              margin-top: 10px;
+              border-radius: 11px;
+              border: 1px solid #d1d5db;
+              background: #f9fafb;
               overflow: hidden;
+              box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
             }
             .fdl-fat-dre-row--result {
               display: grid;
               grid-template-columns: minmax(0, 1fr) minmax(7.25rem, max-content);
               column-gap: 1.25rem;
               align-items: baseline;
-              padding: 11px 14px;
-              border-bottom: 1px solid #e8eaed;
+              padding: 13px 16px;
+              border-bottom: 1px solid #e2e5ea;
               background: #f9fafb;
             }
             .fdl-fat-dre-row--result .fdl-fat-dre-lab {
               font-weight: 600;
-              font-size: 0.92rem;
+              font-size: 0.93rem;
               color: #111827;
+              letter-spacing: -0.01em;
             }
             .fdl-fat-dre-row--result .fdl-fat-dre-val {
               font-weight: 700;
-              font-size: 1.12rem;
+              font-size: 1.14rem;
               color: #111827;
               font-variant-numeric: tabular-nums;
               text-align: right;
@@ -4268,17 +4283,17 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               grid-template-columns: minmax(0, 1fr) minmax(7.25rem, max-content);
               column-gap: 1.25rem;
               align-items: baseline;
-              padding: 9px 14px 11px 14px;
-              background: #f3f4f6;
+              padding: 10px 16px 12px 16px;
+              background: #f1f3f5;
             }
             .fdl-fat-dre-row--margem .fdl-fat-dre-lab {
               font-weight: 500;
-              font-size: 0.8rem;
+              font-size: 0.81rem;
               color: #6b7280;
             }
             .fdl-fat-dre-row--margem .fdl-fat-dre-val {
               font-weight: 600;
-              font-size: 0.94rem;
+              font-size: 0.96rem;
               color: #374151;
               font-variant-numeric: tabular-nums;
               text-align: right;
@@ -4556,10 +4571,11 @@ def _render_faturamento_dre_minimal(
     _fdl_fat_min_vsp(size="md")
     _render_fdl_fat_dre_nf_gerencial(kp=_kp, ok_nf_dates=ok_nf_dates)
 
+    _fdl_fat_min_vsp(size="md")
     _fdl_ui_gap_section()
     _fdl_fat_min_vsp(size="lg")
     st.divider()
-    _fdl_fat_min_vsp(size="sm")
+    _fdl_fat_min_vsp(size="md")
 
     _nf_table_cols_order = [
         "Emissão NF",
@@ -4673,6 +4689,7 @@ def _render_faturamento_dre_minimal(
         if _cn in _disp_nf_ui.columns:
             _cfg_nf[_cn] = TextColumn(_cn, width=_cw, help=_ch) if _ch else TextColumn(_cn, width=_cw)
 
+    _fdl_fat_min_vsp(size="sm")
     st.subheader("Tabela por NF")
     _fdl_fat_min_vsp(size="sm")
     st.markdown(

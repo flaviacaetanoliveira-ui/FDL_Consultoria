@@ -4048,16 +4048,29 @@ def _render_fdl_fat_dre_nf_gerencial(
         val: str,
         *,
         ref: bool = False,
+        lead: bool = False,
+        bridge: bool = False,
+        encargo: bool = False,
+        enc_last: bool = False,
         title: str | None = None,
     ) -> str:
         cls = "fdl-fat-dre-row"
-        if ref:
+        if lead:
+            cls += " fdl-fat-dre-row--lead"
+        elif ref:
             cls += " fdl-fat-dre-row--ref"
+        elif bridge:
+            cls += " fdl-fat-dre-row--bridge"
+        elif encargo:
+            cls += " fdl-fat-dre-row--enc"
+            if enc_last:
+                cls += " fdl-fat-dre-row--enc-last"
         tattr = f' title="{html.escape(title, quote=True)}"' if title else ""
+        vcls = "fdl-fat-dre-val" + (" fdl-fat-dre-val--out" if encargo else "")
         return (
             f'<div class="{cls}"{tattr}>'
             f'<span class="fdl-fat-dre-lab">{html.escape(lab)}</span>'
-            f'<span class="fdl-fat-dre-val">{html.escape(val)}</span>'
+            f'<span class="{vcls}">{html.escape(val)}</span>'
             "</div>"
         )
 
@@ -4068,6 +4081,7 @@ def _render_fdl_fat_dre_nf_gerencial(
         + _dre_row(
             "Receita de venda (lista)",
             rec_venda,
+            lead=True,
             title="Σ Quantidade × Preço de lista no recorte.",
         )
         + _dre_row(
@@ -4081,18 +4095,21 @@ def _render_fdl_fat_dre_nf_gerencial(
         + _dre_row(
             "Diferença (venda − faturado NF)",
             dif_disp,
+            bridge=True,
             title="Receita lista − faturado NF (totais do recorte).",
         )
         + '<p class="fdl-fat-dre-foot fdl-fat-dre-foot--inline">'
         "Ref. fiscal 1× por NF — não soma à receita de lista."
         "</p>"
-        '<div class="fdl-fat-dre-block-h">Encargos</div>'
-        + _dre_row("Comissão", enc_com, title="Σ comissão no recorte.")
-        + _dre_row("Frete", enc_fre, title="Σ frete no recorte.")
-        + _dre_row("Imposto", enc_imp, title="Σ imposto no recorte.")
+        '<div class="fdl-fat-dre-block-h fdl-fat-dre-block-h--enc">Encargos</div>'
+        + _dre_row("Comissão", enc_com, encargo=True, title="Σ comissão no recorte.")
+        + _dre_row("Frete", enc_fre, encargo=True, title="Σ frete no recorte.")
+        + _dre_row("Imposto", enc_imp, encargo=True, title="Σ imposto no recorte.")
         + _dre_row(
             "Despesa fixa",
             enc_df,
+            encargo=True,
+            enc_last=True,
             title="Σ despesa fixa (5% sobre valor de venda por NF) no recorte.",
         )
         + '<div class="fdl-fat-dre-block-h">Fechamento</div>'
@@ -4187,35 +4204,81 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               margin: 14px 0 5px 0;
             }
             .fdl-fat-dre-block-h:first-of-type { margin-top: 0; }
+            .fdl-fat-dre-block-h--enc {
+              margin-top: 16px;
+              margin-bottom: 7px;
+            }
             .fdl-fat-dre-row {
               display: grid;
-              grid-template-columns: minmax(0, 1fr) minmax(7.25rem, max-content);
-              column-gap: 1.25rem;
+              grid-template-columns: minmax(0, 1fr) minmax(7.5rem, max-content);
+              column-gap: 1.35rem;
               align-items: baseline;
               padding: 8px 0;
               border-bottom: 1px solid #f0f1f3;
               font-size: 0.875rem;
               color: #374151;
             }
+            .fdl-fat-dre-row--lead {
+              padding: 11px 0 12px 0;
+              margin-bottom: 2px;
+              border-bottom: 2px solid #e2e5ea;
+              background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+            }
+            .fdl-fat-dre-row--lead .fdl-fat-dre-lab {
+              font-weight: 600;
+              font-size: 0.93rem;
+              color: #111827;
+              letter-spacing: -0.015em;
+            }
+            .fdl-fat-dre-row--lead .fdl-fat-dre-val {
+              font-weight: 700;
+              font-size: 1.05rem;
+              color: #111827;
+            }
             .fdl-fat-dre-row--ref {
-              margin-top: 6px;
-              padding-top: 8px;
-              padding-bottom: 9px;
-              border-top: 1px solid #f0f2f5;
-              border-bottom: 1px solid #eef0f3;
-              background: #fafbfc;
+              margin-top: 4px;
+              padding-top: 6px;
+              padding-bottom: 7px;
+              border-top: none;
+              border-bottom: 1px dashed #e5e8ed;
+              background: #fcfcfd;
             }
             .fdl-fat-dre-row--ref .fdl-fat-dre-lab {
-              color: #9ca3af;
-              font-weight: 500;
-              font-size: 0.74rem;
+              color: #b0b8c4;
+              font-weight: 400;
+              font-size: 0.68rem;
               font-style: italic;
-              letter-spacing: 0.01em;
+              letter-spacing: 0.02em;
             }
             .fdl-fat-dre-row--ref .fdl-fat-dre-val {
-              color: #9ca3af;
+              color: #b0b8c4;
               font-weight: 400;
-              font-size: 0.74rem;
+              font-size: 0.68rem;
+            }
+            .fdl-fat-dre-row--bridge {
+              margin-top: 6px;
+              padding: 10px 12px 11px 12px;
+              border-bottom: 2px solid #d1d5db;
+              background: #f1f3f5;
+              border-radius: 7px;
+            }
+            .fdl-fat-dre-row--bridge .fdl-fat-dre-lab {
+              font-weight: 600;
+              font-size: 0.89rem;
+              color: #1f2937;
+            }
+            .fdl-fat-dre-row--bridge .fdl-fat-dre-val {
+              font-weight: 600;
+              font-size: 0.93rem;
+              color: #111827;
+            }
+            .fdl-fat-dre-row--enc {
+              padding: 10px 2px;
+              border-bottom: 1px solid #f4f5f6;
+            }
+            .fdl-fat-dre-row--enc-last {
+              border-bottom: 1px solid #dde1e8;
+              padding-bottom: 11px;
             }
             .fdl-fat-dre-lab {
               min-width: 0;
@@ -4229,6 +4292,11 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               color: #111827;
               justify-self: end;
             }
+            .fdl-fat-dre-val--out {
+              color: #4b5563;
+              font-weight: 600;
+              letter-spacing: 0.03em;
+            }
             .fdl-fat-dre-foot {
               font-size: 0.63rem;
               color: #9ca3af;
@@ -4241,38 +4309,41 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               margin-bottom: 2px;
             }
             .fdl-fat-dre-foot--final {
-              margin-top: 10px;
+              margin-top: 22px;
               margin-bottom: 0;
-              font-size: 0.58rem;
-              color: #b0b8c4;
-              line-height: 1.38;
+              padding-top: 2px;
+              font-size: 0.52rem;
+              color: #c5ccd6;
+              line-height: 1.36;
             }
             .fdl-fat-dre-close {
-              margin-top: 10px;
-              border-radius: 11px;
-              border: 1px solid #d1d5db;
-              background: #f9fafb;
+              margin-top: 11px;
+              border-radius: 12px;
+              border: 1px solid #c5cad3;
+              background: linear-gradient(180deg, #fcfcfd 0%, #f6f7f9 100%);
               overflow: hidden;
-              box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+              box-shadow:
+                0 1px 2px rgba(15, 23, 42, 0.04),
+                0 4px 14px rgba(15, 23, 42, 0.06);
             }
             .fdl-fat-dre-row--result {
               display: grid;
-              grid-template-columns: minmax(0, 1fr) minmax(7.25rem, max-content);
-              column-gap: 1.25rem;
+              grid-template-columns: minmax(0, 1fr) minmax(7.5rem, max-content);
+              column-gap: 1.35rem;
               align-items: baseline;
-              padding: 13px 16px;
-              border-bottom: 1px solid #e2e5ea;
-              background: #f9fafb;
+              padding: 14px 17px;
+              border-bottom: 1px solid #d9dde3;
+              background: transparent;
             }
             .fdl-fat-dre-row--result .fdl-fat-dre-lab {
               font-weight: 600;
-              font-size: 0.93rem;
+              font-size: 0.94rem;
               color: #111827;
               letter-spacing: -0.01em;
             }
             .fdl-fat-dre-row--result .fdl-fat-dre-val {
               font-weight: 700;
-              font-size: 1.14rem;
+              font-size: 1.15rem;
               color: #111827;
               font-variant-numeric: tabular-nums;
               text-align: right;
@@ -4280,20 +4351,20 @@ def _fdl_fat_min_inject_ui_styles() -> None:
             }
             .fdl-fat-dre-row--margem {
               display: grid;
-              grid-template-columns: minmax(0, 1fr) minmax(7.25rem, max-content);
-              column-gap: 1.25rem;
+              grid-template-columns: minmax(0, 1fr) minmax(7.5rem, max-content);
+              column-gap: 1.35rem;
               align-items: baseline;
-              padding: 10px 16px 12px 16px;
-              background: #f1f3f5;
+              padding: 11px 17px 13px 17px;
+              background: rgba(255, 255, 255, 0.55);
             }
             .fdl-fat-dre-row--margem .fdl-fat-dre-lab {
               font-weight: 500;
-              font-size: 0.81rem;
+              font-size: 0.82rem;
               color: #6b7280;
             }
             .fdl-fat-dre-row--margem .fdl-fat-dre-val {
               font-weight: 600;
-              font-size: 0.96rem;
+              font-size: 0.97rem;
               color: #374151;
               font-variant-numeric: tabular-nums;
               text-align: right;

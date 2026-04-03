@@ -3773,6 +3773,233 @@ def _faturamento_nf_apply_minimal_recorte(
     return out
 
 
+def _fmt_pct_ptbr_ratio(ratio: float, *, decimals: int = 1) -> str:
+    """Ex.: 0,123 → «12,3%» (apenas apresentação)."""
+    if math.isnan(ratio) or math.isinf(ratio):
+        return "—"
+    p = ratio * 100.0
+    body = f"{p:.{decimals}f}".replace(".", ",")
+    return f"{body}%"
+
+
+def _margem_sobre_venda_str(resultado: float, valor_venda: float) -> str:
+    """Margem % = Σ Resultado ÷ Σ Valor da venda (mesmos totais do painel; só exibição)."""
+    if (
+        valor_venda == 0
+        or math.isnan(valor_venda)
+        or math.isnan(resultado)
+        or math.isinf(resultado)
+    ):
+        return "—"
+    return _fmt_pct_ptbr_ratio(resultado / valor_venda, decimals=1)
+
+
+def _render_fdl_fat_dre_nf_kpi_cards(
+    *,
+    kp: dict[str, float | int],
+    ok_nf_dates: bool,
+    use_nf_materializado: bool,
+) -> None:
+    """
+    Cards executivos NF-first (Faturamento & DRE): duas linhas, hierarquia visual;
+    sem alterar totais — apenas exibição.
+    """
+    vv = float(kp["valor_venda"])
+    res = float(kp["resultado"])
+    vf_str = (
+        _fmt_brl_ptbr_celula(kp["valor_faturado_nf"]) if ok_nf_dates else "—"
+    )
+    dif_str = _fmt_brl_ptbr_celula(kp["diferenca"]) if ok_nf_dates else "—"
+    margem_str = _margem_sobre_venda_str(res, vv)
+
+    _ht_vf = (
+        "Soma de Nota_Valor_Liquido_Total uma vez por NF no período de emissão da NF."
+    )
+    _ht_dif = "Valor da venda total menos valor faturado total (NF) no recorte."
+    _ht_df = (
+        "5% do Valor da venda (Σ Quantidade × Preço de lista) agregado à NF, por nota."
+    )
+    _ht_res = (
+        "Valores já consolidados no materializado NF-first (Resultado / Despesa fixa)."
+        if use_nf_materializado
+        else (
+            "Soma do Resultado das linhas de pedido da NF; recompõe despesa fixa quando aplicável "
+            "para alinhar ao corte único por NF."
+        )
+    )
+    _ht_mg = (
+        "Σ Resultado ÷ Σ Valor da venda no recorte. Valor da venda = Quantidade × Preço de lista. "
+        "Se Σ Valor da venda = 0, exibe traço."
+    )
+
+    def _card(
+        label: str,
+        value: str,
+        *,
+        tier: str,
+        accent: bool = False,
+        title: str | None = None,
+    ) -> str:
+        classes = f"fdl-fat-kpi-card fdl-fat-kpi-card--{tier}"
+        if accent:
+            classes += " fdl-fat-kpi-card--accent"
+        tattr = ""
+        if title:
+            tattr = f' title="{html.escape(title, quote=True)}"'
+        return (
+            f'<div class="{classes}"{tattr}>'
+            f'<div class="fdl-fat-kpi-label">{html.escape(label)}</div>'
+            f'<div class="fdl-fat-kpi-value">{html.escape(value)}</div>'
+            "</div>"
+        )
+
+    primary_inner = "".join(
+        [
+            _card(
+                "Valor da venda",
+                _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00",
+                tier="primary",
+                title="Σ Quantidade × Preço de lista no recorte (grão NF).",
+            ),
+            _card(
+                "Valor faturado (NF)",
+                vf_str or "—",
+                tier="primary",
+                title=_ht_vf,
+            ),
+            _card(
+                "Resultado",
+                _fmt_brl_ptbr_celula(kp["resultado"]) or "—",
+                tier="primary",
+                accent=True,
+                title=_ht_res,
+            ),
+            _card(
+                "Margem %",
+                margem_str,
+                tier="primary",
+                accent=True,
+                title=_ht_mg,
+            ),
+        ]
+    )
+
+    secondary_inner = "".join(
+        [
+            _card(
+                "Diferença (venda − NF)",
+                dif_str or "—",
+                tier="secondary",
+                title=_ht_dif,
+            ),
+            _card(
+                "Comissão",
+                _fmt_brl_ptbr_celula(kp["comissao"]) or "R$ 0,00",
+                tier="secondary",
+            ),
+            _card(
+                "Frete",
+                _fmt_brl_ptbr_celula(kp["frete"]) or "R$ 0,00",
+                tier="secondary",
+            ),
+            _card(
+                "Imposto",
+                _fmt_brl_ptbr_celula(kp["imposto"]) or "R$ 0,00",
+                tier="secondary",
+            ),
+            _card(
+                "Despesa fixa",
+                _fmt_brl_ptbr_celula(kp["despesa_fixa"]) or "R$ 0,00",
+                tier="secondary",
+                title=_ht_df,
+            ),
+        ]
+    )
+
+    st.markdown(
+        dedent(
+            """
+            <style>
+            .fdl-fat-kpi-shell {
+              font-family: var(--font, "Source Sans Pro", sans-serif);
+              margin: 0 0 4px 0;
+            }
+            .fdl-fat-kpi-row {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 14px;
+              margin-bottom: 16px;
+            }
+            .fdl-fat-kpi-row--secondary {
+              gap: 10px;
+              margin-bottom: 0;
+            }
+            .fdl-fat-kpi-card {
+              flex: 1 1 0;
+              min-width: 148px;
+              background: #ffffff;
+              border: 1px solid #e5e7eb;
+              border-radius: 12px;
+              padding: 14px 16px;
+              box-sizing: border-box;
+              box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            }
+            .fdl-fat-kpi-card--primary {
+              padding: 18px 20px;
+              min-width: 160px;
+            }
+            .fdl-fat-kpi-card--primary.fdl-fat-kpi-card--accent {
+              background: #f9fafb;
+              border-color: #d1d5db;
+              box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+            }
+            .fdl-fat-kpi-card--secondary {
+              padding: 12px 14px;
+              min-width: 120px;
+            }
+            .fdl-fat-kpi-label {
+              font-size: 0.72rem;
+              font-weight: 500;
+              color: #6b7280;
+              line-height: 1.35;
+              margin: 0 0 10px 0;
+              letter-spacing: 0.02em;
+              text-transform: none;
+            }
+            .fdl-fat-kpi-card--secondary .fdl-fat-kpi-label {
+              font-size: 0.68rem;
+              margin-bottom: 8px;
+            }
+            .fdl-fat-kpi-value {
+              font-size: 1.45rem;
+              font-weight: 600;
+              color: #111827;
+              line-height: 1.15;
+              font-variant-numeric: tabular-nums;
+              letter-spacing: -0.02em;
+            }
+            .fdl-fat-kpi-card--primary .fdl-fat-kpi-value {
+              font-size: 1.55rem;
+              font-weight: 700;
+            }
+            .fdl-fat-kpi-card--primary.fdl-fat-kpi-card--accent .fdl-fat-kpi-value {
+              font-size: 1.68rem;
+            }
+            .fdl-fat-kpi-card--secondary .fdl-fat-kpi-value {
+              font-size: 1.08rem;
+              font-weight: 600;
+            }
+            </style>
+            """
+        )
+        + f'<div class="fdl-fat-kpi-shell">'
+        f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--primary">{primary_inner}</div>'
+        f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--secondary">{secondary_inner}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def _render_faturamento_dre_minimal(
     df: pd.DataFrame,
     load_info: dict[str, object],
@@ -4004,48 +4231,11 @@ def _render_faturamento_dre_minimal(
     )
     st.caption(f"**Painel NF-first:** **{_kp['n_nf']}** nota(s) no recorte · base: {_base_desc}.")
 
-    _r_a, _r_b = st.columns((1, 1))
-    with _r_a:
-        st.metric("Valor da venda", _fmt_brl_ptbr_celula(_kp["valor_venda"]))
-    with _r_b:
-        st.metric(
-            "Valor faturado (NF)",
-            _fmt_brl_ptbr_celula(_kp["valor_faturado_nf"]) if ok_nf_dates else "—",
-            help="Σ **Nota_Valor_Liquido_Total** uma vez por NF no período de **emissão**.",
-        )
-    _r_c, _r_d, _r_e, _r_f = st.columns(4)
-    with _r_c:
-        st.metric(
-            "Diferença (venda − NF)",
-            _fmt_brl_ptbr_celula(_kp["diferenca"]) if ok_nf_dates else "—",
-        )
-    with _r_d:
-        st.metric("Comissão", _fmt_brl_ptbr_celula(_kp["comissao"]))
-    with _r_e:
-        st.metric("Frete", _fmt_brl_ptbr_celula(_kp["frete"]))
-    with _r_f:
-        st.metric("Imposto", _fmt_brl_ptbr_celula(_kp["imposto"]))
-    _r_g, _r_h = st.columns(2)
-    with _r_g:
-        st.metric(
-            "Despesa fixa",
-            _fmt_brl_ptbr_celula(_kp["despesa_fixa"]),
-            help="**5%** do **Valor da venda** (Σ Quantidade × Preço de lista) agregado à NF, por nota.",
-        )
-    with _r_h:
-        st.metric(
-            "Resultado",
-            _fmt_brl_ptbr_celula(_kp["resultado"]),
-            help=(
-                "Valores já consolidados no **materializado NF-first** (contrato de **Resultado** / **Despesa fixa**)."
-                if use_nf_materializado
-                else (
-                    "Soma do **Resultado** das linhas de pedido da NF; se existir coluna **Despesas Fixas** no "
-                    "materializado linha, o painel **recompõe** o total: Σ Resultado + Σ Despesas Fixas (linhas) − "
-                    "**Despesa fixa** (5% sobre o valor de venda agregado), para alinhar ao corte único por NF."
-                )
-            ),
-        )
+    _render_fdl_fat_dre_nf_kpi_cards(
+        kp=_kp,
+        ok_nf_dates=ok_nf_dates,
+        use_nf_materializado=use_nf_materializado,
+    )
 
     _fdl_ui_gap_tight()
 

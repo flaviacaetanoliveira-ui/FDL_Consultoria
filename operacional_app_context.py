@@ -400,9 +400,9 @@ _LOGIN_PAGE_STYLES = """
   .fdl-login-logo {
     display: block;
     width: auto;
-    max-width: min(248px, 100%);
+    max-width: min(300px, 100%);
     height: auto;
-    max-height: 70px;
+    max-height: 52px;
     object-fit: contain;
   }
   .fdl-login-wordmark {
@@ -588,7 +588,7 @@ _LOGIN_PAGE_STYLES = """
 
 
 def _login_brand_logo_html() -> str:
-    """Logo horizontal FDL no login; fallback tipográfico se não houver ficheiro."""
+    """Wordmark FDL Analytics no login; fallback tipográfico se não houver ficheiro."""
     logo_path = _REPO_ROOT / "assets" / "fdl_analytics_logo.png"
     if logo_path.is_file():
         b64 = base64.b64encode(logo_path.read_bytes()).decode("ascii")

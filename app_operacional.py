@@ -542,8 +542,8 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin-bottom: 0.48rem !important;
             }
             .fdl-sb-brand-shell {
-              margin: 0.1rem 0 0.15rem 0;
-              padding: 0.7rem 0.6rem 0.58rem;
+              margin: 0.08rem 0 0.12rem 0;
+              padding: 0.62rem 0.55rem 0.56rem;
               border-radius: 12px;
               background: linear-gradient(
                 165deg,
@@ -562,11 +562,12 @@ def _fdl_sidebar_inject_layout_css() -> None:
               display: flex;
               justify-content: center;
               align-items: center;
-              margin: 0 auto 0.48rem auto;
+              margin: 0 auto 0.38rem auto;
               max-width: 100%;
+              padding: 0 0.15rem;
             }
             .fdl-sb-logo-img {
-              max-height: 2.72rem;
+              max-height: 2.05rem;
               width: auto !important;
               max-width: 100%;
               height: auto;
@@ -591,9 +592,9 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin: 0 0 0.65rem 0;
             }
             .fdl-sb-tagline--after-logo {
-              margin-top: 0;
-              margin-bottom: 0.62rem;
-              padding: 0 0.35rem;
+              margin-top: 0.05rem;
+              margin-bottom: 0.52rem;
+              padding: 0 0.3rem;
               text-align: center;
               font-weight: 600;
               letter-spacing: 0.062em;
@@ -601,7 +602,7 @@ def _fdl_sidebar_inject_layout_css() -> None:
             }
             .fdl-sb-client-row {
               margin: 0;
-              padding-top: 0.52rem;
+              padding-top: 0.48rem;
               border-top: 1px solid rgba(226, 232, 240, 0.65);
             }
             .fdl-sb-client-block {
@@ -756,7 +757,7 @@ def _fdl_sidebar_inject_layout_css() -> None:
 
 @st.cache_data(show_spinner=False)
 def _fdl_sidebar_logo_data_uri_cached(path_str: str, mtime_ns: int) -> str | None:
-    """Logo embutido no HTML da sidebar (um único cartão de marca; evita bloco separado do st.image)."""
+    """Wordmark PNG embutido no HTML da sidebar (cartão de marca único; evita bloco separado do st.image)."""
     logo_path = Path(path_str)
     if not logo_path.is_file():
         return None

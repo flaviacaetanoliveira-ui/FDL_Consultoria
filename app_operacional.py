@@ -4073,6 +4073,14 @@ def _margem_sobre_venda_str(resultado: float, valor_venda: float) -> str:
     return _fmt_pct_ptbr_ratio(resultado / valor_venda, decimals=1)
 
 
+def _nf_row_margem_resultado_venda_ratio(valor_venda: pd.Series, resultado: pd.Series) -> pd.Series:
+    """Por NF: resultado ÷ valor da venda (lista); NaN quando indefinido — mesma regra do painel."""
+    vv = pd.to_numeric(valor_venda, errors="coerce")
+    rr = pd.to_numeric(resultado, errors="coerce")
+    denom = vv.mask(vv == 0, other=pd.NA)
+    return (rr / denom).where(vv.notna() & rr.notna())
+
+
 def _render_fdl_fat_dre_nf_kpi_cards(
     *,
     kp: dict[str, float | int],
@@ -5806,22 +5814,23 @@ def _render_faturamento_dre_minimal(
     _fdl_fat_min_vsp(size="md")
 
     _nf_table_cols_order = [
-        "Emissão NF",
+        "Emissão",
         "Empresa",
         "Plataforma",
         "NF",
         "Situação",
-        "Pedido / multiloja",
-        "Produto",
-        "Linhas pedido",
-        "Valor da venda",
-        "Valor faturado NF",
+        "Pedido",
+        "Produtos",
+        "Linhas",
+        "Venda (lista)",
+        "Faturado (NF)",
         "Diferença",
         "Comissão",
         "Frete",
         "Imposto",
-        "Despesa fixa",
+        "Desp. fixa",
         "Resultado",
+        "Margem %",
     ]
 
     _df_nf_table = df_nf
@@ -5834,26 +5843,31 @@ def _render_faturamento_dre_minimal(
     _disp_nf_ui = pd.DataFrame()
     if not _df_nf_table.empty:
         _plat_s = _faturamento_nf_platform_display_series(_df_nf_table).astype(str)
+        _marg_ratio = _nf_row_margem_resultado_venda_ratio(
+            _df_nf_table["valor_venda"],
+            _df_nf_table["resultado"],
+        )
         _disp_nf_full = pd.DataFrame(
             {
-                "Emissão NF": _df_nf_table["Nota_Data_Emissao"].apply(
+                "Emissão": _df_nf_table["Nota_Data_Emissao"].apply(
                     lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "—"
                 ),
                 "Empresa": _df_nf_table["empresa"].astype(str).replace("", "—"),
                 "Plataforma": _plat_s,
                 "NF": _df_nf_table["Nota_Numero_Normalizado"].astype(str),
                 "Situação": _df_nf_table["Nota_Situacao"].astype(str).replace("", "—"),
-                "Pedido / multiloja": _faturamento_disp_texto_sem_none(_df_nf_table["pedido_resumo"]),
-                "Produto": _faturamento_disp_texto_sem_none(_df_nf_table["produto_resumo"]),
-                "Linhas pedido": _df_nf_table["n_linhas_pedido"].astype(int),
-                "Valor da venda": pd.to_numeric(_df_nf_table["valor_venda"], errors="coerce"),
-                "Valor faturado NF": pd.to_numeric(_df_nf_table["valor_faturado_nf"], errors="coerce"),
+                "Pedido": _faturamento_disp_texto_sem_none(_df_nf_table["pedido_resumo"]),
+                "Produtos": _faturamento_disp_texto_sem_none(_df_nf_table["produto_resumo"]),
+                "Linhas": _df_nf_table["n_linhas_pedido"].astype(int),
+                "Venda (lista)": pd.to_numeric(_df_nf_table["valor_venda"], errors="coerce"),
+                "Faturado (NF)": pd.to_numeric(_df_nf_table["valor_faturado_nf"], errors="coerce"),
                 "Diferença": pd.to_numeric(_df_nf_table["diferenca"], errors="coerce"),
                 "Comissão": pd.to_numeric(_df_nf_table["comissao"], errors="coerce"),
                 "Frete": pd.to_numeric(_df_nf_table["frete"], errors="coerce"),
                 "Imposto": pd.to_numeric(_df_nf_table["imposto"], errors="coerce"),
-                "Despesa fixa": pd.to_numeric(_df_nf_table["despesa_fixa"], errors="coerce"),
+                "Desp. fixa": pd.to_numeric(_df_nf_table["despesa_fixa"], errors="coerce"),
                 "Resultado": pd.to_numeric(_df_nf_table["resultado"], errors="coerce"),
+                "Margem %": (_marg_ratio * 100.0),
             }
         )
         _disp_nf_full = _disp_nf_full[_nf_table_cols_order]
@@ -5865,57 +5879,107 @@ def _render_faturamento_dre_minimal(
                 return t if t else "—"
             return t[: max_len - 1] + "…"
 
-        _disp_nf_ui["Pedido / multiloja"] = _disp_nf_ui["Pedido / multiloja"].map(
-            lambda x: _fat_min_trunc_text_cell(x, 72)
-        )
-        _disp_nf_ui["Produto"] = _disp_nf_ui["Produto"].map(lambda x: _fat_min_trunc_text_cell(x, 72))
+        def _nf_tbl_money_str(x: object) -> str:
+            if x is None:
+                return "—"
+            try:
+                if pd.isna(x):
+                    return "—"
+            except TypeError:
+                pass
+            s = _fmt_brl_ptbr_celula(x)
+            return s if s else "—"
+
+        def _nf_tbl_linhas_str(x: object) -> str:
+            try:
+                if pd.isna(x):
+                    return "—"
+            except TypeError:
+                pass
+            try:
+                n = int(round(float(x)))
+            except (TypeError, ValueError):
+                return "—"
+            return _fmt_int_ptbr(n)
+
+        def _nf_tbl_margem_str(ratio_times_100: object) -> str:
+            """``Margem %`` no export numérico = ratio×100; reconstrói ratio para o mesmo formato do painel."""
+            try:
+                if pd.isna(ratio_times_100):
+                    return "—"
+            except TypeError:
+                return "—"
+            try:
+                pct = float(ratio_times_100)
+            except (TypeError, ValueError):
+                return "—"
+            if math.isnan(pct) or math.isinf(pct):
+                return "—"
+            return _fmt_pct_ptbr_ratio(pct / 100.0, decimals=1)
+
+        for _money_col in (
+            "Venda (lista)",
+            "Faturado (NF)",
+            "Diferença",
+            "Comissão",
+            "Frete",
+            "Imposto",
+            "Desp. fixa",
+            "Resultado",
+        ):
+            _disp_nf_ui[_money_col] = _disp_nf_ui[_money_col].map(_nf_tbl_money_str)
+        _disp_nf_ui["Linhas"] = _disp_nf_ui["Linhas"].map(_nf_tbl_linhas_str)
+        _disp_nf_ui["Margem %"] = _disp_nf_full["Margem %"].map(_nf_tbl_margem_str)
+        _disp_nf_ui["Pedido"] = _disp_nf_ui["Pedido"].map(lambda x: _fat_min_trunc_text_cell(x, 72))
+        _disp_nf_ui["Produtos"] = _disp_nf_ui["Produtos"].map(lambda x: _fat_min_trunc_text_cell(x, 72))
 
     _cfg_nf: dict[str, NumberColumn | TextColumn] = {}
-    if "Valor da venda" in _disp_nf_ui.columns:
-        _cfg_nf["Valor da venda"] = NumberColumn(
-            "Valor da venda", format="R$ %,.2f", width="medium"
+    _nf_col_help: dict[str, str | None] = {
+        "Emissão": None,
+        "Empresa": None,
+        "Plataforma": None,
+        "NF": None,
+        "Situação": None,
+        "Pedido": "Resumo do pedido / multiloja (texto completo no CSV).",
+        "Produtos": "Resumo de itens (texto completo no CSV).",
+        "Linhas": "Quantidade de linhas de pedido agregadas nesta NF.",
+        "Venda (lista)": "Σ Quantidade × Preço de lista (pedidos ligados à NF).",
+        "Faturado (NF)": "Valor líquido da NF (uma vez por nota).",
+        "Diferença": "Venda (lista) − Faturado (NF).",
+        "Comissão": None,
+        "Frete": None,
+        "Imposto": None,
+        "Desp. fixa": "5% sobre valor da venda agregado à NF.",
+        "Resultado": "Resultado consolidado por NF (mesma regra do painel).",
+        "Margem %": "Resultado ÷ Venda (lista); alinhado ao KPI «Margem %» do painel.",
+    }
+    _nf_col_width: dict[str, str] = {
+        "Emissão": "small",
+        "Empresa": "medium",
+        "Plataforma": "small",
+        "NF": "small",
+        "Situação": "small",
+        "Pedido": "large",
+        "Produtos": "large",
+        "Linhas": "small",
+        "Venda (lista)": "medium",
+        "Faturado (NF)": "medium",
+        "Diferença": "small",
+        "Comissão": "small",
+        "Frete": "small",
+        "Imposto": "small",
+        "Desp. fixa": "small",
+        "Resultado": "medium",
+        "Margem %": "small",
+    }
+    for _cn in _nf_table_cols_order:
+        if _cn not in _disp_nf_ui.columns:
+            continue
+        _w = _nf_col_width.get(_cn, "medium")
+        _h = _nf_col_help.get(_cn)
+        _cfg_nf[_cn] = (
+            TextColumn(_cn, width=_w, help=_h) if _h else TextColumn(_cn, width=_w)
         )
-    if "Valor faturado NF" in _disp_nf_ui.columns:
-        _cfg_nf["Valor faturado NF"] = NumberColumn(
-            "Valor faturado NF", format="R$ %,.2f", width="medium"
-        )
-    if "Diferença" in _disp_nf_ui.columns:
-        _cfg_nf["Diferença"] = NumberColumn(
-            "Diferença",
-            format="R$ %,.2f",
-            width="medium",
-            help="Valor da venda menos valor faturado na NF.",
-        )
-    for _mc in ("Comissão", "Frete", "Imposto", "Despesa fixa"):
-        if _mc in _disp_nf_ui.columns:
-            _cfg_nf[_mc] = NumberColumn(_mc, format="R$ %,.2f", width="small")
-    if "Resultado" in _disp_nf_ui.columns:
-        _cfg_nf["Resultado"] = NumberColumn(
-            "Resultado",
-            format="R$ %,.2f",
-            width="medium",
-            help="Resultado consolidado por NF (materializado / regra do painel).",
-        )
-    if "Linhas pedido" in _disp_nf_ui.columns:
-        _cfg_nf["Linhas pedido"] = NumberColumn(
-            "Linhas pedido",
-            format="%d",
-            width="small",
-            help="Quantidade de linhas de pedido agregadas nesta NF.",
-        )
-
-    _txt_nf_specs: tuple[tuple[str, str, str | None], ...] = (
-        ("Emissão NF", "small", None),
-        ("Empresa", "large", None),
-        ("Plataforma", "medium", None),
-        ("NF", "small", None),
-        ("Situação", "small", None),
-        ("Pedido / multiloja", "large", "Resumo de pedido ou multiloja (texto completo no CSV)."),
-        ("Produto", "large", "Resumo de produtos/itens (texto completo no CSV)."),
-    )
-    for _cn, _cw, _ch in _txt_nf_specs:
-        if _cn in _disp_nf_ui.columns:
-            _cfg_nf[_cn] = TextColumn(_cn, width=_cw, help=_ch) if _ch else TextColumn(_cn, width=_cw)
 
     _fdl_fat_min_vsp(size="sm")
     st.markdown(

@@ -558,12 +558,20 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin: 0;
               padding: 0;
             }
-            [data-testid="stSidebar"] [data-testid="stImage"] img {
+            .fdl-sb-logo-wrap {
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              margin: 0 auto 0.48rem auto;
+              max-width: 100%;
+            }
+            .fdl-sb-logo-img {
               max-height: 2.72rem;
               width: auto !important;
+              max-width: 100%;
+              height: auto;
               object-fit: contain;
               display: block;
-              margin: 0 auto 0.52rem auto;
               opacity: 1;
             }
             .fdl-sb-product {
@@ -744,6 +752,30 @@ def _fdl_sidebar_inject_layout_css() -> None:
         ),
         unsafe_allow_html=True,
     )
+
+
+@st.cache_data(show_spinner=False)
+def _fdl_sidebar_logo_data_uri_cached(path_str: str, mtime_ns: int) -> str | None:
+    """Logo embutido no HTML da sidebar (um único cartão de marca; evita bloco separado do st.image)."""
+    logo_path = Path(path_str)
+    if not logo_path.is_file():
+        return None
+    ext = logo_path.suffix.lower()
+    mime = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }.get(ext)
+    if not mime:
+        return None
+    try:
+        raw = logo_path.read_bytes()
+    except OSError:
+        return None
+    if len(raw) > 1_500_000:
+        return None
+    return f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
 
 
 def _now_ts_br_str() -> str:
@@ -8304,11 +8336,17 @@ with st.sidebar:
 
     st.write("")
     _logo_file = _REPO_APP_ROOT / "assets" / "fdl_analytics_logo.png"
-    _has_logo = _logo_file.is_file()
-    _sp_l, _sp_c, _sp_r = st.columns([0.35, 3.3, 0.35])
-    with _sp_c:
-        if _has_logo:
-            st.image(str(_logo_file), use_container_width=True)
+    _logo_data_uri: str | None = None
+    if _logo_file.is_file():
+        try:
+            _logo_mtime_ns = int(_logo_file.stat().st_mtime_ns)
+        except OSError:
+            _logo_mtime_ns = 0
+        _logo_data_uri = _fdl_sidebar_logo_data_uri_cached(
+            str(_logo_file.resolve()),
+            _logo_mtime_ns,
+        )
+    _has_logo = _logo_data_uri is not None
 
     _cli_raw = str(st.session_state.get("cliente", "") or _app_ctx.display_name or "").strip()
     if not _cli_raw:
@@ -8316,8 +8354,11 @@ with st.sidebar:
         _cli_raw = _u.split("@", 1)[0] if "@" in _u else (_u or "Conta")
     _cli_nome = html.escape(_cli_raw)
     _sb_tagline = "Da operação ao insight"
-    if _has_logo:
+    if _has_logo and _logo_data_uri:
         _brand_inner = (
+            '<div class="fdl-sb-logo-wrap">'
+            f'<img class="fdl-sb-logo-img" src="{_logo_data_uri}" alt="FDL Analytics" />'
+            "</div>"
             f'<div class="fdl-sb-tagline fdl-sb-tagline--after-logo">{html.escape(_sb_tagline)}</div>'
             '<div class="fdl-sb-client-row"><div class="fdl-sb-client-block">'
             '<span class="fdl-sb-client-tag">Conta</span>'

@@ -3444,26 +3444,250 @@ def _dataframe_conciliacao_somente_grid(df: pd.DataFrame) -> pd.DataFrame:
 def _column_config_conciliacao(
     df: pd.DataFrame, *, moeda_como_texto: bool = False
 ) -> dict[str, NumberColumn | DatetimeColumn | TextColumn]:
-    """Moeda em coluna numérica (export) ou texto pt-BR (grid). Referências sempre TextColumn."""
+    """Cabeçalhos curtos + help; moeda em texto pt-BR na grelha ou número no export."""
     cfg: dict[str, NumberColumn | DatetimeColumn | TextColumn] = {}
     for c in ("Valor da nota", "Valor a receber", "Valor pago", "Diferença"):
         if c in df.columns:
             if moeda_como_texto:
-                cfg[c] = TextColumn(c, width="medium")
+                _disp = {
+                    "Valor da nota": ("R$ NF", "Valor da nota fiscal."),
+                    "Valor a receber": ("A receber", "Valor esperado de repasse / a receber."),
+                    "Valor pago": ("Pago", "Valor efetivamente creditado."),
+                    "Diferença": ("Δ R$", "Pago menos a receber (quando aplicável)."),
+                }.get(c, (c, ""))
+                _hl = _disp[1]
+                cfg[c] = (
+                    TextColumn(_disp[0], width="small", help=_hl)
+                    if _hl
+                    else TextColumn(_disp[0], width="small")
+                )
             else:
                 cfg[c] = NumberColumn(c, format="R$ %,.2f")
-    for c in ("Número da venda", "Número do pedido", "Número da nota"):
-        if c in df.columns:
-            cfg[c] = TextColumn(c, width="medium")
+    if "Número da venda" in df.columns:
+        cfg["Número da venda"] = TextColumn(
+            "Venda",
+            width="small",
+            help="Identificador da venda na plataforma.",
+        )
+    if "Número do pedido" in df.columns:
+        cfg["Número do pedido"] = TextColumn(
+            "Pedido",
+            width="small",
+            help="Pedido / order ID.",
+        )
+    if "Número da nota" in df.columns:
+        cfg["Número da nota"] = TextColumn(
+            "NF",
+            width="small",
+            help="Número da nota fiscal.",
+        )
     if "Data de emissão" in df.columns:
-        cfg["Data de emissão"] = DatetimeColumn("Data de emissão", format="DD/MM/YYYY", width="small")
+        cfg["Data de emissão"] = DatetimeColumn(
+            "Emissão",
+            format="DD/MM/YYYY",
+            width="small",
+            help="Data de emissão da NF.",
+        )
     if "Data de pagamento" in df.columns:
-        cfg["Data de pagamento"] = DatetimeColumn("Data de pagamento", format="DD/MM/YYYY HH:mm", width="medium")
+        cfg["Data de pagamento"] = DatetimeColumn(
+            "Pagamento",
+            format="DD/MM/YYYY HH:mm",
+            width="medium",
+            help="Data/hora do pagamento na plataforma.",
+        )
     if "Situação" in df.columns:
-        cfg["Situação"] = TextColumn("Situação", width="medium")
+        cfg["Situação"] = TextColumn(
+            "Status",
+            width="medium",
+            help="Situação do ciclo (prazo, divergência, etc.).",
+        )
     if "Ação sugerida" in df.columns:
-        cfg["Ação sugerida"] = TextColumn("Ação sugerida", width="large")
+        cfg["Ação sugerida"] = TextColumn(
+            "Ação",
+            width="large",
+            help="Tratativa sugerida pela conciliação (mesma regra de sempre).",
+        )
+    if "Plataforma" in df.columns:
+        cfg["Plataforma"] = TextColumn("Plat.", width="small", help="Canal de venda.")
     return cfg
+
+
+def _fdl_repasse_inject_panel_styles() -> None:
+    """Refino visual Conciliação de Repasse (filtros compactos vêm de ``_fdl_cp_inject_panel_styles``)."""
+    st.markdown(
+        dedent(
+            """
+            <style>
+            .fdl-repasse-filtros-h {
+              font-size: 1rem;
+              font-weight: 700;
+              color: #0f172a;
+              margin: 0 0 4px 0;
+              letter-spacing: -0.02em;
+            }
+            .fdl-repasse-caption {
+              font-size: 0.74rem;
+              font-weight: 500;
+              color: #64748b;
+              line-height: 1.38;
+              margin: 0 0 10px 0;
+            }
+            .fdl-repasse-caption strong { color: #334155; font-weight: 600; }
+            .fdl-repasse-section-title {
+              font-size: 1.14rem;
+              font-weight: 800;
+              color: #0f172a;
+              margin: 0 0 4px 0;
+              letter-spacing: -0.025em;
+            }
+            .fdl-repasse-section-note {
+              font-size: 0.74rem;
+              font-weight: 500;
+              color: #64748b;
+              margin: 0 0 10px 0;
+              line-height: 1.42;
+            }
+            .fdl-repasse-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-card--primary {
+              border-left: 3px solid #0f172a;
+              padding: 18px 20px 20px 20px;
+            }
+            .fdl-repasse-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-card--primary .fdl-fat-kpi-value {
+              font-size: 1.82rem;
+            }
+            div[data-testid="stVerticalBlockBorderWrapper"]:has(.fdl-repasse-filtros-h) {
+              border-color: #cbd5e1 !important;
+              box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05) !important;
+            }
+            </style>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _repasse_fila_operacional_styler(df: pd.DataFrame) -> object:
+    """Alinhamento e realce leve em Δ negativo (apenas exibição na grelha)."""
+    if df.empty:
+        return df
+    sty = df.style
+    try:
+        sty = sty.hide(axis="index")
+    except (TypeError, ValueError, AttributeError):
+        try:
+            sty = sty.hide_index()
+        except Exception:
+            pass
+
+    def _diff_style(v: object) -> str:
+        s = str(v).strip()
+        base = "text-align: right; font-variant-numeric: tabular-nums;"
+        if s.startswith("R$ -"):
+            return base + "background-color: #fef2f2; color: #991b1b; font-weight: 600;"
+        return base
+
+    money_no_diff = [
+        c for c in ("Valor da nota", "Valor a receber", "Valor pago") if c in df.columns
+    ]
+    if money_no_diff:
+        sty = sty.set_properties(
+            subset=money_no_diff,
+            **{"text-align": "right", "font-variant-numeric": "tabular-nums"},
+        )
+    if "Diferença" in df.columns:
+        _m = getattr(sty, "map", None) or getattr(sty, "applymap", None)
+        if _m is not None:
+            sty = _m(_diff_style, subset=["Diferença"])
+    for c in ("Situação", "Ação sugerida"):
+        if c in df.columns:
+            sty = sty.set_properties(
+                subset=[c],
+                **{"font-weight": "600", "white-space": "nowrap"},
+            )
+    if "Plataforma" in df.columns:
+        sty = sty.set_properties(subset=["Plataforma"], **{"font-weight": "500"})
+    return sty
+
+
+def _render_repasse_resumo_por_acao_kpis(contagens: dict[str, int], *, n_linhas: int) -> None:
+    """Cards alinhados ao painel Faturamento: fila + distribuição por ação."""
+
+    def _card(
+        label: str,
+        value: str,
+        *,
+        tier: str,
+        accent: bool = False,
+        title: str | None = None,
+    ) -> str:
+        classes = f"fdl-fat-kpi-card fdl-fat-kpi-card--{tier}"
+        if accent:
+            classes += " fdl-fat-kpi-card--accent"
+        tattr = ""
+        if title:
+            tattr = f' title="{html.escape(title, quote=True)}"'
+        return (
+            f'<div class="{classes}"{tattr}>'
+            f'<div class="fdl-fat-kpi-label">{html.escape(label)}</div>'
+            f'<div class="fdl-fat-kpi-value">{html.escape(value)}</div>'
+            "</div>"
+        )
+
+    primary = _card(
+        "Registos no recorte",
+        _fmt_int_ptbr(int(n_linhas)),
+        tier="primary",
+        accent=True,
+        title="Linhas após filtros: período, plataforma, ação, situação e busca.",
+    )
+    if _repasse_vendas_liberacoes_only():
+        secondary = "".join(
+            [
+                _card("Baixado", _fmt_int_ptbr(int(contagens.get("Baixado", 0))), tier="secondary"),
+                _card(
+                    "Divergências",
+                    _fmt_int_ptbr(int(contagens.get("Analisar diferença", 0))),
+                    tier="secondary",
+                    title="Contagem com ação «Analisar diferença».",
+                ),
+                _card(
+                    "Sem pagamento",
+                    _fmt_int_ptbr(int(contagens.get("Verificar recebimento", 0))),
+                    tier="secondary",
+                    title="«Verificar recebimento».",
+                ),
+                _card(
+                    "Zerados",
+                    _fmt_int_ptbr(int(contagens.get("Zerado", 0))),
+                    tier="secondary",
+                    title="«Revisar venda zerada».",
+                ),
+            ]
+        )
+    else:
+        ok = int(contagens.get("Ok", 0))
+        bling = (
+            int(contagens.get("Baixado", 0))
+            if _repasse_sem_bling()
+            else int(contagens.get("Baixar no Bling", 0))
+        )
+        div = int(contagens.get("Analisar diferença", 0))
+        zero = int(contagens.get("Zerado", 0))
+        c2_l = "Baixado" if _repasse_sem_bling() else "Baixar no Bling"
+        secondary = "".join(
+            [
+                _card("OK", _fmt_int_ptbr(ok), tier="secondary"),
+                _card(c2_l, _fmt_int_ptbr(bling), tier="secondary"),
+                _card("Divergências", _fmt_int_ptbr(div), tier="secondary"),
+                _card("Zerados", _fmt_int_ptbr(zero), tier="secondary"),
+            ]
+        )
+    st.markdown(
+        f'<div class="fdl-fat-kpi-shell fdl-repasse-kpi-shell">'
+        f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--primary">{primary}</div>'
+        f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--secondary">{secondary}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _multiselect_stable(
@@ -7805,42 +8029,6 @@ def _drop_duplicate_columns_keep_first(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[:, ~df.columns.duplicated()].copy()
 
 
-def _repasse_ui_validacao_kpi_saas(contagens: dict[str, int]) -> None:
-    """KPIs da base filtrada — `st.metric` dentro de contentores com borda (UI nativa)."""
-    if _repasse_vendas_liberacoes_only():
-        baixado = int(contagens.get("Baixado", 0))
-        diverg = int(contagens.get("Analisar diferença", 0))
-        sem_pag = int(contagens.get("Verificar recebimento", 0))
-        zero = int(contagens.get("Zerado", 0))
-        c1, c2, c3, c4 = st.columns(4)
-        specs: list[tuple[Any, str, int]] = [
-            (c1, "Baixado", baixado),
-            (c2, "Divergências", diverg),
-            (c3, "Sem pagamento", sem_pag),
-            (c4, "Zerados", zero),
-        ]
-        for col, label, val in specs:
-            with col:
-                st.metric(label, _fmt_int_ptbr(val))
-        return
-
-    ok = int(contagens.get("Ok", 0))
-    bling = int(contagens.get("Baixado", 0)) if _repasse_sem_bling() else int(contagens.get("Baixar no Bling", 0))
-    div = int(contagens.get("Analisar diferença", 0))
-    zero = int(contagens.get("Zerado", 0))
-    c2_label = "Baixado" if _repasse_sem_bling() else "Baixar no Bling"
-    c1, c2, c3, c4 = st.columns(4)
-    specs: list[tuple[Any, str, int]] = [
-        (c1, "OK", ok),
-        (c2, c2_label, bling),
-        (c3, "Divergências", div),
-        (c4, "Zerados", zero),
-    ]
-    for col, label, val in specs:
-        with col:
-            st.metric(label, _fmt_int_ptbr(val))
-
-
 def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     """
     Filtros + validação de ações + fila/tabela de repasse.
@@ -7852,14 +8040,20 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.warning("Sem dados de repasse para esta vista. Contacte o suporte se o problema continuar.")
         return
 
+    _fdl_cp_inject_panel_styles()
+    _fdl_repasse_inject_panel_styles()
+    _fdl_ui_gap_tight()
+
     # Chaves de widget por org: sem isto, ao mudar de empresa o estado do Streamlit podia manter
     # limites/valores de outra org e parecer que o calendário «começa» na data errada.
     _rep_wk = _frete_org_widget_suffix(_active_org.org_id)
 
     with st.container(border=True):
-        st.subheader("Filtros")
-        st.caption("Período, critérios e busca para refinar o recorte.")
-        st.write("")
+        st.markdown('<p class="fdl-repasse-filtros-h">Filtros</p>', unsafe_allow_html=True)
+        st.markdown(
+            '<p class="fdl-repasse-caption">Recorte por <strong>data de pagamento</strong> (dia civil) · plataforma, ação, situação e busca.</p>',
+            unsafe_allow_html=True,
+        )
         dp_series_full = pd.to_datetime(base["Data de pagamento"], errors="coerce")
         _d_min, _d_max, has_dp_base = _series_datetime_bounds_dates(dp_series_full)
         # O Streamlit mantém data_input no session_state: após rematerializar com datas mais recentes,
@@ -7876,36 +8070,28 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             if "Plataforma" in base.columns
             else []
         )
-        st.markdown("**Período** · data de pagamento")
-        st.caption("Comparação por dia civil (meia-noite a meia-noite).")
-        r2 = st.columns((1.15, 1.15))
+        r2 = st.columns((1, 1))
         with r2[0]:
-            st.caption("Início")
             data_pag_ini = st.date_input(
-                " ",
+                "Pagamento — início",
                 value=_d_min,
                 min_value=_d_min,
                 max_value=_d_max,
                 format="DD/MM/YYYY",
-                label_visibility="collapsed",
                 key=f"op_repasse_d_pag_ini_{_rep_wk}",
             )
         with r2[1]:
-            st.caption("Fim")
             data_pag_fim = st.date_input(
-                " ",
+                "Pagamento — fim",
                 value=_d_max,
                 min_value=_d_min,
                 max_value=_d_max,
                 format="DD/MM/YYYY",
-                label_visibility="collapsed",
                 key=f"op_repasse_d_pag_fim_{_rep_wk}",
             )
         data_pag_ini = _safe_streamlit_date(data_pag_ini, _d_min)
         data_pag_fim = _safe_streamlit_date(data_pag_fim, _d_max)
-        st.write("")
-        st.markdown("**Critérios**")
-        r1 = st.columns((1.15, 1.15, 1.15))
+        r1 = st.columns((1, 1, 1))
         with r1[0]:
             sel_plat = _multiselect_stable(
                 f"op_ms_plat_{_rep_wk}", "Plataforma", plats, compact_label=True
@@ -7931,12 +8117,9 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             )
         with r1[2]:
             sel_sit = _multiselect_stable(f"op_ms_sit_{_rep_wk}", "Situação", sit, compact_label=True)
-        st.write("")
-        st.markdown("**Busca**")
         busca = st.text_input(
-            "Texto (venda, pedido ou nota)",
-            placeholder="Venda, pedido ou nota…",
-            label_visibility="collapsed",
+            "Buscar venda, pedido ou NF",
+            placeholder="Venda, pedido, NF…",
             key=f"op_repasse_busca_txt_{_rep_wk}",
         ).strip().lower()
         if not has_dp_base:
@@ -7944,9 +8127,29 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 "Sem datas de pagamento na base: o período não filtra linhas (todas as vendas aparecem). "
                 "Com datas preenchidas, o filtro por período passa a aplicar-se."
             )
+        _clr_l, _clr_r = st.columns((1.55, 1))
+        with _clr_l:
+            pass
+        with _clr_r:
+            if st.button(
+                "Limpar filtros desta vista",
+                key=f"op_repasse_clear_{_rep_wk}",
+                use_container_width=True,
+                help="Repor período à base, limpar plataforma/ação/situação e a busca.",
+            ):
+                for _k in (
+                    _bounds_sig_key,
+                    f"op_repasse_d_pag_ini_{_rep_wk}",
+                    f"op_repasse_d_pag_fim_{_rep_wk}",
+                    f"op_ms_plat_{_rep_wk}",
+                    f"op_ms_acao_{_rep_wk}",
+                    f"op_ms_sit_{_rep_wk}",
+                    f"op_repasse_busca_txt_{_rep_wk}",
+                ):
+                    st.session_state.pop(_k, None)
+                st.rerun()
 
-    st.divider()
-    _fdl_ui_gap_section()
+    _fdl_ui_gap_tight()
 
     if data_pag_fim < data_pag_ini:
         st.warning("A data final não pode ser anterior à data inicial. Ajuste o período.")
@@ -7996,10 +8199,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     if not has_dp_base:
         _pag_caption += " — **filtro por data inativo** (sem datas na base)"
     st.caption(
-        f"Plataforma: **{plataforma_label}** · Atualizado: **{ts_proc}** · {_pag_caption}"
+        f"Plataforma **{plataforma_label}** · Atualizado **{ts_proc}** · {_pag_caption}"
     )
 
-    st.divider()
+    _fdl_ui_gap_tight()
 
     # Tipos numéricos para a base já filtrada (tabela e totais nas colunas)
     tabela["Valor da nota"] = pd.to_numeric(tabela["Valor da nota"], errors="coerce").fillna(0.0)
@@ -8008,15 +8211,18 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
     tabela["Diferença"] = pd.to_numeric(tabela.get("Diferença"), errors="coerce")
 
-    st.subheader("📊 Resumo por ação")
-    st.caption("Contagens sobre o recorte filtrado.")
+    st.markdown(
+        '<p class="fdl-repasse-section-title">Resumo por ação</p>'
+        '<p class="fdl-repasse-section-note">Tamanho da fila e distribuição por ação sugerida no recorte atual.</p>',
+        unsafe_allow_html=True,
+    )
     if _repasse_vendas_liberacoes_only():
         acoes_validacao = ["Baixado", "Analisar diferença", "Verificar recebimento"]
     else:
         acoes_validacao = ["Ok", "Baixado" if _repasse_sem_bling() else "Baixar no Bling", "Analisar diferença"]
     contagens_acao = {a: int(tabela["Ação sugerida operacional"].eq(a).sum()) for a in acoes_validacao}
     contagens_acao["Zerado"] = int(tabela["Ação sugerida operacional"].eq("Revisar venda zerada").sum())
-    _repasse_ui_validacao_kpi_saas(contagens_acao)
+    _render_repasse_resumo_por_acao_kpis(contagens_acao, n_linhas=len(tabela))
 
     _fdl_ui_gap_section()
     st.divider()
@@ -8154,8 +8360,11 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.caption("Desative FDL_SAFE_MODE para voltar à UI completa.")
         return
 
-    st.subheader("📋 Fila operacional")
-    st.caption("Analise o recorte na grelha; exporte para partilhar fora do sistema.")
+    st.markdown(
+        '<p class="fdl-repasse-section-title">Fila operacional</p>'
+        '<p class="fdl-repasse-section-note">Tratativa no recorte · exporte Excel/PDF quando o volume permitir.</p>',
+        unsafe_allow_html=True,
+    )
     _fdl_ui_gap_section()
 
     # Guardrail de estabilidade: evita trabalho pesado em cada troca de filtro
@@ -8223,7 +8432,11 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         if not tabela_grid.empty
         else None
     )
-    _disp_grid: object = tabela_grid
+    _n_grid = len(tabela_exibir)
+    _h_grid = min(520, 44 + min(_n_grid, 16) * 34) if _n_grid else 160
+    _disp_grid: object = (
+        _repasse_fila_operacional_styler(tabela_grid) if not tabela_grid.empty else tabela_grid
+    )
 
     if tabela_exibir.empty:
         st.info(
@@ -8232,7 +8445,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.dataframe(
             _disp_grid,
             use_container_width=True,
-            height=160,
+            height=_h_grid,
             hide_index=True,
             column_config=_cfg_grid,
         )
@@ -8240,11 +8453,11 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.dataframe(
             _disp_grid,
             use_container_width=True,
-            height=550,
+            height=_h_grid,
             hide_index=True,
             column_config=_cfg_grid,
         )
-    st.caption(f"{len(tabela_exibir)} linhas no filtro atual.")
+    st.caption(f"{_fmt_int_ptbr(_n_grid)} linhas no recorte.")
 
 _admin_mode = _is_admin_mode()
 
@@ -8750,7 +8963,8 @@ elif _fv == "repasse":
     _render_financeiro_header(
         segment="Repasse",
         title="Conciliação de Repasse",
-        subtitle="Recebimentos, notas e divergências numa única vista.",
+        subtitle="Fila de tratativa · repasses, NF e divergências no mesmo recorte.",
+        compact_spacing=True,
     )
 else:
     _render_financeiro_header(

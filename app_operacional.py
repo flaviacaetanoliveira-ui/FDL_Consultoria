@@ -545,9 +545,9 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin: 0.06rem 0 0.12rem 0;
               padding: 0.72rem 0.56rem 0.62rem;
               border-radius: 12px;
-              background: rgba(255, 255, 255, 0.82);
-              border: 1px solid rgba(226, 232, 240, 0.45);
-              box-shadow: none;
+              background: rgba(255, 255, 255, 0.92);
+              border: 1px solid rgba(203, 213, 225, 0.65);
+              box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
             }
             .fdl-sb-brand {
               margin: 0;
@@ -555,25 +555,25 @@ def _fdl_sidebar_inject_layout_css() -> None:
             }
             .fdl-sb-wordmark {
               display: block;
-              margin: 0 auto 0.52rem auto;
+              margin: 0 auto 0.5rem auto;
               max-width: 100%;
-              padding: 0 0.12rem;
+              padding: 0 0.1rem;
               text-align: center;
               font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
                 "Helvetica Neue", Arial, sans-serif;
-              line-height: 1.18;
+              line-height: 1.16;
             }
             .fdl-sb-wordmark-fdl {
-              font-size: 1.09rem;
+              font-size: 1.2rem;
               font-weight: 800;
-              letter-spacing: -0.042em;
-              color: #0a1628;
+              letter-spacing: -0.045em;
+              color: #070f18;
             }
             .fdl-sb-wordmark-analytics {
-              font-size: 0.98rem;
+              font-size: 1.05rem;
               font-weight: 500;
-              letter-spacing: -0.026em;
-              color: #6b7785;
+              letter-spacing: -0.028em;
+              color: #5c6a78;
             }
             .fdl-sb-tagline {
               font-size: 0.6875rem;
@@ -584,15 +584,15 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin: 0 0 0.65rem 0;
             }
             .fdl-sb-tagline--after-logo {
-              margin-top: 0.18rem;
-              margin-bottom: 0.58rem;
-              padding: 0 0.4rem;
+              margin-top: 0.14rem;
+              margin-bottom: 0.55rem;
+              padding: 0 0.45rem;
               text-align: center;
-              font-size: 0.625rem;
+              font-size: 0.59375rem;
               font-weight: 500;
-              letter-spacing: 0.05em;
-              color: #8b95a3;
-              line-height: 1.5;
+              letter-spacing: 0.048em;
+              color: #9ca8b5;
+              line-height: 1.45;
             }
             .fdl-sb-client-row {
               margin: 0;
@@ -614,15 +614,15 @@ def _fdl_sidebar_inject_layout_css() -> None:
               font-size: 0.46875rem;
               font-weight: 500;
               text-transform: uppercase;
-              letter-spacing: 0.16em;
-              color: #e4e9ef;
+              letter-spacing: 0.15em;
+              color: #c5ced8;
               line-height: 1.3;
             }
             .fdl-sb-client-name {
-              font-size: 0.90625rem;
+              font-size: 0.9375rem;
               font-weight: 600;
-              letter-spacing: -0.018em;
-              color: #2c3a47;
+              letter-spacing: -0.02em;
+              color: #1e293b;
               line-height: 1.45;
               word-break: break-word;
             }
@@ -633,16 +633,16 @@ def _fdl_sidebar_inject_layout_css() -> None:
             }
             .fdl-sb-section-label {
               font-size: 0.59375rem;
-              font-weight: 600;
+              font-weight: 700;
               text-transform: none;
-              letter-spacing: 0.11em;
-              color: #94a3b8;
+              letter-spacing: 0.1em;
+              color: #64748b;
               margin: 1.2rem 0 0.48rem 0;
-              padding: 0 0.12rem 0.4rem 0.12rem;
+              padding: 0 0.12rem 0.42rem 0.12rem;
               border-radius: 0;
               background: transparent;
               border: none;
-              border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+              border-bottom: 1px solid rgba(148, 163, 184, 0.45);
               box-shadow: none;
               line-height: 1.35;
             }
@@ -714,27 +714,27 @@ def _fdl_sidebar_inject_layout_css() -> None:
               padding: 0 0.2rem 0.12rem;
             }
             .fdl-sb-footer-label {
-              font-size: 0.5rem;
-              font-weight: 500;
+              font-size: 0.53125rem;
+              font-weight: 600;
               text-transform: uppercase;
-              letter-spacing: 0.14em;
-              color: #d1d9e2;
-              margin: 0 0 0.28rem 0;
+              letter-spacing: 0.12em;
+              color: #94a3b8;
+              margin: 0 0 0.26rem 0;
               line-height: 1.25;
             }
             .fdl-sb-footer-ts {
-              font-size: 0.78125rem;
-              font-weight: 500;
+              font-size: 0.8125rem;
+              font-weight: 600;
               font-variant-numeric: tabular-nums;
-              color: #5c6b7a;
-              margin: 0 0 0.4rem 0;
+              color: #3d4d5c;
+              margin: 0 0 0.38rem 0;
               line-height: 1.4;
-              letter-spacing: 0.02em;
+              letter-spacing: 0.015em;
             }
             .fdl-sb-footer-admin {
               font-size: 0.65rem;
               font-weight: 400;
-              color: #b4bcc6;
+              color: #8b95a3;
               margin: 0.1rem 0 0 0;
               line-height: 1.4;
               word-break: break-word;
@@ -915,13 +915,25 @@ def _inject_fdl_professional_theme() -> None:
             section[data-testid="stMain"] h3 {
                 margin-top: 0.5rem;
                 margin-bottom: 0.35rem;
-                color: #1f2937;
+                color: #111827;
                 font-weight: 600;
             }
             section[data-testid="stMain"] hr {
                 margin: 0.5rem 0 !important;
                 border: none;
-                border-top: 1px solid #e8ecf1;
+                border-top: 1px solid #d1d9e4;
+            }
+            section[data-testid="stMain"] [data-testid="stCaption"] {
+                color: #64748b !important;
+                font-size: 0.8125rem !important;
+                font-weight: 500 !important;
+                line-height: 1.45 !important;
+            }
+            section[data-testid="stMain"] label[data-testid="stWidgetLabel"] p,
+            section[data-testid="stMain"] [data-testid="stWidgetLabel"] p {
+                color: #374151 !important;
+                font-weight: 600 !important;
+                font-size: 0.84rem !important;
             }
             .fdl-ui-gap-section {
                 display: block;
@@ -943,34 +955,39 @@ def _inject_fdl_professional_theme() -> None:
                 padding: 0 0 0.15rem 0;
             }
             .fdl-financeiro-header .fdl-header-kicker {
-                margin: 0 0 0.2rem 0;
-                font-size: 0.78rem;
-                font-weight: 600;
-                letter-spacing: 0.04em;
+                margin: 0 0 0.22rem 0;
+                font-size: 0.75rem;
+                font-weight: 700;
+                letter-spacing: 0.055em;
                 text-transform: uppercase;
-                color: #6b7280;
+                color: #475569;
             }
             .fdl-financeiro-header .fdl-header-title {
-                margin: 0 0 0.35rem 0;
+                margin: 0 0 0.32rem 0;
                 font-size: 1.65rem;
                 font-weight: 700;
-                letter-spacing: -0.02em;
-                line-height: 1.2;
-                color: #111827;
+                letter-spacing: -0.025em;
+                line-height: 1.18;
+                color: #0f172a;
             }
             .fdl-financeiro-header .fdl-header-sub {
                 margin: 0;
-                font-size: 0.95rem;
-                color: #4b5563;
-                line-height: 1.5;
+                font-size: 0.9rem;
+                font-weight: 500;
+                color: #64748b;
+                line-height: 1.45;
+                max-width: 44rem;
             }
             .fdl-financeiro-header--compact .fdl-header-title {
-                margin-bottom: 0.2rem;
-                font-size: 1.45rem;
+                margin-bottom: 0.18rem;
+                font-size: 1.52rem;
+                letter-spacing: -0.028em;
             }
             .fdl-financeiro-header--compact .fdl-header-sub {
-                font-size: 0.88rem;
-                line-height: 1.35;
+                font-size: 0.8125rem;
+                font-weight: 500;
+                color: #6b7785;
+                line-height: 1.42;
             }
             /* Cartão de métrica (Streamlit 1.35+: stMetricContainer envolve label + valor) */
             [data-testid="stMetricContainer"] {
@@ -1011,9 +1028,9 @@ def _inject_fdl_professional_theme() -> None:
                 letter-spacing: 0.02em;
             }
             div[data-testid="stVerticalBlockBorderWrapper"] {
-                border-radius: 0.5rem;
-                border-color: #e2e8f0 !important;
-                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+                border-radius: 0.55rem;
+                border-color: #cbd5e1 !important;
+                box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
             }
         </style>
         """,
@@ -4184,13 +4201,13 @@ def _render_fdl_fat_dre_nf_kpi_cards(
             <style>
             .fdl-fat-kpi-shell {
               font-family: var(--font, "Source Sans Pro", sans-serif);
-              margin: 0 0 18px 0;
+              margin: 0 0 20px 0;
             }
             .fdl-fat-kpi-row {
               display: flex;
               flex-wrap: wrap;
-              gap: 14px;
-              margin-bottom: 16px;
+              gap: 12px;
+              margin-bottom: 14px;
             }
             .fdl-fat-kpi-row--secondary {
               gap: 10px;
@@ -4200,56 +4217,58 @@ def _render_fdl_fat_dre_nf_kpi_cards(
               flex: 1 1 0;
               min-width: 148px;
               background: #ffffff;
-              border: 1px solid #e5e7eb;
+              border: 1px solid #cbd5e1;
               border-radius: 12px;
               padding: 14px 16px;
               box-sizing: border-box;
-              box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+              box-shadow: 0 2px 6px rgba(15, 23, 42, 0.055);
             }
             .fdl-fat-kpi-card--primary {
-              padding: 18px 20px;
-              min-width: 160px;
+              padding: 16px 18px;
+              min-width: 158px;
             }
             .fdl-fat-kpi-card--primary.fdl-fat-kpi-card--accent {
-              background: #f9fafb;
-              border-color: #d1d5db;
-              box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+              background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+              border-color: #94a3b8;
+              box-shadow: 0 2px 8px rgba(15, 23, 42, 0.07);
             }
             .fdl-fat-kpi-card--secondary {
-              padding: 12px 14px;
-              min-width: 120px;
+              padding: 11px 13px;
+              min-width: 118px;
             }
             .fdl-fat-kpi-label {
-              font-size: 0.72rem;
-              font-weight: 500;
-              color: #6b7280;
-              line-height: 1.35;
-              margin: 0 0 10px 0;
-              letter-spacing: 0.02em;
-              text-transform: none;
+              font-size: 0.68rem;
+              font-weight: 600;
+              color: #475569;
+              line-height: 1.3;
+              margin: 0 0 8px 0;
+              letter-spacing: 0.04em;
+              text-transform: uppercase;
             }
             .fdl-fat-kpi-card--secondary .fdl-fat-kpi-label {
-              font-size: 0.68rem;
-              margin-bottom: 8px;
+              font-size: 0.625rem;
+              margin-bottom: 7px;
+              letter-spacing: 0.035em;
             }
             .fdl-fat-kpi-value {
-              font-size: 1.45rem;
-              font-weight: 600;
-              color: #111827;
-              line-height: 1.15;
+              font-size: 1.48rem;
+              font-weight: 700;
+              color: #0f172a;
+              line-height: 1.12;
               font-variant-numeric: tabular-nums;
-              letter-spacing: -0.02em;
+              letter-spacing: -0.03em;
             }
             .fdl-fat-kpi-card--primary .fdl-fat-kpi-value {
-              font-size: 1.55rem;
-              font-weight: 700;
+              font-size: 1.62rem;
+              font-weight: 800;
             }
             .fdl-fat-kpi-card--primary.fdl-fat-kpi-card--accent .fdl-fat-kpi-value {
-              font-size: 1.68rem;
+              font-size: 1.75rem;
             }
             .fdl-fat-kpi-card--secondary .fdl-fat-kpi-value {
-              font-size: 1.08rem;
-              font-weight: 600;
+              font-size: 1.12rem;
+              font-weight: 700;
+              color: #1e293b;
             }
             </style>
             """
@@ -4402,27 +4421,43 @@ def _fdl_fat_min_inject_ui_styles() -> None:
             """
             <style>
             .fdl-fat-min-aside {
-              color: #6b7280;
-              font-size: 0.78rem;
-              line-height: 1.5;
-              margin: 0 0 11px 0;
-              max-width: 58rem;
+              color: #4b5563;
+              font-size: 0.76rem;
+              line-height: 1.48;
+              margin: 0 0 9px 0;
+              max-width: 52rem;
             }
-            .fdl-fat-min-aside strong { color: #4b5563; font-weight: 600; }
-            .fdl-fat-min-aside--tight { margin-bottom: 5px; }
+            .fdl-fat-min-aside strong { color: #1e293b; font-weight: 600; }
+            .fdl-fat-min-aside--tight { margin-bottom: 4px; font-size: 0.72rem; color: #64748b; }
             .fdl-fat-min-aside--recorte {
-              font-size: 0.74rem;
-              color: #9ca3af;
-              line-height: 1.45;
-              margin: 0 0 8px 0;
-            }
-            .fdl-fat-min-aside--recorte strong { color: #6b7280; font-weight: 600; }
-            .fdl-fat-min-table-cap {
-              color: #9ca3af;
-              font-size: 0.7rem;
+              font-size: 0.72rem;
+              color: #64748b;
               line-height: 1.42;
-              margin: 0 0 12px 0;
-              max-width: 58rem;
+              margin: 0 0 6px 0;
+            }
+            .fdl-fat-min-aside--recorte strong { color: #334155; font-weight: 600; }
+            .fdl-fat-min-table-cap {
+              color: #64748b;
+              font-size: 0.72rem;
+              line-height: 1.4;
+              margin: 0 0 10px 0;
+              max-width: 52rem;
+            }
+            .fdl-fat-min-nf-h {
+              margin: 0 0 0.15rem 0;
+              font-size: 1.05rem;
+              font-weight: 700;
+              letter-spacing: -0.02em;
+              color: #0f172a;
+              line-height: 1.25;
+            }
+            .fdl-fat-min-nf-sub {
+              margin: 0 0 0.5rem 0;
+              font-size: 0.72rem;
+              font-weight: 500;
+              color: #64748b;
+              letter-spacing: 0.02em;
+              text-transform: uppercase;
             }
             .fdl-fat-min-vsp-sm {
               display: block;
@@ -4443,39 +4478,46 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               max-width: min(48rem, 100%);
               width: 100%;
               margin: 0;
+              padding: 16px 18px 18px 18px;
+              border: 1px solid #b8c4d0;
+              border-radius: 14px;
+              background: linear-gradient(165deg, #f8fafc 0%, #f1f5f9 48%, #eef2f6 100%);
+              box-shadow: 0 2px 10px rgba(15, 23, 42, 0.055);
               font-family: var(--font, "Source Sans Pro", sans-serif);
+              box-sizing: border-box;
             }
             .fdl-fat-dre-title {
-              font-size: 0.94rem;
-              font-weight: 700;
-              color: #111827;
-              margin: 0 0 3px 0;
-              letter-spacing: -0.02em;
+              font-size: 1.02rem;
+              font-weight: 800;
+              color: #0f172a;
+              margin: 0 0 4px 0;
+              letter-spacing: -0.025em;
             }
             .fdl-fat-dre-sub {
-              font-size: 0.68rem;
-              color: #9ca3af;
-              margin: 0 0 10px 0;
-              line-height: 1.35;
+              font-size: 0.7rem;
+              font-weight: 500;
+              color: #64748b;
+              margin: 0 0 12px 0;
+              line-height: 1.4;
             }
             .fdl-fat-dre-block-h {
-              font-size: 0.64rem;
-              font-weight: 600;
+              font-size: 0.66rem;
+              font-weight: 700;
               text-transform: uppercase;
-              letter-spacing: 0.07em;
-              color: #9ca3af;
-              margin: 14px 0 5px 0;
+              letter-spacing: 0.09em;
+              color: #475569;
+              margin: 16px 0 6px 0;
             }
             .fdl-fat-dre-block-h:first-of-type { margin-top: 0; }
             .fdl-fat-dre-block-h--a {
               margin-bottom: 8px;
             }
             .fdl-fat-dre-a-shell {
-              border: 1px solid #e8ecf1;
+              border: 1px solid #c5d0da;
               border-radius: 10px;
-              padding: 6px 14px 8px 14px;
-              margin: 0 0 4px 0;
-              background: #fefefe;
+              padding: 8px 14px 10px 14px;
+              margin: 0 0 6px 0;
+              background: rgba(255, 255, 255, 0.88);
             }
             .fdl-fat-dre-block-h--enc {
               margin-top: 14px;
@@ -4486,10 +4528,10 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               grid-template-columns: minmax(0, 1fr) minmax(8rem, max-content);
               column-gap: 1.4rem;
               align-items: baseline;
-              padding: 8px 0;
-              border-bottom: 1px solid #f0f1f3;
+              padding: 9px 0;
+              border-bottom: 1px solid #e2e8f0;
               font-size: 0.875rem;
-              color: #374151;
+              color: #1e293b;
             }
             .fdl-fat-dre-a-shell .fdl-fat-dre-row--lead {
               border-radius: 6px;
@@ -4536,9 +4578,9 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               margin-bottom: 2px;
               padding: 11px 12px 12px 12px;
               border-bottom: none;
-              background: #eef0f3;
+              background: #e2e8f0;
               border-radius: 8px;
-              border: 1px solid #e0e4ea;
+              border: 1px solid #cbd5e1;
             }
             .fdl-fat-dre-row--bridge .fdl-fat-dre-lab {
               font-weight: 600;
@@ -4605,14 +4647,14 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               line-height: 1.34;
             }
             .fdl-fat-dre-close {
-              margin-top: 12px;
+              margin-top: 14px;
               border-radius: 12px;
-              border: 1px solid #bfc6d0;
-              background: linear-gradient(165deg, #fdfdfd 0%, #f4f5f7 55%, #f0f1f4 100%);
+              border: 1px solid #94a3b8;
+              background: linear-gradient(165deg, #ffffff 0%, #f1f5f9 55%, #e8edf3 100%);
               overflow: hidden;
               box-shadow:
-                0 1px 3px rgba(15, 23, 42, 0.035),
-                0 6px 18px rgba(15, 23, 42, 0.055);
+                0 2px 4px rgba(15, 23, 42, 0.05),
+                0 8px 22px rgba(15, 23, 42, 0.07);
             }
             .fdl-fat-dre-row--result {
               display: grid;
@@ -4658,6 +4700,21 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               text-align: right;
               justify-self: end;
             }
+            /* Faturamento & DRE: filtros mais compactos (só quando esta vista injeta o bloco) */
+            section[data-testid="stMain"] [data-baseweb="select"] > div {
+              min-height: 38px !important;
+            }
+            section[data-testid="stMain"] [data-baseweb="input"] > div {
+              min-height: 38px !important;
+            }
+            section[data-testid="stMain"] [data-baseweb="input"] input {
+              padding-top: 0.42rem !important;
+              padding-bottom: 0.42rem !important;
+              font-size: 0.875rem !important;
+            }
+            section[data-testid="stMain"] [data-testid="stMultiSelect"] [data-baseweb="select"] > div {
+              min-height: 38px !important;
+            }
             </style>
             """
         ),
@@ -4691,13 +4748,13 @@ def _fdl_cp_inject_panel_styles() -> None:
             <style>
             .fdl-fat-kpi-shell {
               font-family: var(--font, "Source Sans Pro", sans-serif);
-              margin: 0 0 18px 0;
+              margin: 0 0 20px 0;
             }
             .fdl-fat-kpi-row {
               display: flex;
               flex-wrap: wrap;
-              gap: 14px;
-              margin-bottom: 16px;
+              gap: 12px;
+              margin-bottom: 14px;
             }
             .fdl-fat-kpi-row--secondary {
               gap: 10px;
@@ -4707,55 +4764,58 @@ def _fdl_cp_inject_panel_styles() -> None:
               flex: 1 1 0;
               min-width: 148px;
               background: #ffffff;
-              border: 1px solid #e5e7eb;
+              border: 1px solid #cbd5e1;
               border-radius: 12px;
               padding: 14px 16px;
               box-sizing: border-box;
-              box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+              box-shadow: 0 2px 6px rgba(15, 23, 42, 0.055);
             }
             .fdl-fat-kpi-card--primary {
-              padding: 18px 20px;
-              min-width: 160px;
+              padding: 16px 18px;
+              min-width: 158px;
             }
             .fdl-fat-kpi-card--primary.fdl-fat-kpi-card--accent {
-              background: #f9fafb;
-              border-color: #d1d5db;
-              box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+              background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+              border-color: #94a3b8;
+              box-shadow: 0 2px 8px rgba(15, 23, 42, 0.07);
             }
             .fdl-fat-kpi-card--secondary {
-              padding: 12px 14px;
-              min-width: 120px;
+              padding: 11px 13px;
+              min-width: 118px;
             }
             .fdl-fat-kpi-label {
-              font-size: 0.72rem;
-              font-weight: 500;
-              color: #6b7280;
-              line-height: 1.35;
-              margin: 0 0 10px 0;
-              letter-spacing: 0.02em;
+              font-size: 0.68rem;
+              font-weight: 600;
+              color: #475569;
+              line-height: 1.3;
+              margin: 0 0 8px 0;
+              letter-spacing: 0.04em;
+              text-transform: uppercase;
             }
             .fdl-fat-kpi-card--secondary .fdl-fat-kpi-label {
-              font-size: 0.68rem;
-              margin-bottom: 8px;
+              font-size: 0.625rem;
+              margin-bottom: 7px;
+              letter-spacing: 0.035em;
             }
             .fdl-fat-kpi-value {
-              font-size: 1.45rem;
-              font-weight: 600;
-              color: #111827;
-              line-height: 1.15;
+              font-size: 1.48rem;
+              font-weight: 700;
+              color: #0f172a;
+              line-height: 1.12;
               font-variant-numeric: tabular-nums;
-              letter-spacing: -0.02em;
+              letter-spacing: -0.03em;
             }
             .fdl-fat-kpi-card--primary .fdl-fat-kpi-value {
-              font-size: 1.55rem;
-              font-weight: 700;
+              font-size: 1.62rem;
+              font-weight: 800;
             }
             .fdl-fat-kpi-card--primary.fdl-fat-kpi-card--accent .fdl-fat-kpi-value {
-              font-size: 1.68rem;
+              font-size: 1.75rem;
             }
             .fdl-fat-kpi-card--secondary .fdl-fat-kpi-value {
-              font-size: 1.08rem;
-              font-weight: 600;
+              font-size: 1.12rem;
+              font-weight: 700;
+              color: #1e293b;
             }
             .fdl-cp-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-card {
               display: flex;
@@ -5510,19 +5570,18 @@ def _render_faturamento_dre_minimal(
         use_nf_materializado = False
 
     _fdl_fat_min_aside(
-        "Universo (Etapa 1): período único = <strong>emissão da NF</strong>. Uma linha por NF válida no intervalo. "
-        "Valor faturado = líquido da NF uma vez; valor da venda, comissão, frete, imposto e resultado = soma nas "
-        "linhas de pedido ligadas a essas NFs (filtros Empresa e Plataforma). Despesa fixa = 5% do valor da venda "
-        "agregado a cada NF. A coluna Data do pedido não filtra o painel. NF só aparece com linha de pedido ligada à nota."
+        "<strong>Recorte</strong>: período = <strong>emissão da NF</strong> · grão = <strong>1 linha por nota</strong> no intervalo. "
+        "Faturado (NF) 1×; venda, encargos e resultado = soma dos pedidos ligados. Despesa fixa = 5% sobre venda por NF."
     )
     if use_nf_materializado:
         _fdl_fat_min_aside(
-            "Fonte: materializado NF-first (<code>dataset_faturamento_nf.parquet</code>); filtros aplicados em memória."
+            "Fonte: <strong>materializado NF-first</strong> — filtros em memória.",
+            tight=True,
         )
     else:
         _fdl_fat_min_aside(
-            "Fonte: agregação ao vivo a partir do grão linha; com <code>dataset_faturamento_nf.parquet</code> na pasta, "
-            "o painel passa a consumir a tabela NF."
+            "Fonte: <strong>agregação em memória</strong> (grão pedido); com Parquet NF-first o painel consome a tabela de notas.",
+            tight=True,
         )
     if use_nf_materializado and _is_admin_mode() and load_info.get("faturamento_nf_first_path"):
         _p = html.escape(str(load_info.get("faturamento_nf_first_path")))
@@ -5666,16 +5725,23 @@ def _render_faturamento_dre_minimal(
             )
         else:
             _fdl_fat_min_aside("Sem coluna Nota_Data_Emissao — período de emissão indisponível.", tight=True)
-        if st.button("Limpar filtros desta vista", key="fdl_fat_min_reset"):
-            for _k in (
-                "fdl_fat_min_emp",
-                "fdl_fat_min_plat",
-                "fdl_fat_min_nf_d_ini",
-                "fdl_fat_min_nf_d_fim",
-                "fdl_fat_min_nf_bounds_sig",
+        _clr_sp, _clr_btn = st.columns((1.55, 1))
+        with _clr_btn:
+            if st.button(
+                "Limpar filtros desta vista",
+                key="fdl_fat_min_reset",
+                use_container_width=True,
+                help="Repor empresa, plataforma e datas de emissão NF ao padrão do carregamento.",
             ):
-                st.session_state.pop(_k, None)
-            st.rerun()
+                for _k in (
+                    "fdl_fat_min_emp",
+                    "fdl_fat_min_plat",
+                    "fdl_fat_min_nf_d_ini",
+                    "fdl_fat_min_nf_d_fim",
+                    "fdl_fat_min_nf_bounds_sig",
+                ):
+                    st.session_state.pop(_k, None)
+                st.rerun()
 
     _fdl_ui_gap_section()
     _fdl_fat_min_vsp(size="md")
@@ -5735,6 +5801,7 @@ def _render_faturamento_dre_minimal(
     _fdl_fat_min_vsp(size="md")
     _fdl_ui_gap_section()
     _fdl_fat_min_vsp(size="lg")
+    _fdl_fat_min_vsp(size="sm")
     st.divider()
     _fdl_fat_min_vsp(size="md")
 
@@ -5851,11 +5918,14 @@ def _render_faturamento_dre_minimal(
             _cfg_nf[_cn] = TextColumn(_cn, width=_cw, help=_ch) if _ch else TextColumn(_cn, width=_cw)
 
     _fdl_fat_min_vsp(size="sm")
-    st.subheader("Tabela por NF")
+    st.markdown(
+        '<h2 class="fdl-fat-min-nf-h">Tabela por NF</h2>'
+        '<p class="fdl-fat-min-nf-sub">Detalhamento · drill-down</p>',
+        unsafe_allow_html=True,
+    )
     _fdl_fat_min_vsp(size="sm")
     st.markdown(
-        f'<div class="fdl-fat-min-table-cap">{len(_disp_nf_ui)} linha(s) · uma por NF · emissão decrescente. '
-        f"Export CSV: mesmas colunas; Pedido e Produto sem truncar.</div>",
+        f'<div class="fdl-fat-min-table-cap">{len(_disp_nf_ui)} linha(s) · emissão decrescente · export CSV com texto completo.</div>',
         unsafe_allow_html=True,
     )
     if _disp_nf_ui.empty:
@@ -5868,8 +5938,8 @@ def _render_faturamento_dre_minimal(
             use_container_width=True,
             hide_index=True,
             height=min(
-                620,
-                176 + 42 * min(len(_disp_nf_ui), 17),
+                420,
+                140 + 34 * min(len(_disp_nf_ui), 11),
             ),
             column_config=_cfg_nf,
         )
@@ -8523,7 +8593,7 @@ if _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in _e
     _render_financeiro_header(
         segment="Painel",
         title="Faturamento & DRE",
-        subtitle="Etapa 1 — filtros mínimos, KPIs e tabela por venda (mesmo recorte no CSV).",
+        subtitle="Indicadores, DRE gerencial e detalhamento por NF — um único recorte (export alinhado).",
         kicker_area="Faturamento & DRE",
         compact_spacing=True,
     )

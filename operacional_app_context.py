@@ -5,15 +5,11 @@ Contexto de usuário / organização / rotas para o app operacional.
 """
 from __future__ import annotations
 
-import base64
 from dataclasses import dataclass
-from pathlib import Path
 
 import streamlit as st
 
 from operacional_usuarios import USUARIOS, autenticar, normalizar_email
-
-_REPO_ROOT = Path(__file__).resolve().parent
 
 
 @dataclass(frozen=True)
@@ -397,20 +393,24 @@ _LOGIN_PAGE_STYLES = """
     width: 100%;
     max-width: 100%;
   }
-  .fdl-login-logo {
-    display: block;
-    width: auto;
-    max-width: min(328px, 100%);
-    height: auto;
-    max-height: 58px;
-    object-fit: contain;
-  }
-  .fdl-login-wordmark {
-    font-size: 1.35rem;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    color: #111827;
+  .fdl-login-wordmark-line {
     margin: 0;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+      sans-serif;
+    line-height: 1.2;
+    text-align: center;
+  }
+  .fdl-login-wordmark-fdl {
+    font-size: 1.48rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: #0a1628;
+  }
+  .fdl-login-wordmark-analytics {
+    font-size: 1.3rem;
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    color: #6b7785;
   }
   .fdl-login-title {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -588,16 +588,14 @@ _LOGIN_PAGE_STYLES = """
 
 
 def _login_brand_logo_html() -> str:
-    """Wordmark FDL Analytics no login; fallback tipográfico se não houver ficheiro."""
-    logo_path = _REPO_ROOT / "assets" / "fdl_analytics_logo.png"
-    if logo_path.is_file():
-        b64 = base64.b64encode(logo_path.read_bytes()).decode("ascii")
-        return (
-            f'<div class="fdl-login-logo-wrap">'
-            f'<img src="data:image/png;base64,{b64}" class="fdl-login-logo" alt="FDL Analytics" '
-            f'loading="eager" decoding="async" /></div>'
-        )
-    return '<div class="fdl-login-logo-wrap"><p class="fdl-login-wordmark">FDL Analytics</p></div>'
+    """Wordmark tipográfico FDL Analytics (sem PNG; evita ícone embutido em raster)."""
+    return (
+        '<div class="fdl-login-logo-wrap">'
+        '<p class="fdl-login-wordmark-line" role="img" aria-label="FDL Analytics">'
+        '<span class="fdl-login-wordmark-fdl">FDL</span>'
+        '<span class="fdl-login-wordmark-analytics"> Analytics</span>'
+        "</p></div>"
+    )
 
 
 def require_app_user() -> AppUserContext:

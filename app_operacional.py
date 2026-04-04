@@ -553,30 +553,27 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin: 0;
               padding: 0;
             }
-            .fdl-sb-logo-wrap {
-              display: flex;
-              justify-content: center;
-              align-items: center;
+            .fdl-sb-wordmark {
+              display: block;
               margin: 0 auto 0.52rem auto;
               max-width: 100%;
               padding: 0 0.12rem;
+              text-align: center;
+              font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+              line-height: 1.18;
             }
-            .fdl-sb-logo-img {
-              max-height: 2.45rem;
-              width: auto !important;
-              max-width: 100%;
-              height: auto;
-              object-fit: contain;
-              display: block;
-              opacity: 1;
+            .fdl-sb-wordmark-fdl {
+              font-size: 1.09rem;
+              font-weight: 800;
+              letter-spacing: -0.042em;
+              color: #0a1628;
             }
-            .fdl-sb-product {
-              font-size: 1.14rem;
-              font-weight: 700;
-              letter-spacing: -0.04em;
-              color: #0f172a;
-              line-height: 1.15;
-              margin: 0 0 0.22rem 0;
+            .fdl-sb-wordmark-analytics {
+              font-size: 0.98rem;
+              font-weight: 500;
+              letter-spacing: -0.026em;
+              color: #6b7785;
             }
             .fdl-sb-tagline {
               font-size: 0.6875rem;
@@ -750,30 +747,6 @@ def _fdl_sidebar_inject_layout_css() -> None:
         ),
         unsafe_allow_html=True,
     )
-
-
-@st.cache_data(show_spinner=False)
-def _fdl_sidebar_logo_data_uri_cached(path_str: str, mtime_ns: int) -> str | None:
-    """Wordmark PNG embutido no HTML da sidebar (cartão de marca único; evita bloco separado do st.image)."""
-    logo_path = Path(path_str)
-    if not logo_path.is_file():
-        return None
-    ext = logo_path.suffix.lower()
-    mime = {
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".webp": "image/webp",
-    }.get(ext)
-    if not mime:
-        return None
-    try:
-        raw = logo_path.read_bytes()
-    except OSError:
-        return None
-    if len(raw) > 1_500_000:
-        return None
-    return f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
 
 
 def _now_ts_br_str() -> str:
@@ -8333,18 +8306,6 @@ with st.sidebar:
     _sb_area = st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY, FDL_PRODUCT_AREA_FINANCEIRO)
 
     st.write("")
-    _logo_file = _REPO_APP_ROOT / "assets" / "fdl_analytics_logo.png"
-    _logo_data_uri: str | None = None
-    if _logo_file.is_file():
-        try:
-            _logo_mtime_ns = int(_logo_file.stat().st_mtime_ns)
-        except OSError:
-            _logo_mtime_ns = 0
-        _logo_data_uri = _fdl_sidebar_logo_data_uri_cached(
-            str(_logo_file.resolve()),
-            _logo_mtime_ns,
-        )
-    _has_logo = _logo_data_uri is not None
 
     _cli_raw = str(st.session_state.get("cliente", "") or _app_ctx.display_name or "").strip()
     if not _cli_raw:
@@ -8352,26 +8313,17 @@ with st.sidebar:
         _cli_raw = _u.split("@", 1)[0] if "@" in _u else (_u or "Conta")
     _cli_nome = html.escape(_cli_raw)
     _sb_tagline = "Da operação ao insight"
-    if _has_logo and _logo_data_uri:
-        _brand_inner = (
-            '<div class="fdl-sb-logo-wrap">'
-            f'<img class="fdl-sb-logo-img" src="{_logo_data_uri}" alt="FDL Analytics" />'
-            "</div>"
-            f'<div class="fdl-sb-tagline fdl-sb-tagline--after-logo">{html.escape(_sb_tagline)}</div>'
-            '<div class="fdl-sb-client-row"><div class="fdl-sb-client-block">'
-            '<span class="fdl-sb-client-tag">Conta</span>'
-            f'<span class="fdl-sb-client-name">{_cli_nome}</span>'
-            "</div></div>"
-        )
-    else:
-        _brand_inner = (
-            '<div class="fdl-sb-product">FDL Analytics</div>'
-            f'<div class="fdl-sb-tagline">{html.escape(_sb_tagline)}</div>'
-            '<div class="fdl-sb-client-row"><div class="fdl-sb-client-block">'
-            '<span class="fdl-sb-client-tag">Conta</span>'
-            f'<span class="fdl-sb-client-name">{_cli_nome}</span>'
-            "</div></div>"
-        )
+    _brand_inner = (
+        '<div class="fdl-sb-wordmark" role="img" aria-label="FDL Analytics">'
+        '<span class="fdl-sb-wordmark-fdl">FDL</span>'
+        '<span class="fdl-sb-wordmark-analytics"> Analytics</span>'
+        "</div>"
+        f'<div class="fdl-sb-tagline fdl-sb-tagline--after-logo">{html.escape(_sb_tagline)}</div>'
+        '<div class="fdl-sb-client-row"><div class="fdl-sb-client-block">'
+        '<span class="fdl-sb-client-tag">Conta</span>'
+        f'<span class="fdl-sb-client-name">{_cli_nome}</span>'
+        "</div></div>"
+    )
     st.markdown(
         '<div class="fdl-sb-brand-shell">'
         f'<div class="fdl-sb-brand">{_brand_inner}</div>'

@@ -145,17 +145,32 @@ def _dataframe_frete_grid(
 
 
 def _column_config_frete(df: pd.DataFrame) -> dict[str, TextColumn]:
+    """Cabeçalhos curtos + help na grelha executiva (layout «executivo»)."""
     cfg: dict[str, TextColumn] = {}
+    disp: dict[str, tuple[str, str, str]] = {
+        "Data da venda": ("Data", "small", "Data da venda (export ML)."),
+        "N.º venda": ("Venda", "small", "Identificador da venda na plataforma."),
+        "Estado da venda": ("UF", "small", "Estado da venda."),
+        "Número do anúncio": ("Anúncio", "medium", "Item / anúncio ML."),
+        "Frete esperado": ("Esperado", "small", "Frete esperado conforme anúncio."),
+        "Frete cobrado": ("Cobrado", "small", "Frete cobrado na plataforma."),
+        "Diferença": ("Δ R$", "small", "Cobrado menos esperado."),
+        "Situação do Frete": ("Situação", "medium", "Classificação operacional do frete."),
+        "Ação Recomendada": ("Ação", "medium", "Tratativa sugerida."),
+        FRETE_UI_RECEBIDO: ("Receb.", "small", "Marcação «recebido» no detalhe, quando aplicável."),
+    }
     for c in df.columns:
+        if c in disp:
+            lab, w, h = disp[c]
+            cfg[c] = TextColumn(lab, width=w, help=h)  # type: ignore[arg-type]
+            continue
         cl = str(c).lower()
-        if c in (FRETE_UI_N_VENDA, FRETE_UI_ANUNCIO, "Número do anúncio", "Data da venda", "N.º venda"):
+        if c in (FRETE_UI_N_VENDA, FRETE_UI_ANUNCIO, "Número do anúncio"):
             cfg[c] = TextColumn(str(c), width="medium")
-        elif c in ("Estado", "Estado da venda", FRETE_UI_SITUACAO_FRETE):
+        elif c in ("Estado", FRETE_UI_SITUACAO_FRETE):
             cfg[c] = TextColumn(str(c), width="small")
         elif c == FRETE_UI_ACAO_RECOMENDADA:
             cfg[c] = TextColumn(str(c), width="medium")
-        elif c == FRETE_UI_RECEBIDO:
-            cfg[c] = TextColumn(str(c), width="small")
         elif "descri" in cl or "titulo" in cl or "título" in cl:
             cfg[c] = TextColumn(str(c), width="large")
     return cfg

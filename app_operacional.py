@@ -108,6 +108,7 @@ from operacional_frete_ui import (
     _column_config_frete,
     _dataframe_frete_grid,
     _frete_conciliacao_grid_com_icones,
+    frete_executivo_display_styled,
 )
 
 _REPO_APP_ROOT = Path(__file__).resolve().parent
@@ -3561,6 +3562,114 @@ def _fdl_repasse_inject_panel_styles() -> None:
             </style>
             """
         ),
+        unsafe_allow_html=True,
+    )
+
+
+def _fdl_frete_inject_panel_styles() -> None:
+    """Refino visual Conciliação de Frete (filtros compactos: ``_fdl_cp_inject_panel_styles``)."""
+    st.markdown(
+        dedent(
+            """
+            <style>
+            .fdl-frete-filtros-h {
+              font-size: 1rem;
+              font-weight: 700;
+              color: #0f172a;
+              margin: 0 0 4px 0;
+              letter-spacing: -0.02em;
+            }
+            .fdl-frete-caption {
+              font-size: 0.74rem;
+              font-weight: 500;
+              color: #64748b;
+              line-height: 1.38;
+              margin: 0 0 10px 0;
+            }
+            .fdl-frete-caption strong { color: #334155; font-weight: 600; }
+            .fdl-frete-section-title {
+              font-size: 1.14rem;
+              font-weight: 800;
+              color: #0f172a;
+              margin: 0 0 4px 0;
+              letter-spacing: -0.025em;
+            }
+            .fdl-frete-section-note {
+              font-size: 0.74rem;
+              font-weight: 500;
+              color: #64748b;
+              margin: 0 0 10px 0;
+              line-height: 1.42;
+            }
+            .fdl-frete-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-card--primary {
+              border-left: 3px solid #0f172a;
+              padding: 18px 20px 20px 20px;
+            }
+            .fdl-frete-kpi-shell.fdl-fat-kpi-shell .fdl-fat-kpi-card--primary .fdl-fat-kpi-value {
+              font-size: 1.82rem;
+            }
+            div[data-testid="stVerticalBlockBorderWrapper"]:has(.fdl-frete-filtros-h) {
+              border-color: #cbd5e1 !important;
+              box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05) !important;
+            }
+            </style>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _render_frete_indicadores_kpis(kpi_ex: dict[str, float], *, n_linhas: int) -> None:
+    """Cards alinhados ao painel Repasse: volume + montantes |Δ| no recorte."""
+
+    def _card(
+        label: str,
+        value: str,
+        *,
+        tier: str,
+        accent: bool = False,
+        title: str | None = None,
+    ) -> str:
+        classes = f"fdl-fat-kpi-card fdl-fat-kpi-card--{tier}"
+        if accent:
+            classes += " fdl-fat-kpi-card--accent"
+        tattr = ""
+        if title:
+            tattr = f' title="{html.escape(title, quote=True)}"'
+        return (
+            f'<div class="{classes}"{tattr}>'
+            f'<div class="fdl-fat-kpi-label">{html.escape(label)}</div>'
+            f'<div class="fdl-fat-kpi-value">{html.escape(value)}</div>'
+            "</div>"
+        )
+
+    primary = _card(
+        "Vendas no recorte",
+        _fmt_int_ptbr(int(n_linhas)),
+        tier="primary",
+        accent=True,
+        title="Linhas após filtros: período, estado, situação do frete e busca.",
+    )
+    secondary = "".join(
+        [
+            _card(
+                "A recuperar (cobrado a maior)",
+                _fmt_brl_ptbr_celula(kpi_ex.get("cobrado_maior", 0.0)),
+                tier="secondary",
+                title="Soma |Δ| nas linhas «Cobrado a maior».",
+            ),
+            _card(
+                "Repasse a conferir",
+                _fmt_brl_ptbr_celula(kpi_ex.get("repasse", 0.0)),
+                tier="secondary",
+                title="Soma |Δ| nas linhas com repasse de frete a validar.",
+            ),
+        ]
+    )
+    st.markdown(
+        f'<div class="fdl-fat-kpi-shell fdl-frete-kpi-shell">'
+        f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--primary">{primary}</div>'
+        f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--secondary">{secondary}</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -7516,6 +7625,8 @@ def _render_frete_operacional_ui(
     _sig = _frete_org_widget_suffix(org_id)
 
     try:
+            _fdl_cp_inject_panel_styles()
+            _fdl_frete_inject_panel_styles()
             _frete_stage_trace(2, "Filtros", "início")
             work = df_frete.copy()
             today = datetime.now(_BR_TZ).date()
@@ -7552,15 +7663,15 @@ def _render_frete_operacional_ui(
             situacao_opts: list[str] = list(FRETE_SITUACAO_FRETE_VALORES_FILTRO)
         
             with st.container(border=True):
-                st.subheader("Filtros")
-                st.caption("Período, critérios e busca para refinar o recorte.")
-                st.write("")
-                st.markdown("**Período** · data da venda")
-                st.caption(
-                    "Comparação por dia civil. Por omissão: últimos 30 dias até hoje."
+                st.markdown('<p class="fdl-frete-filtros-h">Filtros</p>', unsafe_allow_html=True)
+                st.markdown(
+                    '<p class="fdl-frete-caption">Recorte por <strong>data da venda</strong> (dia civil) · estado, '
+                    "situação do frete e busca. Por omissão: últimos 30 dias até hoje.</p>",
+                    unsafe_allow_html=True,
                 )
-                r2 = st.columns((1.15, 1.15, 2.3))
+                r2 = st.columns((1, 1))
                 with r2[0]:
+                    st.caption("Início")
                     data_ini = st.date_input(
                         "Data da venda — início",
                         value=d_ini_val,
@@ -7568,8 +7679,10 @@ def _render_frete_operacional_ui(
                         max_value=picker_max,
                         format="DD/MM/YYYY",
                         key=f"op_frete_d_ini_{_sig}",
+                        label_visibility="collapsed",
                     )
                 with r2[1]:
+                    st.caption("Fim")
                     data_fim = st.date_input(
                         "Data da venda — fim",
                         value=d_fim_val,
@@ -7577,19 +7690,45 @@ def _render_frete_operacional_ui(
                         max_value=picker_max,
                         format="DD/MM/YYYY",
                         key=f"op_frete_d_fim_{_sig}",
+                        label_visibility="collapsed",
                     )
-                st.write("")
-                st.markdown("**Critérios**")
-                r1 = st.columns((1.15, 1.15, 1.7))
+                r1 = st.columns((1, 1, 1.35))
                 with r1[0]:
-                    sel_est = _multiselect_stable(f"op_frete_ms_est_{_sig}", "Estado da venda", estados)
+                    sel_est = _multiselect_stable(
+                        f"op_frete_ms_est_{_sig}", "Estado da venda", estados, compact_label=True
+                    )
                 with r1[1]:
                     sel_sit = _multiselect_stable(
-                        f"op_frete_ms_situacao_{_sig}", FRETE_UI_SITUACAO_FRETE, situacao_opts
+                        f"op_frete_ms_situacao_{_sig}",
+                        FRETE_UI_SITUACAO_FRETE,
+                        situacao_opts,
+                        compact_label=True,
                     )
                 with r1[2]:
-                    busca = st.text_input("Busca (venda ou # anúncio)", "", key=f"op_frete_busca_{_sig}")
+                    busca = st.text_input(
+                        "Busca (venda ou # anúncio)",
+                        "",
+                        placeholder="Venda, anúncio…",
+                        key=f"op_frete_busca_{_sig}",
+                    )
                     busca = busca.strip().lower()
+                _clr_l, _clr_r = st.columns((1.55, 1))
+                with _clr_r:
+                    if st.button(
+                        "Limpar filtros desta vista",
+                        key=f"op_frete_clear_{_sig}",
+                        use_container_width=True,
+                        help="Repor datas aos limites úteis da base, limpar estado/situação e a busca.",
+                    ):
+                        for _k in (
+                            f"op_frete_d_ini_{_sig}",
+                            f"op_frete_d_fim_{_sig}",
+                            f"op_frete_ms_est_{_sig}",
+                            f"op_frete_ms_situacao_{_sig}",
+                            f"op_frete_busca_{_sig}",
+                        ):
+                            st.session_state.pop(_k, None)
+                        st.rerun()
 
             data_ini = _safe_streamlit_date(data_ini, d_ini_val)
             data_fim = _safe_streamlit_date(data_fim, d_fim_val)
@@ -7679,20 +7818,13 @@ def _render_frete_operacional_ui(
         tbl_repasse = frete_tabela_anuncios_repasse_frete(tbl_show, recebido_series)
 
         _fdl_ui_gap_section_lg()
-        st.subheader("📊 Indicadores")
-        st.caption("Valores sobre o recorte filtrado.")
+        st.markdown(
+            '<p class="fdl-frete-section-title">Indicadores</p>'
+            '<p class="fdl-frete-section-note">Volume de vendas e montantes |Δ| no recorte (mesma regra de sempre).</p>',
+            unsafe_allow_html=True,
+        )
         _fdl_ui_gap_section()
-        ek1, ek2 = st.columns(2)
-        with ek1:
-            st.metric(
-                "Cobrado a maior (valor a recuperar)",
-                _fmt_brl_ptbr_celula(kpi_ex["cobrado_maior"]),
-            )
-        with ek2:
-            st.metric(
-                "Repasse de frete (valor total)",
-                _fmt_brl_ptbr_celula(kpi_ex["repasse"]),
-            )
+        _render_frete_indicadores_kpis(kpi_ex, n_linhas=len(tbl_show))
 
         if _is_admin and FRETE_UI_STATUS_CONC in tbl_show.columns:
             st.caption(
@@ -7702,8 +7834,11 @@ def _render_frete_operacional_ui(
         _sem_anuncio = FRETE_UI_ANUNCIO not in tbl_show.columns
         st.divider()
         _fdl_ui_gap_section()
-        st.subheader("💸 Problemas de frete (cobrado a maior)")
-        st.caption("Anúncios onde o frete cobrado excede o esperado — prioridade para recuperação.")
+        st.markdown(
+            '<p class="fdl-frete-section-title">Cobrado a maior (por anúncio)</p>'
+            '<p class="fdl-frete-section-note">Anúncios onde o frete cobrado excede o esperado — prioridade para recuperação.</p>',
+            unsafe_allow_html=True,
+        )
         if _sem_anuncio:
             st.info("Inclua o **# do anúncio** no export de vendas para agregar por anúncio.")
         elif tbl_cob_maior.empty:
@@ -7719,8 +7854,11 @@ def _render_frete_operacional_ui(
 
         st.divider()
         _fdl_ui_gap_section()
-        st.subheader("🚚 Controle de repasse de frete")
-        st.caption("Anúncios com repasse de frete a validar (inclui marcação «Recebido?» no detalhe).")
+        st.markdown(
+            '<p class="fdl-frete-section-title">Repasse de frete (por anúncio)</p>'
+            '<p class="fdl-frete-section-note">Anúncios com repasse a validar; «Recebido?» no detalhamento abaixo.</p>',
+            unsafe_allow_html=True,
+        )
         if _sem_anuncio:
             pass
         elif tbl_repasse.empty:
@@ -7745,8 +7883,11 @@ def _render_frete_operacional_ui(
 
         st.divider()
         _fdl_ui_gap_section()
-        st.subheader("📋 Detalhamento das vendas")
-        st.caption("Linhas filtradas — exporte o recorte ou ajuste «Recebido?» quando disponível.")
+        st.markdown(
+            '<p class="fdl-frete-section-title">Detalhamento das vendas</p>'
+            '<p class="fdl-frete-section-note">Grelha executiva do recorte · exporte CSV/Excel ou ajuste «Recebido?» quando disponível.</p>',
+            unsafe_allow_html=True,
+        )
         _fdl_ui_gap_section()
 
         t_export_view = dataframe_frete_conciliacao_principal(tbl_show, layout="executivo")
@@ -7794,15 +7935,16 @@ def _render_frete_operacional_ui(
         t_grid = _dataframe_frete_grid(tbl_show, _fmt_brl_ptbr_celula, _col_referencia_como_texto)
         t_main = dataframe_frete_conciliacao_principal(t_grid, layout="executivo")
         t_main = _frete_conciliacao_grid_com_icones(t_main)
-        _h_df = 550 if len(t_main) > 8 else 360
-    
+        t_display = frete_executivo_display_styled(t_main)
+        _h_df = min(560, 140 + max(18 * min(len(t_main), 80), 120))
+
         if t_main.empty:
             st.info(
                 "**Nenhuma venda** com os filtros atuais. Alargue o período de datas ou limpe a busca / multiselects."
             )
         else:
             st.dataframe(
-                t_main,
+                t_display,
                 column_config=_column_config_frete(t_main),
                 use_container_width=True,
                 hide_index=True,
@@ -7810,9 +7952,9 @@ def _render_frete_operacional_ui(
             )
             st.caption(
                 "Use o ícone **olho** na barra da tabela para mostrar ou ocultar colunas. "
-                "Em **Situação do Frete**, os ícones indicam o estado (ex.: ✅ OK, ⬆️ cobrado a maior, 🚚 repasse)."
+                "Em **Situação do Frete**, os ícones indicam o estado (ex.: ✅ OK, ⬆️ cobrado a maior, 🚚 repasse). "
+                f"**{len(t_main)}** linhas no filtro atual."
             )
-        st.caption(f"{len(t_main)} linhas no filtro atual.")
     
         if _is_admin and load_info.get("frete_consume") in ("live", "live_fallback"):
             st.caption(
@@ -8970,7 +9112,8 @@ else:
     _render_financeiro_header(
         segment="Frete",
         title="Conciliação de Frete",
-        subtitle="Frete cobrado na plataforma face ao valor esperado por anúncio.",
+        subtitle="Frete cobrado vs esperado · anúncios e vendas no mesmo recorte.",
+        compact_spacing=True,
     )
 
 if _fv == "repasse" and _fdl_product_area == FDL_PRODUCT_AREA_FINANCEIRO:

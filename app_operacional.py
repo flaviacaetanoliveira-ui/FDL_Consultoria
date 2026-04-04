@@ -539,11 +539,11 @@ def _fdl_sidebar_inject_layout_css() -> None:
               padding-bottom: 1.35rem;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] {
-              margin-bottom: 0.42rem !important;
+              margin-bottom: 0.48rem !important;
             }
             .fdl-sb-brand-shell {
               margin: 0.1rem 0 0.15rem 0;
-              padding: 0.65rem 0.55rem 0.55rem;
+              padding: 0.7rem 0.6rem 0.58rem;
               border-radius: 12px;
               background: linear-gradient(
                 165deg,
@@ -559,12 +559,12 @@ def _fdl_sidebar_inject_layout_css() -> None:
               padding: 0;
             }
             [data-testid="stSidebar"] [data-testid="stImage"] img {
-              max-height: 2.15rem;
+              max-height: 2.72rem;
               width: auto !important;
               object-fit: contain;
               display: block;
-              margin: 0 auto 0.45rem auto;
-              opacity: 0.98;
+              margin: 0 auto 0.52rem auto;
+              opacity: 1;
             }
             .fdl-sb-product {
               font-size: 1.14rem;
@@ -577,48 +577,50 @@ def _fdl_sidebar_inject_layout_css() -> None:
             .fdl-sb-tagline {
               font-size: 0.6875rem;
               font-weight: 600;
-              letter-spacing: 0.04em;
-              color: #7c8a9c;
-              line-height: 1.45;
+              letter-spacing: 0.045em;
+              color: #5c6675;
+              line-height: 1.5;
               margin: 0 0 0.65rem 0;
             }
             .fdl-sb-tagline--after-logo {
               margin-top: 0;
-              margin-bottom: 0.55rem;
+              margin-bottom: 0.62rem;
+              padding: 0 0.35rem;
               text-align: center;
               font-weight: 600;
-              letter-spacing: 0.055em;
+              letter-spacing: 0.062em;
+              color: #4a5568;
             }
             .fdl-sb-client-row {
               margin: 0;
-              padding-top: 0.45rem;
-              border-top: 1px solid rgba(226, 232, 240, 0.75);
+              padding-top: 0.52rem;
+              border-top: 1px solid rgba(226, 232, 240, 0.65);
             }
             .fdl-sb-client-block {
               display: flex;
               flex-direction: column;
               align-items: center;
               text-align: center;
-              gap: 0.2rem;
+              gap: 0.3rem;
             }
             .fdl-sb-brand-shell .fdl-sb-client-block {
               align-items: stretch;
               text-align: left;
             }
             .fdl-sb-client-tag {
-              font-size: 0.5625rem;
-              font-weight: 600;
+              font-size: 0.5rem;
+              font-weight: 500;
               text-transform: uppercase;
-              letter-spacing: 0.11em;
-              color: #c5cdd8;
-              line-height: 1.2;
+              letter-spacing: 0.14em;
+              color: #d8dee6;
+              line-height: 1.25;
             }
             .fdl-sb-client-name {
-              font-size: 0.8125rem;
+              font-size: 0.875rem;
               font-weight: 600;
-              letter-spacing: -0.01em;
-              color: #5c6b7e;
-              line-height: 1.35;
+              letter-spacing: -0.015em;
+              color: #3d4d5c;
+              line-height: 1.42;
               word-break: break-word;
             }
             .fdl-sb-divider {
@@ -627,15 +629,18 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin: 0.75rem 0 0.15rem 0;
             }
             .fdl-sb-section-label {
-              font-size: 0.6875rem;
+              font-size: 0.625rem;
               font-weight: 600;
               text-transform: none;
-              letter-spacing: 0.035em;
-              color: #7c8796;
-              margin: 1.45rem 0 0.58rem 0;
-              padding: 0 0.2rem 0.38rem 0.2rem;
-              border-bottom: 1px solid rgba(148, 163, 184, 0.22);
-              line-height: 1.25;
+              letter-spacing: 0.1em;
+              color: #8b96a3;
+              margin: 1.38rem 0 0.62rem 0;
+              padding: 0.32rem 0.45rem 0.32rem 0.5rem;
+              border-radius: 8px;
+              background: rgba(248, 250, 252, 0.72);
+              border: 1px solid rgba(226, 232, 240, 0.55);
+              box-shadow: 0 1px 0 rgba(255, 255, 255, 0.65) inset;
+              line-height: 1.3;
             }
             .fdl-sb-section-label--first {
               margin-top: 0.35rem;
@@ -653,76 +658,86 @@ def _fdl_sidebar_inject_layout_css() -> None:
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"] {
               font-weight: 600 !important;
+              letter-spacing: -0.012em !important;
               color: #0f172a !important;
-              background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%) !important;
-              border: 1px solid #e2e8f0 !important;
-              border-left: 3px solid #1e293b !important;
-              border-radius: 11px !important;
+              background: linear-gradient(180deg, #ffffff 0%, #f4f6f9 100%) !important;
+              border: 1px solid rgba(226, 232, 240, 0.95) !important;
+              border-left: 3px solid #0f172a !important;
+              border-radius: 10px !important;
               box-shadow:
-                0 1px 0 rgba(255, 255, 255, 0.95) inset,
-                0 2px 6px rgba(15, 23, 42, 0.06) !important;
-              padding-top: 0.52rem !important;
-              padding-bottom: 0.52rem !important;
-              transition: box-shadow 0.15s ease, border-color 0.15s ease !important;
+                0 1px 0 rgba(255, 255, 255, 0.98) inset,
+                0 1px 2px rgba(15, 23, 42, 0.04),
+                0 3px 8px rgba(15, 23, 42, 0.05) !important;
+              padding-top: 0.56rem !important;
+              padding-bottom: 0.56rem !important;
+              min-height: 2.65rem !important;
+              transition: box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease !important;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"]:hover {
+              border-color: rgba(203, 213, 225, 0.98) !important;
               box-shadow:
-                0 1px 0 rgba(255, 255, 255, 0.95) inset,
-                0 3px 10px rgba(15, 23, 42, 0.08) !important;
+                0 1px 0 rgba(255, 255, 255, 0.98) inset,
+                0 2px 4px rgba(15, 23, 42, 0.05),
+                0 5px 14px rgba(15, 23, 42, 0.07) !important;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"] {
               font-weight: 500 !important;
-              color: #7a8794 !important;
-              border: 1px solid transparent !important;
-              background-color: rgba(255, 255, 255, 0.35) !important;
-              border-radius: 11px !important;
-              padding-top: 0.48rem !important;
-              padding-bottom: 0.48rem !important;
-              box-shadow: none !important;
-              transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
+              letter-spacing: -0.008em !important;
+              color: #64748b !important;
+              border: 1px solid rgba(226, 232, 240, 0.55) !important;
+              background: linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(248, 250, 252, 0.55) 100%) !important;
+              border-radius: 10px !important;
+              padding-top: 0.52rem !important;
+              padding-bottom: 0.52rem !important;
+              min-height: 2.52rem !important;
+              box-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) inset !important;
+              transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease !important;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"]:hover {
-              border-color: rgba(226, 232, 240, 0.95) !important;
-              background-color: rgba(248, 250, 252, 0.95) !important;
-              color: #52606d !important;
+              border-color: rgba(203, 213, 225, 0.85) !important;
+              background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%) !important;
+              color: #475569 !important;
+              box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.85) inset,
+                0 2px 6px rgba(15, 23, 42, 0.04) !important;
             }
             .fdl-sb-footer-rule {
               height: 1px;
-              margin: 1.15rem 0 0;
-              background: linear-gradient(90deg, transparent, #e8ecf1 10%, #e8ecf1 90%, transparent);
+              margin: 1.25rem 0 0;
+              background: linear-gradient(90deg, transparent, rgba(226, 232, 240, 0.55) 8%, rgba(226, 232, 240, 0.85) 50%, rgba(226, 232, 240, 0.55) 92%, transparent);
             }
             .fdl-sb-footer {
-              margin: 0.55rem 0 0 0;
-              padding: 0 0.15rem;
+              margin: 0.62rem 0 0 0;
+              padding: 0 0.2rem 0.15rem;
             }
             .fdl-sb-footer-label {
-              font-size: 0.5625rem;
-              font-weight: 600;
+              font-size: 0.5rem;
+              font-weight: 500;
               text-transform: uppercase;
-              letter-spacing: 0.1em;
-              color: #c5cdd8;
-              margin: 0 0 0.2rem 0;
-              line-height: 1.2;
+              letter-spacing: 0.14em;
+              color: #d1d9e2;
+              margin: 0 0 0.28rem 0;
+              line-height: 1.25;
             }
             .fdl-sb-footer-ts {
-              font-size: 0.75rem;
+              font-size: 0.78125rem;
               font-weight: 500;
               font-variant-numeric: tabular-nums;
-              color: #8b96a3;
-              margin: 0 0 0.35rem 0;
-              line-height: 1.35;
-              letter-spacing: 0.01em;
+              color: #5c6b7a;
+              margin: 0 0 0.4rem 0;
+              line-height: 1.4;
+              letter-spacing: 0.02em;
             }
             .fdl-sb-footer-admin {
               font-size: 0.65rem;
               font-weight: 400;
               color: #b4bcc6;
-              margin: 0.15rem 0 0 0;
+              margin: 0.1rem 0 0 0;
               line-height: 1.4;
               word-break: break-word;
             }
             .fdl-sb-footer-spacer {
-              height: 0.35rem;
+              height: 0.5rem;
             }
             </style>
             """

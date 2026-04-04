@@ -543,16 +543,11 @@ def _fdl_sidebar_inject_layout_css() -> None:
             }
             .fdl-sb-brand-shell {
               margin: 0.08rem 0 0.12rem 0;
-              padding: 0.62rem 0.55rem 0.56rem;
+              padding: 0.58rem 0.5rem 0.52rem;
               border-radius: 12px;
-              background: linear-gradient(
-                165deg,
-                rgba(248, 250, 252, 0.75) 0%,
-                rgba(255, 255, 255, 0.4) 48%,
-                rgba(248, 250, 252, 0.35) 100%
-              );
-              border: 1px solid rgba(226, 232, 240, 0.65);
-              box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+              background: rgba(255, 255, 255, 0.82);
+              border: 1px solid rgba(226, 232, 240, 0.45);
+              box-shadow: none;
             }
             .fdl-sb-brand {
               margin: 0;
@@ -562,9 +557,9 @@ def _fdl_sidebar_inject_layout_css() -> None:
               display: flex;
               justify-content: center;
               align-items: center;
-              margin: 0 auto 0.38rem auto;
+              margin: 0 auto 0.36rem auto;
               max-width: 100%;
-              padding: 0 0.15rem;
+              padding: 0;
             }
             .fdl-sb-logo-img {
               max-height: 2.05rem;
@@ -574,6 +569,7 @@ def _fdl_sidebar_inject_layout_css() -> None:
               object-fit: contain;
               display: block;
               opacity: 1;
+              mix-blend-mode: multiply;
             }
             .fdl-sb-product {
               font-size: 1.14rem;
@@ -635,33 +631,34 @@ def _fdl_sidebar_inject_layout_css() -> None:
             .fdl-sb-divider {
               height: 1px;
               background: linear-gradient(90deg, transparent, #e2e8f0 12%, #e2e8f0 88%, transparent);
-              margin: 0.75rem 0 0.15rem 0;
+              margin: 0.62rem 0 0.12rem 0;
             }
             .fdl-sb-section-label {
-              font-size: 0.625rem;
+              font-size: 0.59375rem;
               font-weight: 600;
               text-transform: none;
-              letter-spacing: 0.1em;
-              color: #8b96a3;
-              margin: 1.38rem 0 0.62rem 0;
-              padding: 0.32rem 0.45rem 0.32rem 0.5rem;
-              border-radius: 8px;
-              background: rgba(248, 250, 252, 0.72);
-              border: 1px solid rgba(226, 232, 240, 0.55);
-              box-shadow: 0 1px 0 rgba(255, 255, 255, 0.65) inset;
-              line-height: 1.3;
+              letter-spacing: 0.11em;
+              color: #94a3b8;
+              margin: 1.2rem 0 0.48rem 0;
+              padding: 0 0.12rem 0.4rem 0.12rem;
+              border-radius: 0;
+              background: transparent;
+              border: none;
+              border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+              box-shadow: none;
+              line-height: 1.35;
             }
             .fdl-sb-section-label--first {
-              margin-top: 0.35rem;
+              margin-top: 0.28rem;
             }
             .fdl-sb-org-hint {
-              font-size: 0.5625rem;
-              font-weight: 600;
-              letter-spacing: 0.14em;
+              font-size: 0.53125rem;
+              font-weight: 500;
+              letter-spacing: 0.16em;
               text-transform: uppercase;
-              color: #d1d9e2;
-              line-height: 1.3;
-              margin: 0 0 0.38rem 0;
+              color: #c5ced8;
+              line-height: 1.35;
+              margin: 0 0 0.32rem 0;
               padding: 0 0.2rem;
               text-align: center;
             }
@@ -669,25 +666,24 @@ def _fdl_sidebar_inject_layout_css() -> None:
               font-weight: 600 !important;
               letter-spacing: -0.012em !important;
               color: #0f172a !important;
-              background: linear-gradient(180deg, #ffffff 0%, #f4f6f9 100%) !important;
-              border: 1px solid rgba(226, 232, 240, 0.95) !important;
-              border-left: 3px solid #0f172a !important;
+              background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+              border: 1px solid rgba(226, 232, 240, 0.9) !important;
+              border-left: 2px solid #475569 !important;
               border-radius: 10px !important;
               box-shadow:
-                0 1px 0 rgba(255, 255, 255, 0.98) inset,
-                0 1px 2px rgba(15, 23, 42, 0.04),
-                0 3px 8px rgba(15, 23, 42, 0.05) !important;
+                0 1px 0 rgba(255, 255, 255, 0.9) inset,
+                0 1px 3px rgba(15, 23, 42, 0.035) !important;
               padding-top: 0.56rem !important;
               padding-bottom: 0.56rem !important;
               min-height: 2.65rem !important;
               transition: box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease !important;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"]:hover {
-              border-color: rgba(203, 213, 225, 0.98) !important;
+              border-color: rgba(203, 213, 225, 0.95) !important;
+              border-left-color: #334155 !important;
               box-shadow:
-                0 1px 0 rgba(255, 255, 255, 0.98) inset,
-                0 2px 4px rgba(15, 23, 42, 0.05),
-                0 5px 14px rgba(15, 23, 42, 0.07) !important;
+                0 1px 0 rgba(255, 255, 255, 0.95) inset,
+                0 2px 8px rgba(15, 23, 42, 0.05) !important;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"] {
               font-weight: 500 !important;
@@ -712,12 +708,12 @@ def _fdl_sidebar_inject_layout_css() -> None:
             }
             .fdl-sb-footer-rule {
               height: 1px;
-              margin: 1.25rem 0 0;
+              margin: 0.78rem 0 0;
               background: linear-gradient(90deg, transparent, rgba(226, 232, 240, 0.55) 8%, rgba(226, 232, 240, 0.85) 50%, rgba(226, 232, 240, 0.55) 92%, transparent);
             }
             .fdl-sb-footer {
-              margin: 0.62rem 0 0 0;
-              padding: 0 0.2rem 0.15rem;
+              margin: 0.48rem 0 0 0;
+              padding: 0 0.2rem 0.12rem;
             }
             .fdl-sb-footer-label {
               font-size: 0.5rem;
@@ -746,7 +742,7 @@ def _fdl_sidebar_inject_layout_css() -> None:
               word-break: break-word;
             }
             .fdl-sb-footer-spacer {
-              height: 0.5rem;
+              height: 0.35rem;
             }
             </style>
             """

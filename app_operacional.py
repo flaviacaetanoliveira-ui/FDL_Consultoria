@@ -543,7 +543,7 @@ def _fdl_sidebar_inject_layout_css() -> None:
             }
             .fdl-sb-brand-shell {
               margin: 0.08rem 0 0.12rem 0;
-              padding: 0.58rem 0.5rem 0.52rem;
+              padding: 0.6rem 0.52rem 0.54rem;
               border-radius: 12px;
               background: rgba(255, 255, 255, 0.82);
               border: 1px solid rgba(226, 232, 240, 0.45);
@@ -557,19 +557,18 @@ def _fdl_sidebar_inject_layout_css() -> None:
               display: flex;
               justify-content: center;
               align-items: center;
-              margin: 0 auto 0.36rem auto;
+              margin: 0 auto 0.42rem auto;
               max-width: 100%;
-              padding: 0;
+              padding: 0 0.08rem;
             }
             .fdl-sb-logo-img {
-              max-height: 2.05rem;
+              max-height: 2.2rem;
               width: auto !important;
               max-width: 100%;
               height: auto;
               object-fit: contain;
               display: block;
               opacity: 1;
-              mix-blend-mode: multiply;
             }
             .fdl-sb-product {
               font-size: 1.14rem;
@@ -588,17 +587,17 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin: 0 0 0.65rem 0;
             }
             .fdl-sb-tagline--after-logo {
-              margin-top: 0.05rem;
-              margin-bottom: 0.52rem;
-              padding: 0 0.3rem;
+              margin-top: 0.12rem;
+              margin-bottom: 0.46rem;
+              padding: 0 0.35rem;
               text-align: center;
               font-weight: 600;
-              letter-spacing: 0.062em;
+              letter-spacing: 0.058em;
               color: #4a5568;
             }
             .fdl-sb-client-row {
               margin: 0;
-              padding-top: 0.48rem;
+              padding-top: 0.44rem;
               border-top: 1px solid rgba(226, 232, 240, 0.65);
             }
             .fdl-sb-client-block {

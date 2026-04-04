@@ -542,8 +542,8 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin-bottom: 0.48rem !important;
             }
             .fdl-sb-brand-shell {
-              margin: 0.08rem 0 0.12rem 0;
-              padding: 0.6rem 0.52rem 0.54rem;
+              margin: 0.06rem 0 0.12rem 0;
+              padding: 0.72rem 0.56rem 0.62rem;
               border-radius: 12px;
               background: rgba(255, 255, 255, 0.82);
               border: 1px solid rgba(226, 232, 240, 0.45);
@@ -557,12 +557,12 @@ def _fdl_sidebar_inject_layout_css() -> None:
               display: flex;
               justify-content: center;
               align-items: center;
-              margin: 0 auto 0.42rem auto;
+              margin: 0 auto 0.52rem auto;
               max-width: 100%;
-              padding: 0 0.08rem;
+              padding: 0 0.12rem;
             }
             .fdl-sb-logo-img {
-              max-height: 2.2rem;
+              max-height: 2.45rem;
               width: auto !important;
               max-width: 100%;
               height: auto;
@@ -587,44 +587,46 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin: 0 0 0.65rem 0;
             }
             .fdl-sb-tagline--after-logo {
-              margin-top: 0.12rem;
-              margin-bottom: 0.46rem;
-              padding: 0 0.35rem;
+              margin-top: 0.18rem;
+              margin-bottom: 0.58rem;
+              padding: 0 0.4rem;
               text-align: center;
-              font-weight: 600;
-              letter-spacing: 0.058em;
-              color: #4a5568;
+              font-size: 0.625rem;
+              font-weight: 500;
+              letter-spacing: 0.05em;
+              color: #8b95a3;
+              line-height: 1.5;
             }
             .fdl-sb-client-row {
               margin: 0;
-              padding-top: 0.44rem;
-              border-top: 1px solid rgba(226, 232, 240, 0.65);
+              padding-top: 0.56rem;
+              border-top: 1px solid rgba(226, 232, 240, 0.6);
             }
             .fdl-sb-client-block {
               display: flex;
               flex-direction: column;
               align-items: center;
               text-align: center;
-              gap: 0.3rem;
+              gap: 0.36rem;
             }
             .fdl-sb-brand-shell .fdl-sb-client-block {
               align-items: stretch;
               text-align: left;
             }
             .fdl-sb-client-tag {
-              font-size: 0.5rem;
+              font-size: 0.46875rem;
               font-weight: 500;
               text-transform: uppercase;
-              letter-spacing: 0.14em;
-              color: #d8dee6;
-              line-height: 1.25;
+              letter-spacing: 0.16em;
+              color: #e4e9ef;
+              line-height: 1.3;
             }
             .fdl-sb-client-name {
-              font-size: 0.875rem;
+              font-size: 0.90625rem;
               font-weight: 600;
-              letter-spacing: -0.015em;
-              color: #3d4d5c;
-              line-height: 1.42;
+              letter-spacing: -0.018em;
+              color: #2c3a47;
+              line-height: 1.45;
               word-break: break-word;
             }
             .fdl-sb-divider {

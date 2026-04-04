@@ -400,9 +400,9 @@ _LOGIN_PAGE_STYLES = """
   .fdl-login-logo {
     display: block;
     width: auto;
-    max-width: min(320px, 100%);
+    max-width: min(328px, 100%);
     height: auto;
-    max-height: 56px;
+    max-height: 58px;
     object-fit: contain;
   }
   .fdl-login-wordmark {

@@ -1464,13 +1464,16 @@ def _load_faturamento_materialized_dataframe(path_s: str, url_s: str) -> pd.Data
 
 
 def _faturamento_nf_parquet_path_from_materialized_path(path_s: str) -> Path | None:
-    """``dataset_faturamento_nf.parquet`` ao lado do CSV/Parquet linha (mesmo ``current/``)."""
+    """``dataset_faturamento_nf.parquet`` no mesmo diretório que o materializado linha ou dentro da pasta apontada."""
     if not (path_s or "").strip():
         return None
     try:
         p = Path(path_s).expanduser()
         if not p.is_absolute():
             p = (_REPO_APP_ROOT / p).resolve()
+        if p.is_dir():
+            cand = p / "dataset_faturamento_nf.parquet"
+            return cand if cand.is_file() else None
         if not p.is_file():
             return None
         cand = p.parent / "dataset_faturamento_nf.parquet"
@@ -1480,13 +1483,16 @@ def _faturamento_nf_parquet_path_from_materialized_path(path_s: str) -> Path | N
 
 
 def _faturamento_fiscal_parquet_path_from_materialized_path(path_s: str) -> Path | None:
-    """``dataset_faturamento_fiscal.parquet`` ao lado do materializado linha (mesmo ``current/``)."""
+    """``dataset_faturamento_fiscal.parquet`` no mesmo diretório que o materializado linha ou dentro da pasta apontada."""
     if not (path_s or "").strip():
         return None
     try:
         p = Path(path_s).expanduser()
         if not p.is_absolute():
             p = (_REPO_APP_ROOT / p).resolve()
+        if p.is_dir():
+            cand = p / "dataset_faturamento_fiscal.parquet"
+            return cand if cand.is_file() else None
         if not p.is_file():
             return None
         cand = p.parent / "dataset_faturamento_fiscal.parquet"
@@ -1633,6 +1639,12 @@ def _load_faturamento_data(
             info["faturamento_nf_first_skip"] = "sem_path_local"
         if path_s:
             fp_p = _faturamento_fiscal_parquet_path_from_materialized_path(path_s)
+            if fp_p is None:
+                _nf_side = _faturamento_nf_parquet_path_from_materialized_path(path_s)
+                if _nf_side is not None:
+                    _fp_alt = _nf_side.parent / "dataset_faturamento_fiscal.parquet"
+                    if _fp_alt.is_file():
+                        fp_p = _fp_alt
             if fp_p is not None:
                 try:
                     df_fiscal0 = pd.read_parquet(fp_p, engine="pyarrow")
@@ -1649,6 +1661,11 @@ def _load_faturamento_data(
                         info["faturamento_fiscal_first"] = True
                         info["faturamento_fiscal_first_path"] = str(fp_p.resolve())
                         info["faturamento_fiscal_first_row_count_loaded"] = int(len(df_fiscal0))
+                        if df_fiscal_scoped.empty and len(df_fiscal0) > 0:
+                            info["faturamento_fiscal_user_hint"] = (
+                                "O ficheiro fiscal tem linhas, mas **nenhuma** ficou no escopo da org ativa "
+                                "(confira ``org_id`` no Parquet vs organização da sidebar)."
+                            )
                     else:
                         info["faturamento_fiscal_first_skip"] = "contract_columns_incompletos_ou_vazio"
                 except Exception as ex_f:  # noqa: BLE001
@@ -4445,8 +4462,10 @@ def _faturamento_nf_apply_minimal_recorte(
     out = df_nf.copy()
     emp_opts = _faturamento_dre_etiquetas_empresa_recorte(out)
     sel_emp = [str(x).strip() for x in empresas_sel if str(x).strip()]
-    if emp_opts and sel_emp:
-        out = out.loc[out["empresa"].astype(str).isin(sel_emp)].copy()
+    if emp_opts and sel_emp and "empresa" in out.columns:
+        sel_cf = {x.casefold() for x in sel_emp}
+        em_cf = out["empresa"].fillna("").astype(str).str.strip().str.casefold()
+        out = out.loc[em_cf.isin(sel_cf)].copy()
     sel_plat = [str(x).strip() for x in plataformas_sel if str(x).strip()]
     if sel_plat and "plataforma" in out.columns:
         out = out.loc[out["plataforma"].astype(str).str.strip().isin(sel_plat)].copy()
@@ -4471,7 +4490,9 @@ def _faturamento_fiscal_apply_minimal_recorte(
     emp_opts = _faturamento_dre_etiquetas_empresa_recorte(out)
     sel_emp = [str(x).strip() for x in empresas_sel if str(x).strip()]
     if emp_opts and sel_emp and "empresa" in out.columns:
-        out = out.loc[out["empresa"].astype(str).isin(sel_emp)].copy()
+        sel_cf = {x.casefold() for x in sel_emp}
+        em_cf = out["empresa"].fillna("").astype(str).str.strip().str.casefold()
+        out = out.loc[em_cf.isin(sel_cf)].copy()
     if ok_nf_dates and nf_d_fim >= nf_d_ini and "Nota_Data_Emissao" in out.columns:
         m = _fdl_fr_mask_nf_emissao_no_periodo(out["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
         out = out.loc[m].copy()
@@ -6430,6 +6451,31 @@ def _render_faturamento_dre_minimal(
         if _ef:
             _parts_f.append(f"Erro: <code>{html.escape(str(_ef))}</code>.")
         _fdl_fat_min_aside(" ".join(_parts_f), tight=True)
+
+    if use_nf_materializado and not use_fiscal_parquet:
+        _fiscal_why: list[str] = []
+        if load_info.get("faturamento_fiscal_user_hint"):
+            _fiscal_why.append(str(load_info["faturamento_fiscal_user_hint"]))
+        elif load_info.get("faturamento_fiscal_first_error"):
+            _fiscal_why.append(f"Erro ao ler: {load_info['faturamento_fiscal_first_error']}")
+        elif load_info.get("faturamento_fiscal_first_skip"):
+            _sk = str(load_info["faturamento_fiscal_first_skip"])
+            _fiscal_why.append(
+                "ficheiro ausente na pasta do materializado"
+                if _sk == "ficheiro_ausente"
+                else ("materializado só por URL sem pasta local — não dá para ler o Parquet fiscal"
+                if _sk == "sem_path_local"
+                else _sk)
+            )
+        else:
+            _fiscal_why.append("Parquet fiscal não validado ou vazio após escopo")
+        st.warning(
+            "**Valor faturado (NF)** neste ecrã está no **modo NF-first (pedidos ligados)** — costuma ficar "
+            "**abaixo** do total do relatório de **notas de saída** do Bling no mesmo período. "
+            "Para alinhar ao Bling, gere e publique `dataset_faturamento_fiscal.parquet` junto do materializado "
+            "(pipeline de materialização) e recarregue. "
+            f"**Estado do artefato fiscal:** {' · '.join(_fiscal_why)}"
+        )
 
     if df.empty and not use_nf_materializado:
         st.info(

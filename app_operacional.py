@@ -4555,6 +4555,38 @@ def _faturamento_fiscal_apply_minimal_recorte(
     return out
 
 
+def _nf_panel_filter_merged_fiscal_by_plataforma_resumo(
+    df_nf: pd.DataFrame,
+    plataformas_sel: tuple[str, ...],
+) -> pd.DataFrame:
+    """
+    Com Parquet fiscal + merge left join, o universo da tabela era **todas** as NFs fiscais; o filtro de
+    plataforma só cortava o comercial antes do join, deixando linhas «só fiscais» com «—» e venda 0.
+
+    Quando o utilizador escolhe plataforma(s), restringe o quadro **após** o merge às linhas cujo
+    ``plataforma_resumo`` (texto antes de «(+N)») coincide com a seleção.
+    """
+    if df_nf.empty:
+        return df_nf
+    sel_plat = [str(x).strip() for x in plataformas_sel if str(x).strip()]
+    if not sel_plat or "plataforma_resumo" not in df_nf.columns:
+        return df_nf
+    want = {nf_grain_plataforma_match_key(x) for x in sel_plat}
+    want.discard("")
+    if not want:
+        return df_nf
+
+    def _key_from_resumo(raw: object) -> str:
+        s = str(raw).strip() if raw is not None else ""
+        if not s or s == "—":
+            return ""
+        base = s.split("(", 1)[0].strip()
+        return nf_grain_plataforma_match_key(base)
+
+    got = df_nf["plataforma_resumo"].map(_key_from_resumo)
+    return df_nf.loc[got.isin(want)].copy()
+
+
 def _merge_fiscal_base_with_commercial_nf(
     df_fiscal: pd.DataFrame,
     df_commercial: pd.DataFrame,
@@ -6472,7 +6504,8 @@ def _render_faturamento_dre_minimal(
     )
     if use_fiscal_parquet:
         _plat_expl += (
-            " Com Parquet fiscal ativo, a plataforma não corta o universo de NFs fiscais — apenas o comercial."
+            " Com Parquet fiscal ativo, ao escolher uma ou mais plataformas a **tabela** mostra só NFs em que o "
+            "merge trouxe essa plataforma (evita linhas só fiscais com «—»). **Vazio** = todas as NFs do recorte fiscal."
         )
     _plat_help = "Plataforma: " + _plat_expl
 
@@ -6606,6 +6639,8 @@ def _render_faturamento_dre_minimal(
             ok_nf_dates=ok_nf_dates,
         )
         df_nf = _merge_fiscal_base_with_commercial_nf(df_fiscal_cut, df_nf_commercial)
+        if _min_state.plataformas:
+            df_nf = _nf_panel_filter_merged_fiscal_by_plataforma_resumo(df_nf, _min_state.plataformas)
     else:
         df_nf = df_nf_commercial
 
@@ -6641,8 +6676,11 @@ def _render_faturamento_dre_minimal(
             }[x],
             key="fdl_fat_min_venda_sinal",
             help=(
-                "Filtra pelo **valor da venda (lista)** agregado à NF (comercial). "
-                "Não altera o faturado fiscal por NF."
+                "Filtra pelo **valor da venda (lista)** agregado à NF (lado comercial). "
+                "**Só venda positiva** exclui notas em que a lista é 0 — incluindo notas **só fiscais** "
+                "(emitidas no Bling mas sem pedido ligado no materializado): deixam de aparecer na tabela. "
+                "Use **Todas** para ver também essas NFs (com «—» em Pedido/Produtos). "
+                "Não altera o valor faturado (NF) vindo do Parquet fiscal."
             ),
         )
 
@@ -6682,9 +6720,9 @@ def _render_faturamento_dre_minimal(
             )
             if use_fiscal_parquet:
                 _fdl_fat_min_aside(
-                    "Com Parquet fiscal ativo, os KPIs somam o <strong>mesmo quadro</strong> que a tabela: "
-                    "uma linha por NF do recorte fiscal, com colunas comerciais por <em>left join</em> "
-                    "(plataforma filtra só o lado comercial).",
+                    "Com Parquet fiscal ativo, o merge é <em>left join</em> fiscal + comercial; "
+                    "se o filtro <strong>Plataforma</strong> tiver opções, a tabela e os KPIs deste bloco ficam só com NFs "
+                    "cuja <code>plataforma_resumo</code> corresponde à seleção.",
                     tight=True,
                 )
             if use_nf_materializado:
@@ -6763,8 +6801,9 @@ def _render_faturamento_dre_minimal(
                     tight=True,
                 )
                 _fdl_fat_min_aside(
-                    "Com Parquet fiscal ativo, o card usa a soma de <strong>Valor_Liquido_NF</strong> no recorte "
-                    "(emissão + empresa; sem filtro de plataforma).",
+                    "Com Parquet fiscal ativo, o card de auditoria acima usa <strong>Valor_Liquido_NF</strong> no "
+                    "recorte fiscal (emissão + empresa). Os KPIs principais seguem o quadro da tabela (com filtro de "
+                    "plataforma quando aplicável).",
                     tight=True,
                 )
             if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame):

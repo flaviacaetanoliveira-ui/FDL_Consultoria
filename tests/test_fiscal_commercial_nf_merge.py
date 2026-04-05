@@ -59,6 +59,15 @@ def test_merge_fallback_quando_comercial_sem_org_id() -> None:
     assert out.iloc[0]["plataforma_resumo"] == "ML"
 
 
+def test_merge_strict_org_only_ignores_fallback() -> None:
+    fiscal = _fiscal_row(org_id="org-esquilo")
+    comm = _comm_row(org_id="", Nota_Numero_Normalizado="042480")
+    out_strict = merge_fiscal_base_with_commercial_nf_dataframe(fiscal, comm, strict_org_only=True)
+    out_full = merge_fiscal_base_with_commercial_nf_dataframe(fiscal, comm, strict_org_only=False)
+    assert str(out_strict.iloc[0]["pedido_resumo"]) == "—"
+    assert out_full.iloc[0]["pedido_resumo"] == "2000015600000000"
+
+
 def test_merge_prioriza_linha_com_org_quando_ambas_existem() -> None:
     """Com linha com org correta e linha sem org, não sobrescrever com fallback errado."""
     fiscal = _fiscal_row(org_id="o1")

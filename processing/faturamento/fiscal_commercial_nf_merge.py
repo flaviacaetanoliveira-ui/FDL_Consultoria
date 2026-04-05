@@ -20,11 +20,17 @@ from processing.faturamento.normalize import (
 def merge_fiscal_base_with_commercial_nf_dataframe(
     df_fiscal: pd.DataFrame,
     df_commercial: pd.DataFrame,
+    *,
+    strict_org_only: bool = False,
 ) -> pd.DataFrame:
     """
     Uma linha por NF do recorte fiscal; colunas comerciais quando existir vínculo.
 
-    Igual ao contrato de ``app_operacional._merge_fiscal_base_with_commercial_nf``.
+    ``strict_org_only=True``: só merge por (org_id, empresa, NF) — para auditoria vs fallback
+    por ``org_id`` vazio no comercial.
+
+    Igual ao contrato de ``app_operacional._merge_fiscal_base_with_commercial_nf`` (com
+    ``strict_org_only=False``, o padrão).
     """
     cols_out = [
         "org_id",
@@ -125,7 +131,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         co_e = co.loc[co["_jo"].eq(""), use].drop_duplicates(subset=["_je_m", "_jn_m"], keep="first")
 
         if co_n.empty:
-            if co_e.empty:
+            if co_e.empty or strict_org_only:
                 merged = fc.copy()
                 for _c in fill_commercial:
                     merged[_c] = pd.NA
@@ -136,7 +142,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
             merged = fc.merge(co_n, on=["_jo", "_je_m", "_jn_m"], how="left", indicator="__mf")
             unmatched = merged["__mf"].eq("left_only")
             merged = merged.drop(columns=["__mf"])
-            if unmatched.any() and not co_e.empty:
+            if unmatched.any() and not co_e.empty and not strict_org_only:
                 co_e2 = co_e.drop(columns=["_jo"], errors="ignore")
                 fill = (
                     merged.loc[unmatched, ["_je_m", "_jn_m"]]

@@ -31,3 +31,6 @@ logs/
 
 # Logs locais do mirror Power BI / agendamento
 powerbi_mirror/output/*.log
+
+# Saida local do script audit_fiscal_comercial_nf_merge.py
+scripts/_audit_out_*/

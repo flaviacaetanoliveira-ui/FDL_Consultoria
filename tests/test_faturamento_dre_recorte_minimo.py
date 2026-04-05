@@ -8,6 +8,7 @@ import pandas as pd
 
 from faturamento_dre_recorte_minimo import (
     FaturamentoRecorteMinState,
+    apply_nf_panel_frete_gap_fallback,
     apply_recorte_minimo,
     build_nf_grain_dataframe,
     nf_grain_plataforma_label_for_ui,
@@ -477,3 +478,42 @@ def test_compute_comercial_conferencia_qtd_x_pl() -> None:
     assert stt.valor_venda == 24.0
     assert stt.linhas_pedido == 2
     assert stt.pedidos_multiloja_distintos == 1
+
+
+def test_apply_nf_panel_frete_gap_fallback_um_pedido() -> None:
+    df = pd.DataFrame(
+        {
+            "frete": [0.0],
+            "valor_faturado_nf": [339.80],
+            "valor_venda": [241.0],
+            "n_linhas_pedido": [1],
+        }
+    )
+    out = apply_nf_panel_frete_gap_fallback(df)
+    assert abs(float(out.iloc[0]["frete"]) - 98.80) < 1e-6
+
+
+def test_apply_nf_panel_frete_gap_fallback_ignora_varias_linhas_pedido() -> None:
+    df = pd.DataFrame(
+        {
+            "frete": [0.0],
+            "valor_faturado_nf": [339.80],
+            "valor_venda": [241.0],
+            "n_linhas_pedido": [2],
+        }
+    )
+    out = apply_nf_panel_frete_gap_fallback(df)
+    assert abs(float(out.iloc[0]["frete"])) < 1e-9
+
+
+def test_apply_nf_panel_frete_gap_fallback_nao_sobrescreve_frete_comercial() -> None:
+    df = pd.DataFrame(
+        {
+            "frete": [10.0],
+            "valor_faturado_nf": [339.80],
+            "valor_venda": [241.0],
+            "n_linhas_pedido": [1],
+        }
+    )
+    out = apply_nf_panel_frete_gap_fallback(df)
+    assert abs(float(out.iloc[0]["frete"]) - 10.0) < 1e-9

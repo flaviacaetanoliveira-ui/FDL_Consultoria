@@ -47,6 +47,7 @@ from processing.faturamento.normalize import (
 )
 from faturamento_dre_recorte_minimo import (
     _min_cal_limits,
+    apply_nf_panel_frete_gap_fallback,
     build_nf_grain_dataframe,
     compute_nf_panel_kpis,
     faturamento_min_series_nf_emissao_bounds_dates,
@@ -6644,6 +6645,8 @@ def _render_faturamento_dre_minimal(
     else:
         df_nf = df_nf_commercial
 
+    df_nf = apply_nf_panel_frete_gap_fallback(df_nf)
+
     if "fdl_fat_min_venda_sinal" not in st.session_state:
         # Com Parquet fiscal, «Todas» inclui NFs só no Bling (sem pedido no materializado) → colunas «—».
         st.session_state["fdl_fat_min_venda_sinal"] = "positiva" if use_fiscal_kpi else "todos"
@@ -7000,7 +7003,13 @@ def _render_faturamento_dre_minimal(
             else "Venda (lista) − Faturado (NF)."
         ),
         "Comissão": "Comercial: soma das comissões das linhas de pedido ligadas à NF." if use_fiscal_kpi else None,
-        "Frete": "Comercial: soma do frete das linhas de pedido ligadas à NF." if use_fiscal_kpi else None,
+        "Frete": (
+            "Prioridade: frete das linhas de pedido; se ~0, usa coluna «Frete» do export de notas no Parquet fiscal "
+            "(após rematerializar); se ainda ~0, com **uma** linha de pedido e faturado > lista, "
+            "preenche com a diferença (caso típico frete ML no líquido da NF)."
+            if use_fiscal_kpi
+            else None
+        ),
         "Imposto": "Comercial: soma do imposto das linhas de pedido ligadas à NF." if use_fiscal_kpi else None,
         "Desp. fixa": (
             "Comercial: 5% sobre valor da venda (lista) agregado à NF."

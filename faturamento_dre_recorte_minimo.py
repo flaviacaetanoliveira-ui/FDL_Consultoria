@@ -489,6 +489,33 @@ def build_nf_grain_dataframe(
     return out.reset_index(drop=True), tuple(warn)
 
 
+def apply_nf_panel_frete_gap_fallback(df: pd.DataFrame, *, eps: float = 1e-9) -> pd.DataFrame:
+    """
+    Ajuste de **apresentação** na tabela NF-first: se ``frete`` está ~0, ``valor_venda`` > 0,
+    ``valor_faturado_nf > valor_venda`` e ``n_linhas_pedido == 1``, define
+    ``frete = valor_faturado_nf - valor_venda``.
+
+    Serve quando o pedido não trouxe frete, o Parquet fiscal ainda não tem ``Frete_Nota_Export``
+    (materialização antiga) ou o merge não preencheu — caso típico ML em que o líquido da nota
+    inclui o frete do Bling e a diferença para a lista é esse valor.
+
+    Não altera se ``frete`` comercial já > 0 nem se há mais do que uma linha de pedido na NF.
+    """
+    need = {"frete", "valor_faturado_nf", "valor_venda", "n_linhas_pedido"}
+    if df.empty or not need.issubset(df.columns):
+        return df
+    out = df.copy()
+    fr = pd.to_numeric(out["frete"], errors="coerce").fillna(0.0)
+    vf = pd.to_numeric(out["valor_faturado_nf"], errors="coerce").fillna(0.0)
+    vv = pd.to_numeric(out["valor_venda"], errors="coerce").fillna(0.0)
+    gap = vf - vv
+    nl = pd.to_numeric(out["n_linhas_pedido"], errors="coerce").fillna(0).astype(int)
+    m = (fr <= eps) & (gap > eps) & (vv > eps) & (nl == 1)
+    if m.any():
+        out.loc[m, "frete"] = gap.loc[m].astype(float)
+    return out
+
+
 def compute_nf_panel_kpis(df_nf: pd.DataFrame) -> dict[str, float | int]:
     """KPIs do painel NF-first = somas (e contagens) sobre ``df_nf``."""
     empty = {

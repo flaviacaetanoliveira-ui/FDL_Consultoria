@@ -90,3 +90,61 @@ def load_all_pedidos_csv_concatenated(pedidos_dir: Path) -> tuple[pd.DataFrame, 
         "mtime_iso": detalhe[-1]["mtime_iso"] if detalhe else "",
     }
     return merged, meta
+
+
+def dedupe_pedidos_multiloja_codigo(
+    df: pd.DataFrame,
+    *,
+    col_multiloja: str = "Número do pedido multiloja",
+    col_codigo: str = "Código",
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """
+    Remove duplicados da mesma linha lógica de pedido após concat de vários CSV (ex.: Dez + Jan).
+
+    - Se existir **linha com ``Data`` em dezembro/2025** no grupo, mantém a de **Data mais antiga**
+      entre essas (valor/comissões do pedido em dezembro, alinhado a NFs emitidas no início de jan).
+    - Caso contrário (só 2026+ ou um único mês), mantém a linha com **Data mais recente**
+      (último snapshot do export).
+
+    Chave: ``(org_id, empresa, multiloja, Código)``.
+    Deve correr **depois** de ``enrich_pedidos_com_notas`` para não perder colunas de NF no registo
+    que se mantém (o export de dezembro costuma trazer a mesma chave de vínculo à nota).
+    """
+    if df.empty or "Data" not in df.columns:
+        return df, {"pedidos_dedupe_multiloja_codigo": "skip_empty_or_no_data"}
+    missing = [c for c in ("org_id", "empresa", col_multiloja, col_codigo) if c not in df.columns]
+    if missing:
+        return df, {"pedidos_dedupe_multiloja_codigo": f"skip_missing_{missing}"}
+
+    work = df.copy()
+    for c in ("org_id", "empresa", col_multiloja, col_codigo):
+        work[c] = work[c].fillna("").astype(str).str.strip()
+
+    keys = ["org_id", "empresa", col_multiloja, col_codigo]
+    dts = pd.to_datetime(work["Data"], errors="coerce", dayfirst=True)
+
+    def _pick_one(g: pd.DataFrame) -> pd.DataFrame:
+        idx = g.index
+        g_dt = dts.loc[idx]
+        dec_mask = (g_dt.dt.year == 2025) & (g_dt.dt.month == 12)
+        if dec_mask.any():
+            pick = g_dt.loc[dec_mask].idxmin()
+            return work.loc[[pick]]
+        pick = g_dt.idxmax()
+        return work.loc[[pick]]
+
+    n_before = len(work)
+    _gb = work.groupby(keys, dropna=False, group_keys=False)
+    try:
+        out = _gb.apply(_pick_one, include_groups=False)
+    except TypeError:
+        out = _gb.apply(_pick_one)
+    out = out.reset_index(drop=True)
+    n_after = len(out)
+    meta = {
+        "pedidos_dedupe_multiloja_codigo": "applied",
+        "pedidos_linhas_antes": n_before,
+        "pedidos_linhas_depois": n_after,
+        "pedidos_linhas_removidas": n_before - n_after,
+    }
+    return out, meta

@@ -186,8 +186,9 @@ def test_build_nf_grain_one_nf_two_order_lines() -> None:
     assert float(out.iloc[0]["valor_faturado_nf"]) == 100.0
     assert float(out.iloc[0]["valor_venda"]) == 25.0
     assert float(out.iloc[0]["despesa_fixa"]) == 1.25
-    # Frete 0,5+0,5 por linha → dedup 0,5; corrige Σ Resultado em +0,5
-    assert float(out.iloc[0]["resultado"]) == 5.5
+    assert float(out.iloc[0]["comissao"]) == 3.0
+    assert float(out.iloc[0]["frete"]) == 1.0
+    assert float(out.iloc[0]["resultado"]) == 5.0
     assert int(out.iloc[0]["n_linhas_pedido"]) == 2
     assert bool(out.iloc[0]["faturamento_nota_vinculada"])
     kp = compute_nf_panel_kpis(out)
@@ -195,7 +196,7 @@ def test_build_nf_grain_one_nf_two_order_lines() -> None:
     assert kp["valor_faturado_nf"] == 100.0
     assert kp["valor_venda"] == 25.0
     assert kp["despesa_fixa"] == 1.25
-    assert kp["resultado"] == 5.5
+    assert kp["resultado"] == 5.0
 
 
 def test_build_nf_grain_recomposes_resultado_when_despesas_fixas_present() -> None:
@@ -234,8 +235,8 @@ def test_build_nf_grain_recomposes_resultado_when_despesas_fixas_present() -> No
     assert float(out.iloc[0]["resultado"]) == 4.0 + 3.0 + 2.0 + 0.5 - 1.25
 
 
-def test_build_nf_grain_venda_linha_prefers_valor_total() -> None:
-    """Shopee-like: Preço de lista inflado; Valor total reflete a venda real."""
+def test_build_nf_grain_valor_venda_usa_somente_preco_lista() -> None:
+    """Mesmo com «Valor total» no export, o grão NF usa Quantidade × Preço de lista."""
     df = pd.DataFrame(
         {
             "empresa": ["A"],
@@ -266,11 +267,11 @@ def test_build_nf_grain_venda_linha_prefers_valor_total() -> None:
         nf_d_fim=date(2026, 3, 31),
     )
     assert not w and len(out) == 1
-    assert abs(float(out.iloc[0]["valor_venda"]) - 98.4) < 1e-6
+    assert abs(float(out.iloc[0]["valor_venda"]) - 196.8) < 1e-6
 
 
-def test_build_nf_grain_dedupes_comissao_frete_same_pedido_multiloja() -> None:
-    """Dois itens, mesma NF e mesmo multiloja: comissão e frete iguais não somam 2×."""
+def test_build_nf_grain_soma_comissao_frete_por_linha() -> None:
+    """Dois itens na mesma NF: comissão e frete somam todas as linhas."""
     df = pd.DataFrame(
         {
             "empresa": ["A", "A"],
@@ -302,12 +303,12 @@ def test_build_nf_grain_dedupes_comissao_frete_same_pedido_multiloja() -> None:
     )
     assert not w and len(out) == 1
     row = out.iloc[0]
-    assert abs(float(row["comissao"]) - 109.27) < 1e-6
-    assert abs(float(row["frete"]) - 91.15) < 1e-6
+    assert abs(float(row["comissao"]) - 218.54) < 1e-6
+    assert abs(float(row["frete"]) - 182.30) < 1e-6
     assert abs(float(row["valor_venda"]) - 642.75) < 1e-6
 
 
-def test_build_nf_grain_integracommerce_comissao_pct_sobre_venda_lista() -> None:
+def test_build_nf_grain_integracommerce_usa_taxa_bling_sem_override() -> None:
     df = pd.DataFrame(
         {
             "empresa": ["A"],
@@ -340,13 +341,12 @@ def test_build_nf_grain_integracommerce_comissao_pct_sobre_venda_lista() -> None
     assert not w and len(out) == 1
     row = out.iloc[0]
     assert abs(float(row["valor_venda"]) - 100.0) < 1e-6
-    assert abs(float(row["comissao"]) - 18.0) < 1e-6
-    # res_raw=40; com_raw=com_dedup=50; res_corr=40; com_final=18 → +32
-    assert abs(float(row["resultado"]) - 72.0) < 1e-6
+    assert abs(float(row["comissao"]) - 50.0) < 1e-6
+    assert abs(float(row["resultado"]) - 40.0) < 1e-6
 
 
-def test_build_nf_grain_plataforma_resumo_ignores_linha_sem_nome_com_maior_venda() -> None:
-    """Linha auxiliar com maior venda_linha mas sem «Nome da plataforma» não apaga o rótulo MM."""
+def test_build_nf_grain_plataforma_resumo_linha_sem_nome_maior_peso_cai_no_fallback() -> None:
+    """Linha com maior Q×lista sem «Nome da plataforma»: rótulo cai no 1.º nome válido do grupo."""
     df = pd.DataFrame(
         {
             "empresa": ["A", "A"],
@@ -380,7 +380,7 @@ def test_build_nf_grain_plataforma_resumo_ignores_linha_sem_nome_com_maior_venda
     assert "MadeiraMadeira" in str(out.iloc[0]["plataforma_resumo"])
 
 
-def test_build_nf_grain_madeiramadeira_comissao_pct_sobre_venda_lista() -> None:
+def test_build_nf_grain_madeiramadeira_usa_taxa_bling_sem_override() -> None:
     df = pd.DataFrame(
         {
             "empresa": ["A"],
@@ -412,8 +412,8 @@ def test_build_nf_grain_madeiramadeira_comissao_pct_sobre_venda_lista() -> None:
     )
     assert not w and len(out) == 1
     row = out.iloc[0]
-    assert abs(float(row["comissao"]) - 38.0) < 1e-6
-    assert abs(float(row["resultado"]) - 92.0) < 1e-6
+    assert abs(float(row["comissao"]) - 80.0) < 1e-6
+    assert abs(float(row["resultado"]) - 50.0) < 1e-6
 
 
 def test_nf_grain_plataforma_match_key_unifies_labels() -> None:

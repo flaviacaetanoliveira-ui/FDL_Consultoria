@@ -10,6 +10,7 @@ from faturamento_dre_recorte_minimo import (
     FaturamentoRecorteMinState,
     apply_nf_panel_custo_from_line_grain,
     apply_nf_panel_frete_gap_fallback,
+    apply_nf_panel_resultado_frete_nota_lista,
     apply_recorte_minimo,
     build_nf_grain_dataframe,
     nf_grain_plataforma_label_for_ui,
@@ -611,6 +612,72 @@ def test_compute_comercial_conferencia_qtd_x_pl() -> None:
     assert stt.valor_venda == 24.0
     assert stt.linhas_pedido == 2
     assert stt.pedidos_multiloja_distintos == 1
+
+
+def test_apply_nf_panel_resultado_frete_nota_lista_soma_frete() -> None:
+    df = pd.DataFrame(
+        {
+            "valor_faturado_nf": [752.01],
+            "valor_venda": [630.0],
+            "frete": [122.01],
+            "resultado": [26.55],
+        }
+    )
+    out = apply_nf_panel_resultado_frete_nota_lista(df)
+    assert abs(float(out.iloc[0]["resultado"]) - 148.56) < 0.02
+
+
+def test_apply_nf_panel_resultado_frete_nota_lista_apos_gap_fallback() -> None:
+    df = pd.DataFrame(
+        {
+            "frete": [0.0],
+            "valor_faturado_nf": [752.01],
+            "valor_venda": [630.0],
+            "n_linhas_pedido": [1],
+            "resultado": [26.55],
+        }
+    )
+    out = apply_nf_panel_resultado_frete_nota_lista(apply_nf_panel_frete_gap_fallback(df))
+    assert abs(float(out.iloc[0]["frete"]) - 122.01) < 0.02
+    assert abs(float(out.iloc[0]["resultado"]) - 148.56) < 0.02
+
+
+def test_build_nf_grain_imputa_frete_gap_uma_linha_sem_mudar_resultado_bruto() -> None:
+    """Uma linha: frete comercial 0 e NF > lista → ``frete`` = gap no grão; ``resultado`` ajusta-se no painel."""
+    df = pd.DataFrame(
+        {
+            "empresa": ["A"],
+            "org_id": ["o1"],
+            "Nota_Numero_Normalizado": ["NF1"],
+            "Nota_Valor_Liquido_Total": [752.01],
+            "Nota_Data_Emissao": pd.to_datetime(["2025-06-10"]),
+            "Nota_Situacao": ["Autorizada"],
+            "Quantidade": [1.0],
+            "Preço de lista": [630.0],
+            "Nome da plataforma": ["ML"],
+            "Número do pedido multiloja": ["P1"],
+            "Taxa de Comissão": [119.70],
+            "Frete_Plataforma": [0.0],
+            "Imposto": [90.24],
+            "Resultado": [26.55],
+            "Descrição": ["X"],
+            "faturamento_nota_vinculada": [True],
+        }
+    )
+    st = FaturamentoRecorteMinState((), ())
+    out, w = build_nf_grain_dataframe(
+        df,
+        st,
+        ok_nf_dates=True,
+        nf_d_ini=date(2025, 6, 1),
+        nf_d_fim=date(2025, 6, 30),
+    )
+    assert not w
+    assert abs(float(out.iloc[0]["valor_venda"]) - 630.0) < 1e-6
+    assert abs(float(out.iloc[0]["frete"]) - 122.01) < 0.02
+    assert abs(float(out.iloc[0]["resultado"]) - 26.55) < 0.02
+    adj = apply_nf_panel_resultado_frete_nota_lista(out)
+    assert abs(float(adj.iloc[0]["resultado"]) - 148.56) < 0.02
 
 
 def test_apply_nf_panel_frete_gap_fallback_um_pedido() -> None:

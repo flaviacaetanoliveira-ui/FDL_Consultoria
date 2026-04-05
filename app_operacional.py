@@ -48,6 +48,7 @@ from processing.faturamento.normalize import (
 from faturamento_dre_recorte_minimo import (
     _min_cal_limits,
     apply_nf_panel_frete_gap_fallback,
+    apply_nf_panel_resultado_frete_nota_lista,
     build_nf_grain_dataframe,
     compute_nf_panel_kpis,
     faturamento_min_series_nf_emissao_bounds_dates,
@@ -6663,6 +6664,7 @@ def _render_faturamento_dre_minimal(
         df_nf = df_nf_commercial
 
     df_nf = apply_nf_panel_frete_gap_fallback(df_nf)
+    df_nf = apply_nf_panel_resultado_frete_nota_lista(df_nf)
 
     if "fdl_fat_min_venda_sinal" not in st.session_state:
         # Com Parquet fiscal, «Todas» inclui NFs só no Bling (sem pedido no materializado) → colunas «—».
@@ -6738,6 +6740,8 @@ def _render_faturamento_dre_minimal(
                 "<strong>Recorte temporal</strong>: <strong>emissão da NF</strong>. "
                 "<strong>Comercial</strong> — venda (lista), comissão, frete, imposto, despesa fixa, resultado e margem: "
                 "somas dos <strong>pedidos ligados</strong> à NF; <strong>Plataforma</strong> filtra só esse lado. "
+                "Se o frete reflete o excesso do faturado (NF) sobre a lista (típico frete na nota de saída), o "
+                "<strong>resultado</strong> inclui a correção +frete (comissão e imposto mantêm as regras das linhas). "
                 "<strong>Fiscal</strong> — valor faturado (NF) e coluna «Faturado»: "
                 "<strong>1× por NF</strong> via <code>dataset_faturamento_fiscal.parquet</code> quando válido; "
                 "caso contrário, valor líquido do grão NF-first. Despesa fixa = 5% sobre venda (lista) por NF."

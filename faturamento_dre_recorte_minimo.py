@@ -221,6 +221,25 @@ def _nf_grain_frete_numeric(df: pd.DataFrame) -> pd.Series:
     return pd.Series(0.0, index=df.index)
 
 
+def _nf_frete_nota_coincide_com_gap(
+    valor_faturado_nf: float,
+    valor_venda: float,
+    frete: float,
+    *,
+    eps: float = 1e-9,
+    rel_tol: float = 0.02,
+) -> bool:
+    """
+    True quando o frete explica (aprox.) o excesso do líquido da NF sobre a venda (lista): típico frete só na nota.
+    Comissão/imposto permanecem nas regras atuais; o ajuste é só em ``resultado`` (ver ``apply_nf_panel_resultado_frete_nota_lista``).
+    """
+    gap = valor_faturado_nf - valor_venda
+    if valor_venda <= eps or gap <= eps or frete <= eps:
+        return False
+    tol = max(eps, rel_tol * max(abs(valor_venda), abs(valor_faturado_nf), abs(gap)))
+    return abs(frete - gap) <= tol
+
+
 def _nf_grain_custo_produto_col_name(columns: list[str]) -> str:
     """Mesma prioridade que o painel linha (``Custo_Produto_Total`` V2, senão legado)."""
     if "Custo_Produto_Total" in columns:
@@ -295,9 +314,13 @@ def build_nf_grain_dataframe(
     ``Frete_Plataforma`` / ``Custo de Frete``.
 
     **Resultado:** Σ ``Resultado`` das linhas. Com coluna ``Despesas Fixas``: Σ ``Resultado`` + Σ ``Despesas Fixas``
-    − ``despesa_fixa`` (5% × ``valor_venda`` na NF).
+    − ``despesa_fixa`` (5% × ``valor_venda`` na NF). O painel aplica depois
+    ``apply_nf_panel_resultado_frete_nota_lista`` quando o frete coincide com o excesso NF−lista (frete na saída).
 
     **Despesa fixa:** ``NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA`` × ``valor_venda`` (por NF).
+
+    **Frete (grão):** com **uma** linha de pedido, frete comercial ~0 e ``valor_faturado_nf > valor_venda``, imputa-se
+    ``frete = valor_faturado_nf − valor_venda`` (alinhado ao fallback do painel / nota de saída).
     """
     warn: list[str] = []
     cols_out = [
@@ -453,6 +476,12 @@ def build_nf_grain_dataframe(
         else:
             res = res_raw
 
+        _eps_f = 1e-9
+        gap_nf = vl_nf - v_venda
+        nl_gr = int(len(gr))
+        if nl_gr == 1 and fre <= _eps_f and gap_nf > _eps_f and v_venda > _eps_f:
+            fre = float(gap_nf)
+
         ml_set: set[str] = set()
         ped_set: set[str] = set()
         if ml_col in gr.columns:
@@ -551,6 +580,30 @@ def apply_nf_panel_frete_gap_fallback(df: pd.DataFrame, *, eps: float = 1e-9) ->
     m = (fr <= eps) & (gap > eps) & (vv > eps) & (nl == 1)
     if m.any():
         out.loc[m, "frete"] = gap.loc[m].astype(float)
+    return out
+
+
+def apply_nf_panel_resultado_frete_nota_lista(df: pd.DataFrame, *, eps: float = 1e-9, rel_tol: float = 0.02) -> pd.DataFrame:
+    """
+    Quando o **frete** reflete o excesso do faturado (NF) sobre a **venda (lista)** — frete essencialmente só na nota de
+    saída — soma ``frete`` a ``resultado``. Equivale a incluir o frete na base e subtrair na linha frete, sem alterar
+    comissão nem imposto (já calculados nas linhas).
+    """
+    need = {"valor_faturado_nf", "valor_venda", "frete", "resultado"}
+    if df.empty or not need.issubset(df.columns):
+        return df
+    out = df.copy()
+    vf = pd.to_numeric(out["valor_faturado_nf"], errors="coerce").fillna(0.0)
+    vv = pd.to_numeric(out["valor_venda"], errors="coerce").fillna(0.0)
+    fr = pd.to_numeric(out["frete"], errors="coerce").fillna(0.0)
+    gap = vf - vv
+    mx = pd.concat([vv.abs(), vf.abs(), gap.abs()], axis=1).max(axis=1)
+    tol = (rel_tol * mx).clip(lower=eps)
+    m = (vv > eps) & (gap > eps) & (fr > eps) & ((fr - gap).abs() <= tol)
+    if not m.any():
+        return out
+    res = pd.to_numeric(out["resultado"], errors="coerce").fillna(0.0)
+    out.loc[m, "resultado"] = (res.loc[m] + fr.loc[m]).astype(float)
     return out
 
 

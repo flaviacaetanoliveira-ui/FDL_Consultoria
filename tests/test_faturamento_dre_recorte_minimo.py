@@ -10,7 +10,9 @@ from faturamento_dre_recorte_minimo import (
     FaturamentoRecorteMinState,
     apply_recorte_minimo,
     build_nf_grain_dataframe,
+    nf_grain_plataforma_label_for_ui,
     nf_grain_plataforma_match_key,
+    nf_grain_plataforma_ui_options,
     compute_comercial_conferencia_stats,
     compute_fiscal_nf_conferencia_stats,
     compute_nf_panel_kpis,
@@ -417,6 +419,17 @@ def test_build_nf_grain_madeiramadeira_comissao_pct_sobre_venda_lista() -> None:
 def test_nf_grain_plataforma_match_key_unifies_labels() -> None:
     assert nf_grain_plataforma_match_key("MADEIRA MADEIRA") == nf_grain_plataforma_match_key("MadeiraMadeira")
     assert nf_grain_plataforma_match_key("Mercado Livre") == "mercadolivre"
+
+
+def test_nf_grain_plataforma_ui_options_excludes_bling() -> None:
+    s = pd.Series(["Bling", "MercadoLivre", "bling", "Shopee"])
+    assert nf_grain_plataforma_ui_options(s) == ["MercadoLivre", "Shopee"]
+
+
+def test_nf_grain_plataforma_label_for_ui_maps_bling() -> None:
+    assert nf_grain_plataforma_label_for_ui("Bling") == "Loja direta"
+    assert nf_grain_plataforma_label_for_ui("MercadoLivre") == "MercadoLivre"
+    assert nf_grain_plataforma_label_for_ui("") == "—"
 
 
 def test_build_nf_grain_platform_filter_accepts_alias() -> None:

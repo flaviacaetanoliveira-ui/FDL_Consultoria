@@ -43,6 +43,27 @@ def nf_grain_plataforma_match_key(raw: object) -> str:
     return xs.casefold().replace(" ", "")
 
 
+# ERP / canal interno no export — não é marketplace; não deve aparecer no filtro «Plataforma».
+_NF_GRAIN_PLATAFORMA_UI_EXCLUDE_KEYS: frozenset[str] = frozenset({"bling"})
+
+
+def nf_grain_plataforma_ui_options(series: pd.Series) -> list[str]:
+    """Rótulos únicos para multiselect (exclui placeholders tipo «Bling»)."""
+    raw = {str(x).strip() for x in series.dropna().unique() if str(x).strip()}
+    out = [x for x in raw if nf_grain_plataforma_match_key(x) not in _NF_GRAIN_PLATAFORMA_UI_EXCLUDE_KEYS]
+    return sorted(out)
+
+
+def nf_grain_plataforma_label_for_ui(raw: object) -> str:
+    """Texto na tabela: «Bling» no pedido = venda direta/ERP, não canal ML/Shopee."""
+    xs = str(raw).strip() if raw is not None else ""
+    if not xs or xs.casefold() in {"nan", "none", "nat", "<na>", "—"}:
+        return "—"
+    if nf_grain_plataforma_match_key(xs) == "bling":
+        return "Loja direta"
+    return xs
+
+
 def _min_cal_limits(d_min: date, d_max: date) -> tuple[date, date]:
     today = datetime.now(_BR_TZ).date()
     cal_max = max(d_max, today)

@@ -50,7 +50,9 @@ from faturamento_dre_recorte_minimo import (
     compute_nf_panel_kpis,
     faturamento_min_series_nf_emissao_bounds_dates,
     faturamento_recorte_min_state_from_session,
+    nf_grain_plataforma_label_for_ui,
     nf_grain_plataforma_match_key,
+    nf_grain_plataforma_ui_options,
 )
 from fdl_paths import resolve_pasta_vendas_ml
 from operacional_app_context import (
@@ -4484,10 +4486,12 @@ def _series_nf_emissao_pt_br(s: pd.Series) -> pd.Series:
 
 def _faturamento_nf_platform_display_series(df_nf: pd.DataFrame) -> pd.Series:
     if "plataforma" in df_nf.columns:
-        return _df_get_series_column(df_nf, "plataforma").fillna("").astype(str)
-    if "plataforma_resumo" in df_nf.columns:
-        return _df_get_series_column(df_nf, "plataforma_resumo").fillna("").astype(str)
-    return pd.Series("", index=df_nf.index, dtype=str)
+        s = _df_get_series_column(df_nf, "plataforma").fillna("").astype(str)
+    elif "plataforma_resumo" in df_nf.columns:
+        s = _df_get_series_column(df_nf, "plataforma_resumo").fillna("").astype(str)
+    else:
+        return pd.Series("", index=df_nf.index, dtype=str)
+    return s.map(nf_grain_plataforma_label_for_ui)
 
 
 def _faturamento_nf_apply_minimal_recorte(
@@ -6206,9 +6210,11 @@ def _render_comercial_pedidos_analise(
         _d_fim_ui = None
 
     emp_opts = _faturamento_dre_etiquetas_empresa_recorte(df_atend)
-    plats = sorted(
-        {str(x).strip() for x in df_atend["Nome da plataforma"].dropna().unique() if str(x).strip()}
-    ) if "Nome da plataforma" in df_atend.columns else []
+    plats = (
+        nf_grain_plataforma_ui_options(df_atend["Nome da plataforma"])
+        if "Nome da plataforma" in df_atend.columns
+        else []
+    )
 
     with st.container(border=True):
         st.markdown('<p class="fdl-cp-filtros-h">Filtros</p>', unsafe_allow_html=True)
@@ -6600,17 +6606,11 @@ def _render_faturamento_dre_minimal(
     if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame) and "plataforma" in df_nf_pre.columns:
         # Opções alinhadas ao grão NF (Parquet); evita misturar com linhas fiscais sem ``plataforma``
         # e garante o mesmo rótulo que o filtro ``plataforma`` / ``nf_grain_plataforma_match_key``.
-        plats = sorted(
-            {str(x).strip() for x in df_nf_pre["plataforma"].dropna().unique() if str(x).strip()}
-        )
+        plats = nf_grain_plataforma_ui_options(df_nf_pre["plataforma"])
     elif use_nf_materializado and "plataforma" in _df_bounds.columns:
-        plats = sorted(
-            {str(x).strip() for x in _df_bounds["plataforma"].dropna().unique() if str(x).strip()}
-        )
+        plats = nf_grain_plataforma_ui_options(_df_bounds["plataforma"])
     elif "Nome da plataforma" in df.columns:
-        plats = sorted(
-            {str(x).strip() for x in df["Nome da plataforma"].dropna().unique() if str(x).strip()}
-        )
+        plats = nf_grain_plataforma_ui_options(df["Nome da plataforma"])
     else:
         plats = []
 
@@ -7451,8 +7451,10 @@ def _render_faturamento_dre_recorte_global(
             st.session_state["fdl_fat_dre_nf_emi_ini"] = nf_d_min
             st.session_state["fdl_fat_dre_nf_emi_fim"] = min(nf_d_max, datetime.now(_BR_TZ).date())
     sits = sorted({str(x).strip() for x in out["Situação"].dropna().unique() if str(x).strip()})
-    plats = sorted(
-        {str(x).strip() for x in out["Nome da plataforma"].dropna().unique() if str(x).strip()}
+    plats = (
+        nf_grain_plataforma_ui_options(out["Nome da plataforma"])
+        if "Nome da plataforma" in out.columns
+        else []
     )
     emp_opts = _faturamento_dre_etiquetas_empresa_recorte(out)
     nf_sit_vals = (
@@ -7828,8 +7830,10 @@ def _painel_faturamento(
         else:
             d_min = d_max = datetime.now(_BR_TZ).date()
             has_usable_dates = False
-        plats = sorted(
-            {str(x).strip() for x in work["Nome da plataforma"].dropna().unique() if str(x).strip()}
+        plats = (
+            nf_grain_plataforma_ui_options(work["Nome da plataforma"])
+            if "Nome da plataforma" in work.columns
+            else []
         )
         sits = sorted({str(x).strip() for x in work["Situação"].dropna().unique() if str(x).strip()})
 
@@ -8993,7 +8997,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             st.session_state[f"op_repasse_d_pag_ini_{_rep_wk}"] = _d_min
             st.session_state[f"op_repasse_d_pag_fim_{_rep_wk}"] = _d_max
         plats = (
-            sorted([x for x in base["Plataforma"].dropna().unique().tolist() if str(x).strip()])
+            nf_grain_plataforma_ui_options(base["Plataforma"])
             if "Plataforma" in base.columns
             else []
         )

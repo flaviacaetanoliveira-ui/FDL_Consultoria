@@ -20,6 +20,7 @@ from .io_pedidos import dedupe_pedidos_multiloja_codigo, load_all_pedidos_csv_co
 from .join_custo import join_custo_produto
 from .join_custo_notas_itens import enrich_custo_from_notas_itens
 from .join_notas import enrich_pedidos_com_notas
+from .ml_order_fees import allocate_multiloja_order_level_fees
 from .params import (
     FaturamentoParams,
     FaturamentoParamsV2,
@@ -124,6 +125,7 @@ def _build_faturamento_dataset_v1(params: FaturamentoParams, params_path: Path) 
     df = join_custo_produto(df_p, df_c)
     assert_all_skus_have_custo(df)
     df = assign_custo_audit_columns(df, frozenset())
+    df, meta_ml_fees_v1 = allocate_multiloja_order_level_fees(df)
 
     data_proc = _utc_now_iso()
     base_col = "Valor total"
@@ -148,6 +150,7 @@ def _build_faturamento_dataset_v1(params: FaturamentoParams, params_path: Path) 
         "coluna_base_imposto_resolvida": base_col,
         "data_processamento": data_proc,
         "row_count": len(df),
+        **{k: v for k, v in meta_ml_fees_v1.items() if str(k).startswith("ml_fee_")},
     }
     return df, meta
 
@@ -182,6 +185,7 @@ def _build_faturamento_dataset_v2(
 
         df_j = join_custo_produto(df_p, df_c)
         df_j = assign_custo_audit_columns(df_j, dup_keys)
+        df_j, meta_ml_fees = allocate_multiloja_order_level_fees(df_j)
 
         permite = emp.permite_faturamento_sem_nf
         if permite is None:
@@ -205,7 +209,7 @@ def _build_faturamento_dataset_v2(
         )
         df_j, meta_dedupe = dedupe_pedidos_multiloja_codigo(df_j)
         notas_meta_por_empresa.append(
-            {"org_id": emp.org_id, **meta_notas, **meta_custo_nf, **meta_dedupe}
+            {"org_id": emp.org_id, **meta_notas, **meta_custo_nf, **meta_ml_fees, **meta_dedupe}
         )
 
         parts.append(df_j)

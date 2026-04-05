@@ -18,6 +18,21 @@ from .normalize import normalize_pedido_join_key, to_numeric_br
 from .validate import FaturamentoValidationError
 
 
+def _df_col_as_series(df: pd.DataFrame, col: str) -> pd.Series:
+    """
+    Uma série alinhada ao índice de ``df`` para ``col``.
+
+    Exports Excel/CSV por vezes repetem o mesmo nome de coluna; ``df[col]`` passa a ser
+    ``DataFrame`` e quebra agregações / ``to_numeric_br``. Aqui usa-se a primeira coluna homónima.
+    """
+    if col not in df.columns:
+        raise KeyError(col)
+    obj = df[col]
+    if isinstance(obj, pd.DataFrame):
+        return obj.iloc[:, 0]
+    return obj
+
+
 def _norm_org_filter(s: str) -> str:
     return str(s).strip().lower().replace(" ", "_")
 
@@ -123,8 +138,8 @@ def _prep_notas_dataframe(notas_raw: pd.DataFrame) -> pd.DataFrame:
             col_emp = c
             break
 
-    nf_key = normalize_pedido_join_key(df[col_nf].astype(str))
-    vl = to_numeric_br(df[col_vl]) if col_vl in df.columns else pd.Series(0.0, index=df.index)
+    nf_key = normalize_pedido_join_key(_df_col_as_series(df, col_nf).astype(str))
+    vl = to_numeric_br(_df_col_as_series(df, col_vl)) if col_vl in df.columns else pd.Series(0.0, index=df.index)
     if col_dt:
         dt = pd.to_datetime(df[col_dt], errors="coerce", dayfirst=True)
     else:
@@ -148,13 +163,17 @@ def _prep_notas_dataframe(notas_raw: pd.DataFrame) -> pd.DataFrame:
         situ_norm = pd.Series("", index=df.index, dtype=object)
 
     col_frete = next((c for c in df.columns if str(c).strip().casefold() == "frete"), "")
-    frete_v = to_numeric_br(df[col_frete]) if col_frete and col_frete in df.columns else pd.Series(0.0, index=df.index)
+    frete_v = (
+        to_numeric_br(_df_col_as_series(df, col_frete))
+        if col_frete and col_frete in df.columns
+        else pd.Series(0.0, index=df.index)
+    )
 
     out = pd.DataFrame(
         {
             "nf_key": nf_key.astype(str).str.strip(),
             "vl_liq": vl,
-            "frete_linha": frete_v.fillna(0.0).astype(float),
+            "frete_linha": pd.to_numeric(frete_v, errors="coerce").fillna(0.0).astype("float64"),
             "dt_emissao": dt,
             "ped_key": ped_key.astype(str).str.strip(),
             "ml_key": ml_key.astype(str).str.strip(),
@@ -262,6 +281,8 @@ def enrich_pedidos_com_notas(
 
     prep_all = _prep_notas_dataframe(raw)
     prep_all = _filtrar_notas_por_empresa(prep_all, org_id, empresa)
+    if not prep_all.empty:
+        prep_all["nf_key"] = prep_all["nf_key"].astype(str).str.strip()
     sit_by_nf = _situacao_por_nf_agregada(prep_all)
 
     raw = filtrar_notas_canceladas(raw)
@@ -269,6 +290,9 @@ def enrich_pedidos_com_notas(
     prep = _filtrar_notas_por_empresa(prep, org_id, empresa)
     meta["notas_linhas_apos_filtro"] = int(len(prep))
     meta["notas_vazio"] = bool(prep.empty)
+
+    if not prep.empty:
+        prep["nf_key"] = prep["nf_key"].astype(str).str.strip()
 
     if prep.empty:
         out["Nota_Numero_Normalizado"] = ""
@@ -290,6 +314,7 @@ def enrich_pedidos_com_notas(
             Nota_Data_Emissao=("dt_emissao", "min"),
         )
     )
+    totais["nf_key"] = totais["nf_key"].astype(str).str.strip()
     m_ped, m_ml = _maps_pedido_para_nf(prep)
 
     k_ped = normalize_pedido_join_key(out["Número do pedido"].astype(str))

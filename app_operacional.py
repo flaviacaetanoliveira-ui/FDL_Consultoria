@@ -6644,6 +6644,10 @@ def _render_faturamento_dre_minimal(
     else:
         df_nf = df_nf_commercial
 
+    if "fdl_fat_min_venda_sinal" not in st.session_state:
+        # Com Parquet fiscal, «Todas» inclui NFs só no Bling (sem pedido no materializado) → colunas «—».
+        st.session_state["fdl_fat_min_venda_sinal"] = "positiva" if use_fiscal_kpi else "todos"
+
     # Modo fiscal: df_nf = merge fiscal + comercial (base antes de produto/sinal). KPIs e tabela usam df_nf_panel.
     _prod_opts: list[str] = []
     if not df_nf.empty and "produto_resumo" in df_nf.columns:

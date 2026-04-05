@@ -77,15 +77,20 @@ def normalize_nf_fiscal_commercial_join_key_scalar(raw: object) -> str:
     """
     Chave para merge ``dataset_faturamento_fiscal`` ↔ grão comercial (painel NF-first).
 
-    Reutiliza ``normalize_pedido_join_key_scalar`` (trim, sufixo ``.0``). Se o resultado for
-    **só dígitos**, remove zeros à esquerda, alinhando «042517» (export notas) a «42517»
-    (pedidos lidos como número).
+    Reutiliza ``normalize_pedido_join_key_scalar`` (trim, sufixo ``.0``). Prefixo ``NF`` opcional
+    (com ou sem ``-`` / espaço) seguido só de dígitos → normaliza como número (zeros à esquerda),
+    alinhando «NF042517» a «042517» / «42517». Cadeia **só dígitos**: remove zeros à esquerda.
     """
     s = normalize_pedido_join_key_scalar(raw)
     if not s:
         return ""
-    if re.fullmatch(r"\d+", s):
-        return s.lstrip("0") or "0"
+    compact = re.sub(r"\s+", "", s)
+    m = re.fullmatch(r"(?i)NF[\-.]?(\d+)", compact)
+    if m:
+        digits = m.group(1)
+        return digits.lstrip("0") or "0"
+    if re.fullmatch(r"\d+", compact):
+        return compact.lstrip("0") or "0"
     return s
 
 

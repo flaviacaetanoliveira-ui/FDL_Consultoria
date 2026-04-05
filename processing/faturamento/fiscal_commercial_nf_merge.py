@@ -1,7 +1,8 @@
 """
 Merge base fiscal (1 linha por NF) com grão comercial NF-first.
 
-A chave ``normalize_nf_fiscal_commercial_join_key`` já alinha «042480» e «42480» (zeros à esquerda).
+A chave ``normalize_nf_fiscal_commercial_join_key`` alinha «042480» e «42480» (zeros à esquerda) e
+«NF042480» com «042480» quando o sufixo é só dígitos.
 Quando ainda assim não casa, o caso típico é **org_id** vazio no materializado comercial e preenchido
 no fiscal (ou o inverso): o merge estrito em (org_id, empresa, NF) falha. O fallback usa só
 (empresa, NF) nas linhas comerciais sem org_id.

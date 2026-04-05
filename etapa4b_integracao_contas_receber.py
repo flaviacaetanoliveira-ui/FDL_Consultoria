@@ -307,11 +307,25 @@ def _coluna_data_periodo_repasse(data_pagamento: pd.Series, data_emissao_yyyy_mm
     """
     Coluna materializada para filtro de período no app: data de pagamento quando existe;
     caso contrário data de emissão (ex.: Shopee sem liberação). Sem lógica duplicada no Streamlit.
+
+    Emissão usa meia-noite em America/Sao_Paulo em ISO com offset, para o parse no app não deslocar o dia civil.
     """
+    br = ZoneInfo("America/Sao_Paulo")
     pay = pd.to_datetime(data_pagamento, errors="coerce")
-    emi = pd.to_datetime(data_emissao_yyyy_mm_dd.fillna("").astype(str).str.strip(), errors="coerce", format="%Y-%m-%d")
-    comb = pay.where(pay.notna(), emi)
-    return _formatar_data_pagamento_mista(comb)
+    pay_fmt = _formatar_data_pagamento_mista(pay)
+    emi = pd.to_datetime(
+        data_emissao_yyyy_mm_dd.fillna("").astype(str).str.strip(), errors="coerce", format="%Y-%m-%d"
+    )
+
+    def _emi_cell(t: object) -> str:
+        if pd.isna(t):
+            return ""
+        ts = pd.Timestamp(int(t.year), int(t.month), int(t.day), tz=br)
+        return ts.isoformat()
+
+    emi_fmt = emi.map(_emi_cell)
+    empty_pay = pay_fmt.astype(str).str.strip().eq("") | pay_fmt.eq("nan")
+    return pay_fmt.where(~empty_pay, emi_fmt).astype(str)
 
 
 def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.DataFrame, dict[str, object]]:

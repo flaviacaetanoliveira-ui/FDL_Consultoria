@@ -1,52 +1,28 @@
-"""Recorte repasse: pagamento ou emissão quando pagamento vazio."""
+"""Coluna materializada Data período repasse (etapa4b)."""
 from __future__ import annotations
-
-from datetime import date
 
 import pandas as pd
 
-from repasse_period_filter import repasse_mascara_periodo_pagamento_ou_emissao
+from etapa4b_integracao_contas_receber import _coluna_data_periodo_repasse
 
 
-def test_shopee_sem_pagamento_entra_por_emissao_2026():
-    df = pd.DataFrame(
-        {
-            "Data de pagamento": ["", ""],
-            "Data de emissão": ["2025-06-01", "2026-01-05"],
-        }
-    )
-    m = repasse_mascara_periodo_pagamento_ou_emissao(df, date(2026, 1, 1), date(2026, 1, 31))
-    assert m.tolist() == [False, True]
+def test_periodo_usa_emissao_quando_pagamento_vazio():
+    pay = pd.Series([pd.NaT, pd.NaT])
+    emi = pd.Series(["2025-06-01", "2026-01-05"])
+    out = _coluna_data_periodo_repasse(pay, emi)
+    assert "2025-06-01" in out.iloc[0]
+    assert "2026-01-05" in out.iloc[1] and "-03:00" in out.iloc[1]
 
 
-def test_com_pagamento_usa_somente_pagamento():
-    df = pd.DataFrame(
-        {
-            "Data de pagamento": ["2025-12-01 10:00:00", "2026-01-10 12:00:00"],
-            "Data de emissão": ["2026-01-05", "2025-01-01"],
-        }
-    )
-    m = repasse_mascara_periodo_pagamento_ou_emissao(df, date(2026, 1, 1), date(2026, 1, 31))
-    assert m.tolist() == [False, True]
+def test_periodo_prioriza_pagamento():
+    pay = pd.Series([pd.Timestamp("2026-01-10 12:00:00")])
+    emi = pd.Series(["2025-01-01"])
+    out = _coluna_data_periodo_repasse(pay, emi)
+    assert "2026-01-10" in out.iloc[0]
 
 
-def test_pagamento_fora_mas_emissao_dentro_exclui_se_tem_pagamento():
-    df = pd.DataFrame(
-        {
-            "Data de pagamento": ["2025-01-01 00:00:00"],
-            "Data de emissão": ["2026-01-05"],
-        }
-    )
-    m = repasse_mascara_periodo_pagamento_ou_emissao(df, date(2026, 1, 1), date(2026, 1, 31))
-    assert m.tolist() == [False]
-
-
-def test_sem_nenhuma_data_mostra_tudo():
-    df = pd.DataFrame(
-        {
-            "Data de pagamento": [""],
-            "Data de emissão": [""],
-        }
-    )
-    m = repasse_mascara_periodo_pagamento_ou_emissao(df, date(2026, 1, 1), date(2026, 1, 31))
-    assert bool(m.all())
+def test_periodo_vazio_quando_ambos_vazios():
+    pay = pd.Series([pd.NaT])
+    emi = pd.Series([""])
+    out = _coluna_data_periodo_repasse(pay, emi)
+    assert out.iloc[0] == ""

@@ -59,7 +59,6 @@ from faturamento_dre_recorte_minimo import (
     nf_grain_plataforma_ui_options,
 )
 from fdl_paths import resolve_pasta_vendas_ml
-from repasse_period_filter import repasse_mascara_periodo_pagamento_ou_emissao as _repasse_mascara_periodo_pagamento_ou_emissao
 from operacional_app_context import (
     SESSION_ACTIVE_ORG_KEY,
     get_active_organization,
@@ -9013,6 +9012,11 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     _fdl_repasse_inject_panel_styles()
     _fdl_ui_gap_tight()
 
+    # Coluna materializada na tabela final (etapa4b); CSVs antigos só têm «Data de pagamento».
+    _col_periodo_repasse = (
+        "Data período repasse" if "Data período repasse" in base.columns else "Data de pagamento"
+    )
+
     # Chaves de widget por org: sem isto, ao mudar de empresa o estado do Streamlit podia manter
     # limites/valores de outra org e parecer que o calendário «começa» na data errada.
     _rep_wk = _frete_org_widget_suffix(_active_org.org_id)
@@ -9020,24 +9024,13 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     with st.container(border=True):
         st.markdown('<p class="fdl-repasse-filtros-h">Filtros</p>', unsafe_allow_html=True)
         st.markdown(
-            '<p class="fdl-repasse-caption">Recorte por <strong>data de pagamento</strong> (dia civil); '
-            "linhas <strong>sem</strong> pagamento entram pelo intervalo de <strong>data de emissão</strong> da NF. "
+            '<p class="fdl-repasse-caption">Recorte pelo período conforme a coluna <strong>Data período repasse</strong> '
+            "da tabela final (materializada no pipeline). CSV legado: só <strong>Data de pagamento</strong>. "
             "Plataforma, ação, situação e busca.</p>",
             unsafe_allow_html=True,
         )
-        dp_series_full = _parse_data_pagamento_final(_first_series(base, "Data de pagamento"))
+        dp_series_full = _parse_data_pagamento_final(_first_series(base, _col_periodo_repasse))
         _d_min, _d_max, has_dp_base = _series_datetime_bounds_dates(dp_series_full)
-        _col_de_base = _resolve_col_data_emissao(list(base.columns))
-        if _col_de_base and _col_de_base in base.columns:
-            de_series_full = _parse_data_emissao_final(_first_series(base, _col_de_base))
-            de_min, de_max, has_de_base = _series_datetime_bounds_dates(de_series_full)
-        else:
-            has_de_base = False
-        if has_dp_base and has_de_base:
-            _d_min = min(_d_min, de_min)
-            _d_max = max(_d_max, de_max)
-        elif has_de_base and not has_dp_base:
-            _d_min, _d_max = de_min, de_max
         today_rep = datetime.now(_BR_TZ).date()
         picker_min = min(_d_min, today_rep - timedelta(days=3 * 365))
         picker_max = max(_d_max, today_rep)
@@ -9109,14 +9102,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             placeholder="Venda, pedido, NF…",
             key=f"op_repasse_busca_txt_{_rep_wk}",
         ).strip().lower()
-        if not has_dp_base and not has_de_base:
+        if not has_dp_base:
             st.info(
-                "Sem datas de pagamento nem de emissão na base: o período não filtra linhas (todas as vendas aparecem). "
-                "Com datas preenchidas, o filtro por período passa a aplicar-se."
-            )
-        elif not has_dp_base and has_de_base:
-            st.info(
-                "Sem datas de pagamento na base: o recorte por período usa **data de emissão** da NF em todas as linhas."
+                "Sem datas na coluna de período da tabela: o filtro por datas não aplica (todas as linhas aparecem). "
+                "Regenere o repasse com o pipeline atual para obter **Data período repasse**."
             )
         _clr_l, _clr_r = st.columns((1.55, 1))
         with _clr_l:
@@ -9161,8 +9150,13 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         )
         tabela = tabela[m_busca]
     
-    m_periodo = _repasse_mascara_periodo_pagamento_ou_emissao(tabela, data_pag_ini, data_pag_fim)
-    tabela = tabela.loc[m_periodo].copy()
+    _dp_filt = _parse_data_pagamento_final(_first_series(tabela, _col_periodo_repasse))
+    if _dp_filt.notna().any():
+        _dd = _dp_filt.dt.normalize()
+        _ini_ts = pd.Timestamp(data_pag_ini)
+        _fim_ts = pd.Timestamp(data_pag_fim) + pd.Timedelta(days=1)
+        m_data = _dp_filt.notna() & (_dd >= _ini_ts) & (_dd < _fim_ts)
+        tabela = tabela.loc[m_data].copy()
     tabela = _excluir_linhas_fora_conciliacao(tabela)
     
     if "Plataforma" in base.columns:
@@ -9179,10 +9173,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     
     _pag_caption = (
         f"Período: **{data_pag_ini.strftime('%d/%m/%Y')}** a **{data_pag_fim.strftime('%d/%m/%Y')}** "
-        "(pagamento; sem pagamento usa emissão da NF)"
+        f"({_col_periodo_repasse})"
     )
-    if not has_dp_base and not has_de_base:
-        _pag_caption += " — **filtro por data inativo** (sem datas na base)"
+    if not has_dp_base:
+        _pag_caption += " — **filtro por data inativo** (sem datas na coluna de período)"
     st.caption(
         f"Plataforma **{plataforma_label}** · Atualizado **{ts_proc}** · {_pag_caption}"
     )

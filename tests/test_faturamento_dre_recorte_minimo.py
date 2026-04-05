@@ -342,6 +342,41 @@ def test_build_nf_grain_integracommerce_comissao_pct_sobre_venda_lista() -> None
     assert abs(float(row["resultado"]) - 72.0) < 1e-6
 
 
+def test_build_nf_grain_plataforma_resumo_ignores_linha_sem_nome_com_maior_venda() -> None:
+    """Linha auxiliar com maior venda_linha mas sem «Nome da plataforma» não apaga o rótulo MM."""
+    df = pd.DataFrame(
+        {
+            "empresa": ["A", "A"],
+            "org_id": ["o1", "o1"],
+            "Nota_Numero_Normalizado": ["NFX", "NFX"],
+            "Nota_Valor_Liquido_Total": [300.0, 300.0],
+            "Nota_Data_Emissao": pd.to_datetime(["2026-01-10", "2026-01-10"]),
+            "Nota_Situacao": ["Autorizada", "Autorizada"],
+            "Quantidade": [1.0, 1.0],
+            "Preço de lista": [50.0, 999.0],
+            "Valor total": [50.0, 999.0],
+            "Nome da plataforma": ["MadeiraMadeira", ""],
+            "Número do pedido multiloja": ["P1", "P1"],
+            "Taxa de Comissão": [0.0, 0.0],
+            "Frete_Plataforma": [0.0, 0.0],
+            "Imposto": [0.0, 0.0],
+            "Resultado": [0.0, 0.0],
+            "Descrição": ["A", "B"],
+            "faturamento_nota_vinculada": [True, True],
+        }
+    )
+    st = FaturamentoRecorteMinState((), ())
+    out, w = build_nf_grain_dataframe(
+        df,
+        st,
+        ok_nf_dates=True,
+        nf_d_ini=date(2026, 1, 1),
+        nf_d_fim=date(2026, 1, 31),
+    )
+    assert not w and len(out) == 1
+    assert "MadeiraMadeira" in str(out.iloc[0]["plataforma_resumo"])
+
+
 def test_build_nf_grain_madeiramadeira_comissao_pct_sobre_venda_lista() -> None:
     df = pd.DataFrame(
         {

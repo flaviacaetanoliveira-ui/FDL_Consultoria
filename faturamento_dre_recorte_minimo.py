@@ -461,12 +461,21 @@ def build_nf_grain_dataframe(
         if "Nome da plataforma" in gr.columns:
             plat_vals = gr["Nome da plataforma"].fillna("").astype(str).str.strip()
             w_arr = v_lin.to_numpy(dtype=float)
+            # Só considerar linhas com nome de plataforma preenchido; senão a linha com maior
+            # venda_linha pode ser cabeçalho/auxiliar sem «Nome da plataforma» e anular o rótulo
+            # (ex.: MadeiraMadeira com valor noutra linha sem plataforma).
             best = ""
             best_w = -1.0
             for p, tw in zip(plat_vals, w_arr, strict=False):
+                if not p:
+                    continue
                 if tw > best_w:
                     best_w = float(tw)
                     best = p
+            if not best and plat_vals.ne("").any():
+                # Fallback: todas as venda_linha nas linhas com plataforma são 0 — usa 1.º nome válido
+                first_p = plat_vals[plat_vals.ne("")].iloc[0]
+                best = str(first_p).strip()
             plats_u = plat_vals[plat_vals.ne("")]
             if plats_u.nunique() > 1:
                 plat_res = f"{best or '—'} (+{plats_u.nunique() - 1})" if best else f"{plats_u.nunique()} plataformas"

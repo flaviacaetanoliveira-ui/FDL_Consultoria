@@ -6690,9 +6690,10 @@ def _render_faturamento_dre_minimal(
             _nf_kpi_fim = _nf_kpi_ini
 
     if use_nf_materializado:
-        # Recorte linhas (empresa / emissão NF); depois **grão NF** com a mesma lógica do modo in-memory.
-        # Sem isto, ``_merge_fiscal_base_with_commercial_nf`` recebia o CSV linha-a-linha — sem
-        # ``plataforma_resumo``, ``valor_venda``, ``pedido_resumo``… e a tabela ficava só com «—».
+        # ``faturamento_nf_df`` é normalmente ``dataset_faturamento_nf.parquet`` = **já grão NF**
+        # (contrato NF-first). ``build_nf_grain_dataframe`` exige colunas de **linha de pedido**
+        # (ex. ``Nota_Valor_Liquido_Total`` por linha); aplicá-lo ao Parquet devolve vazio + aviso
+        # «sem colunas fiscais mínimas» e zera todo o lado comercial no merge fiscal.
         df_nf_lines = _faturamento_nf_apply_minimal_recorte(
             df_nf_pre,
             empresas_sel=_min_state.empresas,
@@ -6701,13 +6702,24 @@ def _render_faturamento_dre_minimal(
             nf_d_fim=_nf_kpi_fim,
             ok_nf_dates=ok_nf_dates,
         )
-        df_nf_commercial, _wrn_nf = build_nf_grain_dataframe(
-            df_nf_lines,
-            _min_state,
-            ok_nf_dates=ok_nf_dates,
-            nf_d_ini=_nf_kpi_ini,
-            nf_d_fim=_nf_kpi_fim,
-        )
+        if nf_first_contract_dataframe_valid(df_nf_pre):
+            df_nf_commercial = df_nf_lines.copy()
+            if "plataforma_resumo" not in df_nf_commercial.columns:
+                if "plataforma" in df_nf_commercial.columns:
+                    df_nf_commercial["plataforma_resumo"] = (
+                        df_nf_commercial["plataforma"].fillna("").astype(str)
+                    )
+                else:
+                    df_nf_commercial["plataforma_resumo"] = "—"
+            _wrn_nf = ()
+        else:
+            df_nf_commercial, _wrn_nf = build_nf_grain_dataframe(
+                df_nf_lines,
+                _min_state,
+                ok_nf_dates=ok_nf_dates,
+                nf_d_ini=_nf_kpi_ini,
+                nf_d_fim=_nf_kpi_fim,
+            )
     else:
         df_nf_commercial, _wrn_nf = build_nf_grain_dataframe(
             df,

@@ -565,9 +565,8 @@ def apply_nf_panel_custo_from_line_grain(
     eps: float = 1e-9,
 ) -> pd.DataFrame:
     """
-    Quando o painel usa ``dataset_faturamento_nf.parquet``, ``custo_produto`` pode vir zerado (materialização
-    antiga ou coluna total ausente no grão gravado). Recalcula o grão a partir do dataset **linha** com o mesmo
-    recorte e usa ``custo_produto`` daí quando > eps (alinha com ``build_nf_grain_dataframe``).
+    Recalcula ``custo_produto`` a partir do dataset **linha** (mesmo recorte que ``build_nf_grain_dataframe``).
+    Não é usado pelo Streamlit: o app lê só o Parquet NF materializado; mantida para testes ou scripts offline.
     """
     if df_nf.empty or df_line.empty or "custo_produto" not in df_nf.columns:
         return df_nf

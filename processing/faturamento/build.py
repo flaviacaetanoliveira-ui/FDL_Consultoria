@@ -18,6 +18,7 @@ from .flags import apply_faturamento_flags
 from .io_custo import load_custo_xlsx
 from .io_pedidos import dedupe_pedidos_multiloja_codigo, load_all_pedidos_csv_concatenated, load_latest_pedidos_csv
 from .join_custo import join_custo_produto
+from .join_custo_notas_itens import enrich_custo_from_notas_itens
 from .join_notas import enrich_pedidos_com_notas
 from .params import (
     FaturamentoParams,
@@ -195,8 +196,17 @@ def _build_faturamento_dataset_v2(
             org_id=emp.org_id,
             empresa=emp.empresa,
         )
+        df_j, meta_custo_nf = enrich_custo_from_notas_itens(
+            df_j,
+            df_c,
+            notas_dir=notas_dir,
+            org_id=emp.org_id,
+            empresa=emp.empresa,
+        )
         df_j, meta_dedupe = dedupe_pedidos_multiloja_codigo(df_j)
-        notas_meta_por_empresa.append({"org_id": emp.org_id, **meta_notas, **meta_dedupe})
+        notas_meta_por_empresa.append(
+            {"org_id": emp.org_id, **meta_notas, **meta_custo_nf, **meta_dedupe}
+        )
 
         parts.append(df_j)
         emp_sources.append(

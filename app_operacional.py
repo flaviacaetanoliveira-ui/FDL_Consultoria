@@ -4661,9 +4661,11 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     margem_str = _margem_sobre_venda_str(res, vv)
 
     _ht_vf = (
-        "Soma do **valor líquido da NF** (1× por nota) a partir do ficheiro **dataset_faturamento_fiscal.parquet** "
-        "(export de notas de saída / Bling), com **Nota_Data_Emissao** no período. "
-        "Não usa o grão NF-first de pedidos para este total."
+        "Fiscal (Bling): soma dos valores líquidos das NFs (1 linha por nota no Parquet), "
+        "com data de emissão dentro do período e filtros de empresa aplicados. "
+        "Deve alinhar ao relatório de notas de saída do Bling no mesmo intervalo de emissão e escopo de empresas "
+        "(canceladas/denegadas costumam estar excluídas na geração do Parquet). "
+        "Plataforma não altera este total. Não usa o valor líquido vindo só do grão NF-first de pedidos."
         if valor_faturado_from_fiscal_parquet
         else (
             "Soma de Nota_Valor_Liquido_Total uma vez por NF no período de emissão da NF "
@@ -4671,8 +4673,11 @@ def _render_fdl_fat_dre_nf_kpi_cards(
         )
     )
     _ht_dif = (
-        "Σ **Valor da venda** (comercial, pedidos ligados no recorte) menos Σ **valor líquido NF** "
-        "(fiscal, Parquet Bling). NFs só fiscais aparecem com venda 0 neste cruzamento."
+        "Ponte comercial × fiscal: Σ valor da venda (lista), só pedidos no recorte (comercial), "
+        "menos Σ valor líquido NF (fiscal, Parquet). "
+        "Interpretação: desvio entre preço lista agregado aos pedidos e o que consta na nota; "
+        "valores positivos ou negativos são esperados (descontos, composição de pedidos, timing). "
+        "NFs sem pedido ligado no materializado aparecem com venda 0 e diferença negativa."
         if valor_faturado_from_fiscal_parquet
         else "Valor da venda total menos valor faturado total (NF) no recorte."
     )
@@ -4680,16 +4685,26 @@ def _render_fdl_fat_dre_nf_kpi_cards(
         "5% do Valor da venda (Σ Quantidade × Preço de lista) agregado à NF, por nota."
     )
     _ht_res = (
-        "Valores já consolidados no materializado NF-first (Resultado / Despesa fixa)."
-        if use_nf_materializado
+        "Comercial: Σ resultado por NF a partir dos pedidos ligados (não confundir com o valor líquido da NF fiscal)."
+        if valor_faturado_from_fiscal_parquet
         else (
-            "Soma do Resultado das linhas de pedido da NF; recompõe despesa fixa quando aplicável "
-            "para alinhar ao corte único por NF."
+            "Valores já consolidados no materializado NF-first (Resultado / Despesa fixa)."
+            if use_nf_materializado
+            else (
+                "Soma do Resultado das linhas de pedido da NF; recompõe despesa fixa quando aplicável "
+                "para alinhar ao corte único por NF."
+            )
         )
     )
     _ht_mg = (
-        "Σ Resultado ÷ Σ Valor da venda no recorte. Valor da venda = Quantidade × Preço de lista. "
+        "Somente comercial: Σ Resultado ÷ Σ Valor da venda (lista) (Quantidade × Preço de lista no recorte). "
+        "O valor faturado fiscal e a diferença não entram nesta conta. "
         "Se Σ Valor da venda = 0, exibe traço."
+        if valor_faturado_from_fiscal_parquet
+        else (
+            "Σ Resultado ÷ Σ Valor da venda no recorte. Valor da venda = Quantidade × Preço de lista. "
+            "Se Σ Valor da venda = 0, exibe traço."
+        )
     )
 
     def _card(
@@ -4716,13 +4731,22 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     primary_inner = "".join(
         [
             _card(
-                "Valor da venda",
+                "Valor da venda (lista)" if valor_faturado_from_fiscal_parquet else "Valor da venda",
                 _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00",
                 tier="primary",
-                title="Σ Quantidade × Preço de lista no recorte (grão NF).",
+                title=(
+                    "Comercial: Σ Quantidade × Preço de lista, agregado por NF no recorte (pedidos ligados). "
+                    "Filtro Plataforma aplica-se aqui."
+                    if valor_faturado_from_fiscal_parquet
+                    else "Σ Quantidade × Preço de lista no recorte (grão NF)."
+                ),
             ),
             _card(
-                "Valor faturado (NF)",
+                (
+                    "Valor faturado (NF) · fiscal"
+                    if valor_faturado_from_fiscal_parquet
+                    else "Valor faturado (NF)"
+                ),
                 vf_str or "—",
                 tier="primary",
                 title=_ht_vf,
@@ -4735,7 +4759,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
                 title=_ht_res,
             ),
             _card(
-                "Margem %",
+                "Margem % · comercial" if valor_faturado_from_fiscal_parquet else "Margem %",
                 margem_str,
                 tier="primary",
                 accent=True,
@@ -4747,7 +4771,11 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     secondary_inner = "".join(
         [
             _card(
-                "Diferença (venda − NF)",
+                (
+                    "Diferença (venda lista − fiscal NF)"
+                    if valor_faturado_from_fiscal_parquet
+                    else "Diferença (venda − NF)"
+                ),
                 dif_str or "—",
                 tier="secondary",
                 title=_ht_dif,
@@ -4943,17 +4971,31 @@ def _render_fdl_fat_dre_nf_gerencial(
         '<div class="fdl-fat-dre-block-h fdl-fat-dre-block-h--a">Ponte comercial × fiscal</div>'
         '<div class="fdl-fat-dre-a-shell">'
         + _dre_row(
-            "Receita de venda (lista)",
+            (
+                "Receita de venda (lista) · comercial"
+                if valor_faturado_from_fiscal_parquet
+                else "Receita de venda (lista)"
+            ),
             rec_venda,
             lead=True,
-            title="Σ Quantidade × Preço de lista no recorte.",
+            title=(
+                "Comercial: Σ Quantidade × Preço de lista; filtro Plataforma aplica-se a este total."
+                if valor_faturado_from_fiscal_parquet
+                else "Σ Quantidade × Preço de lista no recorte."
+            ),
         )
         + _dre_row(
-            "Faturado NF (ref. fiscal)",
+            (
+                "Faturado NF · fiscal (Parquet)"
+                if valor_faturado_from_fiscal_parquet
+                else "Faturado NF (ref. fiscal)"
+            ),
             vf_disp,
             ref=True,
             title=(
-                "Total **fiscal** a partir de **dataset_faturamento_fiscal.parquet** (Bling), 1× por NF no período de emissão."
+                "Total fiscal (Bling / notas de saída) em dataset_faturamento_fiscal.parquet: "
+                "1× por NF, data de emissão no período; sem filtro de plataforma. "
+                "Conferir no Bling com relatório de notas de saída no mesmo intervalo de emissão."
                 if valor_faturado_from_fiscal_parquet
                 else (
                     "Nota_Valor_Liquido_Total 1× por NF. Contraste com a receita em lista; "
@@ -4962,32 +5004,68 @@ def _render_fdl_fat_dre_nf_gerencial(
             ),
         )
         + _dre_row(
-            "Diferença (venda − faturado NF)",
+            (
+                "Diferença (lista comercial − fiscal NF)"
+                if valor_faturado_from_fiscal_parquet
+                else "Diferença (venda − faturado NF)"
+            ),
             dif_disp,
             bridge=True,
             title=(
-                "Receita lista (comercial) − total fiscal (Parquet notas), ambos no recorte de emissão."
+                "Ponte entre receita em lista (pedidos) e total fiscal (notas). "
+                "Não é indicador de erro; interpretar à luz de descontos e vínculo pedido–NF."
                 if valor_faturado_from_fiscal_parquet
                 else "Receita lista − faturado NF (totais do recorte).",
             ),
         )
         + '<p class="fdl-fat-dre-foot-a-note">'
         + (
-            "Ref. fiscal = export notas (Parquet dedicado); não soma à receita de lista."
+            "Fiscal = Parquet de notas (alinhado ao Bling na mesma janela de emissão); não soma à receita de lista."
             if valor_faturado_from_fiscal_parquet
             else "Ref. fiscal 1× por NF — não soma à receita de lista."
         )
         + "</p></div>"
         '<div class="fdl-fat-dre-block-h fdl-fat-dre-block-h--enc">Encargos</div>'
-        + _dre_row("Comissão", enc_com, encargo=True, title="Σ comissão no recorte.")
-        + _dre_row("Frete", enc_fre, encargo=True, title="Σ frete no recorte.")
-        + _dre_row("Imposto", enc_imp, encargo=True, title="Σ imposto no recorte.")
+        + _dre_row(
+            "Comissão",
+            enc_com,
+            encargo=True,
+            title=(
+                "Σ comissão comercial (pedidos) no recorte."
+                if valor_faturado_from_fiscal_parquet
+                else "Σ comissão no recorte."
+            ),
+        )
+        + _dre_row(
+            "Frete",
+            enc_fre,
+            encargo=True,
+            title=(
+                "Σ frete comercial (pedidos) no recorte."
+                if valor_faturado_from_fiscal_parquet
+                else "Σ frete no recorte."
+            ),
+        )
+        + _dre_row(
+            "Imposto",
+            enc_imp,
+            encargo=True,
+            title=(
+                "Σ imposto comercial (pedidos) no recorte."
+                if valor_faturado_from_fiscal_parquet
+                else "Σ imposto no recorte."
+            ),
+        )
         + _dre_row(
             "Despesa fixa",
             enc_df,
             encargo=True,
             enc_last=True,
-            title="Σ despesa fixa (5% sobre valor de venda por NF) no recorte.",
+            title=(
+                "Σ despesa fixa comercial (5% sobre valor de venda lista por NF) no recorte."
+                if valor_faturado_from_fiscal_parquet
+                else "Σ despesa fixa (5% sobre valor de venda por NF) no recorte."
+            ),
         )
         + '<div class="fdl-fat-dre-block-h">Fechamento</div>'
         '<div class="fdl-fat-dre-close">'
@@ -4996,12 +5074,23 @@ def _render_fdl_fat_dre_nf_gerencial(
         f'<span class="fdl-fat-dre-val">{html.escape(res_disp)}</span>'
         "</div>"
         '<div class="fdl-fat-dre-row--margem">'
-        '<span class="fdl-fat-dre-lab">Margem sobre venda</span>'
+        '<span class="fdl-fat-dre-lab">'
+        + (
+            "Margem sobre venda (comercial)"
+            if valor_faturado_from_fiscal_parquet
+            else "Margem sobre venda"
+        )
+        + "</span>"
         f'<span class="fdl-fat-dre-val">{html.escape(margem_s)}</span>'
         "</div></div>"
         '<p class="fdl-fat-dre-foot fdl-fat-dre-foot--final">'
-        "Margem = resultado ÷ receita de venda (lista). Sem CMV nesta fase."
-        "</p>"
+        + (
+            "Margem = Σ resultado ÷ Σ receita de venda (lista), ambos comerciais; "
+            "valor faturado fiscal não entra. Sem CMV nesta fase."
+            if valor_faturado_from_fiscal_parquet
+            else "Margem = resultado ÷ receita de venda (lista). Sem CMV nesta fase."
+        )
+        + "</p>"
     )
     st.markdown(
         f'<div class="fdl-fat-dre-wrap">{_inner}</div>',
@@ -6528,13 +6617,18 @@ def _render_faturamento_dre_minimal(
         _base_desc_html += (
             f" · <strong>{len(df_fiscal_pre)}</strong> NF(s) no Parquet fiscal (carregamento, escopo org)"
         )
-    _nf_rec_label = (
-        "nota(s) fiscal(is) no período (Parquet Bling)"
-        if use_fiscal_kpi
-        else "nota(s) no recorte"
-    )
+    if use_fiscal_kpi:
+        _nf_rec_html = (
+            f"<strong>{_kp['n_nf']}</strong> NF(s) no recorte <strong>fiscal</strong> "
+            "(emissão no período + empresa; <strong>Plataforma</strong> não altera esta contagem). "
+            "É o mesmo número de <strong>linhas</strong> na tabela por NF abaixo."
+        )
+    else:
+        _nf_rec_html = (
+            f"<strong>{_kp['n_nf']}</strong> nota(s) no recorte (grão do painel)"
+        )
     _fdl_fat_min_aside(
-        f"Painel NF-first · recorte: <strong>{_kp['n_nf']}</strong> {_nf_rec_label} · base: {_base_desc_html}",
+        f"Painel NF-first · {_nf_rec_html} · base: {_base_desc_html}",
         recorte=True,
     )
     _fdl_ui_gap_tight()
@@ -6690,24 +6784,41 @@ def _render_faturamento_dre_minimal(
         "Situação": None,
         "Pedido": "Resumo do pedido / multiloja (texto completo no CSV).",
         "Produtos": "Resumo de itens (texto completo no CSV).",
-        "Linhas": "Quantidade de linhas de pedido agregadas nesta NF.",
-        "Venda (lista)": "Σ Quantidade × Preço de lista (pedidos ligados à NF).",
+        "Linhas": "Quantidade de linhas de pedido agregadas nesta NF (comercial).",
+        "Venda (lista)": (
+            "Comercial: Σ Quantidade × Preço de lista dos pedidos ligados a esta NF (0 se não houver vínculo)."
+            if use_fiscal_kpi
+            else "Σ Quantidade × Preço de lista (pedidos ligados à NF)."
+        ),
         "Faturado (NF)": (
-            "Valor líquido 1× por NF a partir de dataset_faturamento_fiscal.parquet (export Bling), emissão no período."
+            "Fiscal: valor líquido 1× por NF (dataset_faturamento_fiscal.parquet / Bling), data de emissão no período."
             if use_fiscal_kpi
             else "Valor líquido da NF (uma vez por nota), grão NF-first / materializado."
         ),
         "Diferença": (
-            "Venda (lista) comercial − faturado fiscal (Parquet notas); NFs só fiscais aparecem com venda 0."
+            "Comercial − fiscal nesta linha: Venda (lista) − Faturado (NF). "
+            "Interpretar como ponte lista↔nota, não como erro automático."
             if use_fiscal_kpi
             else "Venda (lista) − Faturado (NF)."
         ),
-        "Comissão": None,
-        "Frete": None,
-        "Imposto": None,
-        "Desp. fixa": "5% sobre valor da venda agregado à NF.",
-        "Resultado": "Resultado consolidado por NF (mesma regra do painel).",
-        "Margem %": "Resultado ÷ Venda (lista); alinhado ao KPI «Margem %» do painel.",
+        "Comissão": "Comercial: soma das comissões das linhas de pedido ligadas à NF." if use_fiscal_kpi else None,
+        "Frete": "Comercial: soma do frete das linhas de pedido ligadas à NF." if use_fiscal_kpi else None,
+        "Imposto": "Comercial: soma do imposto das linhas de pedido ligadas à NF." if use_fiscal_kpi else None,
+        "Desp. fixa": (
+            "Comercial: 5% sobre valor da venda (lista) agregado à NF."
+            if use_fiscal_kpi
+            else "5% sobre valor da venda agregado à NF."
+        ),
+        "Resultado": (
+            "Comercial: resultado consolidado por NF (mesma regra do painel)."
+            if use_fiscal_kpi
+            else "Resultado consolidado por NF (mesma regra do painel)."
+        ),
+        "Margem %": (
+            "Comercial: Resultado ÷ Venda (lista) nesta NF; não usa valor faturado fiscal."
+            if use_fiscal_kpi
+            else "Resultado ÷ Venda (lista); alinhado ao KPI «Margem %» do painel.",
+        ),
     }
     _nf_col_width: dict[str, str] = {
         "Emissão": "small",
@@ -6738,24 +6849,43 @@ def _render_faturamento_dre_minimal(
         )
 
     _fdl_fat_min_vsp(size="sm")
+    _nf_sub = (
+        "Uma linha por <strong>NF fiscal</strong> no recorte; coluna «Faturado» = Bling/Parquet; "
+        "venda, encargos e resultado = <strong>comercial</strong> (pedidos ligados)."
+        if use_fiscal_kpi
+        else "Detalhamento · drill-down"
+    )
     st.markdown(
-        '<h2 class="fdl-fat-min-nf-h">Tabela por NF</h2>'
-        '<p class="fdl-fat-min-nf-sub">Detalhamento · drill-down</p>',
+        f'<h2 class="fdl-fat-min-nf-h">Tabela por NF</h2>'
+        f'<p class="fdl-fat-min-nf-sub">{_nf_sub}</p>',
         unsafe_allow_html=True,
     )
     _fdl_fat_min_vsp(size="sm")
-    _tbl_cap_x = (
-        " · «Faturado (NF)» = fiscal (Bling); demais colunas monetárias = comercial quando há pedido ligado."
-        if use_fiscal_kpi
-        else ""
-    )
+    if use_fiscal_kpi:
+        _tbl_cap_body = (
+            f"{len(_disp_nf_ui)} linha(s) (= NFs fiscais no recorte). "
+            "Legenda: «Faturado (NF)» e o universo de linhas = <strong>fiscal</strong> (Parquet, 1 NF por linha). "
+            "«Venda (lista)», «Diferença», encargos, «Resultado» e «Margem %» = <strong>comercial</strong> "
+            "(pedidos; sem pedido → venda 0). Emissão em ordem decrescente; export CSV com texto completo."
+        )
+    else:
+        _tbl_cap_body = (
+            f"{len(_disp_nf_ui)} linha(s) · emissão decrescente · export CSV com texto completo."
+        )
     st.markdown(
-        f'<div class="fdl-fat-min-table-cap">{len(_disp_nf_ui)} linha(s) · emissão decrescente · export CSV com texto completo.{_tbl_cap_x}</div>',
+        f'<div class="fdl-fat-min-table-cap">{_tbl_cap_body}</div>',
         unsafe_allow_html=True,
     )
     if _disp_nf_ui.empty:
         st.info(
-            "Sem notas no recorte (confirme **período de emissão**, **empresa** e **plataforma**)."
+            (
+                "Sem linhas no recorte (confirme **período de emissão** e **empresa**; "
+                "**Plataforma** só restringe o comercial, não o universo fiscal)."
+            )
+            if use_fiscal_kpi
+            else (
+                "Sem linhas no recorte (confirme **período de emissão**, **empresa** e **plataforma**)."
+            )
         )
     else:
         st.dataframe(

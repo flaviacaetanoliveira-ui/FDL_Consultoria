@@ -4399,10 +4399,36 @@ def _render_faturamento_dre_bloco_por_empresa(
     )
 
 
+def _df_get_series_column(df: pd.DataFrame, col: str) -> pd.Series:
+    """
+    Garante uma única ``pd.Series`` por nome de coluna.
+    Se existirem colunas duplicadas, ``df[col]`` pode ser ``DataFrame`` — aqui usa-se a primeira série.
+    """
+    obj = df[col]
+    if isinstance(obj, pd.DataFrame):
+        return obj.iloc[:, 0].copy()
+    return obj.copy()
+
+
+def _series_empty_str_to_dash(s: pd.Series, *, dash: str = "—") -> pd.Series:
+    """Normaliza texto: vazio / placeholders → traço (células de tabela NF-first)."""
+    t = s.fillna("").map(lambda v: str(v).strip())
+    return t.mask(t.eq("") | t.str.lower().isin({"nan", "none", "nat", "<na>", "null"}), dash)
+
+
+def _series_nf_emissao_pt_br(s: pd.Series) -> pd.Series:
+    """Datas de emissão como dd/mm/aaaa (aceita string, Timestamp, date vindo do Parquet)."""
+    ts = pd.to_datetime(s, errors="coerce", dayfirst=False)
+    fmt = ts.dt.strftime("%d/%m/%Y")
+    return fmt.where(ts.notna(), "—")
+
+
 def _faturamento_nf_platform_display_series(df_nf: pd.DataFrame) -> pd.Series:
     if "plataforma" in df_nf.columns:
-        return df_nf["plataforma"].fillna("").astype(str)
-    return df_nf["plataforma_resumo"].fillna("").astype(str) if "plataforma_resumo" in df_nf.columns else pd.Series("", index=df_nf.index)
+        return _df_get_series_column(df_nf, "plataforma").fillna("").astype(str)
+    if "plataforma_resumo" in df_nf.columns:
+        return _df_get_series_column(df_nf, "plataforma_resumo").fillna("").astype(str)
+    return pd.Series("", index=df_nf.index, dtype=str)
 
 
 def _faturamento_nf_apply_minimal_recorte(
@@ -4577,9 +4603,11 @@ def _merge_fiscal_base_with_commercial_nf(
 
     v_fat = pd.to_numeric(merged["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
     vv = pd.to_numeric(merged["valor_venda"], errors="coerce").fillna(0.0)
-    org_out = merged["org_id"] if "org_id" in merged.columns else merged["_jo"]
+    org_raw = _df_get_series_column(merged, "org_id") if "org_id" in merged.columns else merged["_jo"]
+    org_s = org_raw.fillna("").map(lambda v: str(v).strip())
+    org_s = org_s.mask(org_s.str.lower().isin({"nan", "none", "nat", "<na>", "null"}), "")
     if "Nota_Situacao" in merged.columns:
-        sit_s = merged["Nota_Situacao"].fillna("").astype(str).str.strip().replace("", "—")
+        sit_s = _series_empty_str_to_dash(_df_get_series_column(merged, "Nota_Situacao"))
     else:
         sit_s = pd.Series("—", index=merged.index, dtype=str)
     fv = merged["faturamento_nota_vinculada"].fillna(False)
@@ -4589,7 +4617,7 @@ def _merge_fiscal_base_with_commercial_nf(
         fv = fv.ne(0) if fv.dtype != bool else fv
     out = pd.DataFrame(
         {
-            "org_id": org_out.astype(str).replace("", pd.NA).fillna("").astype(str),
+            "org_id": org_s.astype(str),
             "Nota_Numero_Normalizado": merged["_jn"].astype(str),
             "Nota_Data_Emissao": merged["Nota_Data_Emissao"],
             "Nota_Situacao": sit_s,
@@ -5018,14 +5046,16 @@ def _render_fdl_fat_dre_nf_gerencial(
                 else "Receita lista − faturado NF (totais do recorte).",
             ),
         )
-        + '<p class="fdl-fat-dre-foot-a-note">'
         + (
-            "Fiscal = Parquet de notas (alinhado ao Bling na mesma janela de emissão); não soma à receita de lista."
-            if valor_faturado_from_fiscal_parquet
-            else "Ref. fiscal 1× por NF — não soma à receita de lista."
+            '<p class="fdl-fat-dre-foot-a-note">'
+            + (
+                "Fiscal = Parquet de notas (alinhado ao Bling na mesma janela de emissão); não soma à receita de lista."
+                if valor_faturado_from_fiscal_parquet
+                else "Ref. fiscal 1× por NF — não soma à receita de lista."
+            )
+            + "</p></div>"
+            + '<div class="fdl-fat-dre-block-h fdl-fat-dre-block-h--enc">Encargos</div>'
         )
-        + "</p></div>"
-        '<div class="fdl-fat-dre-block-h fdl-fat-dre-block-h--enc">Encargos</div>'
         + _dre_row(
             "Comissão",
             enc_com,
@@ -5067,30 +5097,32 @@ def _render_fdl_fat_dre_nf_gerencial(
                 else "Σ despesa fixa (5% sobre valor de venda por NF) no recorte."
             ),
         )
-        + '<div class="fdl-fat-dre-block-h">Fechamento</div>'
-        '<div class="fdl-fat-dre-close">'
-        '<div class="fdl-fat-dre-row--result">'
-        '<span class="fdl-fat-dre-lab">Resultado</span>'
-        f'<span class="fdl-fat-dre-val">{html.escape(res_disp)}</span>'
-        "</div>"
-        '<div class="fdl-fat-dre-row--margem">'
-        '<span class="fdl-fat-dre-lab">'
         + (
-            "Margem sobre venda (comercial)"
-            if valor_faturado_from_fiscal_parquet
-            else "Margem sobre venda"
+            '<div class="fdl-fat-dre-block-h">Fechamento</div>'
+            '<div class="fdl-fat-dre-close">'
+            '<div class="fdl-fat-dre-row--result">'
+            '<span class="fdl-fat-dre-lab">Resultado</span>'
+            f'<span class="fdl-fat-dre-val">{html.escape(res_disp)}</span>'
+            "</div>"
+            '<div class="fdl-fat-dre-row--margem">'
+            '<span class="fdl-fat-dre-lab">'
+            + (
+                "Margem sobre venda (comercial)"
+                if valor_faturado_from_fiscal_parquet
+                else "Margem sobre venda"
+            )
+            + "</span>"
+            f'<span class="fdl-fat-dre-val">{html.escape(margem_s)}</span>'
+            "</div></div>"
+            '<p class="fdl-fat-dre-foot fdl-fat-dre-foot--final">'
+            + (
+                "Margem = Σ resultado ÷ Σ receita de venda (lista), ambos comerciais; "
+                "valor faturado fiscal não entra. Sem CMV nesta fase."
+                if valor_faturado_from_fiscal_parquet
+                else "Margem = resultado ÷ receita de venda (lista). Sem CMV nesta fase."
+            )
+            + "</p>"
         )
-        + "</span>"
-        f'<span class="fdl-fat-dre-val">{html.escape(margem_s)}</span>'
-        "</div></div>"
-        '<p class="fdl-fat-dre-foot fdl-fat-dre-foot--final">'
-        + (
-            "Margem = Σ resultado ÷ Σ receita de venda (lista), ambos comerciais; "
-            "valor faturado fiscal não entra. Sem CMV nesta fase."
-            if valor_faturado_from_fiscal_parquet
-            else "Margem = resultado ÷ receita de venda (lista). Sem CMV nesta fase."
-        )
-        + "</p>"
     )
     st.markdown(
         f'<div class="fdl-fat-dre-wrap">{_inner}</div>',
@@ -6631,6 +6663,26 @@ def _render_faturamento_dre_minimal(
         f"Painel NF-first · {_nf_rec_html} · base: {_base_desc_html}",
         recorte=True,
     )
+    if use_fiscal_kpi:
+        st.info(
+            "Modo **fiscal (Parquet) ativo**: o card «Valor faturado (NF) · fiscal» usa a soma de "
+            "**Valor_Liquido_NF** em `dataset_faturamento_fiscal.parquet` neste recorte (emissão + empresa; "
+            "sem filtro de plataforma). Valor da venda, margem % e encargos continuam **comerciais** (pedidos)."
+        )
+    if use_fiscal_kpi and _is_admin_mode():
+        _aud_sum = float(
+            pd.to_numeric(df_fiscal_cut["Valor_Liquido_NF"], errors="coerce").fillna(0.0).sum()
+        )
+        _kp_vf = float(_kp["valor_faturado_nf"])
+        _match = abs(_aud_sum - _kp_vf) < 0.02
+        _fdl_fat_min_aside(
+            "Admin — fonte do card fiscal: "
+            f"<code>faturamento_fiscal_first</code>={load_info.get('faturamento_fiscal_first')!s}; "
+            f"Σ <code>Valor_Liquido_NF</code> no recorte = <strong>{_aud_sum:.2f}</strong>; "
+            f"<code>kp['valor_faturado_nf']</code> = <strong>{_kp_vf:.2f}</strong>; "
+            f"coincidem={'sim' if _match else 'NÃO — investigar'}",
+            tight=True,
+        )
     _fdl_ui_gap_tight()
     _fdl_fat_min_vsp(size="md")
 
@@ -6677,9 +6729,17 @@ def _render_faturamento_dre_minimal(
 
     _df_nf_table = df_nf
     if not df_nf.empty and "Nota_Data_Emissao" in df_nf.columns:
-        _df_nf_table = df_nf.sort_values(
-            "Nota_Data_Emissao", ascending=False, na_position="last"
-        ).reset_index(drop=True)
+        _tmp_sort = df_nf.copy()
+        _tmp_sort["_fdl_nf_emi_ord"] = pd.to_datetime(
+            _df_get_series_column(_tmp_sort, "Nota_Data_Emissao"),
+            errors="coerce",
+            dayfirst=False,
+        )
+        _df_nf_table = (
+            _tmp_sort.sort_values("_fdl_nf_emi_ord", ascending=False, na_position="last")
+            .drop(columns=["_fdl_nf_emi_ord"], errors="ignore")
+            .reset_index(drop=True)
+        )
 
     _disp_nf_full = pd.DataFrame()
     _disp_nf_ui = pd.DataFrame()
@@ -6691,13 +6751,17 @@ def _render_faturamento_dre_minimal(
         )
         _disp_nf_full = pd.DataFrame(
             {
-                "Emissão": _df_nf_table["Nota_Data_Emissao"].apply(
-                    lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "—"
+                "Emissão": _series_nf_emissao_pt_br(
+                    _df_get_series_column(_df_nf_table, "Nota_Data_Emissao")
                 ),
-                "Empresa": _df_nf_table["empresa"].astype(str).replace("", "—"),
+                "Empresa": _series_empty_str_to_dash(_df_get_series_column(_df_nf_table, "empresa")),
                 "Plataforma": _plat_s,
-                "NF": _df_nf_table["Nota_Numero_Normalizado"].astype(str),
-                "Situação": _df_nf_table["Nota_Situacao"].astype(str).replace("", "—"),
+                "NF": _df_get_series_column(_df_nf_table, "Nota_Numero_Normalizado")
+                .fillna("")
+                .map(lambda v: str(v).strip()),
+                "Situação": _series_empty_str_to_dash(
+                    _df_get_series_column(_df_nf_table, "Nota_Situacao")
+                ),
                 "Pedido": _faturamento_disp_texto_sem_none(_df_nf_table["pedido_resumo"]),
                 "Produtos": _faturamento_disp_texto_sem_none(_df_nf_table["produto_resumo"]),
                 "Linhas": _df_nf_table["n_linhas_pedido"].astype(int),

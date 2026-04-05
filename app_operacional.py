@@ -1501,6 +1501,39 @@ def _faturamento_fiscal_parquet_path_from_materialized_path(path_s: str) -> Path
         return None
 
 
+def _faturamento_fiscal_parquet_resolve(path_s: str) -> tuple[Path | None, str]:
+    """
+    Resolve ``dataset_faturamento_fiscal.parquet`` para o carregamento do painel.
+
+    Ordem: pasta/ficheiro ao lado do path do materializado linha → pasta do Parquet NF-first
+    → ``data_products/<slug>/faturamento/current/`` (V2 canónico em disco), quando existir.
+
+    O fallback V2 cobre casos em que o path explícito aponta para uma cópia sem os Parquets,
+    mas o pipeline gravou fiscal na pasta canónica.
+    """
+    if not (path_s or "").strip():
+        return None, ""
+    fp = _faturamento_fiscal_parquet_path_from_materialized_path(path_s)
+    if fp is not None:
+        return fp, "sibling_materializado"
+    nf_side = _faturamento_nf_parquet_path_from_materialized_path(path_s)
+    if nf_side is not None:
+        alt = nf_side.parent / "dataset_faturamento_fiscal.parquet"
+        if alt.is_file():
+            return alt, "nf_parquet_parent"
+    v2s = _faturamento_v2_canonical_dataset_path_str()
+    if v2s:
+        try:
+            v2file = _faturamento_resolve_disk_path(v2s)
+            if v2file.is_file():
+                cand = v2file.parent / "dataset_faturamento_fiscal.parquet"
+                if cand.is_file():
+                    return cand.resolve(), "v2_canonical_folder"
+        except OSError:
+            pass
+    return None, ""
+
+
 def _faturamento_nf_parquet_stat_token(path_s: str) -> str:
     nf = _faturamento_nf_parquet_path_from_materialized_path(path_s)
     if nf is None:
@@ -1638,14 +1671,9 @@ def _load_faturamento_data(
         else:
             info["faturamento_nf_first_skip"] = "sem_path_local"
         if path_s:
-            fp_p = _faturamento_fiscal_parquet_path_from_materialized_path(path_s)
-            if fp_p is None:
-                _nf_side = _faturamento_nf_parquet_path_from_materialized_path(path_s)
-                if _nf_side is not None:
-                    _fp_alt = _nf_side.parent / "dataset_faturamento_fiscal.parquet"
-                    if _fp_alt.is_file():
-                        fp_p = _fp_alt
+            fp_p, fp_how = _faturamento_fiscal_parquet_resolve(path_s)
             if fp_p is not None:
+                info["faturamento_fiscal_path_resolution"] = fp_how
                 try:
                     df_fiscal0 = pd.read_parquet(fp_p, engine="pyarrow")
                     if fiscal_contract_dataframe_valid(df_fiscal0):
@@ -3862,7 +3890,12 @@ def _render_repasse_resumo_por_acao_kpis(contagens: dict[str, int], *, n_linhas:
 
 
 def _multiselect_stable(
-    key: str, label: str, options: list[str], *, compact_label: bool = False
+    key: str,
+    label: str,
+    options: list[str],
+    *,
+    compact_label: bool = False,
+    help: str | None = None,
 ) -> list[str]:
     """
     Evita `default=` com listas recém-ordenadas a cada rerun (perdia estado / ecrã em branco).
@@ -3890,8 +3923,9 @@ def _multiselect_stable(
             key=key,
             placeholder="Todos",
             label_visibility="collapsed",
+            help=help,
         )
-    return st.multiselect(label, opts, key=key, placeholder="Escolher…")
+    return st.multiselect(label, opts, key=key, placeholder="Escolher…", help=help)
 
 
 def _faturamento_divergencia_tol() -> float:
@@ -4696,6 +4730,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     ok_nf_dates: bool,
     use_nf_materializado: bool,
     valor_faturado_from_fiscal_parquet: bool = False,
+    fat_dre_faturado_mode: str = "nf_first",
 ) -> None:
     """
     Cards executivos NF-first (Faturamento & DRE): duas linhas, hierarquia visual;
@@ -4928,11 +4963,42 @@ def _render_fdl_fat_dre_nf_kpi_cards(
               font-weight: 700;
               color: #1e293b;
             }
+            .fdl-fat-kpi-mode {
+              margin: 0 0 10px 0;
+              font-size: 0.7rem;
+              color: #64748b;
+              letter-spacing: 0.02em;
+            }
+            .fdl-fat-kpi-mode-pill {
+              display: inline-block;
+              padding: 3px 10px;
+              border-radius: 999px;
+              background: #f1f5f9;
+              border: 1px solid #e2e8f0;
+              color: #475569;
+              font-weight: 600;
+            }
+            .fdl-fat-kpi-mode-pill--fiscal {
+              background: #ecfdf5;
+              border-color: #a7f3d0;
+              color: #065f46;
+            }
             </style>
             """
         )
         + f'<div class="fdl-fat-kpi-shell">'
-        f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--primary">{primary_inner}</div>'
+        + (
+            '<div class="fdl-fat-kpi-mode"><span class="fdl-fat-kpi-mode-pill fdl-fat-kpi-mode-pill--fiscal">'
+            "Faturado (NF): fiscal Parquet</span></div>"
+            if fat_dre_faturado_mode == "fiscal"
+            else (
+                '<div class="fdl-fat-kpi-mode"><span class="fdl-fat-kpi-mode-pill">'
+                "Faturado (NF): NF-first</span></div>"
+                if use_nf_materializado
+                else ""
+            )
+        )
+        + f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--primary">{primary_inner}</div>'
         f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--secondary">{secondary_inner}</div>'
         f"</div>",
         unsafe_allow_html=True,
@@ -6397,85 +6463,9 @@ def _render_faturamento_dre_minimal(
         and fiscal_contract_dataframe_valid(df_fiscal_pre)
     )
 
-    _fdl_fat_min_aside(
-        "<strong>Recorte temporal</strong>: <strong>emissão da NF</strong>. "
-        "<strong>Comercial</strong> — venda (lista), comissão, frete, imposto, despesa fixa, resultado e margem: "
-        "somas dos <strong>pedidos ligados</strong> à NF; <strong>Plataforma</strong> filtra só esse lado. "
-        "<strong>Fiscal</strong> — valor faturado (NF) e coluna «Faturado»: "
-        "<strong>1× por NF</strong> via <code>dataset_faturamento_fiscal.parquet</code> (export Bling) quando válido; "
-        "caso contrário, valor líquido do grão NF-first / linhas como antes. "
-        "Despesa fixa = 5% sobre venda (lista) por NF."
+    st.caption(
+        "Período por emissão da NF. Faturado (NF) usa o export fiscal Parquet quando o ficheiro está disponível."
     )
-    if use_fiscal_parquet:
-        _fdl_fat_min_aside(
-            "KPI «Valor faturado (NF)» e totais fiscais da DRE usam o <strong>Parquet fiscal</strong>; "
-            "demais KPIs permanecem <strong>comerciais</strong>.",
-            tight=True,
-        )
-    if use_nf_materializado:
-        _fdl_fat_min_aside(
-            "Fonte comercial: <strong>materializado NF-first</strong> (agregação por NF em memória).",
-            tight=True,
-        )
-    else:
-        _fdl_fat_min_aside(
-            "Fonte comercial: <strong>agregação em memória</strong> (grão pedido); com Parquet NF-first o painel usa a tabela de notas para o vínculo.",
-            tight=True,
-        )
-    if use_nf_materializado and _is_admin_mode() and load_info.get("faturamento_nf_first_path"):
-        _p = html.escape(str(load_info.get("faturamento_nf_first_path")))
-        _fdl_fat_min_aside(f"Admin — path Parquet NF-first: <code>{_p}</code>", tight=True)
-    elif _is_admin_mode() and (
-        load_info.get("faturamento_nf_first_skip") or load_info.get("faturamento_nf_first_error")
-    ):
-        _sk = load_info.get("faturamento_nf_first_skip")
-        _e = load_info.get("faturamento_nf_first_error")
-        _parts = ["Admin — NF-first não ativo."]
-        if _sk:
-            _parts.append(f"Motivo: <code>{html.escape(str(_sk))}</code>.")
-        if _e:
-            _parts.append(f"Erro: <code>{html.escape(str(_e))}</code>.")
-        _fdl_fat_min_aside(" ".join(_parts), tight=True)
-    if use_fiscal_parquet and _is_admin_mode() and load_info.get("faturamento_fiscal_first_path"):
-        _pf = html.escape(str(load_info.get("faturamento_fiscal_first_path")))
-        _fdl_fat_min_aside(f"Admin — path Parquet fiscal: <code>{_pf}</code>", tight=True)
-    elif _is_admin_mode() and (
-        load_info.get("faturamento_fiscal_first_skip")
-        or load_info.get("faturamento_fiscal_first_error")
-    ):
-        _skf = load_info.get("faturamento_fiscal_first_skip")
-        _ef = load_info.get("faturamento_fiscal_first_error")
-        _parts_f = ["Admin — Parquet fiscal não ativo (fallback ao faturado NF do grão comercial)."]
-        if _skf:
-            _parts_f.append(f"Motivo: <code>{html.escape(str(_skf))}</code>.")
-        if _ef:
-            _parts_f.append(f"Erro: <code>{html.escape(str(_ef))}</code>.")
-        _fdl_fat_min_aside(" ".join(_parts_f), tight=True)
-
-    if use_nf_materializado and not use_fiscal_parquet:
-        _fiscal_why: list[str] = []
-        if load_info.get("faturamento_fiscal_user_hint"):
-            _fiscal_why.append(str(load_info["faturamento_fiscal_user_hint"]))
-        elif load_info.get("faturamento_fiscal_first_error"):
-            _fiscal_why.append(f"Erro ao ler: {load_info['faturamento_fiscal_first_error']}")
-        elif load_info.get("faturamento_fiscal_first_skip"):
-            _sk = str(load_info["faturamento_fiscal_first_skip"])
-            _fiscal_why.append(
-                "ficheiro ausente na pasta do materializado"
-                if _sk == "ficheiro_ausente"
-                else ("materializado só por URL sem pasta local — não dá para ler o Parquet fiscal"
-                if _sk == "sem_path_local"
-                else _sk)
-            )
-        else:
-            _fiscal_why.append("Parquet fiscal não validado ou vazio após escopo")
-        st.warning(
-            "**Valor faturado (NF)** neste ecrã está no **modo NF-first (pedidos ligados)** — costuma ficar "
-            "**abaixo** do total do relatório de **notas de saída** do Bling no mesmo período. "
-            "Para alinhar ao Bling, gere e publique `dataset_faturamento_fiscal.parquet` junto do materializado "
-            "(pipeline de materialização) e recarregue. "
-            f"**Estado do artefato fiscal:** {' · '.join(_fiscal_why)}"
-        )
 
     if df.empty and not use_nf_materializado:
         st.info(
@@ -6559,6 +6549,17 @@ def _render_faturamento_dre_minimal(
     else:
         plats = []
 
+    _plat_expl = (
+        "Filtra notas pela plataforma consolidada no grão NF (materializado)."
+        if use_nf_materializado
+        else "Restringe linhas de pedido no enriquecimento (venda, comissão, frete, etc.) nas NFs já filtradas por emissão."
+    )
+    if use_fiscal_parquet:
+        _plat_expl += (
+            " Com Parquet fiscal ativo, a plataforma não corta o universo de NFs fiscais — apenas o comercial."
+        )
+    _plat_help = "Plataforma: " + _plat_expl
+
     with st.container(border=True):
         st.subheader("Filtros")
         if emp_opts:
@@ -6577,17 +6578,7 @@ def _render_faturamento_dre_minimal(
                 help="**Vazio** = todas as empresas neste carregamento. Uma ou mais marcas para refinar.",
                 placeholder="Todas",
             )
-        _multiselect_stable("fdl_fat_min_plat", "Plataforma", plats)
-        _plat_expl = (
-            "filtra notas pela plataforma consolidada no grão NF (materializado)."
-            if use_nf_materializado
-            else "restringe linhas de pedido no enriquecimento (venda, comissão, frete, etc.) nas NFs já filtradas por emissão."
-        )
-        if use_fiscal_parquet:
-            _plat_expl += (
-                " Com Parquet fiscal ativo, a plataforma não corta o universo de NFs fiscais — apenas o comercial."
-            )
-        _fdl_fat_min_aside("Plataforma: " + _plat_expl, tight=True)
+        _multiselect_stable("fdl_fat_min_plat", "Plataforma", plats, help=_plat_help)
         if ok_nf_dates:
             r_nf = st.columns((1, 1))
             with r_nf[0]:
@@ -6609,12 +6600,9 @@ def _render_faturamento_dre_minimal(
                     help=_FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN,
                 )
         elif "Nota_Data_Emissao" in _df_bounds.columns:
-            _fdl_fat_min_aside(
-                "Nota_Data_Emissao sem datas utilizáveis — período de emissão indisponível.",
-                tight=True,
-            )
+            st.caption("Período de emissão indisponível (datas não utilizáveis em Nota_Data_Emissao).")
         else:
-            _fdl_fat_min_aside("Sem coluna Nota_Data_Emissao — período de emissão indisponível.", tight=True)
+            st.caption("Período de emissão indisponível (sem coluna Nota_Data_Emissao).")
         _clr_sp, _clr_btn = st.columns((1.55, 1))
         with _clr_btn:
             if st.button(
@@ -6691,49 +6679,116 @@ def _render_faturamento_dre_minimal(
         _kp["diferenca"] = float(_kp["valor_venda"]) - vf_fiscal
         _kp["n_nf"] = int(len(df_fiscal_cut))
 
-    _base_desc_html = (
-        f"<strong>{len(df_nf_pre)}</strong> nota(s) no materializado NF-first"
+    _base_n = (
+        len(df_nf_pre)
         if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame)
-        else f"<strong>{len(df)}</strong> linhas no carregamento (grão pedido)"
+        else len(df)
     )
-    if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame):
-        _base_desc_html += (
-            f" · <strong>{len(df_fiscal_pre)}</strong> NF(s) no Parquet fiscal (carregamento, escopo org)"
-        )
-    if use_fiscal_kpi:
-        _nf_rec_html = (
-            f"<strong>{_kp['n_nf']}</strong> NF(s) no recorte <strong>fiscal</strong> "
-            "(emissão no período + empresa; <strong>Plataforma</strong> não altera esta contagem). "
-            "É o mesmo número de <strong>linhas</strong> na tabela por NF abaixo."
-        )
-    else:
-        _nf_rec_html = (
-            f"<strong>{_kp['n_nf']}</strong> nota(s) no recorte (grão do painel)"
-        )
-    _fdl_fat_min_aside(
-        f"Painel NF-first · {_nf_rec_html} · base: {_base_desc_html}",
-        recorte=True,
-    )
-    if use_fiscal_kpi:
-        st.info(
-            "Modo **fiscal (Parquet) ativo**: o card «Valor faturado (NF) · fiscal» usa a soma de "
-            "**Valor_Liquido_NF** em `dataset_faturamento_fiscal.parquet` neste recorte (emissão + empresa; "
-            "sem filtro de plataforma). Valor da venda, margem % e encargos continuam **comerciais** (pedidos)."
-        )
-    if use_fiscal_kpi and _is_admin_mode():
-        _aud_sum = float(
-            pd.to_numeric(df_fiscal_cut["Valor_Liquido_NF"], errors="coerce").fillna(0.0).sum()
-        )
-        _kp_vf = float(_kp["valor_faturado_nf"])
-        _match = abs(_aud_sum - _kp_vf) < 0.02
-        _fdl_fat_min_aside(
-            "Admin — fonte do card fiscal: "
-            f"<code>faturamento_fiscal_first</code>={load_info.get('faturamento_fiscal_first')!s}; "
-            f"Σ <code>Valor_Liquido_NF</code> no recorte = <strong>{_aud_sum:.2f}</strong>; "
-            f"<code>kp['valor_faturado_nf']</code> = <strong>{_kp_vf:.2f}</strong>; "
-            f"coincidem={'sim' if _match else 'NÃO — investigar'}",
-            tight=True,
-        )
+    _base_tail = " no materializado NF" if use_nf_materializado else " no carregamento"
+    st.caption(f"{_kp['n_nf']} notas no recorte · base {_base_n}{_base_tail}")
+
+    if _is_admin_mode():
+        with st.expander("Diagnóstico materializado (admin)", expanded=False):
+            _fdl_fat_min_aside(
+                "<strong>Recorte temporal</strong>: <strong>emissão da NF</strong>. "
+                "<strong>Comercial</strong> — venda (lista), comissão, frete, imposto, despesa fixa, resultado e margem: "
+                "somas dos <strong>pedidos ligados</strong> à NF; <strong>Plataforma</strong> filtra só esse lado. "
+                "<strong>Fiscal</strong> — valor faturado (NF) e coluna «Faturado»: "
+                "<strong>1× por NF</strong> via <code>dataset_faturamento_fiscal.parquet</code> quando válido; "
+                "caso contrário, valor líquido do grão NF-first. Despesa fixa = 5% sobre venda (lista) por NF."
+            )
+            if use_fiscal_parquet:
+                _fdl_fat_min_aside(
+                    "KPI «Valor faturado (NF)» e totais fiscais da DRE usam o <strong>Parquet fiscal</strong>; "
+                    "demais KPIs permanecem <strong>comerciais</strong>.",
+                    tight=True,
+                )
+            if use_nf_materializado:
+                _fdl_fat_min_aside(
+                    "Fonte comercial: <strong>materializado NF-first</strong>.",
+                    tight=True,
+                )
+            else:
+                _fdl_fat_min_aside(
+                    "Fonte comercial: <strong>agregação em memória</strong> (grão pedido).",
+                    tight=True,
+                )
+            if use_nf_materializado and load_info.get("faturamento_nf_first_path"):
+                _p = html.escape(str(load_info.get("faturamento_nf_first_path")))
+                _fdl_fat_min_aside(f"Path Parquet NF-first: <code>{_p}</code>", tight=True)
+            elif load_info.get("faturamento_nf_first_skip") or load_info.get("faturamento_nf_first_error"):
+                _sk = load_info.get("faturamento_nf_first_skip")
+                _e = load_info.get("faturamento_nf_first_error")
+                _parts = ["NF-first não ativo."]
+                if _sk:
+                    _parts.append(f"Motivo: <code>{html.escape(str(_sk))}</code>.")
+                if _e:
+                    _parts.append(f"Erro: <code>{html.escape(str(_e))}</code>.")
+                _fdl_fat_min_aside(" ".join(_parts), tight=True)
+            if load_info.get("faturamento_fiscal_path_resolution"):
+                _pr = html.escape(str(load_info.get("faturamento_fiscal_path_resolution")))
+                _fdl_fat_min_aside(f"Parquet fiscal resolvido via: <code>{_pr}</code>", tight=True)
+            if use_fiscal_parquet and load_info.get("faturamento_fiscal_first_path"):
+                _pf = html.escape(str(load_info.get("faturamento_fiscal_first_path")))
+                _fdl_fat_min_aside(f"Path Parquet fiscal: <code>{_pf}</code>", tight=True)
+            elif load_info.get("faturamento_fiscal_first_skip") or load_info.get("faturamento_fiscal_first_error"):
+                _skf = load_info.get("faturamento_fiscal_first_skip")
+                _ef = load_info.get("faturamento_fiscal_first_error")
+                _parts_f = ["Parquet fiscal não ativo no carregamento (fallback ao faturado NF comercial)."]
+                if _skf:
+                    _parts_f.append(f"Motivo: <code>{html.escape(str(_skf))}</code>.")
+                if _ef:
+                    _parts_f.append(f"Erro: <code>{html.escape(str(_ef))}</code>.")
+                _fdl_fat_min_aside(" ".join(_parts_f), tight=True)
+            if use_nf_materializado and not use_fiscal_parquet:
+                _fiscal_why: list[str] = []
+                if load_info.get("faturamento_fiscal_user_hint"):
+                    _fiscal_why.append(str(load_info["faturamento_fiscal_user_hint"]))
+                elif load_info.get("faturamento_fiscal_first_error"):
+                    _fiscal_why.append(f"Erro ao ler: {load_info['faturamento_fiscal_first_error']}")
+                elif load_info.get("faturamento_fiscal_first_skip"):
+                    _sk = str(load_info["faturamento_fiscal_first_skip"])
+                    _fiscal_why.append(
+                        "ficheiro ausente na pasta do materializado"
+                        if _sk == "ficheiro_ausente"
+                        else (
+                            "materializado só por URL sem pasta local — não dá para ler o Parquet fiscal"
+                            if _sk == "sem_path_local"
+                            else _sk
+                        )
+                    )
+                else:
+                    _fiscal_why.append("Parquet fiscal não validado ou vazio após escopo")
+                _fdl_fat_min_aside(
+                    "<strong>Valor faturado (NF)</strong> neste ecrã está em <strong>NF-first (pedidos ligados)</strong>. "
+                    "Para alinhar ao Bling, publique <code>dataset_faturamento_fiscal.parquet</code> junto do materializado. "
+                    f"<strong>Estado fiscal:</strong> {' · '.join(html.escape(str(x)) for x in _fiscal_why)}"
+                )
+            if use_fiscal_kpi:
+                _aud_sum = float(
+                    pd.to_numeric(df_fiscal_cut["Valor_Liquido_NF"], errors="coerce").fillna(0.0).sum()
+                )
+                _kp_vf = float(_kp["valor_faturado_nf"])
+                _match = abs(_aud_sum - _kp_vf) < 0.02
+                _fdl_fat_min_aside(
+                    "Card fiscal: "
+                    f"<code>faturamento_fiscal_first</code>={load_info.get('faturamento_fiscal_first')!s}; "
+                    f"Σ <code>Valor_Liquido_NF</code> no recorte = <strong>{_aud_sum:.2f}</strong>; "
+                    f"valor no card = <strong>{_kp_vf:.2f}</strong>; "
+                    f"coincidem={'sim' if _match else 'NÃO — investigar'}",
+                    tight=True,
+                )
+                _fdl_fat_min_aside(
+                    "Com Parquet fiscal ativo, o card usa a soma de <strong>Valor_Liquido_NF</strong> no recorte "
+                    "(emissão + empresa; sem filtro de plataforma).",
+                    tight=True,
+                )
+            if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame):
+                _fdl_fat_min_aside(
+                    f"Parquet fiscal (escopo org no carregamento): <strong>{len(df_fiscal_pre)}</strong> NF(s).",
+                    tight=True,
+                )
+
     _fdl_ui_gap_tight()
     _fdl_fat_min_vsp(size="md")
 
@@ -6742,6 +6797,7 @@ def _render_faturamento_dre_minimal(
         ok_nf_dates=ok_nf_dates,
         use_nf_materializado=use_nf_materializado,
         valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
+        fat_dre_faturado_mode=("fiscal" if use_fiscal_kpi else "nf_first"),
     )
 
     _fdl_fat_min_vsp(size="md")

@@ -10,6 +10,7 @@ from faturamento_dre_recorte_minimo import (
     FaturamentoRecorteMinState,
     apply_recorte_minimo,
     build_nf_grain_dataframe,
+    nf_grain_plataforma_match_key,
     compute_comercial_conferencia_stats,
     compute_fiscal_nf_conferencia_stats,
     compute_nf_panel_kpis,
@@ -411,6 +412,44 @@ def test_build_nf_grain_madeiramadeira_comissao_pct_sobre_venda_lista() -> None:
     row = out.iloc[0]
     assert abs(float(row["comissao"]) - 38.0) < 1e-6
     assert abs(float(row["resultado"]) - 92.0) < 1e-6
+
+
+def test_nf_grain_plataforma_match_key_unifies_labels() -> None:
+    assert nf_grain_plataforma_match_key("MADEIRA MADEIRA") == nf_grain_plataforma_match_key("MadeiraMadeira")
+    assert nf_grain_plataforma_match_key("Mercado Livre") == "mercadolivre"
+
+
+def test_build_nf_grain_platform_filter_accepts_alias() -> None:
+    df = pd.DataFrame(
+        {
+            "empresa": ["A", "A"],
+            "org_id": ["o1", "o1"],
+            "Nota_Numero_Normalizado": ["NF1", "NF2"],
+            "Nota_Valor_Liquido_Total": [10.0, 20.0],
+            "Nota_Data_Emissao": pd.to_datetime(["2025-06-10", "2025-06-11"]),
+            "Nota_Situacao": ["Autorizada", "Autorizada"],
+            "Quantidade": [1.0, 1.0],
+            "Preço de lista": [5.0, 7.0],
+            "Nome da plataforma": ["MadeiraMadeira", "MercadoLivre"],
+            "Número do pedido multiloja": ["P1", "P2"],
+            "Taxa de Comissão": [0.0, 0.0],
+            "Frete_Plataforma": [0.0, 0.0],
+            "Imposto": [0.0, 0.0],
+            "Resultado": [1.0, 2.0],
+            "Descrição": ["X", "Y"],
+            "faturamento_nota_vinculada": [True, True],
+        }
+    )
+    st = FaturamentoRecorteMinState((), ("MADEIRA MADEIRA",))
+    out, w = build_nf_grain_dataframe(
+        df,
+        st,
+        ok_nf_dates=True,
+        nf_d_ini=date(2025, 6, 1),
+        nf_d_fim=date(2025, 6, 30),
+    )
+    assert not w and len(out) == 1
+    assert str(out.iloc[0]["Nota_Numero_Normalizado"]) == "NF1"
 
 
 def test_compute_comercial_conferencia_qtd_x_pl() -> None:

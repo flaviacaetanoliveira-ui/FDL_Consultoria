@@ -50,6 +50,7 @@ from faturamento_dre_recorte_minimo import (
     compute_nf_panel_kpis,
     faturamento_min_series_nf_emissao_bounds_dates,
     faturamento_recorte_min_state_from_session,
+    nf_grain_plataforma_match_key,
 )
 from fdl_paths import resolve_pasta_vendas_ml
 from operacional_app_context import (
@@ -4514,7 +4515,11 @@ def _faturamento_nf_apply_minimal_recorte(
         else ("Nome da plataforma" if "Nome da plataforma" in out.columns else "")
     )
     if sel_plat and _plat_col:
-        out = out.loc[out[_plat_col].astype(str).str.strip().isin(sel_plat)].copy()
+        want = {nf_grain_plataforma_match_key(x) for x in sel_plat}
+        want.discard("")
+        if want:
+            got = out[_plat_col].map(nf_grain_plataforma_match_key)
+            out = out.loc[got.isin(want)].copy()
     if ok_nf_dates and nf_d_fim >= nf_d_ini and "Nota_Data_Emissao" in out.columns:
         m = _fdl_fr_mask_nf_emissao_no_periodo(out["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
         out = out.loc[m].copy()
@@ -6592,7 +6597,13 @@ def _render_faturamento_dre_minimal(
         )
 
     emp_opts = _faturamento_dre_etiquetas_empresa_recorte(_df_bounds)
-    if use_nf_materializado and "plataforma" in _df_bounds.columns:
+    if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame) and "plataforma" in df_nf_pre.columns:
+        # Opções alinhadas ao grão NF (Parquet); evita misturar com linhas fiscais sem ``plataforma``
+        # e garante o mesmo rótulo que o filtro ``plataforma`` / ``nf_grain_plataforma_match_key``.
+        plats = sorted(
+            {str(x).strip() for x in df_nf_pre["plataforma"].dropna().unique() if str(x).strip()}
+        )
+    elif use_nf_materializado and "plataforma" in _df_bounds.columns:
         plats = sorted(
             {str(x).strip() for x in _df_bounds["plataforma"].dropna().unique() if str(x).strip()}
         )

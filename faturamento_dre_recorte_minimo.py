@@ -30,6 +30,19 @@ from faturamento_dre_recorte import (
 NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA = 0.05
 
 
+def nf_grain_plataforma_match_key(raw: object) -> str:
+    """
+    Chave estável para filtrar «Nome da plataforma» / ``plataforma`` (grão NF).
+
+    Alinha rótulos do export («MADEIRA MADEIRA», «MadeiraMadeira», «madeira madeira») para o mesmo
+    critério, evitando que o multiselect deixe de bater com o materializado.
+    """
+    xs = str(raw).strip() if raw is not None else ""
+    if not xs or xs.casefold() in {"nan", "none", "nat", "<na>"}:
+        return ""
+    return xs.casefold().replace(" ", "")
+
+
 def _min_cal_limits(d_min: date, d_max: date) -> tuple[date, date]:
     today = datetime.now(_BR_TZ).date()
     cal_max = max(d_max, today)
@@ -411,7 +424,11 @@ def build_nf_grain_dataframe(
 
     sel_plat = list(state.plataformas)
     if sel_plat and "Nome da plataforma" in df_linked.columns:
-        df_linked = df_linked[df_linked["Nome da plataforma"].isin(sel_plat)].copy()
+        want = {nf_grain_plataforma_match_key(x) for x in sel_plat}
+        want.discard("")
+        if want:
+            got = df_linked["Nome da plataforma"].map(nf_grain_plataforma_match_key)
+            df_linked = df_linked.loc[got.isin(want)].copy()
 
     if df_linked.empty:
         return pd.DataFrame(columns=cols_out), tuple(warn)
@@ -653,7 +670,11 @@ def apply_recorte_minimo(
 
     sel_plat = list(state.plataformas)
     if sel_plat and "Nome da plataforma" in sliced.columns:
-        sliced = sliced[sliced["Nome da plataforma"].isin(sel_plat)].copy()
+        want = {nf_grain_plataforma_match_key(x) for x in sel_plat}
+        want.discard("")
+        if want:
+            got = sliced["Nome da plataforma"].map(nf_grain_plataforma_match_key)
+            sliced = sliced.loc[got.isin(want)].copy()
 
     if ok_dates and not sliced.empty:
         d_ini = _fdl_fr_safe_streamlit_date(data_venda_ini, d_min)

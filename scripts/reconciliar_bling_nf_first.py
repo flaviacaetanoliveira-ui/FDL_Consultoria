@@ -39,6 +39,22 @@ from processing.faturamento.io_notas_saida import (  # noqa: E402
 from processing.faturamento.normalize import normalize_pedido_join_key, to_numeric_br  # noqa: E402
 
 
+def nf_key_reconciliacao(raw: object) -> str:
+    """
+    Chave canónica para cruzar Bling ↔ materializado.
+
+    Aplica ``normalize_pedido_join_key`` (ex.: remove sufixo Excel ``.0``) e, se o resultado for
+    só dígitos, remove zeros à esquerda — alinhado ao ``Nota_Numero_Normalizado`` típico no Parquet
+    (ex.: Bling ``038476`` ↔ app ``38476``).
+    """
+    s = normalize_pedido_join_key(pd.Series([str(raw)])).iloc[0]
+    if not s:
+        return ""
+    if "." in s and s.replace(".", "").replace("-", "").isdigit():
+        s = s.split(".")[0]
+    return s.lstrip("0") if s.isdigit() else s
+
+
 def _fmt_brl(x: float) -> str:
     s = f"{x:,.2f}"
     return s.replace(",", "X").replace(".", ",").replace("X", ".")
@@ -82,7 +98,7 @@ def _find_col_situacao(columns: list[str]) -> str:
 
 
 def agregar_bling_raw(raw: pd.DataFrame, *, arquivo: str) -> tuple[pd.DataFrame, dict[str, str]]:
-    """1 linha por NF; nf_key = mesma normalização que o pipeline (pedido/NF)."""
+    """1 linha por NF; ``nf_key`` = :func:`nf_key_reconciliacao` (cruzamento com materializado)."""
     cols = list(raw.columns)
     col_nf = _find_col_numero_nf(cols)
     if not col_nf:
@@ -100,7 +116,7 @@ def agregar_bling_raw(raw: pd.DataFrame, *, arquivo: str) -> tuple[pd.DataFrame,
     col_sit = _find_col_situacao(cols)
 
     prep = raw.copy()
-    prep["_nf_key"] = normalize_pedido_join_key(prep[col_nf].astype(str))
+    prep["_nf_key"] = prep[col_nf].map(nf_key_reconciliacao)
     prep["_dt"] = pd.to_datetime(prep[col_dt], errors="coerce", dayfirst=True)
     prep["_vl_liq"] = to_numeric_br(prep[col_liq])
     if col_br and col_br in prep.columns:
@@ -162,7 +178,7 @@ def carregar_nf_first(path: Path) -> pd.DataFrame:
     if "Nota_Numero_Normalizado" not in df.columns:
         raise SystemExit("Parquet NF-first: falta coluna Nota_Numero_Normalizado.")
     df = df.copy()
-    df["nf_key"] = normalize_pedido_join_key(df["Nota_Numero_Normalizado"].astype(str))
+    df["nf_key"] = df["Nota_Numero_Normalizado"].map(nf_key_reconciliacao)
     return df
 
 
@@ -173,17 +189,21 @@ def carregar_grao_linha(path: Path) -> pd.DataFrame:
     else:
         df = None
         for enc in ("utf-8-sig", "utf-8", "latin1", "cp1252"):
-            try:
-                df = pd.read_csv(p, encoding=enc, sep=";", low_memory=False)
+            for sep in (";", ",", "\t"):
+                try:
+                    df = pd.read_csv(p, encoding=enc, sep=sep, low_memory=False)
+                    if len(df.columns) > 5:
+                        break
+                except Exception:
+                    df = None
+            if df is not None and len(df.columns) > 5:
                 break
-            except Exception:
-                continue
         if df is None:
             df = pd.read_csv(p, low_memory=False)
     if "Nota_Numero_Normalizado" not in df.columns:
         return pd.DataFrame()
     df = df.copy()
-    df["_nf_key"] = normalize_pedido_join_key(df["Nota_Numero_Normalizado"].astype(str))
+    df["_nf_key"] = df["Nota_Numero_Normalizado"].map(nf_key_reconciliacao)
     return df
 
 
@@ -273,6 +293,14 @@ def main() -> None:
             if line_df.empty:
                 print(f"Aviso: grão linha sem Nota_Numero_Normalizado ou vazio: {lp}", file=sys.stderr)
                 line_df = None
+            elif empresas and "empresa" in line_df.columns:
+                _n0 = len(line_df)
+                line_df = _filtrar_empresa(line_df, "empresa", empresas)
+                if line_df.empty and _n0:
+                    print(
+                        "Aviso: grão linha sem linhas após filtro --empresa (motivos de exclusão usam só esta marca).",
+                        file=sys.stderr,
+                    )
         else:
             print(f"Aviso: ficheiro linha não encontrado: {lp}", file=sys.stderr)
 

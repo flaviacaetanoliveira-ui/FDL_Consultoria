@@ -499,12 +499,23 @@ def _materialize_faturamento(
         SCHEMA_VERSION_NF_FIRST,
         build_nf_materializado_dataframe,
     )
+    from processing.faturamento.fiscal_materializado import (
+        SCHEMA_VERSION_FISCAL,
+        build_fiscal_materializado_dataframe,
+        fiscal_materializado_meta_snapshot,
+    )
 
     df_nf = build_nf_materializado_dataframe(df)
     _write_parquet(_dataframe_safe_for_parquet(df_nf), out_dir / "dataset_faturamento_nf.parquet")
     meta["dataset_faturamento_nf_parquet"] = "dataset_faturamento_nf.parquet"
     meta["nf_first_row_count"] = int(len(df_nf))
     meta["schema_version_nf_first"] = SCHEMA_VERSION_NF_FIRST
+
+    df_fiscal = build_fiscal_materializado_dataframe(params_path)
+    _write_parquet(_dataframe_safe_for_parquet(df_fiscal), out_dir / "dataset_faturamento_fiscal.parquet")
+    meta["dataset_faturamento_fiscal_parquet"] = "dataset_faturamento_fiscal.parquet"
+    meta["schema_version_fiscal"] = SCHEMA_VERSION_FISCAL
+    meta.update(fiscal_materializado_meta_snapshot(df_fiscal))
 
     _write_metadata(out_dir / "metadata.json", meta)
 

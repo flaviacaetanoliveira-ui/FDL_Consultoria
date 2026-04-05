@@ -4779,6 +4779,12 @@ def _render_fdl_fat_dre_nf_kpi_cards(
                 tier="secondary",
             ),
             _card(
+                "Custo produto",
+                _fmt_brl_ptbr_celula(kp.get("custo_produto", 0.0)) or "R$ 0,00",
+                tier="secondary",
+                title="Σ Custo_Produto_Total (ou «Custo do Produto») no recorte.",
+            ),
+            _card(
                 "Frete",
                 _fmt_brl_ptbr_celula(kp["frete"]) or "R$ 0,00",
                 tier="secondary",
@@ -4954,6 +4960,7 @@ def _render_fdl_fat_dre_nf_gerencial(
     margem_s = _margem_sobre_venda_str(res, vv)
     res_disp = _fmt_brl_ptbr_celula(kp["resultado"]) or "—"
     enc_com = _fmt_brl_ptbr_encargo_dre(kp["comissao"])
+    enc_custo = _fmt_brl_ptbr_encargo_dre(kp.get("custo_produto", 0.0))
     enc_fre = _fmt_brl_ptbr_encargo_dre(kp["frete"])
     enc_imp = _fmt_brl_ptbr_encargo_dre(kp["imposto"])
     enc_df = _fmt_brl_ptbr_encargo_dre(kp["despesa_fixa"])
@@ -5065,6 +5072,16 @@ def _render_fdl_fat_dre_nf_gerencial(
                 "Σ comissão comercial (pedidos) no recorte."
                 if valor_faturado_from_fiscal_parquet
                 else "Σ comissão no recorte."
+            ),
+        )
+        + _dre_row(
+            "Custo produto",
+            enc_custo,
+            encargo=True,
+            title=(
+                "Σ custo do produto (Custo_Produto_Total / «Custo do Produto») no recorte."
+                if valor_faturado_from_fiscal_parquet
+                else "Σ custo do produto no recorte."
             ),
         )
         + _dre_row(
@@ -6857,6 +6874,7 @@ def _render_faturamento_dre_minimal(
         "Faturado (NF)",
         "Diferença",
         "Comissão",
+        "Custo produto",
         "Frete",
         "Imposto",
         "Desp. fixa",
@@ -6886,6 +6904,11 @@ def _render_faturamento_dre_minimal(
             _df_nf_table["valor_venda"],
             _df_nf_table["resultado"],
         )
+        _custo_s = (
+            _df_nf_table["custo_produto"]
+            if "custo_produto" in _df_nf_table.columns
+            else pd.Series(0.0, index=_df_nf_table.index, dtype=float)
+        )
         _disp_nf_full = pd.DataFrame(
             {
                 "Emissão": _series_nf_emissao_pt_br(
@@ -6906,6 +6929,7 @@ def _render_faturamento_dre_minimal(
                 "Faturado (NF)": pd.to_numeric(_df_nf_table["valor_faturado_nf"], errors="coerce"),
                 "Diferença": pd.to_numeric(_df_nf_table["diferenca"], errors="coerce"),
                 "Comissão": pd.to_numeric(_df_nf_table["comissao"], errors="coerce"),
+                "Custo produto": pd.to_numeric(_custo_s, errors="coerce").fillna(0.0),
                 "Frete": pd.to_numeric(_df_nf_table["frete"], errors="coerce"),
                 "Imposto": pd.to_numeric(_df_nf_table["imposto"], errors="coerce"),
                 "Desp. fixa": pd.to_numeric(_df_nf_table["despesa_fixa"], errors="coerce"),
@@ -6965,6 +6989,7 @@ def _render_faturamento_dre_minimal(
             "Faturado (NF)",
             "Diferença",
             "Comissão",
+            "Custo produto",
             "Frete",
             "Imposto",
             "Desp. fixa",
@@ -7003,6 +7028,11 @@ def _render_faturamento_dre_minimal(
             else "Venda (lista) − Faturado (NF)."
         ),
         "Comissão": "Comercial: soma das comissões das linhas de pedido ligadas à NF." if use_fiscal_kpi else None,
+        "Custo produto": (
+            "Comercial: Σ **Custo_Produto_Total** (ou «Custo do Produto») das linhas de pedido ligadas à NF."
+            if use_fiscal_kpi
+            else "Σ custo do produto nas linhas de pedido desta NF."
+        ),
         "Frete": (
             "Prioridade: frete das linhas de pedido; se ~0, usa coluna «Frete» do export de notas no Parquet fiscal "
             "(após rematerializar); se ainda ~0, com **uma** linha de pedido e faturado > lista, "
@@ -7040,6 +7070,7 @@ def _render_faturamento_dre_minimal(
         "Faturado (NF)": "medium",
         "Diferença": "small",
         "Comissão": "small",
+        "Custo produto": "medium",
         "Frete": "small",
         "Imposto": "small",
         "Desp. fixa": "small",

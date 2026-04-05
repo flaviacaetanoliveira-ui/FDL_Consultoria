@@ -221,6 +221,15 @@ def _nf_grain_frete_numeric(df: pd.DataFrame) -> pd.Series:
     return pd.Series(0.0, index=df.index)
 
 
+def _nf_grain_custo_produto_col_name(columns: list[str]) -> str:
+    """Mesma prioridade que o painel linha (``Custo_Produto_Total`` V2, senão legado)."""
+    if "Custo_Produto_Total" in columns:
+        return "Custo_Produto_Total"
+    if "Custo do Produto" in columns:
+        return "Custo do Produto"
+    return ""
+
+
 def _nf_grain_venda_linha_series(
     gr: pd.DataFrame,
     *,
@@ -258,7 +267,8 @@ def build_nf_grain_dataframe(
 
     **Venda (lista):** por linha, ``Quantidade × Preço de lista``; soma no grupo NF.
 
-    **Comissão / frete:** soma das linhas (``Taxa de Comissão``, ``Frete_Plataforma`` / ``Custo de Frete``).
+    **Comissão / custo produto / frete:** soma por linha de ``Taxa de Comissão``, ``Custo_Produto_Total`` (ou
+    ``Custo do Produto``), ``Frete_Plataforma`` / ``Custo de Frete``.
 
     **Resultado:** Σ ``Resultado`` das linhas. Com coluna ``Despesas Fixas``: Σ ``Resultado`` + Σ ``Despesas Fixas``
     − ``despesa_fixa`` (5% × ``valor_venda`` na NF).
@@ -276,6 +286,7 @@ def build_nf_grain_dataframe(
         "valor_venda",
         "diferenca",
         "comissao",
+        "custo_produto",
         "frete",
         "imposto",
         "despesa_fixa",
@@ -357,6 +368,7 @@ def build_nf_grain_dataframe(
 
     qcol, pl_col = "Quantidade", "Preço de lista"
     has_qpl = qcol in df_linked.columns and pl_col in df_linked.columns
+    custo_col = _nf_grain_custo_produto_col_name(list(df_linked.columns))
     prod_col = "Descrição" if "Descrição" in df_linked.columns else ("Nome" if "Nome" in df_linked.columns else "")
     ml_col = "Número do pedido multiloja"
     ped_col = "Número do pedido"
@@ -376,6 +388,11 @@ def build_nf_grain_dataframe(
         com = (
             float(pd.to_numeric(gr["Taxa de Comissão"], errors="coerce").fillna(0.0).sum())
             if "Taxa de Comissão" in gr.columns
+            else 0.0
+        )
+        custo_p = (
+            float(pd.to_numeric(gr[custo_col], errors="coerce").fillna(0.0).sum())
+            if custo_col and custo_col in gr.columns
             else 0.0
         )
         fre = float(_nf_grain_frete_numeric(gr).sum())
@@ -471,6 +488,7 @@ def build_nf_grain_dataframe(
                 "valor_venda": v_venda,
                 "diferenca": v_venda - vl_nf,
                 "comissao": com,
+                "custo_produto": custo_p,
                 "frete": fre,
                 "imposto": imp,
                 "despesa_fixa": desp_fix,
@@ -523,6 +541,7 @@ def compute_nf_panel_kpis(df_nf: pd.DataFrame) -> dict[str, float | int]:
         "valor_faturado_nf": 0.0,
         "diferenca": 0.0,
         "comissao": 0.0,
+        "custo_produto": 0.0,
         "frete": 0.0,
         "imposto": 0.0,
         "despesa_fixa": 0.0,
@@ -538,6 +557,11 @@ def compute_nf_panel_kpis(df_nf: pd.DataFrame) -> dict[str, float | int]:
         "valor_faturado_nf": vf,
         "diferenca": vv - vf,
         "comissao": float(pd.to_numeric(df_nf["comissao"], errors="coerce").fillna(0.0).sum()),
+        "custo_produto": float(
+            pd.to_numeric(df_nf["custo_produto"], errors="coerce").fillna(0.0).sum()
+        )
+        if "custo_produto" in df_nf.columns
+        else 0.0,
         "frete": float(pd.to_numeric(df_nf["frete"], errors="coerce").fillna(0.0).sum()),
         "imposto": float(pd.to_numeric(df_nf["imposto"], errors="coerce").fillna(0.0).sum()),
         "despesa_fixa": float(pd.to_numeric(df_nf["despesa_fixa"], errors="coerce").fillna(0.0).sum()),

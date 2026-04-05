@@ -31,6 +31,7 @@ NF_FIRST_CONTRACT_COLUMNS: tuple[str, ...] = (
     "pedido_resumo",
     "produto_resumo",
     "comissao",
+    "custo_produto",
     "frete",
     "imposto",
     "despesa_fixa",
@@ -40,10 +41,9 @@ NF_FIRST_CONTRACT_COLUMNS: tuple[str, ...] = (
     "schema_version_nf",
 )
 
+_NF_FIRST_OPTIONAL_READ = frozenset({"schema_version_nf", "custo_produto"})
 NF_FIRST_CONTRACT_REQUIRED_READ: frozenset[str] = frozenset(
-    c
-    for c in NF_FIRST_CONTRACT_COLUMNS
-    if c not in frozenset({"schema_version_nf"})
+    c for c in NF_FIRST_CONTRACT_COLUMNS if c not in _NF_FIRST_OPTIONAL_READ
 )
 
 

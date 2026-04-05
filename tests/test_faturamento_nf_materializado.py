@@ -29,6 +29,7 @@ def _line_df() -> pd.DataFrame:
             "Nome da plataforma": ["ML", "ML"],
             "Número do pedido multiloja": ["P1", "P1"],
             "Taxa de Comissão": [1.0, 2.0],
+            "Custo_Produto_Total": [4.0, 6.0],
             "Frete_Plataforma": [0.5, 0.5],
             "Imposto": [3.0, 3.0],
             "Resultado": [10.0, -5.0],
@@ -46,6 +47,7 @@ def test_build_nf_materializado_matches_grain_and_contract() -> None:
     assert int(got.iloc[0]["schema_version_nf"]) == SCHEMA_VERSION_NF_FIRST
     assert got.iloc[0]["plataforma"] == "ML"
     assert float(got.iloc[0]["valor_venda"]) == 25.0
+    assert float(got.iloc[0]["custo_produto"]) == 10.0
     assert float(got.iloc[0]["despesa_fixa"]) == 1.25
     st = FaturamentoRecorteMinState((), ())
     ref, _ = build_nf_grain_dataframe(

@@ -46,6 +46,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         "valor_venda",
         "diferenca",
         "comissao",
+        "custo_produto",
         "frete",
         "imposto",
         "despesa_fixa",
@@ -74,6 +75,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         merged = fc
         merged["valor_venda"] = 0.0
         merged["comissao"] = 0.0
+        merged["custo_produto"] = 0.0
         merged["frete"] = 0.0
         merged["imposto"] = 0.0
         merged["despesa_fixa"] = 0.0
@@ -104,6 +106,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
             "_jn_m",
             "valor_venda",
             "comissao",
+            "custo_produto",
             "frete",
             "imposto",
             "despesa_fixa",
@@ -118,6 +121,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         fill_commercial = [
             "valor_venda",
             "comissao",
+            "custo_produto",
             "frete",
             "imposto",
             "despesa_fixa",
@@ -161,6 +165,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         for _c in (
             "valor_venda",
             "comissao",
+            "custo_produto",
             "frete",
             "imposto",
             "despesa_fixa",
@@ -184,6 +189,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
                     merged[_c] = 0.0
         merged["valor_venda"] = pd.to_numeric(merged["valor_venda"], errors="coerce").fillna(0.0)
         merged["comissao"] = pd.to_numeric(merged["comissao"], errors="coerce").fillna(0.0)
+        merged["custo_produto"] = pd.to_numeric(merged["custo_produto"], errors="coerce").fillna(0.0)
         merged["frete"] = pd.to_numeric(merged["frete"], errors="coerce").fillna(0.0)
         merged["imposto"] = pd.to_numeric(merged["imposto"], errors="coerce").fillna(0.0)
         merged["despesa_fixa"] = pd.to_numeric(merged["despesa_fixa"], errors="coerce").fillna(0.0)
@@ -230,6 +236,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
             "valor_venda": vv,
             "diferenca": vv - v_fat,
             "comissao": merged["comissao"],
+            "custo_produto": merged["custo_produto"],
             "frete": merged["frete"],
             "imposto": merged["imposto"],
             "despesa_fixa": merged["despesa_fixa"],

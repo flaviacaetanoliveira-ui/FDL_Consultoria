@@ -27,6 +27,7 @@ def _comm_row(**kwargs: object) -> pd.DataFrame:
         "Nota_Numero_Normalizado": "42480",
         "valor_venda": 80.0,
         "comissao": 1.0,
+        "custo_produto": 0.0,
         "frete": 2.0,
         "imposto": 0.0,
         "despesa_fixa": 0.0,

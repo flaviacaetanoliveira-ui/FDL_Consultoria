@@ -41,6 +41,7 @@ from faturamento_dre_recorte import (
 from processing.faturamento.fiscal_commercial_nf_merge import merge_fiscal_base_with_commercial_nf_dataframe
 from processing.faturamento.fiscal_materializado import fiscal_contract_dataframe_valid
 from processing.faturamento.nf_materializado import nf_first_contract_dataframe_valid
+from processing.faturamento.nf_panel_materializado import nf_panel_materializado_dataframe_valid
 from processing.faturamento.normalize import (
     normalize_empresa_fiscal_commercial_join_key,
     normalize_nf_fiscal_commercial_join_key,
@@ -1495,6 +1496,17 @@ def _faturamento_nf_parquet_path_from_materialized_path(path_s: str) -> Path | N
         return None
 
 
+def _faturamento_nf_panel_parquet_path_from_materialized_path(path_s: str) -> Path | None:
+    """``dataset_faturamento_nf_panel.parquet`` (merge fiscal + frete/resultado pré-calculados) ao lado do NF-first."""
+    nf = _faturamento_nf_parquet_path_from_materialized_path(path_s)
+    if nf is None:
+        return None
+    from processing.faturamento.nf_panel_materializado import NF_PANEL_PARQUET_FILENAME
+
+    cand = nf.parent / NF_PANEL_PARQUET_FILENAME
+    return cand if cand.is_file() else None
+
+
 def _faturamento_fiscal_parquet_path_from_materialized_path(path_s: str) -> Path | None:
     """``dataset_faturamento_fiscal.parquet`` no mesmo diretório que o materializado linha ou dentro da pasta apontada."""
     if not (path_s or "").strip():
@@ -1556,6 +1568,17 @@ def _faturamento_nf_parquet_stat_token(path_s: str) -> str:
         return f"{nf.resolve()}|mtime_ns={stt.st_mtime_ns}|size={stt.st_size}"
     except OSError:
         return "nf_unstat"
+
+
+def _faturamento_nf_panel_parquet_stat_token(path_s: str) -> str:
+    pan = _faturamento_nf_panel_parquet_path_from_materialized_path(path_s)
+    if pan is None:
+        return "nf_panel_absent"
+    try:
+        stt = pan.stat()
+        return f"{pan.resolve()}|mtime_ns={stt.st_mtime_ns}|size={stt.st_size}"
+    except OSError:
+        return "nf_panel_unstat"
 
 
 def _faturamento_ts_for_path(path: Path) -> str:
@@ -1654,6 +1677,8 @@ def _load_faturamento_data(
             "linhas": int(len(df_scoped)),
             "faturamento_nf_first": False,
             "faturamento_nf_df": None,
+            "faturamento_nf_panel_baked": False,
+            "faturamento_nf_panel_df": None,
             "faturamento_fiscal_first": False,
             "faturamento_fiscal_df": None,
         }
@@ -1681,6 +1706,29 @@ def _load_faturamento_data(
                     info["faturamento_nf_first_error"] = str(ex_nf).strip() or ex_nf.__class__.__name__
             else:
                 info["faturamento_nf_first_skip"] = "ficheiro_ausente"
+            panel_p = _faturamento_nf_panel_parquet_path_from_materialized_path(path_s)
+            if panel_p is not None:
+                try:
+                    from processing.faturamento.nf_panel_materializado import (
+                        nf_panel_materializado_dataframe_valid,
+                    )
+
+                    df_p0 = pd.read_parquet(panel_p, engine="pyarrow")
+                    if nf_panel_materializado_dataframe_valid(df_p0):
+                        if scope_consolidado and layout_effective == "v2":
+                            df_p_scoped, _pw = _faturamento_apply_layout_scope_consolidado_v2(
+                                df_p0, allowed_org_ids=aids
+                            )
+                        else:
+                            df_p_scoped, _pw = _faturamento_apply_layout_scope(
+                                df_p0, layout_effective=layout_effective, org_id=active_org_id
+                            )
+                        info["faturamento_nf_panel_df"] = df_p_scoped
+                        info["faturamento_nf_panel_baked"] = True
+                        info["faturamento_nf_panel_path"] = str(panel_p.resolve())
+                        info["faturamento_nf_panel_row_count_loaded"] = int(len(df_p0))
+                except Exception as ex_p:  # noqa: BLE001
+                    info["faturamento_nf_panel_error"] = str(ex_p).strip() or ex_p.__class__.__name__
         else:
             info["faturamento_nf_first_skip"] = "sem_path_local"
         if path_s:
@@ -1796,6 +1844,9 @@ def _faturamento_load_cache_signature(
             str(_strict_materialized()),
             _faturamento_materialized_source_stat_token(),
             _faturamento_nf_parquet_stat_token(
+                str(_faturamento_resolve_materialized_target().get("path_s") or "").strip()
+            ),
+            _faturamento_nf_panel_parquet_stat_token(
                 str(_faturamento_resolve_materialized_target().get("path_s") or "").strip()
             ),
         ]
@@ -4519,7 +4570,11 @@ def _faturamento_nf_apply_minimal_recorte(
     _plat_col = (
         "plataforma"
         if "plataforma" in out.columns
-        else ("Nome da plataforma" if "Nome da plataforma" in out.columns else "")
+        else (
+            "plataforma_resumo"
+            if "plataforma_resumo" in out.columns
+            else ("Nome da plataforma" if "Nome da plataforma" in out.columns else "")
+        )
     )
     if sel_plat and _plat_col:
         want = {nf_grain_plataforma_match_key(x) for x in sel_plat}
@@ -6404,13 +6459,25 @@ def _render_faturamento_dre_minimal(
     _fdl_fat_min_inject_ui_styles()
     _oid = str(org_id)
     _ = org_display_name, ts_proc, load_info
-    df_nf_pre = load_info.get("faturamento_nf_df")
-    use_nf_materializado = (
+    use_nf_panel_baked = bool(load_info.get("faturamento_nf_panel_baked"))
+    _df_nf_panel = load_info.get("faturamento_nf_panel_df")
+    _df_nf_contract = load_info.get("faturamento_nf_df")
+    use_nf_panel_baked_effective = (
+        use_nf_panel_baked
+        and isinstance(_df_nf_panel, pd.DataFrame)
+        and nf_panel_materializado_dataframe_valid(_df_nf_panel)
+    )
+    df_nf_pre = _df_nf_panel if use_nf_panel_baked_effective else _df_nf_contract
+    use_nf_materializado = False
+    if use_nf_panel_baked_effective:
+        use_nf_materializado = isinstance(df_nf_pre, pd.DataFrame) and not df_nf_pre.empty
+    elif (
         bool(load_info.get("faturamento_nf_first"))
         and isinstance(df_nf_pre, pd.DataFrame)
         and nf_first_contract_dataframe_valid(df_nf_pre)
-    )
-    if use_nf_materializado and df_nf_pre.empty and not df.empty:
+    ):
+        use_nf_materializado = True
+    if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame) and df_nf_pre.empty and not df.empty:
         use_nf_materializado = False
 
     df_fiscal_pre = load_info.get("faturamento_fiscal_df")
@@ -6509,6 +6576,8 @@ def _render_faturamento_dre_minimal(
         # Opções alinhadas ao grão NF (Parquet); evita misturar com linhas fiscais sem ``plataforma``
         # e garante o mesmo rótulo que o filtro ``plataforma`` / ``nf_grain_plataforma_match_key``.
         plats = nf_grain_plataforma_ui_options(df_nf_pre["plataforma"])
+    elif use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame) and "plataforma_resumo" in df_nf_pre.columns:
+        plats = nf_grain_plataforma_ui_options(df_nf_pre["plataforma_resumo"])
     elif use_nf_materializado and "plataforma" in _df_bounds.columns:
         plats = nf_grain_plataforma_ui_options(_df_bounds["plataforma"])
     elif "Nome da plataforma" in df.columns:
@@ -6604,10 +6673,8 @@ def _render_faturamento_dre_minimal(
             _nf_kpi_fim = _nf_kpi_ini
 
     if use_nf_materializado:
-        # ``faturamento_nf_df`` é normalmente ``dataset_faturamento_nf.parquet`` = **já grão NF**
-        # (contrato NF-first). ``build_nf_grain_dataframe`` exige colunas de **linha de pedido**
-        # (ex. ``Nota_Valor_Liquido_Total`` por linha); aplicá-lo ao Parquet devolve vazio + aviso
-        # «sem colunas fiscais mínimas» e zera todo o lado comercial no merge fiscal.
+        # ``dataset_faturamento_nf_panel.parquet`` = merge fiscal + frete/resultado já calculados na materialização.
+        # ``dataset_faturamento_nf.parquet`` = só grão comercial (contrato NF-first).
         df_nf_lines = _faturamento_nf_apply_minimal_recorte(
             df_nf_pre,
             empresas_sel=_min_state.empresas,
@@ -6616,7 +6683,17 @@ def _render_faturamento_dre_minimal(
             nf_d_fim=_nf_kpi_fim,
             ok_nf_dates=ok_nf_dates,
         )
-        if nf_first_contract_dataframe_valid(df_nf_pre):
+        if use_nf_panel_baked_effective:
+            df_nf_commercial = df_nf_lines.copy()
+            if "plataforma_resumo" not in df_nf_commercial.columns:
+                if "plataforma" in df_nf_commercial.columns:
+                    df_nf_commercial["plataforma_resumo"] = (
+                        df_nf_commercial["plataforma"].fillna("").astype(str)
+                    )
+                else:
+                    df_nf_commercial["plataforma_resumo"] = "—"
+            _wrn_nf = ()
+        elif nf_first_contract_dataframe_valid(df_nf_pre):
             df_nf_commercial = df_nf_lines.copy()
             if "plataforma_resumo" not in df_nf_commercial.columns:
                 if "plataforma" in df_nf_commercial.columns:
@@ -6649,7 +6726,16 @@ def _render_faturamento_dre_minimal(
         use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame) and fiscal_contract_dataframe_valid(df_fiscal_pre)
     )
     df_fiscal_cut = pd.DataFrame()
-    if use_fiscal_kpi:
+    if use_nf_panel_baked_effective:
+        if use_fiscal_kpi:
+            df_nf = df_nf_commercial.copy()
+            if _min_state.plataformas:
+                df_nf = _nf_panel_filter_merged_fiscal_by_plataforma_resumo(
+                    df_nf, _min_state.plataformas
+                )
+        else:
+            df_nf = df_nf_commercial.copy()
+    elif use_fiscal_kpi:
         df_fiscal_cut = _faturamento_fiscal_apply_minimal_recorte(
             df_fiscal_pre,
             empresas_sel=_min_state.empresas,
@@ -6663,8 +6749,9 @@ def _render_faturamento_dre_minimal(
     else:
         df_nf = df_nf_commercial
 
-    df_nf = apply_nf_panel_frete_gap_fallback(df_nf)
-    df_nf = apply_nf_panel_resultado_frete_nota_lista(df_nf)
+    if not use_nf_panel_baked_effective:
+        df_nf = apply_nf_panel_frete_gap_fallback(df_nf)
+        df_nf = apply_nf_panel_resultado_frete_nota_lista(df_nf)
 
     if "fdl_fat_min_venda_sinal" not in st.session_state:
         # Com Parquet fiscal, «Todas» inclui NFs só no Bling (sem pedido no materializado) → colunas «—».
@@ -6755,7 +6842,13 @@ def _render_faturamento_dre_minimal(
                 )
             if use_nf_materializado:
                 _fdl_fat_min_aside(
-                    "Fonte comercial: <strong>materializado NF-first</strong>.",
+                    "Fonte comercial: <strong>materializado NF-first</strong>"
+                    + (
+                        " · painel com merge fiscal + frete/resultado <strong>pré-calculados</strong> "
+                        "(<code>dataset_faturamento_nf_panel.parquet</code>) — sem recalcular no Streamlit."
+                        if load_info.get("faturamento_nf_panel_baked")
+                        else "."
+                    ),
                     tight=True,
                 )
             else:
@@ -9495,6 +9588,12 @@ elif _fdl_product_area in (
         faturamento_info = {
             **faturamento_info,
             "faturamento_nf_df": _filtrar_df_col_empresa_por_contexto(_nf_ctx),
+        }
+    _nf_panel_ctx = faturamento_info.get("faturamento_nf_panel_df")
+    if isinstance(_nf_panel_ctx, pd.DataFrame):
+        faturamento_info = {
+            **faturamento_info,
+            "faturamento_nf_panel_df": _filtrar_df_col_empresa_por_contexto(_nf_panel_ctx),
         }
 
     faturamento_info = {**faturamento_info, "linhas": int(len(faturamento_df))}

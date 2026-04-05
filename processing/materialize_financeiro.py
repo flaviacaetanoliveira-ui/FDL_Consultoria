@@ -512,6 +512,16 @@ def _materialize_faturamento(
     meta["schema_version_nf_first"] = SCHEMA_VERSION_NF_FIRST
 
     df_fiscal = build_fiscal_materializado_dataframe(params_path)
+    from processing.faturamento.nf_panel_materializado import (
+        NF_PANEL_PARQUET_FILENAME,
+        build_nf_panel_materializado_dataframe,
+    )
+
+    df_nf_panel = build_nf_panel_materializado_dataframe(df_nf, df_fiscal)
+    _write_parquet(_dataframe_safe_for_parquet(df_nf_panel), out_dir / NF_PANEL_PARQUET_FILENAME)
+    meta["dataset_faturamento_nf_panel_parquet"] = NF_PANEL_PARQUET_FILENAME
+    meta["nf_panel_row_count"] = int(len(df_nf_panel))
+
     _write_parquet(_dataframe_safe_for_parquet(df_fiscal), out_dir / "dataset_faturamento_fiscal.parquet")
     meta["dataset_faturamento_fiscal_parquet"] = "dataset_faturamento_fiscal.parquet"
     meta["schema_version_fiscal"] = SCHEMA_VERSION_FISCAL

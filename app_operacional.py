@@ -40,6 +40,10 @@ from faturamento_dre_recorte import (
 )
 from processing.faturamento.fiscal_materializado import fiscal_contract_dataframe_valid
 from processing.faturamento.nf_materializado import nf_first_contract_dataframe_valid
+from processing.faturamento.normalize import (
+    normalize_empresa_fiscal_commercial_join_key,
+    normalize_nf_fiscal_commercial_join_key,
+)
 from faturamento_dre_recorte_minimo import (
     _min_cal_limits,
     build_nf_grain_dataframe,
@@ -4575,6 +4579,8 @@ def _merge_fiscal_base_with_commercial_nf(
         fc["_jo"] = ""
     fc["_je"] = fc["empresa"].fillna("").astype(str).str.strip()
     fc["_jn"] = fc["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
+    fc["_je_m"] = normalize_empresa_fiscal_commercial_join_key(fc["_je"])
+    fc["_jn_m"] = normalize_nf_fiscal_commercial_join_key(fc["_jn"])
 
     if df_commercial.empty:
         merged = fc
@@ -4598,14 +4604,16 @@ def _merge_fiscal_base_with_commercial_nf(
             co["_jo"] = ""
         co["_je"] = co["empresa"].fillna("").astype(str).str.strip()
         co["_jn"] = co["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
+        co["_je_m"] = normalize_empresa_fiscal_commercial_join_key(co["_je"])
+        co["_jn_m"] = normalize_nf_fiscal_commercial_join_key(co["_jn"])
         if "plataforma_resumo" not in co.columns and "plataforma" in co.columns:
             co["plataforma_resumo"] = co["plataforma"].astype(str)
         elif "plataforma_resumo" not in co.columns:
             co["plataforma_resumo"] = "—"
         take = [
             "_jo",
-            "_je",
-            "_jn",
+            "_je_m",
+            "_jn_m",
             "valor_venda",
             "comissao",
             "frete",
@@ -4619,8 +4627,8 @@ def _merge_fiscal_base_with_commercial_nf(
             "faturamento_nota_vinculada",
         ]
         use = [c for c in take if c in co.columns]
-        co_sub = co[use].drop_duplicates(subset=["_jo", "_je", "_jn"], keep="first")
-        merged = fc.merge(co_sub, on=["_jo", "_je", "_jn"], how="left")
+        co_sub = co[use].drop_duplicates(subset=["_jo", "_je_m", "_jn_m"], keep="first")
+        merged = fc.merge(co_sub, on=["_jo", "_je_m", "_jn_m"], how="left")
         for _c in (
             "valor_venda",
             "comissao",

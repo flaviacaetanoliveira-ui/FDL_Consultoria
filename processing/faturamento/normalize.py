@@ -73,6 +73,38 @@ def normalize_pedido_join_key(series: pd.Series) -> pd.Series:
     return series.map(normalize_pedido_join_key_scalar)
 
 
+def normalize_nf_fiscal_commercial_join_key_scalar(raw: object) -> str:
+    """
+    Chave para merge ``dataset_faturamento_fiscal`` ↔ grão comercial (painel NF-first).
+
+    Reutiliza ``normalize_pedido_join_key_scalar`` (trim, sufixo ``.0``). Se o resultado for
+    **só dígitos**, remove zeros à esquerda, alinhando «042517» (export notas) a «42517»
+    (pedidos lidos como número).
+    """
+    s = normalize_pedido_join_key_scalar(raw)
+    if not s:
+        return ""
+    if re.fullmatch(r"\d+", s):
+        return s.lstrip("0") or "0"
+    return s
+
+
+def normalize_nf_fiscal_commercial_join_key(series: pd.Series) -> pd.Series:
+    return series.map(normalize_nf_fiscal_commercial_join_key_scalar)
+
+
+def normalize_empresa_fiscal_commercial_join_key_scalar(raw: object) -> str:
+    """Chave estável para merge fiscal ↔ comercial (evita falha Esquilo ≠ ESQUILO)."""
+    xs = str(raw).strip() if raw is not None else ""
+    if not xs or xs.casefold() in {"nan", "none", "nat", "<na>"}:
+        return ""
+    return xs.casefold()
+
+
+def normalize_empresa_fiscal_commercial_join_key(series: pd.Series) -> pd.Series:
+    return series.fillna("").astype(str).map(normalize_empresa_fiscal_commercial_join_key_scalar)
+
+
 def _parse_number_scalar(raw: object) -> float:
     """Interpreta valores com vírgula BR (1.234,56) ou ponto decimal (79.95)."""
     if raw is None or (isinstance(raw, float) and np.isnan(raw)):

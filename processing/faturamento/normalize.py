@@ -112,8 +112,22 @@ def normalize_empresa_fiscal_commercial_join_key(series: pd.Series) -> pd.Series
 
 def _parse_number_scalar(raw: object) -> float:
     """Interpreta valores com vírgula BR (1.234,56) ou ponto decimal (79.95)."""
-    if raw is None or (isinstance(raw, float) and np.isnan(raw)):
+    if raw is None:
         return float("nan")
+    # Valores já numéricos: não passar por str() — «51.001167» em texto dispara remoção de '.' quando
+    # há >2 casas decimais (ver ramo abaixo), corrompendo comissão/frete após rateio ML (coluna object mista).
+    if isinstance(raw, bool):
+        pass
+    elif isinstance(raw, (int, np.integer)):
+        return float(raw)
+    elif isinstance(raw, (float, np.floating)):
+        try:
+            x = float(raw)
+        except (TypeError, ValueError):
+            return float("nan")
+        if np.isnan(x):
+            return float("nan")
+        return x
     s = str(raw).strip()
     if not s or s.lower() in ("nan", "none", "nat"):
         return float("nan")

@@ -4971,7 +4971,7 @@ def _render_fdl_fat_dre_nf_gerencial(
         bridge: bool = False,
         encargo: bool = False,
         enc_last: bool = False,
-        title: str | None = None,
+        title: str | tuple[str, ...] | None = None,
     ) -> str:
         cls = "fdl-fat-dre-row"
         if lead:
@@ -4984,7 +4984,12 @@ def _render_fdl_fat_dre_nf_gerencial(
             cls += " fdl-fat-dre-row--enc"
             if enc_last:
                 cls += " fdl-fat-dre-row--enc-last"
-        tattr = f' title="{html.escape(title, quote=True)}"' if title else ""
+        _tt = title
+        if isinstance(_tt, tuple) and _tt:
+            _tt = _tt[0]
+        tattr = (
+            f' title="{html.escape(str(_tt), quote=True)}"' if (_tt is not None and str(_tt).strip() != "") else ""
+        )
         vcls = "fdl-fat-dre-val" + (" fdl-fat-dre-val--out" if encargo else "")
         return (
             f'<div class="{cls}"{tattr}>'
@@ -5043,7 +5048,7 @@ def _render_fdl_fat_dre_nf_gerencial(
                 "Ponte entre receita em lista (pedidos) e total fiscal (notas). "
                 "Não é indicador de erro; interpretar à luz de descontos e vínculo pedido–NF."
                 if valor_faturado_from_fiscal_parquet
-                else "Receita lista − faturado NF (totais do recorte).",
+                else "Receita lista − faturado NF (totais do recorte)."
             ),
         )
         + (
@@ -6881,7 +6886,7 @@ def _render_faturamento_dre_minimal(
         "Margem %": (
             "Comercial: Resultado ÷ Venda (lista) nesta NF; não usa valor faturado fiscal."
             if use_fiscal_kpi
-            else "Resultado ÷ Venda (lista); alinhado ao KPI «Margem %» do painel.",
+            else "Resultado ÷ Venda (lista); alinhado ao KPI «Margem %» do painel."
         ),
     }
     _nf_col_width: dict[str, str] = {

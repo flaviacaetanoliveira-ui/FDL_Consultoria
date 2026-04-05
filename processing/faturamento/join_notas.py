@@ -346,7 +346,7 @@ def enrich_pedidos_com_notas(
         if not nfk_s:
             continue
         g_idx = sub.index.tolist()
-        w = sub["Vl_Venda"].astype(float)
+        w = to_numeric_br(_df_col_as_series(sub, "Vl_Venda")).fillna(0.0)
         s = float(w.sum())
         if s <= 0.0 or math.isnan(s):
             out.loc[g_idx, "flag_faturamento_rateio_vl_venda_zero"] = True
@@ -373,8 +373,16 @@ def enrich_pedidos_com_notas(
         if not nfk_s:
             continue
         g_idx = sub.index.tolist()
-        sfp = float(sub["Frete_Plataforma"].fillna(0.0).sum())
-        scf = float(sub["Custo de Frete"].fillna(0.0).sum()) if "Custo de Frete" in out.columns else 0.0
+        sfp = (
+            float(to_numeric_br(_df_col_as_series(sub, "Frete_Plataforma")).fillna(0.0).sum())
+            if "Frete_Plataforma" in sub.columns
+            else 0.0
+        )
+        scf = (
+            float(to_numeric_br(_df_col_as_series(sub, "Custo de Frete")).fillna(0.0).sum())
+            if "Custo de Frete" in sub.columns
+            else 0.0
+        )
         if sfp > _eps or scf > _eps:
             continue
         f_nota = float(frete_por_nf.get(nfk_s, 0.0))

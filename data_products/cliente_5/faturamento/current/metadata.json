@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-05T15:06:41Z",
+  "generated_at": "2026-04-05T21:26:55Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "cliente_5",
   "empresa": "_multi",
@@ -182,7 +182,7 @@
     "custo_col_sku_index": 3,
     "custo_col_preco_index": 4
   },
-  "data_processamento": "2026-04-05T15:06:41Z",
+  "data_processamento": "2026-04-05T21:26:55Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,
@@ -300,6 +300,7 @@
       "notas_linhas_apos_filtro": 10152,
       "notas_arquivos_linhas_brutas": 10509,
       "notas_vazio": false,
+      "notas_frete_fallback_grupos_nf": 84,
       "notas_nf_distintas": 3529,
       "pedidos_dedupe_multiloja_codigo": "applied",
       "pedidos_linhas_antes": 5844,
@@ -312,6 +313,7 @@
       "notas_linhas_apos_filtro": 27538,
       "notas_arquivos_linhas_brutas": 27768,
       "notas_vazio": false,
+      "notas_frete_fallback_grupos_nf": 93,
       "notas_nf_distintas": 4594,
       "pedidos_dedupe_multiloja_codigo": "applied",
       "pedidos_linhas_antes": 5526,

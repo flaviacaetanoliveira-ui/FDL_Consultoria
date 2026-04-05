@@ -38,6 +38,7 @@ from faturamento_dre_recorte import (
     apply_recorte_modulo,
     faturamento_recorte_state_from_session,
 )
+from processing.faturamento.fiscal_commercial_nf_merge import merge_fiscal_base_with_commercial_nf_dataframe
 from processing.faturamento.fiscal_materializado import fiscal_contract_dataframe_valid
 from processing.faturamento.nf_materializado import nf_first_contract_dataframe_valid
 from processing.faturamento.normalize import (
@@ -4560,164 +4561,14 @@ def _merge_fiscal_base_with_commercial_nf(
 ) -> pd.DataFrame:
     """
     Uma linha por NF do **recorte fiscal**; ``valor_faturado_nf`` = ``Valor_Liquido_NF`` (Bling/export notas).
-    Colunas comerciais por ``(org_id, empresa, Nota_Numero_Normalizado)`` quando existir vínculo no grão comercial.
+    Colunas comerciais por ``(org_id, empresa, NF normalizada)``; ver ``fiscal_commercial_nf_merge`` para fallback
+    quando o comercial tem ``org_id`` vazio e o fiscal tem org preenchida.
     """
-    cols_out = [
-        "org_id",
-        "Nota_Numero_Normalizado",
-        "Nota_Data_Emissao",
-        "Nota_Situacao",
-        "empresa",
-        "valor_faturado_nf",
-        "valor_venda",
-        "diferenca",
-        "comissao",
-        "frete",
-        "imposto",
-        "despesa_fixa",
-        "resultado",
-        "plataforma_resumo",
-        "pedido_resumo",
-        "n_linhas_pedido",
-        "produto_resumo",
-        "faturamento_nota_vinculada",
-    ]
-    if df_fiscal.empty:
-        return pd.DataFrame(columns=cols_out)
-
-    fc = df_fiscal.copy()
-    fc["_jo"] = (
-        fc["org_id"].fillna("").astype(str).str.strip() if "org_id" in fc.columns else ""
-    )
-    if "org_id" not in fc.columns:
-        fc["_jo"] = ""
-    fc["_je"] = fc["empresa"].fillna("").astype(str).str.strip()
-    fc["_jn"] = fc["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
-    fc["_je_m"] = normalize_empresa_fiscal_commercial_join_key(fc["_je"])
-    fc["_jn_m"] = normalize_nf_fiscal_commercial_join_key(fc["_jn"])
-
-    if df_commercial.empty:
-        merged = fc
-        merged["valor_venda"] = 0.0
-        merged["comissao"] = 0.0
-        merged["frete"] = 0.0
-        merged["imposto"] = 0.0
-        merged["despesa_fixa"] = 0.0
-        merged["resultado"] = 0.0
-        merged["plataforma_resumo"] = "—"
-        merged["pedido_resumo"] = "—"
-        merged["n_linhas_pedido"] = 0
-        merged["produto_resumo"] = "—"
-        merged["faturamento_nota_vinculada"] = False
-    else:
-        co = df_commercial.copy()
-        co["_jo"] = (
-            co["org_id"].fillna("").astype(str).str.strip() if "org_id" in co.columns else ""
-        )
-        if "org_id" not in co.columns:
-            co["_jo"] = ""
-        co["_je"] = co["empresa"].fillna("").astype(str).str.strip()
-        co["_jn"] = co["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
-        co["_je_m"] = normalize_empresa_fiscal_commercial_join_key(co["_je"])
-        co["_jn_m"] = normalize_nf_fiscal_commercial_join_key(co["_jn"])
-        if "plataforma_resumo" not in co.columns and "plataforma" in co.columns:
-            co["plataforma_resumo"] = co["plataforma"].astype(str)
-        elif "plataforma_resumo" not in co.columns:
-            co["plataforma_resumo"] = "—"
-        take = [
-            "_jo",
-            "_je_m",
-            "_jn_m",
-            "valor_venda",
-            "comissao",
-            "frete",
-            "imposto",
-            "despesa_fixa",
-            "resultado",
-            "plataforma_resumo",
-            "pedido_resumo",
-            "n_linhas_pedido",
-            "produto_resumo",
-            "faturamento_nota_vinculada",
-        ]
-        use = [c for c in take if c in co.columns]
-        co_sub = co[use].drop_duplicates(subset=["_jo", "_je_m", "_jn_m"], keep="first")
-        merged = fc.merge(co_sub, on=["_jo", "_je_m", "_jn_m"], how="left")
-        for _c in (
-            "valor_venda",
-            "comissao",
-            "frete",
-            "imposto",
-            "despesa_fixa",
-            "resultado",
-            "plataforma_resumo",
-            "pedido_resumo",
-            "n_linhas_pedido",
-            "produto_resumo",
-            "faturamento_nota_vinculada",
-        ):
-            if _c not in merged.columns:
-                if _c == "n_linhas_pedido":
-                    merged[_c] = 0
-                elif _c == "faturamento_nota_vinculada":
-                    merged[_c] = False
-                elif _c == "plataforma_resumo":
-                    merged[_c] = "—"
-                elif _c in {"pedido_resumo", "produto_resumo"}:
-                    merged[_c] = "—"
-                else:
-                    merged[_c] = 0.0
-        merged["valor_venda"] = pd.to_numeric(merged["valor_venda"], errors="coerce").fillna(0.0)
-        merged["comissao"] = pd.to_numeric(merged["comissao"], errors="coerce").fillna(0.0)
-        merged["frete"] = pd.to_numeric(merged["frete"], errors="coerce").fillna(0.0)
-        merged["imposto"] = pd.to_numeric(merged["imposto"], errors="coerce").fillna(0.0)
-        merged["despesa_fixa"] = pd.to_numeric(merged["despesa_fixa"], errors="coerce").fillna(0.0)
-        merged["resultado"] = pd.to_numeric(merged["resultado"], errors="coerce").fillna(0.0)
-        merged["n_linhas_pedido"] = (
-            pd.to_numeric(merged["n_linhas_pedido"], errors="coerce").fillna(0).astype(int)
-        )
-        merged["plataforma_resumo"] = merged["plataforma_resumo"].fillna("—").astype(str)
-        merged["pedido_resumo"] = merged["pedido_resumo"].fillna("—")
-        merged["produto_resumo"] = merged["produto_resumo"].fillna("—")
-        merged["faturamento_nota_vinculada"] = merged["faturamento_nota_vinculada"].fillna(False)
-
-    v_fat = pd.to_numeric(merged["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
-    vv = pd.to_numeric(merged["valor_venda"], errors="coerce").fillna(0.0)
-    org_raw = _df_get_series_column(merged, "org_id") if "org_id" in merged.columns else merged["_jo"]
-    org_s = org_raw.fillna("").map(lambda v: str(v).strip())
-    org_s = org_s.mask(org_s.str.lower().isin({"nan", "none", "nat", "<na>", "null"}), "")
-    if "Nota_Situacao" in merged.columns:
-        sit_s = _series_empty_str_to_dash(_df_get_series_column(merged, "Nota_Situacao"))
-    else:
-        sit_s = pd.Series("—", index=merged.index, dtype=str)
-    fv = merged["faturamento_nota_vinculada"].fillna(False)
-    try:
-        fv = fv.astype(bool)
-    except (TypeError, ValueError):
-        fv = fv.ne(0) if fv.dtype != bool else fv
-    out = pd.DataFrame(
-        {
-            "org_id": org_s.astype(str),
-            "Nota_Numero_Normalizado": merged["_jn"].astype(str),
-            "Nota_Data_Emissao": merged["Nota_Data_Emissao"],
-            "Nota_Situacao": sit_s,
-            "empresa": merged["_je"].astype(str),
-            "valor_faturado_nf": v_fat,
-            "valor_venda": vv,
-            "diferenca": vv - v_fat,
-            "comissao": merged["comissao"],
-            "frete": merged["frete"],
-            "imposto": merged["imposto"],
-            "despesa_fixa": merged["despesa_fixa"],
-            "resultado": merged["resultado"],
-            "plataforma_resumo": merged["plataforma_resumo"].astype(str),
-            "pedido_resumo": merged["pedido_resumo"],
-            "n_linhas_pedido": merged["n_linhas_pedido"].astype(int),
-            "produto_resumo": merged["produto_resumo"],
-            "faturamento_nota_vinculada": fv,
-        }
-    )
-    return out[cols_out]
+    out = merge_fiscal_base_with_commercial_nf_dataframe(df_fiscal, df_commercial)
+    if not out.empty and "Nota_Situacao" in out.columns:
+        out = out.copy()
+        out["Nota_Situacao"] = _series_empty_str_to_dash(out["Nota_Situacao"])
+    return out
 
 
 def _fmt_pct_ptbr_ratio(ratio: float, *, decimals: int = 1) -> str:

@@ -485,8 +485,11 @@ _FATURAMENTO_HELP_VL_NF_COL_MIN_TABLE = (
 )
 _FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN = (
     "Eixo **fiscal**: filtra pela **data de emissão** da nota (``Nota_Data_Emissao``). "
-    "Independente do **período da venda** e da **Plataforma**."
+    "Independente do **período da venda** e da **Plataforma**. "
+    "Neste painel o calendário **não considera emissões anteriores a 01/01/2026**."
 )
+# Piso de emissão NF no painel mínimo Faturamento & DRE (produto / alinhamento fiscal 2026+).
+_FDL_FAT_DRE_MIN_PANEL_NF_EMISSAO_DESDE = date(2026, 1, 1)
 _FATURAMENTO_HELP_PERIODO_DATA = (
     "Eixo oficial do período: coluna **Data** (pedido / export ML). "
     "**Data do faturamento** na tabela é informativa e pode estar incompleta — não rege este filtro."
@@ -6430,6 +6433,34 @@ def _render_comercial_pedidos_analise(
             )
 
 
+def _faturamento_dre_apply_produto_e_sinal_venda(
+    df_nf: pd.DataFrame,
+    *,
+    produtos_sel: tuple[str, ...],
+    venda_sinal: str,
+) -> pd.DataFrame:
+    """
+    Refina o quadro NF (já no recorte empresa/plataforma/emissão) por resumo de produto e sinal de ``valor_venda``.
+    """
+    if df_nf.empty:
+        return df_nf
+    out = df_nf
+    sel_p = tuple(str(x).strip() for x in produtos_sel if str(x).strip())
+    if sel_p and "produto_resumo" in out.columns:
+        pr = out["produto_resumo"].fillna("").astype(str).str.strip()
+        out = out.loc[pr.isin(sel_p)].copy()
+    vs = str(venda_sinal or "todos").strip().lower()
+    if vs not in {"", "todos"} and "valor_venda" in out.columns:
+        vv = pd.to_numeric(out["valor_venda"], errors="coerce").fillna(0.0)
+        if vs == "positiva":
+            out = out.loc[vv > 0.0].copy()
+        elif vs == "negativa":
+            out = out.loc[vv < 0.0].copy()
+        elif vs == "zero":
+            out = out.loc[vv.eq(0.0)].copy()
+    return out
+
+
 def _render_faturamento_dre_minimal(
     df: pd.DataFrame,
     load_info: dict[str, object],
@@ -6504,7 +6535,17 @@ def _render_faturamento_dre_minimal(
         )
         return
     nf_min, nf_max, ok_nf_dates = faturamento_min_series_nf_emissao_bounds_dates(_df_bounds)
-    nf_cal_min, nf_cal_max = _min_cal_limits(nf_min, nf_max) if ok_nf_dates else (nf_min, nf_max)
+    _emit_floor = _FDL_FAT_DRE_MIN_PANEL_NF_EMISSAO_DESDE
+    if ok_nf_dates:
+        nf_cal_min, nf_cal_max = _min_cal_limits(nf_min, nf_max)
+        nf_cal_min = max(nf_cal_min, _emit_floor)
+        if nf_max >= _emit_floor:
+            nf_min = max(nf_min, _emit_floor)
+        else:
+            nf_min, nf_max = _emit_floor, _emit_floor
+        nf_cal_max = max(nf_cal_max, nf_max, nf_min, nf_cal_min)
+    else:
+        nf_cal_min, nf_cal_max = (nf_min, nf_max)
     _nf_sig_k = "fdl_fat_min_nf_bounds_sig"
     _today = datetime.now(_BR_TZ).date()
     if ok_nf_dates:
@@ -6609,7 +6650,7 @@ def _render_faturamento_dre_minimal(
                 "Limpar filtros desta vista",
                 key="fdl_fat_min_reset",
                 use_container_width=True,
-                help="Repor empresa, plataforma e datas de emissão NF ao padrão do carregamento.",
+                help="Repor empresa, plataforma, datas de emissão NF, produto e sinal da venda ao padrão.",
             ):
                 for _k in (
                     "fdl_fat_min_emp",
@@ -6617,6 +6658,8 @@ def _render_faturamento_dre_minimal(
                     "fdl_fat_min_nf_d_ini",
                     "fdl_fat_min_nf_d_fim",
                     "fdl_fat_min_nf_bounds_sig",
+                    "fdl_fat_min_prod",
+                    "fdl_fat_min_venda_sinal",
                 ):
                     st.session_state.pop(_k, None)
                 st.rerun()
@@ -6670,8 +6713,55 @@ def _render_faturamento_dre_minimal(
     else:
         df_nf = df_nf_commercial
 
-    # Modo fiscal: df_nf = merge fiscal + comercial (mesma base que a tabela). KPIs devem somar só esse universo.
-    _kp = compute_nf_panel_kpis(df_nf)
+    # Modo fiscal: df_nf = merge fiscal + comercial (base antes de produto/sinal). KPIs e tabela usam df_nf_panel.
+    _prod_opts: list[str] = []
+    if not df_nf.empty and "produto_resumo" in df_nf.columns:
+        _prod_opts = sorted(
+            {
+                str(x).strip()
+                for x in df_nf["produto_resumo"].dropna().unique()
+                if str(x).strip() and str(x).strip() != "—"
+            }
+        )
+    with st.container(border=True):
+        st.subheader("Recorte comercial (produto / sinal da venda)")
+        if _prod_opts:
+            _multiselect_stable(
+                "fdl_fat_min_prod",
+                "Produto (resumo na NF)",
+                _prod_opts,
+                help="**Vazio** = todos. Corresponde à coluna «Produtos» da tabela (agregado por NF).",
+            )
+        else:
+            st.caption("Sem «produto_resumo» no recorte atual — filtro por produto indisponível.")
+        st.selectbox(
+            "Sinal da venda (lista por NF)",
+            options=("todos", "positiva", "negativa", "zero"),
+            format_func=lambda x: {
+                "todos": "Todas (positiva, negativa e zero)",
+                "positiva": "Só venda positiva (lista > 0)",
+                "negativa": "Só venda negativa (lista < 0)",
+                "zero": "Só venda zero (lista = 0)",
+            }[x],
+            key="fdl_fat_min_venda_sinal",
+            help=(
+                "Filtra pelo **valor da venda (lista)** agregado à NF (comercial). "
+                "Não altera o faturado fiscal por NF."
+            ),
+        )
+
+    _prod_sel = tuple(
+        str(x).strip()
+        for x in (st.session_state.get("fdl_fat_min_prod") or [])
+        if str(x).strip()
+    )
+    _venda_sinal = str(st.session_state.get("fdl_fat_min_venda_sinal", "todos")).strip().lower()
+    df_nf_panel = _faturamento_dre_apply_produto_e_sinal_venda(
+        df_nf,
+        produtos_sel=_prod_sel,
+        venda_sinal=_venda_sinal,
+    )
+    _kp = compute_nf_panel_kpis(df_nf_panel)
 
     _base_n = (
         len(df_nf_pre)
@@ -6679,7 +6769,10 @@ def _render_faturamento_dre_minimal(
         else len(df)
     )
     _base_tail = " no materializado NF" if use_nf_materializado else " no carregamento"
-    st.caption(f"{_kp['n_nf']} notas no recorte · base {_base_n}{_base_tail}")
+    _cap_nf = f"{_kp['n_nf']} notas no recorte"
+    if len(df_nf_panel) != len(df_nf):
+        _cap_nf += f" ({len(df_nf)} antes de produto/sinal)"
+    st.caption(f"{_cap_nf} · base {_base_n}{_base_tail}")
 
     if _is_admin_mode():
         with st.expander("Diagnóstico materializado (admin)", expanded=False):
@@ -6829,9 +6922,9 @@ def _render_faturamento_dre_minimal(
         "Margem %",
     ]
 
-    _df_nf_table = df_nf
-    if not df_nf.empty and "Nota_Data_Emissao" in df_nf.columns:
-        _tmp_sort = df_nf.copy()
+    _df_nf_table = df_nf_panel
+    if not df_nf_panel.empty and "Nota_Data_Emissao" in df_nf_panel.columns:
+        _tmp_sort = df_nf_panel.copy()
         _tmp_sort["_fdl_nf_emi_ord"] = pd.to_datetime(
             _df_get_series_column(_tmp_sort, "Nota_Data_Emissao"),
             errors="coerce",

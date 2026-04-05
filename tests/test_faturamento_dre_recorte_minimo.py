@@ -8,6 +8,7 @@ import pandas as pd
 
 from faturamento_dre_recorte_minimo import (
     FaturamentoRecorteMinState,
+    apply_nf_panel_custo_from_line_grain,
     apply_nf_panel_frete_gap_fallback,
     apply_recorte_minimo,
     build_nf_grain_dataframe,
@@ -200,6 +201,136 @@ def test_build_nf_grain_one_nf_two_order_lines() -> None:
     assert kp["custo_produto"] == 0.0
     assert kp["despesa_fixa"] == 1.25
     assert kp["resultado"] == 5.0
+
+
+def test_build_nf_grain_custo_usa_custo_unitario_quando_sem_coluna_total() -> None:
+    """Sem ``Custo_Produto_Total`` / «Custo do Produto», o grão usa ``Quantidade × Custo_Unitario``."""
+    df = pd.DataFrame(
+        {
+            "empresa": ["A", "A"],
+            "org_id": ["o1", "o1"],
+            "Nota_Numero_Normalizado": ["NF1", "NF1"],
+            "Nota_Valor_Liquido_Total": [100.0, 100.0],
+            "Nota_Data_Emissao": pd.to_datetime(["2025-06-10", "2025-06-10"]),
+            "Nota_Situacao": ["Autorizada", "Autorizada"],
+            "Data": pd.to_datetime(["2025-06-01", "2025-06-02"]),
+            "Quantidade": [2.0, 1.0],
+            "Preço de lista": [10.0, 5.0],
+            "Custo_Unitario": [2.0, 3.0],
+            "Nome da plataforma": ["ML", "ML"],
+            "Número do pedido multiloja": ["P1", "P1"],
+            "Taxa de Comissão": [1.0, 2.0],
+            "Frete_Plataforma": [0.5, 0.5],
+            "Imposto": [3.0, 3.0],
+            "Resultado": [10.0, -5.0],
+            "Descrição": ["X", "Y"],
+            "faturamento_nota_vinculada": [True, True],
+        }
+    )
+    st = FaturamentoRecorteMinState((), ())
+    out, w = build_nf_grain_dataframe(
+        df,
+        st,
+        ok_nf_dates=True,
+        nf_d_ini=date(2025, 6, 1),
+        nf_d_fim=date(2025, 6, 30),
+    )
+    assert not w
+    assert float(out.iloc[0]["custo_produto"]) == 7.0
+
+
+def test_build_nf_grain_custo_fallback_unitario_quando_total_so_nan() -> None:
+    """Coluna total presente mas só NaN → recalcula por unitário."""
+    df = pd.DataFrame(
+        {
+            "empresa": ["A", "A"],
+            "org_id": ["o1", "o1"],
+            "Nota_Numero_Normalizado": ["NF1", "NF1"],
+            "Nota_Valor_Liquido_Total": [100.0, 100.0],
+            "Nota_Data_Emissao": pd.to_datetime(["2025-06-10", "2025-06-10"]),
+            "Nota_Situacao": ["Autorizada", "Autorizada"],
+            "Quantidade": [2.0, 1.0],
+            "Preço de lista": [10.0, 5.0],
+            "Custo_Produto_Total": [float("nan"), float("nan")],
+            "Custo_Unitario": [2.0, 3.0],
+            "Nome da plataforma": ["ML", "ML"],
+            "Número do pedido multiloja": ["P1", "P1"],
+            "Taxa de Comissão": [0.0, 0.0],
+            "Frete_Plataforma": [0.0, 0.0],
+            "Imposto": [0.0, 0.0],
+            "Resultado": [0.0, 0.0],
+            "Descrição": ["X", "Y"],
+            "faturamento_nota_vinculada": [True, True],
+        }
+    )
+    st = FaturamentoRecorteMinState((), ())
+    out, _ = build_nf_grain_dataframe(
+        df,
+        st,
+        ok_nf_dates=True,
+        nf_d_ini=date(2025, 6, 1),
+        nf_d_fim=date(2025, 6, 30),
+    )
+    assert float(out.iloc[0]["custo_produto"]) == 7.0
+
+
+def test_apply_nf_panel_custo_from_line_grain_preenche_parquet_zerado() -> None:
+    df_line = pd.DataFrame(
+        {
+            "empresa": ["A", "A"],
+            "org_id": ["o1", "o1"],
+            "Nota_Numero_Normalizado": ["NF1", "NF1"],
+            "Nota_Valor_Liquido_Total": [100.0, 100.0],
+            "Nota_Data_Emissao": pd.to_datetime(["2025-06-10", "2025-06-10"]),
+            "Nota_Situacao": ["Autorizada", "Autorizada"],
+            "Quantidade": [2.0, 1.0],
+            "Preço de lista": [10.0, 5.0],
+            "Custo_Unitario": [2.0, 3.0],
+            "Nome da plataforma": ["ML", "ML"],
+            "Número do pedido multiloja": ["P1", "P1"],
+            "Taxa de Comissão": [1.0, 2.0],
+            "Frete_Plataforma": [0.5, 0.5],
+            "Imposto": [3.0, 3.0],
+            "Resultado": [10.0, -5.0],
+            "Descrição": ["X", "Y"],
+            "faturamento_nota_vinculada": [True, True],
+        }
+    )
+    df_nf = pd.DataFrame(
+        [
+            {
+                "org_id": "o1",
+                "Nota_Numero_Normalizado": "NF1",
+                "Nota_Data_Emissao": pd.Timestamp("2025-06-10"),
+                "Nota_Situacao": "Autorizada",
+                "empresa": "A",
+                "valor_faturado_nf": 100.0,
+                "valor_venda": 25.0,
+                "diferenca": -75.0,
+                "comissao": 3.0,
+                "custo_produto": 0.0,
+                "frete": 1.0,
+                "imposto": 6.0,
+                "despesa_fixa": 1.25,
+                "resultado": 5.0,
+                "plataforma_resumo": "ML",
+                "pedido_resumo": "P1",
+                "n_linhas_pedido": 2,
+                "produto_resumo": "X",
+                "faturamento_nota_vinculada": True,
+            }
+        ]
+    )
+    st = FaturamentoRecorteMinState((), ())
+    got = apply_nf_panel_custo_from_line_grain(
+        df_nf,
+        df_line,
+        st,
+        ok_nf_dates=True,
+        nf_d_ini=date(2025, 6, 1),
+        nf_d_fim=date(2025, 6, 30),
+    )
+    assert float(got.iloc[0]["custo_produto"]) == 7.0
 
 
 def test_build_nf_grain_recomposes_resultado_when_despesas_fixas_present() -> None:

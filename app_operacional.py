@@ -47,6 +47,7 @@ from processing.faturamento.normalize import (
 )
 from faturamento_dre_recorte_minimo import (
     _min_cal_limits,
+    apply_nf_panel_custo_from_line_grain,
     apply_nf_panel_frete_gap_fallback,
     build_nf_grain_dataframe,
     compute_nf_panel_kpis,
@@ -6663,6 +6664,15 @@ def _render_faturamento_dre_minimal(
         df_nf = df_nf_commercial
 
     df_nf = apply_nf_panel_frete_gap_fallback(df_nf)
+    if use_nf_materializado and not df.empty:
+        df_nf = apply_nf_panel_custo_from_line_grain(
+            df_nf,
+            df,
+            _min_state,
+            ok_nf_dates=ok_nf_dates,
+            nf_d_ini=_nf_kpi_ini,
+            nf_d_fim=_nf_kpi_fim,
+        )
 
     if "fdl_fat_min_venda_sinal" not in st.session_state:
         # Com Parquet fiscal, «Todas» inclui NFs só no Bling (sem pedido no materializado) → colunas «—».

@@ -230,6 +230,29 @@ def _nf_grain_custo_produto_col_name(columns: list[str]) -> str:
     return ""
 
 
+def _nf_grain_custo_total_for_group(gr: pd.DataFrame, custo_col: str, *, eps: float = 1e-12) -> float:
+    """
+    Soma custo no grão NF: coluna total (V2/legado) se existir e somar > eps; senão ``Quantidade × Custo_Unitario``
+    (alinhado ao pipeline de faturamento). Se a coluna total existir mas só tiver zeros/NaN, recalcula pelo unitário.
+    """
+    qcol, ucol = "Quantidade", "Custo_Unitario"
+
+    def _from_unitario() -> float:
+        if qcol not in gr.columns or ucol not in gr.columns:
+            return 0.0
+        qtd = pd.to_numeric(gr[qcol], errors="coerce").fillna(0.0)
+        uni = pd.to_numeric(gr[ucol], errors="coerce").fillna(0.0)
+        return float((qtd * uni).sum())
+
+    if custo_col and custo_col in gr.columns:
+        tot = float(pd.to_numeric(gr[custo_col], errors="coerce").fillna(0.0).sum())
+        if tot > eps:
+            return tot
+        alt = _from_unitario()
+        return alt if alt > eps else tot
+    return _from_unitario()
+
+
 def _nf_grain_venda_linha_series(
     gr: pd.DataFrame,
     *,
@@ -267,8 +290,9 @@ def build_nf_grain_dataframe(
 
     **Venda (lista):** por linha, ``Quantidade × Preço de lista``; soma no grupo NF.
 
-    **Comissão / custo produto / frete:** soma por linha de ``Taxa de Comissão``, ``Custo_Produto_Total`` (ou
-    ``Custo do Produto``), ``Frete_Plataforma`` / ``Custo de Frete``.
+    **Comissão / custo produto / frete:** soma por linha de ``Taxa de Comissão``; custo = ``Custo_Produto_Total``
+    (ou ``Custo do Produto``) ou, se ausente/só zeros, ``Quantidade × Custo_Unitario``; frete =
+    ``Frete_Plataforma`` / ``Custo de Frete``.
 
     **Resultado:** Σ ``Resultado`` das linhas. Com coluna ``Despesas Fixas``: Σ ``Resultado`` + Σ ``Despesas Fixas``
     − ``despesa_fixa`` (5% × ``valor_venda`` na NF).
@@ -390,11 +414,7 @@ def build_nf_grain_dataframe(
             if "Taxa de Comissão" in gr.columns
             else 0.0
         )
-        custo_p = (
-            float(pd.to_numeric(gr[custo_col], errors="coerce").fillna(0.0).sum())
-            if custo_col and custo_col in gr.columns
-            else 0.0
-        )
+        custo_p = _nf_grain_custo_total_for_group(gr, custo_col)
         fre = float(_nf_grain_frete_numeric(gr).sum())
         imp = float(pd.to_numeric(gr["Imposto"], errors="coerce").fillna(0.0).sum()) if "Imposto" in gr.columns else 0.0
         desp_fix = float(NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA * v_venda)
@@ -532,6 +552,60 @@ def apply_nf_panel_frete_gap_fallback(df: pd.DataFrame, *, eps: float = 1e-9) ->
     if m.any():
         out.loc[m, "frete"] = gap.loc[m].astype(float)
     return out
+
+
+def apply_nf_panel_custo_from_line_grain(
+    df_nf: pd.DataFrame,
+    df_line: pd.DataFrame,
+    state: FaturamentoRecorteMinState,
+    *,
+    ok_nf_dates: bool,
+    nf_d_ini: date,
+    nf_d_fim: date,
+    eps: float = 1e-9,
+) -> pd.DataFrame:
+    """
+    Quando o painel usa ``dataset_faturamento_nf.parquet``, ``custo_produto`` pode vir zerado (materialização
+    antiga ou coluna total ausente no grão gravado). Recalcula o grão a partir do dataset **linha** com o mesmo
+    recorte e usa ``custo_produto`` daí quando > eps (alinha com ``build_nf_grain_dataframe``).
+    """
+    if df_nf.empty or df_line.empty or "custo_produto" not in df_nf.columns:
+        return df_nf
+    if not ok_nf_dates or nf_d_fim < nf_d_ini:
+        return df_nf
+    need = {"Nota_Data_Emissao", "Nota_Valor_Liquido_Total", "Nota_Numero_Normalizado"}
+    if not need.issubset(df_line.columns):
+        return df_nf
+
+    g_line, _ = build_nf_grain_dataframe(
+        df_line,
+        state,
+        ok_nf_dates=ok_nf_dates,
+        nf_d_ini=nf_d_ini,
+        nf_d_fim=nf_d_fim,
+    )
+    if g_line.empty or "custo_produto" not in g_line.columns:
+        return df_nf
+
+    out = df_nf.copy()
+
+    def _oid(frame: pd.DataFrame) -> pd.Series:
+        if "org_id" in frame.columns:
+            return frame["org_id"].fillna("").astype(str).str.strip()
+        return pd.Series("", index=frame.index, dtype=str)
+
+    out["_k_o"] = _oid(out)
+    out["_k_n"] = out["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
+    gl = g_line.copy()
+    gl["_k_o"] = _oid(gl)
+    gl["_k_n"] = gl["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
+    sub = gl[["_k_o", "_k_n", "custo_produto"]].rename(columns={"custo_produto": "_custo_grain_linha"})
+    sub = sub.drop_duplicates(subset=["_k_o", "_k_n"], keep="first")
+    out = out.merge(sub, on=["_k_o", "_k_n"], how="left")
+    cp = pd.to_numeric(out["custo_produto"], errors="coerce").fillna(0.0)
+    cl = pd.to_numeric(out["_custo_grain_linha"], errors="coerce").fillna(0.0)
+    out["custo_produto"] = cl.where(cl > eps, cp).astype(float)
+    return out.drop(columns=["_k_o", "_k_n", "_custo_grain_linha"])
 
 
 def compute_nf_panel_kpis(df_nf: pd.DataFrame) -> dict[str, float | int]:

@@ -165,6 +165,85 @@ def _write_cenario_vl_zero(base: Path) -> Path:
     return params_path
 
 
+def _write_cenario_frete_somente_nota(base: Path) -> Path:
+    """Pedido sem CF; nota com coluna Frete > 0 (caso Bling típico)."""
+    root = base / "frete_nota"
+    root.mkdir(parents=True)
+    (root / "LojaA").mkdir()
+    (root / "notas_saida").mkdir()
+
+    pd.DataFrame(
+        {
+            "Quantidade": [1, 1],
+            "Preço de lista": ["100,00", "50,00"],
+            "Valor total": ["100,00", "50,00"],
+            "Custo de Frete": ["0", "0"],
+            "Taxa de Comissão": ["0", "0"],
+            "Situação": ["Atendido", "Atendido"],
+            "Existe Nota Fiscal gerada": ["Sim", "Sim"],
+            "Número da nota": ["", ""],
+            "Código": ["SKU-A", "SKU-B"],
+            "Nome da plataforma": ["ML", "ML"],
+            "Número do pedido": ["P1", "P2"],
+            "Número do pedido multiloja": ["MLB040601", "MLB040601"],
+            "Data": ["15/01/2025", "15/01/2025"],
+        }
+    ).to_csv(root / "LojaA" / "ped.csv", sep=";", index=False, encoding="utf-8")
+
+    df_c = pd.DataFrame(
+        {
+            "Código": ["SKU-A", "SKU-B"],
+            "PREÇO DE CUSTO com IPI": ["10,00", "5,00"],
+        }
+    )
+    with pd.ExcelWriter(root / "custo.xlsx", engine="openpyxl") as xw:
+        df_c.to_excel(xw, sheet_name="Planilha1", index=False)
+
+    pd.DataFrame(
+        {
+            "Número": ["NF040601"],
+            "Número do pedido multiloja": ["MLB040601"],
+            "Valor total líquido": ["294,80"],
+            "Frete": ["98,80"],
+            "Data de emissão": ["15/01/2025 10:00"],
+            "Situação": ["Autorizada"],
+        }
+    ).to_csv(root / "notas_saida" / "n.csv", sep=";", index=False, encoding="utf-8")
+
+    pd.DataFrame(
+        {
+            "org_id": ["lojaa"],
+            "competencia": ["2025-01"],
+            "aliquota_imposto": [0.1],
+            "despesa_fixa": [0.05],
+        }
+    ).to_csv(root / "params_mensais.csv", sep=";", index=False, encoding="utf-8")
+
+    params_path = base / "params_frete_nota.json"
+    params_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "cliente_root": str(root.resolve()),
+                "cliente_slug": "cliente_test_frete_nota",
+                "custo_xlsx": "custo.xlsx",
+                "aliquota_imposto": 0.99,
+                "aliquota_despesas_fixas": 0.99,
+                "permite_faturamento_sem_nf": True,
+                "coluna_base_imposto": "Valor total",
+                "params_mensais": "params_mensais.csv",
+                "notas_saida_dir": "notas_saida",
+                "empresas": [
+                    {"org_id": "lojaa", "empresa": "Loja A", "pedidos_dir": "LojaA"},
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return params_path
+
+
 class TestFaturamentoRegrasFechadas(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = REPO / "tests" / "_tmp_faturamento_regras"
@@ -197,6 +276,24 @@ class TestFaturamentoRegrasFechadas(unittest.TestCase):
         self.assertIn("Vl_Venda", df.columns)
         self.assertIn("Frete_Plataforma", df.columns)
         self.assertAlmostEqual(float(df["Receita_Bruta"].sum()), 150.0, places=2)
+
+    def test_frete_plataforma_fallback_coluna_frete_nota(self) -> None:
+        import sys
+
+        if str(REPO) not in sys.path:
+            sys.path.insert(0, str(REPO))
+        from processing.faturamento.build import build_faturamento_dataset
+
+        p = _write_cenario_frete_somente_nota(self._tmpdir)
+        df, meta = build_faturamento_dataset(p)
+        self.assertEqual(len(df), 2)
+        npe = meta.get("notas_por_empresa") or []
+        sf = sum(int(x.get("notas_frete_fallback_grupos_nf", 0) or 0) for x in npe)
+        self.assertGreaterEqual(sf, 1)
+        s_fp = float(df["Frete_Plataforma"].sum())
+        self.assertAlmostEqual(s_fp, 98.80, places=2)
+        self.assertAlmostEqual(float(df.loc[df.index[0], "Frete_Plataforma"]), 49.40, places=2)
+        self.assertAlmostEqual(float(df.loc[df.index[1], "Frete_Plataforma"]), 49.40, places=2)
 
     def test_rateio_vl_venda_zero_erro(self) -> None:
         import sys

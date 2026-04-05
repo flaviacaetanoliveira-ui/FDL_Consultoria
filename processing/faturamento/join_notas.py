@@ -81,6 +81,7 @@ def _prep_notas_dataframe(notas_raw: pd.DataFrame) -> pd.DataFrame:
             columns=[
                 "nf_key",
                 "vl_liq",
+                "frete_linha",
                 "dt_emissao",
                 "ped_key",
                 "ml_key",
@@ -146,10 +147,14 @@ def _prep_notas_dataframe(notas_raw: pd.DataFrame) -> pd.DataFrame:
     else:
         situ_norm = pd.Series("", index=df.index, dtype=object)
 
+    col_frete = next((c for c in df.columns if str(c).strip().casefold() == "frete"), "")
+    frete_v = to_numeric_br(df[col_frete]) if col_frete and col_frete in df.columns else pd.Series(0.0, index=df.index)
+
     out = pd.DataFrame(
         {
             "nf_key": nf_key.astype(str).str.strip(),
             "vl_liq": vl,
+            "frete_linha": frete_v.fillna(0.0).astype(float),
             "dt_emissao": dt,
             "ped_key": ped_key.astype(str).str.strip(),
             "ml_key": ml_key.astype(str).str.strip(),
@@ -217,6 +222,10 @@ def enrich_pedidos_com_notas(
     """
     Acrescenta colunas de nota e comercial base; **não** calcula imposto/resultado.
 
+    ``Frete_Plataforma`` usa ``Custo de Frete`` (pedido); se no grupo da NF soma CF e soma
+    frete-plataforma forem zero, reparte o total da coluna ``Frete`` do export de notas (Bling)
+    igualmente entre as linhas do pedido vinculadas à NF.
+
     Colunas novas principais: ``Vl_Venda``, ``Frete_Plataforma``, ``Nota_Numero_Normalizado``,
     ``Nota_Valor_Liquido_Total``, ``Nota_Valor_Liquido_Rateado``, ``Nota_Rateio_Participacao``,
     ``Nota_Data_Emissao``, ``Nota_Situacao`` (etiqueta derivada do export de notas, por ``nf_key``),
@@ -277,6 +286,7 @@ def enrich_pedidos_com_notas(
         prep.groupby("nf_key", as_index=False)
         .agg(
             Nota_Valor_Liquido_Total=("vl_liq", "sum"),
+            Nota_Frete_Total_Export=("frete_linha", "sum"),
             Nota_Data_Emissao=("dt_emissao", "min"),
         )
     )
@@ -329,6 +339,28 @@ def enrich_pedidos_com_notas(
         out.loc[g_idx, "Nota_Valor_Liquido_Rateado"] = alloc
 
     out["Base_Imposto"] = out["Nota_Valor_Liquido_Rateado"].fillna(0.0)
+
+    frete_por_nf = totais.set_index("nf_key")["Nota_Frete_Total_Export"].fillna(0.0).astype(float)
+    _eps = 1e-9
+    n_fb = 0
+    for nfk, sub in out.groupby("Nota_Numero_Normalizado", sort=False):
+        nfk_s = str(nfk).strip()
+        if not nfk_s:
+            continue
+        g_idx = sub.index.tolist()
+        sfp = float(sub["Frete_Plataforma"].fillna(0.0).sum())
+        scf = float(sub["Custo de Frete"].fillna(0.0).sum()) if "Custo de Frete" in out.columns else 0.0
+        if sfp > _eps or scf > _eps:
+            continue
+        f_nota = float(frete_por_nf.get(nfk_s, 0.0))
+        if f_nota <= _eps:
+            continue
+        n_fb += 1
+        share = f_nota / max(len(g_idx), 1)
+        out.loc[g_idx, "Frete_Plataforma"] = share
+
+    if n_fb:
+        meta["notas_frete_fallback_grupos_nf"] = n_fb
 
     if bad_groups:
         u = sorted(set(bad_groups))

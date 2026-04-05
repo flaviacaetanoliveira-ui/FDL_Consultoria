@@ -6670,14 +6670,8 @@ def _render_faturamento_dre_minimal(
     else:
         df_nf = df_nf_commercial
 
-    _kp = compute_nf_panel_kpis(df_nf_commercial)
-    if use_fiscal_kpi:
-        vf_fiscal = float(
-            pd.to_numeric(df_fiscal_cut["Valor_Liquido_NF"], errors="coerce").fillna(0.0).sum()
-        )
-        _kp["valor_faturado_nf"] = vf_fiscal
-        _kp["diferenca"] = float(_kp["valor_venda"]) - vf_fiscal
-        _kp["n_nf"] = int(len(df_fiscal_cut))
+    # Modo fiscal: df_nf = merge fiscal + comercial (mesma base que a tabela). KPIs devem somar só esse universo.
+    _kp = compute_nf_panel_kpis(df_nf)
 
     _base_n = (
         len(df_nf_pre)
@@ -6699,8 +6693,9 @@ def _render_faturamento_dre_minimal(
             )
             if use_fiscal_parquet:
                 _fdl_fat_min_aside(
-                    "KPI «Valor faturado (NF)» e totais fiscais da DRE usam o <strong>Parquet fiscal</strong>; "
-                    "demais KPIs permanecem <strong>comerciais</strong>.",
+                    "Com Parquet fiscal ativo, os KPIs somam o <strong>mesmo quadro</strong> que a tabela: "
+                    "uma linha por NF do recorte fiscal, com colunas comerciais por <em>left join</em> "
+                    "(plataforma filtra só o lado comercial).",
                     tight=True,
                 )
             if use_nf_materializado:

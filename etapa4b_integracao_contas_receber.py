@@ -216,6 +216,7 @@ def _build_final_from_vendas_liberacoes(root: Path) -> tuple[pd.DataFrame, dict[
     out["Data de pagamento"] = pd.to_datetime(base.get("Data de pagamento"), errors="coerce")
     out["Data de pagamento"] = out["Data de pagamento"].dt.strftime("%Y-%m-%d %H:%M:%S").fillna("")
     out["Data de emissão"] = ""
+    out["Data período repasse"] = out["Data de pagamento"]
     out["Ação sugerida"] = out.apply(_classificar_acao, axis=1)
     final = out[
         [
@@ -233,6 +234,7 @@ def _build_final_from_vendas_liberacoes(root: Path) -> tuple[pd.DataFrame, dict[
             "Diferença",
             "Data de pagamento",
             "Data de emissão",
+            "Data período repasse",
         ]
     ].copy()
     final["empresa"] = DATASET_EMPRESA
@@ -301,6 +303,17 @@ def _formatar_data_pagamento_mista(series: pd.Series) -> pd.Series:
     return series.map(_one).astype(str)
 
 
+def _coluna_data_periodo_repasse(data_pagamento: pd.Series, data_emissao_yyyy_mm_dd: pd.Series) -> pd.Series:
+    """
+    Coluna materializada para filtro de período no app: data de pagamento quando existe;
+    caso contrário data de emissão (ex.: Shopee sem liberação). Sem lógica duplicada no Streamlit.
+    """
+    pay = pd.to_datetime(data_pagamento, errors="coerce")
+    emi = pd.to_datetime(data_emissao_yyyy_mm_dd.fillna("").astype(str).str.strip(), errors="coerce", format="%Y-%m-%d")
+    comb = pay.where(pay.notna(), emi)
+    return _formatar_data_pagamento_mista(comb)
+
+
 def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.DataFrame, dict[str, object]]:
     """
     Monta a tabela operacional final.
@@ -343,7 +356,9 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
             out["Data de emissão"] = out["Data de emissão"].dt.strftime("%Y-%m-%d").fillna("")
         else:
             out["Data de emissão"] = ""
+        pay_before = out["Data de pagamento"]
         out["Data de pagamento"] = _formatar_data_pagamento_mista(out["Data de pagamento"])
+        out["Data período repasse"] = _coluna_data_periodo_repasse(pay_before, out["Data de emissão"])
         out["Ação sugerida"] = out.apply(_classificar_acao, axis=1)
         final = out[
             [
@@ -361,6 +376,7 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
                 "Diferença",
                 "Data de pagamento",
                 "Data de emissão",
+                "Data período repasse",
             ]
         ].copy()
         final["empresa"] = DATASET_EMPRESA
@@ -429,11 +445,13 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
     for col_opt in ("Valor pago", "Data de pagamento"):
         if col_opt not in out.columns:
             out[col_opt] = pd.NA
+    pay_before = out["Data de pagamento"]
     # Garante exibição consistente no app (evita None cru na tabela).
     out["Data de pagamento"] = _formatar_data_pagamento_mista(out["Data de pagamento"])
     out["Data de pagamento"] = (
         out["Data de pagamento"].astype(str).str.replace("NaT", "", regex=False).str.replace("None", "", regex=False)
     )
+    out["Data período repasse"] = _coluna_data_periodo_repasse(pay_before, out["Data de emissão"])
 
     final = out[
         [
@@ -451,6 +469,7 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
             "Diferença",
             "Data de pagamento",
             "Data de emissão",
+            "Data período repasse",
         ]
     ].copy()
     final["empresa"] = DATASET_EMPRESA

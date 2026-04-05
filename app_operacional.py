@@ -59,6 +59,7 @@ from faturamento_dre_recorte_minimo import (
     nf_grain_plataforma_ui_options,
 )
 from fdl_paths import resolve_pasta_vendas_ml
+from repasse_period_filter import repasse_mascara_periodo_pagamento_ou_emissao as _repasse_mascara_periodo_pagamento_ou_emissao
 from operacional_app_context import (
     SESSION_ACTIVE_ORG_KEY,
     get_active_organization,
@@ -1258,7 +1259,13 @@ def _faturamento_resolve_disk_path(path_s: str) -> Path:
 
 
 def _faturamento_v2_canonical_dataset_path_str() -> str:
-    """``data_products/<cliente_slug>/faturamento/current/dataset_faturamento_app.csv`` (ou Parquet)."""
+    """
+    ``data_products/<cliente_slug>/faturamento/current/``.
+
+    Prioridade: ``dataset.parquet`` (artefato principal da materialização, colunas completas),
+    depois ``dataset_faturamento_app.csv`` (espelho para export). Se o CSV ficar velho ao lado
+    de um Parquet novo, ler o CSV primeiro duplicava comissão/frete após correções no pipeline.
+    """
     slug = _materialized_cliente_slug().strip()
     if not slug:
         return ""
@@ -1268,7 +1275,7 @@ def _faturamento_v2_canonical_dataset_path_str() -> str:
         base = (_REPO_APP_ROOT / base).resolve()
     else:
         base = base.resolve()
-    for name in ("dataset_faturamento_app.csv", "dataset.parquet"):
+    for name in ("dataset.parquet", "dataset_faturamento_app.csv"):
         cand = base / name
         if cand.is_file():
             return str(cand.resolve())
@@ -1377,12 +1384,12 @@ def _derive_faturamento_materialized_from_repasse_anchor(anchor: str) -> str:
     # materialize_financeiro: .../<cliente>/<empresa>/repasse/current/ e .../<empresa>/faturamento/current/ (irmãos)
     empresa_dir = path.parent.parent.parent
     base = empresa_dir / "faturamento" / "current"
-    csv_c = base / "dataset_faturamento_app.csv"
-    if csv_c.is_file():
-        return str(csv_c.resolve())
     pq = base / "dataset.parquet"
     if pq.is_file():
         return str(pq.resolve())
+    csv_c = base / "dataset_faturamento_app.csv"
+    if csv_c.is_file():
+        return str(csv_c.resolve())
     return ""
 
 
@@ -9013,11 +9020,29 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     with st.container(border=True):
         st.markdown('<p class="fdl-repasse-filtros-h">Filtros</p>', unsafe_allow_html=True)
         st.markdown(
-            '<p class="fdl-repasse-caption">Recorte por <strong>data de pagamento</strong> (dia civil) · plataforma, ação, situação e busca.</p>',
+            '<p class="fdl-repasse-caption">Recorte por <strong>data de pagamento</strong> (dia civil); '
+            "linhas <strong>sem</strong> pagamento entram pelo intervalo de <strong>data de emissão</strong> da NF. "
+            "Plataforma, ação, situação e busca.</p>",
             unsafe_allow_html=True,
         )
-        dp_series_full = pd.to_datetime(base["Data de pagamento"], errors="coerce")
+        dp_series_full = _parse_data_pagamento_final(_first_series(base, "Data de pagamento"))
         _d_min, _d_max, has_dp_base = _series_datetime_bounds_dates(dp_series_full)
+        _col_de_base = _resolve_col_data_emissao(list(base.columns))
+        if _col_de_base and _col_de_base in base.columns:
+            de_series_full = _parse_data_emissao_final(_first_series(base, _col_de_base))
+            de_min, de_max, has_de_base = _series_datetime_bounds_dates(de_series_full)
+        else:
+            has_de_base = False
+        if has_dp_base and has_de_base:
+            _d_min = min(_d_min, de_min)
+            _d_max = max(_d_max, de_max)
+        elif has_de_base and not has_dp_base:
+            _d_min, _d_max = de_min, de_max
+        today_rep = datetime.now(_BR_TZ).date()
+        picker_min = min(_d_min, today_rep - timedelta(days=3 * 365))
+        picker_max = max(_d_max, today_rep)
+        if picker_max < picker_min:
+            picker_min, picker_max = picker_max, picker_min
         # O Streamlit mantém data_input no session_state: após rematerializar com datas mais recentes,
         # o «Fim» podia ficar preso (ex.: 23/03) embora a base já vá até 31/03. Repor início/fim quando
         # os limites reais da coluna mudarem.
@@ -9037,8 +9062,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             data_pag_ini = st.date_input(
                 "Pagamento — início",
                 value=_d_min,
-                min_value=_d_min,
-                max_value=_d_max,
+                min_value=picker_min,
+                max_value=picker_max,
                 format="DD/MM/YYYY",
                 key=f"op_repasse_d_pag_ini_{_rep_wk}",
             )
@@ -9046,8 +9071,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             data_pag_fim = st.date_input(
                 "Pagamento — fim",
                 value=_d_max,
-                min_value=_d_min,
-                max_value=_d_max,
+                min_value=picker_min,
+                max_value=picker_max,
                 format="DD/MM/YYYY",
                 key=f"op_repasse_d_pag_fim_{_rep_wk}",
             )
@@ -9084,10 +9109,14 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             placeholder="Venda, pedido, NF…",
             key=f"op_repasse_busca_txt_{_rep_wk}",
         ).strip().lower()
-        if not has_dp_base:
+        if not has_dp_base and not has_de_base:
             st.info(
-                "Sem datas de pagamento na base: o período não filtra linhas (todas as vendas aparecem). "
+                "Sem datas de pagamento nem de emissão na base: o período não filtra linhas (todas as vendas aparecem). "
                 "Com datas preenchidas, o filtro por período passa a aplicar-se."
+            )
+        elif not has_dp_base and has_de_base:
+            st.info(
+                "Sem datas de pagamento na base: o recorte por período usa **data de emissão** da NF em todas as linhas."
             )
         _clr_l, _clr_r = st.columns((1.55, 1))
         with _clr_l:
@@ -9132,15 +9161,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         )
         tabela = tabela[m_busca]
     
-    _dp_filt = pd.to_datetime(tabela["Data de pagamento"], errors="coerce")
-    # Sem nenhuma data parseável (ex.: CSV materializado com coluna vazia): não aplicar filtro por período,
-    # senão min=max=hoje em conjunto com .notna() elimina todas as linhas.
-    if _dp_filt.notna().any():
-        _dd = _dp_filt.dt.normalize()
-        _ini_ts = pd.Timestamp(data_pag_ini)
-        _fim_ts = pd.Timestamp(data_pag_fim) + pd.Timedelta(days=1)
-        m_data = _dp_filt.notna() & (_dd >= _ini_ts) & (_dd < _fim_ts)
-        tabela = tabela.loc[m_data].copy()
+    m_periodo = _repasse_mascara_periodo_pagamento_ou_emissao(tabela, data_pag_ini, data_pag_fim)
+    tabela = tabela.loc[m_periodo].copy()
     tabela = _excluir_linhas_fora_conciliacao(tabela)
     
     if "Plataforma" in base.columns:
@@ -9156,9 +9178,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         plataforma_label = "Mercado Livre"
     
     _pag_caption = (
-        f"Pagamento: **{data_pag_ini.strftime('%d/%m/%Y')}** a **{data_pag_fim.strftime('%d/%m/%Y')}**"
+        f"Período: **{data_pag_ini.strftime('%d/%m/%Y')}** a **{data_pag_fim.strftime('%d/%m/%Y')}** "
+        "(pagamento; sem pagamento usa emissão da NF)"
     )
-    if not has_dp_base:
+    if not has_dp_base and not has_de_base:
         _pag_caption += " — **filtro por data inativo** (sem datas na base)"
     st.caption(
         f"Plataforma **{plataforma_label}** · Atualizado **{ts_proc}** · {_pag_caption}"

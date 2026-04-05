@@ -187,6 +187,117 @@ def _nf_grain_frete_numeric(df: pd.DataFrame) -> pd.Series:
     return pd.Series(0.0, index=df.index)
 
 
+def _nf_grain_venda_linha_series(
+    gr: pd.DataFrame,
+    *,
+    has_qpl: bool,
+    qcol: str,
+    pl_col: str,
+) -> pd.Series:
+    """
+    Valor comercial por linha para o painel NF-first.
+
+    Hierarquia: ``Valor total`` (export ML/Bling) quando > 0; senão ``Quantidade × Preço de lista``.
+    Evita casos em que o preço de lista duplica face ao valor real da venda (ex. Shopee).
+    """
+    if has_qpl:
+        qtd = pd.to_numeric(gr[qcol], errors="coerce").fillna(0.0)
+        pl = pd.to_numeric(gr[pl_col], errors="coerce").fillna(0.0)
+        qpl = (qtd * pl).astype(float)
+    else:
+        qpl = pd.Series(0.0, index=gr.index, dtype=float)
+    if "Valor total" in gr.columns:
+        vt = pd.to_numeric(gr["Valor total"], errors="coerce")
+        out = vt.where(vt > 0.0, qpl)
+        out = out.fillna(qpl)
+    else:
+        out = qpl
+    return out.fillna(0.0).astype(float)
+
+
+def _nf_grain_pedido_partition_key(
+    gr: pd.DataFrame,
+    *,
+    ml_col: str,
+    ped_col: str,
+) -> pd.Series:
+    """Chave de pedido lógico: multiloja se preenchido, senão n.º do pedido."""
+    if ml_col in gr.columns:
+        ml = gr[ml_col].fillna("").astype(str).str.strip()
+    else:
+        ml = pd.Series("", index=gr.index, dtype=str)
+    if ped_col in gr.columns:
+        ped = gr[ped_col].fillna("").astype(str).str.strip()
+    else:
+        ped = pd.Series("", index=gr.index, dtype=str)
+    return ml.where(ml.ne(""), ped).astype(str)
+
+
+def _nf_grain_comissao_frete_raw_and_dedup(
+    gr: pd.DataFrame,
+    *,
+    ml_col: str,
+    ped_col: str,
+) -> tuple[float, float, float, float]:
+    """
+    Retorna (com_raw, com_dedup, fre_raw, fre_dedup).
+
+    Comissão e frete repetidos em cada linha de item do mesmo pedido são contados **uma vez** por
+    partição (multiloja ou n.º pedido). Valores distintos na mesma partição mantêm-se somados.
+    """
+    fre_s = _nf_grain_frete_numeric(gr)
+    fre_raw = float(fre_s.sum())
+    if "Taxa de Comissão" in gr.columns:
+        com_s = pd.to_numeric(gr["Taxa de Comissão"], errors="coerce").fillna(0.0)
+        com_raw = float(com_s.sum())
+    else:
+        com_s = pd.Series(0.0, index=gr.index)
+        com_raw = 0.0
+
+    pkey = _nf_grain_pedido_partition_key(gr, ml_col=ml_col, ped_col=ped_col)
+    gr_work = gr.copy()
+    gr_work["_nf_ped_part"] = pkey.values
+
+    com_dedup_total = 0.0
+    fre_dedup_total = 0.0
+    for _, sub in gr_work.groupby("_nf_ped_part", sort=False):
+        if "Taxa de Comissão" in sub.columns:
+            cvals = pd.to_numeric(sub["Taxa de Comissão"], errors="coerce").dropna()
+            if cvals.empty:
+                com_part = 0.0
+            elif cvals.nunique() <= 1:
+                com_part = float(cvals.iloc[0])
+            else:
+                com_part = float(cvals.sum())
+        else:
+            com_part = 0.0
+        fsub = _nf_grain_frete_numeric(sub)
+        fvals = fsub.dropna()
+        if fvals.empty:
+            fre_part = 0.0
+        elif fvals.nunique() <= 1:
+            fre_part = float(fvals.iloc[0])
+        else:
+            fre_part = float(fvals.sum())
+        com_dedup_total += com_part
+        fre_dedup_total += fre_part
+
+    return com_raw, com_dedup_total, fre_raw, fre_dedup_total
+
+
+def _nf_grain_commission_rate_special_plataforma(plat_res: str) -> float | None:
+    """
+    Comissão contratual sobre **Venda (lista)** para integrações específicas.
+    ``plat_res`` pode ser «Nome (+N)» — testa substring normalizada.
+    """
+    s = str(plat_res or "").casefold().replace(" ", "")
+    if "integracommerce" in s:
+        return 0.18
+    if "madeiramadeira" in s:
+        return 0.19
+    return None
+
+
 def build_nf_grain_dataframe(
     df_raw: pd.DataFrame,
     state: FaturamentoRecorteMinState,
@@ -207,11 +318,21 @@ def build_nf_grain_dataframe(
     **Vários pedidos por NF:** agregados na mesma linha NF (somas comerciais; texto ``pedido_resumo``).
     **Várias NFs por pedido:** várias linhas em ``df_nf`` (uma por NF).
 
+    **Venda (lista):** por linha, ``Valor total`` (> 0) quando existir; senão ``Quantidade × Preço de lista``.
+    Soma no grupo NF.
+
+    **Comissão / frete:** soma bruta nas linhas pode duplicar custos de pedido repetidos por item; aplica-se
+    deduplicação por partição (multiloja ou n.º pedido). ``Σ Resultado`` das linhas é corrigido por
+    +(com_raw−com_dedup)+(fre_raw−fre_dedup) para alinhar ao custo único.
+
+    **IntegraCommerce / MadeiraMadeira:** comissão = 18% / 19% sobre ``valor_venda`` (lista), substituindo a
+    comissão Bling deduplicada; ``resultado`` ajusta-se por +(com_dedup−com_final).
+
     **Despesa fixa (produto):** ``despesa_fixa`` = ``NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA`` × ``valor_venda``
     (por NF). Se o materializado tiver ``Despesas Fixas`` por linha, ``resultado`` é recomposto:
     Σ ``Resultado`` + Σ ``Despesas Fixas`` (linhas) − ``despesa_fixa``, para alinhar o lucro ao corte de **5%**
     sobre o valor de venda **agregado** à NF (em vez de só somar ``Resultado`` com alíquotas mensais por linha).
-    Sem coluna ``Despesas Fixas``, mantém-se Σ ``Resultado``.
+    Sem coluna ``Despesas Fixas``, mantém-se o resultado já corrigido pelos passos acima.
     """
     warn: list[str] = []
     cols_out = [
@@ -314,25 +435,20 @@ def build_nf_grain_dataframe(
         nf_vals = pd.to_numeric(gr["Nota_Valor_Liquido_Total"], errors="coerce").dropna()
         vl_nf = float(nf_vals.iloc[0]) if not nf_vals.empty else 0.0
 
-        if has_qpl:
-            qtd = pd.to_numeric(gr[qcol], errors="coerce").fillna(0.0)
-            pl = pd.to_numeric(gr[pl_col], errors="coerce").fillna(0.0)
-            v_venda = float((qtd * pl).sum())
-        else:
-            v_venda = 0.0
+        v_lin = _nf_grain_venda_linha_series(gr, has_qpl=has_qpl, qcol=qcol, pl_col=pl_col)
+        v_venda = float(v_lin.sum())
 
-        com = float(pd.to_numeric(gr["Taxa de Comissão"], errors="coerce").fillna(0.0).sum()) if "Taxa de Comissão" in gr.columns else 0.0
-        fre = float(_nf_grain_frete_numeric(gr).sum())
+        com_raw, com_dedup, fre_raw, fre_dedup = _nf_grain_comissao_frete_raw_and_dedup(
+            gr,
+            ml_col=ml_col,
+            ped_col=ped_col,
+        )
         imp = float(pd.to_numeric(gr["Imposto"], errors="coerce").fillna(0.0).sum()) if "Imposto" in gr.columns else 0.0
         desp_fix = float(NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA * v_venda)
         res_raw = (
             float(pd.to_numeric(gr["Resultado"], errors="coerce").fillna(0.0).sum()) if "Resultado" in gr.columns else 0.0
         )
-        if has_desp_fix_col:
-            df_lin_sum = float(pd.to_numeric(gr["Despesas Fixas"], errors="coerce").fillna(0.0).sum())
-            res = res_raw + df_lin_sum - desp_fix
-        else:
-            res = res_raw
+        res_corr = res_raw + (com_raw - com_dedup) + (fre_raw - fre_dedup)
 
         emi = pd.to_datetime(gr["Nota_Data_Emissao"], errors="coerce", dayfirst=False)
         emi_first = emi.min()
@@ -343,25 +459,36 @@ def build_nf_grain_dataframe(
         emp_s = str(emp.iloc[0]) if len(emp) else ""
 
         if "Nome da plataforma" in gr.columns:
-            if has_qpl:
-                w = (pd.to_numeric(gr[qcol], errors="coerce").fillna(0.0) * pd.to_numeric(gr[pl_col], errors="coerce").fillna(0.0)).to_numpy()
-                plat_vals = gr["Nome da plataforma"].fillna("").astype(str).str.strip()
-                best = ""
-                best_w = -1.0
-                for p, tw in zip(plat_vals, w, strict=False):
-                    if tw > best_w:
-                        best_w = tw
-                        best = p
-                plats_u = plat_vals[plat_vals.ne("")]
-                if plats_u.nunique() > 1:
-                    plat_res = f"{best or '—'} (+{plats_u.nunique() - 1})" if best else f"{plats_u.nunique()} plataformas"
-                else:
-                    plat_res = best or (str(plats_u.iloc[0]) if len(plats_u) else "—")
+            plat_vals = gr["Nome da plataforma"].fillna("").astype(str).str.strip()
+            w_arr = v_lin.to_numpy(dtype=float)
+            best = ""
+            best_w = -1.0
+            for p, tw in zip(plat_vals, w_arr, strict=False):
+                if tw > best_w:
+                    best_w = float(tw)
+                    best = p
+            plats_u = plat_vals[plat_vals.ne("")]
+            if plats_u.nunique() > 1:
+                plat_res = f"{best or '—'} (+{plats_u.nunique() - 1})" if best else f"{plats_u.nunique()} plataformas"
             else:
-                plats_u = gr["Nome da plataforma"].dropna().astype(str).str.strip().unique()
-                plat_res = str(plats_u[0]) if len(plats_u) == 1 else (f"{plats_u[0]} (+{len(plats_u) - 1})" if len(plats_u) else "—")
+                plat_res = best or (str(plats_u.iloc[0]) if len(plats_u) else "—")
         else:
             plat_res = "—"
+
+        _rate_sp = _nf_grain_commission_rate_special_plataforma(plat_res)
+        if _rate_sp is not None and v_venda >= 0.0:
+            com_final = float(_rate_sp * v_venda)
+        else:
+            com_final = float(com_dedup)
+        res_after_com = res_corr + (com_dedup - com_final)
+        com = com_final
+        fre = fre_dedup
+
+        if has_desp_fix_col:
+            df_lin_sum = float(pd.to_numeric(gr["Despesas Fixas"], errors="coerce").fillna(0.0).sum())
+            res = res_after_com + df_lin_sum - desp_fix
+        else:
+            res = res_after_com
 
         ml_set: set[str] = set()
         ped_set: set[str] = set()

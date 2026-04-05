@@ -183,7 +183,8 @@ def test_build_nf_grain_one_nf_two_order_lines() -> None:
     assert float(out.iloc[0]["valor_faturado_nf"]) == 100.0
     assert float(out.iloc[0]["valor_venda"]) == 25.0
     assert float(out.iloc[0]["despesa_fixa"]) == 1.25
-    assert float(out.iloc[0]["resultado"]) == 5.0
+    # Frete 0,5+0,5 por linha → dedup 0,5; corrige Σ Resultado em +0,5
+    assert float(out.iloc[0]["resultado"]) == 5.5
     assert int(out.iloc[0]["n_linhas_pedido"]) == 2
     assert bool(out.iloc[0]["faturamento_nota_vinculada"])
     kp = compute_nf_panel_kpis(out)
@@ -191,7 +192,7 @@ def test_build_nf_grain_one_nf_two_order_lines() -> None:
     assert kp["valor_faturado_nf"] == 100.0
     assert kp["valor_venda"] == 25.0
     assert kp["despesa_fixa"] == 1.25
-    assert kp["resultado"] == 5.0
+    assert kp["resultado"] == 5.5
 
 
 def test_build_nf_grain_recomposes_resultado_when_despesas_fixas_present() -> None:
@@ -228,6 +229,153 @@ def test_build_nf_grain_recomposes_resultado_when_despesas_fixas_present() -> No
     assert float(out.iloc[0]["valor_venda"]) == 25.0
     assert float(out.iloc[0]["despesa_fixa"]) == 1.25
     assert float(out.iloc[0]["resultado"]) == 4.0 + 3.0 + 2.0 + 0.5 - 1.25
+
+
+def test_build_nf_grain_venda_linha_prefers_valor_total() -> None:
+    """Shopee-like: Preço de lista inflado; Valor total reflete a venda real."""
+    df = pd.DataFrame(
+        {
+            "empresa": ["A"],
+            "org_id": ["o1"],
+            "Nota_Numero_Normalizado": ["NFZ"],
+            "Nota_Valor_Liquido_Total": [98.4],
+            "Nota_Data_Emissao": pd.to_datetime(["2026-03-31"]),
+            "Nota_Situacao": ["Autorizada"],
+            "Quantidade": [1.0],
+            "Preço de lista": [196.8],
+            "Valor total": [98.4],
+            "Nome da plataforma": ["Shopee"],
+            "Número do pedido multiloja": ["260331K9EX896U"],
+            "Taxa de Comissão": [10.0],
+            "Frete_Plataforma": [0.0],
+            "Imposto": [0.0],
+            "Resultado": [20.0],
+            "Descrição": ["Mesa"],
+            "faturamento_nota_vinculada": [True],
+        }
+    )
+    st = FaturamentoRecorteMinState((), ())
+    out, w = build_nf_grain_dataframe(
+        df,
+        st,
+        ok_nf_dates=True,
+        nf_d_ini=date(2026, 3, 1),
+        nf_d_fim=date(2026, 3, 31),
+    )
+    assert not w and len(out) == 1
+    assert abs(float(out.iloc[0]["valor_venda"]) - 98.4) < 1e-6
+
+
+def test_build_nf_grain_dedupes_comissao_frete_same_pedido_multiloja() -> None:
+    """Dois itens, mesma NF e mesmo multiloja: comissão e frete iguais não somam 2×."""
+    df = pd.DataFrame(
+        {
+            "empresa": ["A", "A"],
+            "org_id": ["o1", "o1"],
+            "Nota_Numero_Normalizado": ["NFK", "NFK"],
+            "Nota_Valor_Liquido_Total": [642.75, 642.75],
+            "Nota_Data_Emissao": pd.to_datetime(["2026-03-27", "2026-03-27"]),
+            "Nota_Situacao": ["Autorizada", "Autorizada"],
+            "Quantidade": [1.0, 1.0],
+            "Preço de lista": [300.0, 342.75],
+            "Valor total": [300.0, 342.75],
+            "Nome da plataforma": ["MercadoLivre", "MercadoLivre"],
+            "Número do pedido multiloja": ["2000015598945394", "2000015598945394"],
+            "Taxa de Comissão": [109.27, 109.27],
+            "Frete_Plataforma": [91.15, 91.15],
+            "Imposto": [0.0, 0.0],
+            "Resultado": [0.0, 0.0],
+            "Descrição": ["A", "B"],
+            "faturamento_nota_vinculada": [True, True],
+        }
+    )
+    st = FaturamentoRecorteMinState((), ())
+    out, w = build_nf_grain_dataframe(
+        df,
+        st,
+        ok_nf_dates=True,
+        nf_d_ini=date(2026, 3, 1),
+        nf_d_fim=date(2026, 3, 31),
+    )
+    assert not w and len(out) == 1
+    row = out.iloc[0]
+    assert abs(float(row["comissao"]) - 109.27) < 1e-6
+    assert abs(float(row["frete"]) - 91.15) < 1e-6
+    assert abs(float(row["valor_venda"]) - 642.75) < 1e-6
+
+
+def test_build_nf_grain_integracommerce_comissao_pct_sobre_venda_lista() -> None:
+    df = pd.DataFrame(
+        {
+            "empresa": ["A"],
+            "org_id": ["o1"],
+            "Nota_Numero_Normalizado": ["NFI"],
+            "Nota_Valor_Liquido_Total": [200.0],
+            "Nota_Data_Emissao": pd.to_datetime(["2026-01-05"]),
+            "Nota_Situacao": ["Autorizada"],
+            "Quantidade": [1.0],
+            "Preço de lista": [100.0],
+            "Valor total": [100.0],
+            "Nome da plataforma": ["IntegraCommerce"],
+            "Número do pedido multiloja": ["ML1"],
+            "Taxa de Comissão": [50.0],
+            "Frete_Plataforma": [0.0],
+            "Imposto": [0.0],
+            "Resultado": [40.0],
+            "Descrição": ["X"],
+            "faturamento_nota_vinculada": [True],
+        }
+    )
+    st = FaturamentoRecorteMinState((), ())
+    out, w = build_nf_grain_dataframe(
+        df,
+        st,
+        ok_nf_dates=True,
+        nf_d_ini=date(2026, 1, 1),
+        nf_d_fim=date(2026, 1, 31),
+    )
+    assert not w and len(out) == 1
+    row = out.iloc[0]
+    assert abs(float(row["valor_venda"]) - 100.0) < 1e-6
+    assert abs(float(row["comissao"]) - 18.0) < 1e-6
+    # res_raw=40; com_raw=com_dedup=50; res_corr=40; com_final=18 → +32
+    assert abs(float(row["resultado"]) - 72.0) < 1e-6
+
+
+def test_build_nf_grain_madeiramadeira_comissao_pct_sobre_venda_lista() -> None:
+    df = pd.DataFrame(
+        {
+            "empresa": ["A"],
+            "org_id": ["o1"],
+            "Nota_Numero_Normalizado": ["NFM"],
+            "Nota_Valor_Liquido_Total": [500.0],
+            "Nota_Data_Emissao": pd.to_datetime(["2026-01-05"]),
+            "Nota_Situacao": ["Autorizada"],
+            "Quantidade": [1.0],
+            "Preço de lista": [200.0],
+            "Valor total": [200.0],
+            "Nome da plataforma": ["MadeiraMadeira"],
+            "Número do pedido multiloja": ["MM1"],
+            "Taxa de Comissão": [80.0],
+            "Frete_Plataforma": [0.0],
+            "Imposto": [0.0],
+            "Resultado": [50.0],
+            "Descrição": ["Y"],
+            "faturamento_nota_vinculada": [True],
+        }
+    )
+    st = FaturamentoRecorteMinState((), ())
+    out, w = build_nf_grain_dataframe(
+        df,
+        st,
+        ok_nf_dates=True,
+        nf_d_ini=date(2026, 1, 1),
+        nf_d_fim=date(2026, 1, 31),
+    )
+    assert not w and len(out) == 1
+    row = out.iloc[0]
+    assert abs(float(row["comissao"]) - 38.0) < 1e-6
+    assert abs(float(row["resultado"]) - 92.0) < 1e-6
 
 
 def test_compute_comercial_conferencia_qtd_x_pl() -> None:

@@ -38,6 +38,7 @@ from faturamento_dre_recorte import (
     apply_recorte_modulo,
     faturamento_recorte_state_from_session,
 )
+from processing.faturamento.fiscal_materializado import fiscal_contract_dataframe_valid
 from processing.faturamento.nf_materializado import nf_first_contract_dataframe_valid
 from faturamento_dre_recorte_minimo import (
     _min_cal_limits,
@@ -1478,6 +1479,22 @@ def _faturamento_nf_parquet_path_from_materialized_path(path_s: str) -> Path | N
         return None
 
 
+def _faturamento_fiscal_parquet_path_from_materialized_path(path_s: str) -> Path | None:
+    """``dataset_faturamento_fiscal.parquet`` ao lado do materializado linha (mesmo ``current/``)."""
+    if not (path_s or "").strip():
+        return None
+    try:
+        p = Path(path_s).expanduser()
+        if not p.is_absolute():
+            p = (_REPO_APP_ROOT / p).resolve()
+        if not p.is_file():
+            return None
+        cand = p.parent / "dataset_faturamento_fiscal.parquet"
+        return cand if cand.is_file() else None
+    except OSError:
+        return None
+
+
 def _faturamento_nf_parquet_stat_token(path_s: str) -> str:
     nf = _faturamento_nf_parquet_path_from_materialized_path(path_s)
     if nf is None:
@@ -1585,6 +1602,8 @@ def _load_faturamento_data(
             "linhas": int(len(df_scoped)),
             "faturamento_nf_first": False,
             "faturamento_nf_df": None,
+            "faturamento_fiscal_first": False,
+            "faturamento_fiscal_df": None,
         }
         if path_s:
             nf_p = _faturamento_nf_parquet_path_from_materialized_path(path_s)
@@ -1612,6 +1631,32 @@ def _load_faturamento_data(
                 info["faturamento_nf_first_skip"] = "ficheiro_ausente"
         else:
             info["faturamento_nf_first_skip"] = "sem_path_local"
+        if path_s:
+            fp_p = _faturamento_fiscal_parquet_path_from_materialized_path(path_s)
+            if fp_p is not None:
+                try:
+                    df_fiscal0 = pd.read_parquet(fp_p, engine="pyarrow")
+                    if fiscal_contract_dataframe_valid(df_fiscal0):
+                        if scope_consolidado and layout_effective == "v2":
+                            df_fiscal_scoped, _fw = _faturamento_apply_layout_scope_consolidado_v2(
+                                df_fiscal0, allowed_org_ids=aids
+                            )
+                        else:
+                            df_fiscal_scoped, _fw = _faturamento_apply_layout_scope(
+                                df_fiscal0, layout_effective=layout_effective, org_id=active_org_id
+                            )
+                        info["faturamento_fiscal_df"] = df_fiscal_scoped
+                        info["faturamento_fiscal_first"] = True
+                        info["faturamento_fiscal_first_path"] = str(fp_p.resolve())
+                        info["faturamento_fiscal_first_row_count_loaded"] = int(len(df_fiscal0))
+                    else:
+                        info["faturamento_fiscal_first_skip"] = "contract_columns_incompletos_ou_vazio"
+                except Exception as ex_f:  # noqa: BLE001
+                    info["faturamento_fiscal_first_error"] = str(ex_f).strip() or ex_f.__class__.__name__
+            else:
+                info["faturamento_fiscal_first_skip"] = "ficheiro_ausente"
+        else:
+            info["faturamento_fiscal_first_skip"] = "sem_path_local"
         info.update(_faturamento_materialized_fiscal_audit(df_scoped))
         if resolution_source == "explicit" and not bool(info.get("faturamento_fiscal_join_complete")):
             v2_alt = _faturamento_v2_canonical_dataset_path_str()
@@ -4385,6 +4430,188 @@ def _faturamento_nf_apply_minimal_recorte(
     return out
 
 
+def _faturamento_fiscal_apply_minimal_recorte(
+    df_fiscal: pd.DataFrame,
+    *,
+    empresas_sel: tuple[str, ...],
+    nf_d_ini: date,
+    nf_d_fim: date,
+    ok_nf_dates: bool,
+) -> pd.DataFrame:
+    """Recorte fiscal: empresa + emissão. Sem filtro de plataforma (artefato fiscal não tem canal)."""
+    if df_fiscal.empty:
+        return df_fiscal
+    out = df_fiscal.copy()
+    emp_opts = _faturamento_dre_etiquetas_empresa_recorte(out)
+    sel_emp = [str(x).strip() for x in empresas_sel if str(x).strip()]
+    if emp_opts and sel_emp and "empresa" in out.columns:
+        out = out.loc[out["empresa"].astype(str).isin(sel_emp)].copy()
+    if ok_nf_dates and nf_d_fim >= nf_d_ini and "Nota_Data_Emissao" in out.columns:
+        m = _fdl_fr_mask_nf_emissao_no_periodo(out["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
+        out = out.loc[m].copy()
+    return out
+
+
+def _merge_fiscal_base_with_commercial_nf(
+    df_fiscal: pd.DataFrame,
+    df_commercial: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Uma linha por NF do **recorte fiscal**; ``valor_faturado_nf`` = ``Valor_Liquido_NF`` (Bling/export notas).
+    Colunas comerciais por ``(org_id, empresa, Nota_Numero_Normalizado)`` quando existir vínculo no grão comercial.
+    """
+    cols_out = [
+        "org_id",
+        "Nota_Numero_Normalizado",
+        "Nota_Data_Emissao",
+        "Nota_Situacao",
+        "empresa",
+        "valor_faturado_nf",
+        "valor_venda",
+        "diferenca",
+        "comissao",
+        "frete",
+        "imposto",
+        "despesa_fixa",
+        "resultado",
+        "plataforma_resumo",
+        "pedido_resumo",
+        "n_linhas_pedido",
+        "produto_resumo",
+        "faturamento_nota_vinculada",
+    ]
+    if df_fiscal.empty:
+        return pd.DataFrame(columns=cols_out)
+
+    fc = df_fiscal.copy()
+    fc["_jo"] = (
+        fc["org_id"].fillna("").astype(str).str.strip() if "org_id" in fc.columns else ""
+    )
+    if "org_id" not in fc.columns:
+        fc["_jo"] = ""
+    fc["_je"] = fc["empresa"].fillna("").astype(str).str.strip()
+    fc["_jn"] = fc["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
+
+    if df_commercial.empty:
+        merged = fc
+        merged["valor_venda"] = 0.0
+        merged["comissao"] = 0.0
+        merged["frete"] = 0.0
+        merged["imposto"] = 0.0
+        merged["despesa_fixa"] = 0.0
+        merged["resultado"] = 0.0
+        merged["plataforma_resumo"] = "—"
+        merged["pedido_resumo"] = "—"
+        merged["n_linhas_pedido"] = 0
+        merged["produto_resumo"] = "—"
+        merged["faturamento_nota_vinculada"] = False
+    else:
+        co = df_commercial.copy()
+        co["_jo"] = (
+            co["org_id"].fillna("").astype(str).str.strip() if "org_id" in co.columns else ""
+        )
+        if "org_id" not in co.columns:
+            co["_jo"] = ""
+        co["_je"] = co["empresa"].fillna("").astype(str).str.strip()
+        co["_jn"] = co["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
+        if "plataforma_resumo" not in co.columns and "plataforma" in co.columns:
+            co["plataforma_resumo"] = co["plataforma"].astype(str)
+        elif "plataforma_resumo" not in co.columns:
+            co["plataforma_resumo"] = "—"
+        take = [
+            "_jo",
+            "_je",
+            "_jn",
+            "valor_venda",
+            "comissao",
+            "frete",
+            "imposto",
+            "despesa_fixa",
+            "resultado",
+            "plataforma_resumo",
+            "pedido_resumo",
+            "n_linhas_pedido",
+            "produto_resumo",
+            "faturamento_nota_vinculada",
+        ]
+        use = [c for c in take if c in co.columns]
+        co_sub = co[use].drop_duplicates(subset=["_jo", "_je", "_jn"], keep="first")
+        merged = fc.merge(co_sub, on=["_jo", "_je", "_jn"], how="left")
+        for _c in (
+            "valor_venda",
+            "comissao",
+            "frete",
+            "imposto",
+            "despesa_fixa",
+            "resultado",
+            "plataforma_resumo",
+            "pedido_resumo",
+            "n_linhas_pedido",
+            "produto_resumo",
+            "faturamento_nota_vinculada",
+        ):
+            if _c not in merged.columns:
+                if _c == "n_linhas_pedido":
+                    merged[_c] = 0
+                elif _c == "faturamento_nota_vinculada":
+                    merged[_c] = False
+                elif _c == "plataforma_resumo":
+                    merged[_c] = "—"
+                elif _c in {"pedido_resumo", "produto_resumo"}:
+                    merged[_c] = "—"
+                else:
+                    merged[_c] = 0.0
+        merged["valor_venda"] = pd.to_numeric(merged["valor_venda"], errors="coerce").fillna(0.0)
+        merged["comissao"] = pd.to_numeric(merged["comissao"], errors="coerce").fillna(0.0)
+        merged["frete"] = pd.to_numeric(merged["frete"], errors="coerce").fillna(0.0)
+        merged["imposto"] = pd.to_numeric(merged["imposto"], errors="coerce").fillna(0.0)
+        merged["despesa_fixa"] = pd.to_numeric(merged["despesa_fixa"], errors="coerce").fillna(0.0)
+        merged["resultado"] = pd.to_numeric(merged["resultado"], errors="coerce").fillna(0.0)
+        merged["n_linhas_pedido"] = (
+            pd.to_numeric(merged["n_linhas_pedido"], errors="coerce").fillna(0).astype(int)
+        )
+        merged["plataforma_resumo"] = merged["plataforma_resumo"].fillna("—").astype(str)
+        merged["pedido_resumo"] = merged["pedido_resumo"].fillna("—")
+        merged["produto_resumo"] = merged["produto_resumo"].fillna("—")
+        merged["faturamento_nota_vinculada"] = merged["faturamento_nota_vinculada"].fillna(False)
+
+    v_fat = pd.to_numeric(merged["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
+    vv = pd.to_numeric(merged["valor_venda"], errors="coerce").fillna(0.0)
+    org_out = merged["org_id"] if "org_id" in merged.columns else merged["_jo"]
+    if "Nota_Situacao" in merged.columns:
+        sit_s = merged["Nota_Situacao"].fillna("").astype(str).str.strip().replace("", "—")
+    else:
+        sit_s = pd.Series("—", index=merged.index, dtype=str)
+    fv = merged["faturamento_nota_vinculada"].fillna(False)
+    try:
+        fv = fv.astype(bool)
+    except (TypeError, ValueError):
+        fv = fv.ne(0) if fv.dtype != bool else fv
+    out = pd.DataFrame(
+        {
+            "org_id": org_out.astype(str).replace("", pd.NA).fillna("").astype(str),
+            "Nota_Numero_Normalizado": merged["_jn"].astype(str),
+            "Nota_Data_Emissao": merged["Nota_Data_Emissao"],
+            "Nota_Situacao": sit_s,
+            "empresa": merged["_je"].astype(str),
+            "valor_faturado_nf": v_fat,
+            "valor_venda": vv,
+            "diferenca": vv - v_fat,
+            "comissao": merged["comissao"],
+            "frete": merged["frete"],
+            "imposto": merged["imposto"],
+            "despesa_fixa": merged["despesa_fixa"],
+            "resultado": merged["resultado"],
+            "plataforma_resumo": merged["plataforma_resumo"].astype(str),
+            "pedido_resumo": merged["pedido_resumo"],
+            "n_linhas_pedido": merged["n_linhas_pedido"].astype(int),
+            "produto_resumo": merged["produto_resumo"],
+            "faturamento_nota_vinculada": fv,
+        }
+    )
+    return out[cols_out]
+
+
 def _fmt_pct_ptbr_ratio(ratio: float, *, decimals: int = 1) -> str:
     """Ex.: 0,123 → «12,3%» (apenas apresentação)."""
     if math.isnan(ratio) or math.isinf(ratio):
@@ -4419,6 +4646,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     kp: dict[str, float | int],
     ok_nf_dates: bool,
     use_nf_materializado: bool,
+    valor_faturado_from_fiscal_parquet: bool = False,
 ) -> None:
     """
     Cards executivos NF-first (Faturamento & DRE): duas linhas, hierarquia visual;
@@ -4433,9 +4661,21 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     margem_str = _margem_sobre_venda_str(res, vv)
 
     _ht_vf = (
-        "Soma de Nota_Valor_Liquido_Total uma vez por NF no período de emissão da NF."
+        "Soma do **valor líquido da NF** (1× por nota) a partir do ficheiro **dataset_faturamento_fiscal.parquet** "
+        "(export de notas de saída / Bling), com **Nota_Data_Emissao** no período. "
+        "Não usa o grão NF-first de pedidos para este total."
+        if valor_faturado_from_fiscal_parquet
+        else (
+            "Soma de Nota_Valor_Liquido_Total uma vez por NF no período de emissão da NF "
+            "(materializado NF-first / linhas ligadas)."
+        )
     )
-    _ht_dif = "Valor da venda total menos valor faturado total (NF) no recorte."
+    _ht_dif = (
+        "Σ **Valor da venda** (comercial, pedidos ligados no recorte) menos Σ **valor líquido NF** "
+        "(fiscal, Parquet Bling). NFs só fiscais aparecem com venda 0 neste cruzamento."
+        if valor_faturado_from_fiscal_parquet
+        else "Valor da venda total menos valor faturado total (NF) no recorte."
+    )
     _ht_df = (
         "5% do Valor da venda (Σ Quantidade × Preço de lista) agregado à NF, por nota."
     )
@@ -4642,6 +4882,7 @@ def _render_fdl_fat_dre_nf_gerencial(
     *,
     kp: dict[str, float | int],
     ok_nf_dates: bool,
+    valor_faturado_from_fiscal_parquet: bool = False,
 ) -> None:
     """
     DRE gerencial do mesmo recorte que os KPIs: usa apenas totais de ``compute_nf_panel_kpis``.
@@ -4712,18 +4953,31 @@ def _render_fdl_fat_dre_nf_gerencial(
             vf_disp,
             ref=True,
             title=(
-                "Nota_Valor_Liquido_Total 1× por NF. Contraste com a receita em lista; não somar como segunda receita."
+                "Total **fiscal** a partir de **dataset_faturamento_fiscal.parquet** (Bling), 1× por NF no período de emissão."
+                if valor_faturado_from_fiscal_parquet
+                else (
+                    "Nota_Valor_Liquido_Total 1× por NF. Contraste com a receita em lista; "
+                    "não somar como segunda receita."
+                )
             ),
         )
         + _dre_row(
             "Diferença (venda − faturado NF)",
             dif_disp,
             bridge=True,
-            title="Receita lista − faturado NF (totais do recorte).",
+            title=(
+                "Receita lista (comercial) − total fiscal (Parquet notas), ambos no recorte de emissão."
+                if valor_faturado_from_fiscal_parquet
+                else "Receita lista − faturado NF (totais do recorte).",
+            ),
         )
         + '<p class="fdl-fat-dre-foot-a-note">'
-        "Ref. fiscal 1× por NF — não soma à receita de lista."
-        "</p></div>"
+        + (
+            "Ref. fiscal = export notas (Parquet dedicado); não soma à receita de lista."
+            if valor_faturado_from_fiscal_parquet
+            else "Ref. fiscal 1× por NF — não soma à receita de lista."
+        )
+        + "</p></div>"
         '<div class="fdl-fat-dre-block-h fdl-fat-dre-block-h--enc">Encargos</div>'
         + _dre_row("Comissão", enc_com, encargo=True, title="Σ comissão no recorte.")
         + _dre_row("Frete", enc_fre, encargo=True, title="Σ frete no recorte.")
@@ -5972,8 +6226,10 @@ def _render_faturamento_dre_minimal(
     org_display_name: str,
 ) -> None:
     """
-    Etapa 1 — painel **NF-first**: único período = **emissão da NF**; **plataforma** (opcional) restringe linhas
-    de pedido no enriquecimento; KPIs e tabela derivam do mesmo ``df_nf``.
+    Painel **NF-first**: período = **emissão da NF**; **plataforma** restringe o lado **comercial** (pedidos).
+
+    Com ``dataset_faturamento_fiscal.parquet`` válido ao lado do materializado, o **valor faturado (NF)** e a
+    coluna «Faturado» usam esse artefato (Bling); caso contrário mantém-se o faturado do grão comercial (NF-first).
     """
     _fdl_fat_min_inject_ui_styles()
     _oid = str(org_id)
@@ -5987,18 +6243,36 @@ def _render_faturamento_dre_minimal(
     if use_nf_materializado and df_nf_pre.empty and not df.empty:
         use_nf_materializado = False
 
-    _fdl_fat_min_aside(
-        "<strong>Recorte</strong>: período = <strong>emissão da NF</strong> · grão = <strong>1 linha por nota</strong> no intervalo. "
-        "Faturado (NF) 1×; venda, encargos e resultado = soma dos pedidos ligados. Despesa fixa = 5% sobre venda por NF."
+    df_fiscal_pre = load_info.get("faturamento_fiscal_df")
+    use_fiscal_parquet = (
+        bool(load_info.get("faturamento_fiscal_first"))
+        and isinstance(df_fiscal_pre, pd.DataFrame)
+        and fiscal_contract_dataframe_valid(df_fiscal_pre)
     )
+
+    _fdl_fat_min_aside(
+        "<strong>Recorte temporal</strong>: <strong>emissão da NF</strong>. "
+        "<strong>Comercial</strong> — venda (lista), comissão, frete, imposto, despesa fixa, resultado e margem: "
+        "somas dos <strong>pedidos ligados</strong> à NF; <strong>Plataforma</strong> filtra só esse lado. "
+        "<strong>Fiscal</strong> — valor faturado (NF) e coluna «Faturado»: "
+        "<strong>1× por NF</strong> via <code>dataset_faturamento_fiscal.parquet</code> (export Bling) quando válido; "
+        "caso contrário, valor líquido do grão NF-first / linhas como antes. "
+        "Despesa fixa = 5% sobre venda (lista) por NF."
+    )
+    if use_fiscal_parquet:
+        _fdl_fat_min_aside(
+            "KPI «Valor faturado (NF)» e totais fiscais da DRE usam o <strong>Parquet fiscal</strong>; "
+            "demais KPIs permanecem <strong>comerciais</strong>.",
+            tight=True,
+        )
     if use_nf_materializado:
         _fdl_fat_min_aside(
-            "Fonte: <strong>materializado NF-first</strong> — filtros em memória.",
+            "Fonte comercial: <strong>materializado NF-first</strong> (agregação por NF em memória).",
             tight=True,
         )
     else:
         _fdl_fat_min_aside(
-            "Fonte: <strong>agregação em memória</strong> (grão pedido); com Parquet NF-first o painel consome a tabela de notas.",
+            "Fonte comercial: <strong>agregação em memória</strong> (grão pedido); com Parquet NF-first o painel usa a tabela de notas para o vínculo.",
             tight=True,
         )
     if use_nf_materializado and _is_admin_mode() and load_info.get("faturamento_nf_first_path"):
@@ -6015,6 +6289,21 @@ def _render_faturamento_dre_minimal(
         if _e:
             _parts.append(f"Erro: <code>{html.escape(str(_e))}</code>.")
         _fdl_fat_min_aside(" ".join(_parts), tight=True)
+    if use_fiscal_parquet and _is_admin_mode() and load_info.get("faturamento_fiscal_first_path"):
+        _pf = html.escape(str(load_info.get("faturamento_fiscal_first_path")))
+        _fdl_fat_min_aside(f"Admin — path Parquet fiscal: <code>{_pf}</code>", tight=True)
+    elif _is_admin_mode() and (
+        load_info.get("faturamento_fiscal_first_skip")
+        or load_info.get("faturamento_fiscal_first_error")
+    ):
+        _skf = load_info.get("faturamento_fiscal_first_skip")
+        _ef = load_info.get("faturamento_fiscal_first_error")
+        _parts_f = ["Admin — Parquet fiscal não ativo (fallback ao faturado NF do grão comercial)."]
+        if _skf:
+            _parts_f.append(f"Motivo: <code>{html.escape(str(_skf))}</code>.")
+        if _ef:
+            _parts_f.append(f"Erro: <code>{html.escape(str(_ef))}</code>.")
+        _fdl_fat_min_aside(" ".join(_parts_f), tight=True)
 
     if df.empty and not use_nf_materializado:
         st.info(
@@ -6035,7 +6324,17 @@ def _render_faturamento_dre_minimal(
                 st.warning("Não foi possível apresentar o faturamento. Contacte o suporte.")
             return
 
-    _df_bounds = df_nf_pre if use_nf_materializado else df
+    _bounds_parts: list[pd.DataFrame] = []
+    _base_bounds = df_nf_pre if use_nf_materializado else df
+    if isinstance(_base_bounds, pd.DataFrame) and not _base_bounds.empty:
+        _bounds_parts.append(_base_bounds)
+    if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame) and not df_fiscal_pre.empty:
+        _bounds_parts.append(df_fiscal_pre)
+    _df_bounds = (
+        pd.concat(_bounds_parts, ignore_index=True)
+        if len(_bounds_parts) > 1
+        else (_bounds_parts[0] if _bounds_parts else pd.DataFrame())
+    )
     if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame) and df_nf_pre.empty:
         st.info(
             "Sem notas no **materializado NF-first** para este escopo. Confirme materialização "
@@ -6107,15 +6406,16 @@ def _render_faturamento_dre_minimal(
                 placeholder="Todas",
             )
         _multiselect_stable("fdl_fat_min_plat", "Plataforma", plats)
-        _fdl_fat_min_aside(
-            "Plataforma: "
-            + (
-                "filtra notas pela plataforma consolidada no grão NF (materializado)."
-                if use_nf_materializado
-                else "restringe linhas de pedido no enriquecimento (venda, comissão, frete, etc.) nas NFs já filtradas por emissão."
-            ),
-            tight=True,
+        _plat_expl = (
+            "filtra notas pela plataforma consolidada no grão NF (materializado)."
+            if use_nf_materializado
+            else "restringe linhas de pedido no enriquecimento (venda, comissão, frete, etc.) nas NFs já filtradas por emissão."
         )
+        if use_fiscal_parquet:
+            _plat_expl += (
+                " Com Parquet fiscal ativo, a plataforma não corta o universo de NFs fiscais — apenas o comercial."
+            )
+        _fdl_fat_min_aside("Plataforma: " + _plat_expl, tight=True)
         if ok_nf_dates:
             r_nf = st.columns((1, 1))
             with r_nf[0]:
@@ -6174,7 +6474,7 @@ def _render_faturamento_dre_minimal(
             _nf_kpi_fim = _nf_kpi_ini
 
     if use_nf_materializado:
-        df_nf = _faturamento_nf_apply_minimal_recorte(
+        df_nf_commercial = _faturamento_nf_apply_minimal_recorte(
             df_nf_pre,
             empresas_sel=_min_state.empresas,
             plataformas_sel=_min_state.plataformas,
@@ -6184,7 +6484,7 @@ def _render_faturamento_dre_minimal(
         )
         _wrn_nf = ()
     else:
-        df_nf, _wrn_nf = build_nf_grain_dataframe(
+        df_nf_commercial, _wrn_nf = build_nf_grain_dataframe(
             df,
             _min_state,
             ok_nf_dates=ok_nf_dates,
@@ -6194,14 +6494,47 @@ def _render_faturamento_dre_minimal(
     for _m in _wrn_nf:
         st.warning(_m)
 
-    _kp = compute_nf_panel_kpis(df_nf)
+    use_fiscal_kpi = bool(
+        use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame) and fiscal_contract_dataframe_valid(df_fiscal_pre)
+    )
+    df_fiscal_cut = pd.DataFrame()
+    if use_fiscal_kpi:
+        df_fiscal_cut = _faturamento_fiscal_apply_minimal_recorte(
+            df_fiscal_pre,
+            empresas_sel=_min_state.empresas,
+            nf_d_ini=_nf_kpi_ini,
+            nf_d_fim=_nf_kpi_fim,
+            ok_nf_dates=ok_nf_dates,
+        )
+        df_nf = _merge_fiscal_base_with_commercial_nf(df_fiscal_cut, df_nf_commercial)
+    else:
+        df_nf = df_nf_commercial
+
+    _kp = compute_nf_panel_kpis(df_nf_commercial)
+    if use_fiscal_kpi:
+        vf_fiscal = float(
+            pd.to_numeric(df_fiscal_cut["Valor_Liquido_NF"], errors="coerce").fillna(0.0).sum()
+        )
+        _kp["valor_faturado_nf"] = vf_fiscal
+        _kp["diferenca"] = float(_kp["valor_venda"]) - vf_fiscal
+        _kp["n_nf"] = int(len(df_fiscal_cut))
+
     _base_desc_html = (
         f"<strong>{len(df_nf_pre)}</strong> nota(s) no materializado NF-first"
         if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame)
         else f"<strong>{len(df)}</strong> linhas no carregamento (grão pedido)"
     )
+    if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame):
+        _base_desc_html += (
+            f" · <strong>{len(df_fiscal_pre)}</strong> NF(s) no Parquet fiscal (carregamento, escopo org)"
+        )
+    _nf_rec_label = (
+        "nota(s) fiscal(is) no período (Parquet Bling)"
+        if use_fiscal_kpi
+        else "nota(s) no recorte"
+    )
     _fdl_fat_min_aside(
-        f"Painel NF-first · recorte: <strong>{_kp['n_nf']}</strong> nota(s) · base: {_base_desc_html}",
+        f"Painel NF-first · recorte: <strong>{_kp['n_nf']}</strong> {_nf_rec_label} · base: {_base_desc_html}",
         recorte=True,
     )
     _fdl_ui_gap_tight()
@@ -6211,10 +6544,15 @@ def _render_faturamento_dre_minimal(
         kp=_kp,
         ok_nf_dates=ok_nf_dates,
         use_nf_materializado=use_nf_materializado,
+        valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
     )
 
     _fdl_fat_min_vsp(size="md")
-    _render_fdl_fat_dre_nf_gerencial(kp=_kp, ok_nf_dates=ok_nf_dates)
+    _render_fdl_fat_dre_nf_gerencial(
+        kp=_kp,
+        ok_nf_dates=ok_nf_dates,
+        valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
+    )
 
     _fdl_fat_min_vsp(size="md")
     _fdl_ui_gap_section()
@@ -6354,8 +6692,16 @@ def _render_faturamento_dre_minimal(
         "Produtos": "Resumo de itens (texto completo no CSV).",
         "Linhas": "Quantidade de linhas de pedido agregadas nesta NF.",
         "Venda (lista)": "Σ Quantidade × Preço de lista (pedidos ligados à NF).",
-        "Faturado (NF)": "Valor líquido da NF (uma vez por nota).",
-        "Diferença": "Venda (lista) − Faturado (NF).",
+        "Faturado (NF)": (
+            "Valor líquido 1× por NF a partir de dataset_faturamento_fiscal.parquet (export Bling), emissão no período."
+            if use_fiscal_kpi
+            else "Valor líquido da NF (uma vez por nota), grão NF-first / materializado."
+        ),
+        "Diferença": (
+            "Venda (lista) comercial − faturado fiscal (Parquet notas); NFs só fiscais aparecem com venda 0."
+            if use_fiscal_kpi
+            else "Venda (lista) − Faturado (NF)."
+        ),
         "Comissão": None,
         "Frete": None,
         "Imposto": None,
@@ -6398,8 +6744,13 @@ def _render_faturamento_dre_minimal(
         unsafe_allow_html=True,
     )
     _fdl_fat_min_vsp(size="sm")
+    _tbl_cap_x = (
+        " · «Faturado (NF)» = fiscal (Bling); demais colunas monetárias = comercial quando há pedido ligado."
+        if use_fiscal_kpi
+        else ""
+    )
     st.markdown(
-        f'<div class="fdl-fat-min-table-cap">{len(_disp_nf_ui)} linha(s) · emissão decrescente · export CSV com texto completo.</div>',
+        f'<div class="fdl-fat-min-table-cap">{len(_disp_nf_ui)} linha(s) · emissão decrescente · export CSV com texto completo.{_tbl_cap_x}</div>',
         unsafe_allow_html=True,
     )
     if _disp_nf_ui.empty:

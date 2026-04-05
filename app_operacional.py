@@ -4508,8 +4508,13 @@ def _faturamento_nf_apply_minimal_recorte(
         em_cf = out["empresa"].fillna("").astype(str).str.strip().str.casefold()
         out = out.loc[em_cf.isin(sel_cf)].copy()
     sel_plat = [str(x).strip() for x in plataformas_sel if str(x).strip()]
-    if sel_plat and "plataforma" in out.columns:
-        out = out.loc[out["plataforma"].astype(str).str.strip().isin(sel_plat)].copy()
+    _plat_col = (
+        "plataforma"
+        if "plataforma" in out.columns
+        else ("Nome da plataforma" if "Nome da plataforma" in out.columns else "")
+    )
+    if sel_plat and _plat_col:
+        out = out.loc[out[_plat_col].astype(str).str.strip().isin(sel_plat)].copy()
     if ok_nf_dates and nf_d_fim >= nf_d_ini and "Nota_Data_Emissao" in out.columns:
         m = _fdl_fr_mask_nf_emissao_no_periodo(out["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
         out = out.loc[m].copy()
@@ -6685,7 +6690,10 @@ def _render_faturamento_dre_minimal(
             _nf_kpi_fim = _nf_kpi_ini
 
     if use_nf_materializado:
-        df_nf_commercial = _faturamento_nf_apply_minimal_recorte(
+        # Recorte linhas (empresa / emissão NF); depois **grão NF** com a mesma lógica do modo in-memory.
+        # Sem isto, ``_merge_fiscal_base_with_commercial_nf`` recebia o CSV linha-a-linha — sem
+        # ``plataforma_resumo``, ``valor_venda``, ``pedido_resumo``… e a tabela ficava só com «—».
+        df_nf_lines = _faturamento_nf_apply_minimal_recorte(
             df_nf_pre,
             empresas_sel=_min_state.empresas,
             plataformas_sel=_min_state.plataformas,
@@ -6693,7 +6701,13 @@ def _render_faturamento_dre_minimal(
             nf_d_fim=_nf_kpi_fim,
             ok_nf_dates=ok_nf_dates,
         )
-        _wrn_nf = ()
+        df_nf_commercial, _wrn_nf = build_nf_grain_dataframe(
+            df_nf_lines,
+            _min_state,
+            ok_nf_dates=ok_nf_dates,
+            nf_d_ini=_nf_kpi_ini,
+            nf_d_fim=_nf_kpi_fim,
+        )
     else:
         df_nf_commercial, _wrn_nf = build_nf_grain_dataframe(
             df,

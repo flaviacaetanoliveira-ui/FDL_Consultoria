@@ -6,6 +6,9 @@ A chave ``normalize_nf_fiscal_commercial_join_key`` alinha «042480» e «42480�
 Quando ainda assim não casa, o caso típico é **org_id** vazio no materializado comercial e preenchido
 no fiscal (ou o inverso): o merge estrito em (org_id, empresa, NF) falha. O fallback usa só
 (empresa, NF) nas linhas comerciais sem org_id.
+
+**Frete na linha do painel:** mantém o frete **comercial** quando > 0; caso contrário usa
+``Frete_Nota_Export`` do Parquet fiscal (soma da coluna ``Frete`` do export de notas), quando existir.
 """
 
 from __future__ import annotations
@@ -192,6 +195,14 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         merged["pedido_resumo"] = merged["pedido_resumo"].fillna("—")
         merged["produto_resumo"] = merged["produto_resumo"].fillna("—")
         merged["faturamento_nota_vinculada"] = merged["faturamento_nota_vinculada"].fillna(False)
+
+    _eps_f = 1e-9
+    if "Frete_Nota_Export" in merged.columns:
+        f_nota = pd.to_numeric(merged["Frete_Nota_Export"], errors="coerce").fillna(0.0)
+        f_com = pd.to_numeric(merged["frete"], errors="coerce").fillna(0.0)
+        merged["frete"] = f_com.where(f_com > _eps_f, f_nota)
+    else:
+        merged["frete"] = pd.to_numeric(merged["frete"], errors="coerce").fillna(0.0)
 
     v_fat = pd.to_numeric(merged["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
     vv = pd.to_numeric(merged["valor_venda"], errors="coerce").fillna(0.0)

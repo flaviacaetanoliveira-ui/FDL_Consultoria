@@ -68,6 +68,25 @@ def test_merge_strict_org_only_ignores_fallback() -> None:
     assert out_full.iloc[0]["pedido_resumo"] == "2000015600000000"
 
 
+def test_merge_frete_nota_export_quando_comercial_zero() -> None:
+    """Coluna Frete do CSV de notas no fiscal preenche «frete» do painel se o comercial veio 0."""
+    fiscal = _fiscal_row(Valor_Liquido_NF=339.80, Frete_Nota_Export=98.80)
+    comm = _comm_row(
+        valor_venda=241.0,
+        frete=0.0,
+        Nota_Numero_Normalizado="042480",
+    )
+    out = merge_fiscal_base_with_commercial_nf_dataframe(fiscal, comm)
+    assert abs(float(out.iloc[0]["frete"]) - 98.80) < 1e-6
+
+
+def test_merge_frete_comercial_prevalece_sobre_frete_nota() -> None:
+    fiscal = _fiscal_row(Frete_Nota_Export=50.0)
+    comm = _comm_row(frete=2.0, Nota_Numero_Normalizado="042480")
+    out = merge_fiscal_base_with_commercial_nf_dataframe(fiscal, comm)
+    assert abs(float(out.iloc[0]["frete"]) - 2.0) < 1e-6
+
+
 def test_merge_prioriza_linha_com_org_quando_ambas_existem() -> None:
     """Com linha com org correta e linha sem org, não sobrescrever com fallback errado."""
     fiscal = _fiscal_row(org_id="o1")

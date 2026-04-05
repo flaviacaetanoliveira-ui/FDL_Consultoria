@@ -46,12 +46,14 @@ FISCAL_CONTRACT_COLUMNS: tuple[str, ...] = (
     "Nota_Data_Emissao",
     "Nota_Situacao",
     "Valor_Liquido_NF",
+    "Frete_Nota_Export",
     "Valor_Total_NF",
     "schema_version_fiscal",
 )
 
+_FISCAL_OPTIONAL_READ_COLS = frozenset({"Valor_Total_NF", "Frete_Nota_Export"})
 FISCAL_CONTRACT_REQUIRED_READ: frozenset[str] = frozenset(
-    c for c in FISCAL_CONTRACT_COLUMNS if c != "Valor_Total_NF"
+    c for c in FISCAL_CONTRACT_COLUMNS if c not in _FISCAL_OPTIONAL_READ_COLS
 )
 
 
@@ -130,6 +132,7 @@ def build_fiscal_notas_from_directory(
     g = prep.groupby("nf_key", sort=False)
     agg = g.agg(
         Valor_Liquido_NF=("vl_liq", "sum"),
+        Frete_Nota_Export=("frete_linha", "sum"),
         Nota_Data_Emissao=("dt_emissao", "min"),
     ).reset_index()
 
@@ -141,6 +144,7 @@ def build_fiscal_notas_from_directory(
         agg["Valor_Total_NF"] = agg["Nota_Numero_Normalizado"].map(bruto_by_nf)
     else:
         agg["Valor_Total_NF"] = np.nan
+    agg["Frete_Nota_Export"] = pd.to_numeric(agg["Frete_Nota_Export"], errors="coerce").fillna(0.0)
     agg["schema_version_fiscal"] = SCHEMA_VERSION_FISCAL
 
     out = agg[list(FISCAL_CONTRACT_COLUMNS)].copy()
@@ -187,6 +191,7 @@ def build_fiscal_materializado_dataframe(params_path: Path) -> pd.DataFrame:
                 Nota_Data_Emissao=("Nota_Data_Emissao", "min"),
                 Nota_Situacao=("Nota_Situacao", "first"),
                 Valor_Liquido_NF=("Valor_Liquido_NF", "sum"),
+                Frete_Nota_Export=("Frete_Nota_Export", "sum"),
                 Valor_Total_NF=("Valor_Total_NF", "sum"),
                 schema_version_fiscal=("schema_version_fiscal", "first"),
             )

@@ -3426,6 +3426,9 @@ def _excluir_linhas_fora_conciliacao(df: pd.DataFrame) -> pd.DataFrame:
     """
     Remove linhas sem nota fiscal e taxas ML residuais (ex.: 3,62 / 3,54) típicas de encargos sem NF.
 
+    A exigência «com nota» aplica-se **só ao Mercado Livre**: Shopee/Amazon costumam ficar «sem nota» na
+    fila até haver vínculo com notas de saída; não podem ser apagadas só porque o ML já tem NF.
+
     Se **nenhuma** linha tiver número de nota preenchido (ex.: materialização sem pasta notas_saida),
     não elimina o conjunto inteiro — o cliente ainda precisa da fila operacional por venda/pedido.
     """
@@ -3434,7 +3437,15 @@ def _excluir_linhas_fora_conciliacao(df: pd.DataFrame) -> pd.DataFrame:
     out = df
     if "Número da nota" in out.columns:
         mask_nf = _serie_numero_nota_valida(out["Número da nota"])
-        if mask_nf.any():
+        if "Plataforma" in out.columns:
+            plat = out["Plataforma"].fillna("").astype(str).str.strip().str.lower()
+            is_ml = plat.eq("mercado livre")
+            if is_ml.any():
+                ml_has_nf = bool((mask_nf & is_ml).any())
+                if ml_has_nf:
+                    drop = is_ml & ~mask_nf
+                    out = out.loc[~drop].copy()
+        elif mask_nf.any():
             out = out.loc[mask_nf].copy()
     if out.empty or "Total BRL" not in out.columns:
         return out

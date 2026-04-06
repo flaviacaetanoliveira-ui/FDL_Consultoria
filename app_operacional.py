@@ -3657,6 +3657,13 @@ def _column_config_conciliacao(
             width="small",
             help="Data de emissão da NF.",
         )
+    if "Período repasse" in df.columns:
+        cfg["Período repasse"] = DatetimeColumn(
+            "Período",
+            format="DD/MM/YYYY",
+            width="small",
+            help="Data usada no filtro da vista (pagamento quando existe; senão emissão — ex.: Shopee).",
+        )
     if "Data de pagamento" in df.columns:
         cfg["Data de pagamento"] = DatetimeColumn(
             "Pagamento",
@@ -9278,6 +9285,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             if "Data de pagamento" in tabela.columns
             else pd.Series("", index=tabela_exibir.index)
         )
+        if "Data período repasse" in tabela.columns:
+            tabela_exibir["Período repasse"] = _parse_data_pagamento_final(
+                tabela.loc[tabela_exibir.index, "Data período repasse"]
+            )
         tabela_exibir["Valor da nota"] = tabela_exibir["Valor da nota"].fillna(0.0)
         tabela_exibir["Valor a receber"] = tabela_exibir["Valor a receber"].fillna(0.0)
         tabela_exibir["Valor pago"] = tabela_exibir["Valor pago"].fillna(0.0)
@@ -9296,6 +9307,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             "Número do pedido",
             "Número da nota",
             "Data de emissão",
+            "Período repasse",
             "Data de pagamento",
             "Valor da nota",
             "Valor a receber",
@@ -9305,12 +9317,23 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             "Ação sugerida",
         ]
         tabela_exibir = tabela_exibir[[c for c in _ordem_final if c in tabela_exibir.columns]]
-        # Ordenação padrão operacional: pagamentos mais recentes primeiro.
-        if not tabela_exibir.empty and "Data de pagamento" in tabela_exibir.columns:
-            tabela_exibir = tabela_exibir.sort_values(
-                by="Data de pagamento", ascending=False, na_position="last"
-            ).reset_index(drop=True)
-        for _dc in ("Data de emissão", "Data de pagamento"):
+        # Ordenação alinhada ao filtro: «Período repasse» evita esconder Shopee 2026 só com emissão
+        # quando «Data de pagamento» ainda é 2025 ou vazia.
+        if not tabela_exibir.empty:
+            _sort_key = (
+                "Período repasse"
+                if "Período repasse" in tabela_exibir.columns
+                else (
+                    "Data de emissão"
+                    if "Data de emissão" in tabela_exibir.columns
+                    else "Data de pagamento"
+                )
+            )
+            if _sort_key in tabela_exibir.columns:
+                tabela_exibir = tabela_exibir.sort_values(
+                    by=_sort_key, ascending=False, na_position="last"
+                ).reset_index(drop=True)
+        for _dc in ("Data de emissão", "Período repasse", "Data de pagamento"):
             if _dc in tabela_exibir.columns:
                 tabela_exibir[_dc] = pd.to_datetime(tabela_exibir[_dc], errors="coerce")
         for _ref in ("Número da venda", "Número do pedido", "Número da nota"):
@@ -9361,7 +9384,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                 tabela_excel.to_excel(writer, index=False, sheet_name="Conciliação")
                 ws = writer.sheets["Conciliação"]
                 header_row = [cell.value for cell in ws[1]]
-                for c_data in ("Data de emissão", "Data de pagamento"):
+                for c_data in ("Data de emissão", "Período repasse", "Data de pagamento"):
                     if c_data in header_row:
                         col_idx = header_row.index(c_data) + 1
                         for row_idx in range(2, ws.max_row + 1):

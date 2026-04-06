@@ -6802,8 +6802,6 @@ def _render_faturamento_dre_minimal(
                 "Não altera o valor faturado (NF) vindo do Parquet fiscal."
             ),
         )
-    else:
-        _venda_sinal_ui = str(st.session_state.get("fdl_fat_min_venda_sinal", "todos"))
 
     _prod_sel = tuple(
         str(x).strip()

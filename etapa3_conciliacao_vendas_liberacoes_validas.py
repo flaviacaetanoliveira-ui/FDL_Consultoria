@@ -68,6 +68,77 @@ def _find_subdir_by_tokens(base: Path, required_tokens: tuple[str, ...]) -> Path
     return None
 
 
+def _discover_shopee_dirs(
+    root: Path,
+    name_candidates: tuple[str, ...],
+    token_pair: tuple[str, str],
+) -> list[Path]:
+    """
+    Pastas Shopee em ``cliente_root`` **ou** um nível abaixo (ex.: ``Esquilo/Vendas_Shopee``),
+    alinhado à estrutura real (empresa com subpastas próprias).
+    """
+    found: list[Path] = []
+    seen: set[str] = set()
+
+    def add(p: Path | None) -> None:
+        if p is None or not p.is_dir():
+            return
+        key = str(p.resolve())
+        if key in seen:
+            return
+        seen.add(key)
+        found.append(p)
+
+    add(_first_existing(root, name_candidates))
+    add(_find_subdir_by_tokens(root, token_pair))
+    if root.is_dir():
+        for child in sorted(root.iterdir()):
+            if not child.is_dir():
+                continue
+            add(_first_existing(child, name_candidates))
+            add(_find_subdir_by_tokens(child, token_pair))
+    return found
+
+
+def _union_sales_files_sorted(folders: list[Path]) -> list[Path]:
+    """Todos os CSV/XLS da lista de pastas, dedup por caminho, mais recentes primeiro."""
+    all_paths: list[Path] = []
+    for folder in folders:
+        if not folder.is_dir():
+            continue
+        try:
+            all_paths.extend(list_sales_files(folder))
+        except FileNotFoundError:
+            continue
+    by_res: dict[str, Path] = {}
+    for p in all_paths:
+        try:
+            k = str(p.resolve())
+        except OSError:
+            k = str(p)
+        by_res[k] = p
+    return sorted(by_res.values(), key=lambda x: x.stat().st_mtime, reverse=True)
+
+
+def _union_liberacoes_files_sorted(folders: list[Path]) -> list[Path]:
+    all_paths: list[Path] = []
+    for folder in folders:
+        if not folder.is_dir():
+            continue
+        try:
+            all_paths.extend(list_liberacoes_files(folder))
+        except FileNotFoundError:
+            continue
+    by_res: dict[str, Path] = {}
+    for p in all_paths:
+        try:
+            k = str(p.resolve())
+        except OSError:
+            k = str(p)
+        by_res[k] = p
+    return sorted(by_res.values(), key=lambda x: x.stat().st_mtime, reverse=True)
+
+
 def _read_amazon_repo_file(path: Path) -> pd.DataFrame:
     """
     Repositório Amazon tem cabeçalho real após linhas descritivas.
@@ -252,18 +323,22 @@ def _build_conciliacao_amazon(base_dir: str | Path) -> pd.DataFrame:
 
 def _build_conciliacao_shopee(base_dir: str | Path) -> pd.DataFrame:
     root = Path(base_dir)
-    pasta_vendas = _first_existing(root, ("Vendas_Shopee", "Vendas Shopee")) or _find_subdir_by_tokens(
-        root, ("vendas", "shopee")
+    pastas_vendas = _discover_shopee_dirs(
+        root,
+        ("Vendas_Shopee", "Vendas Shopee"),
+        ("vendas", "shopee"),
     )
-    pasta_lib = _first_existing(
+    pastas_lib = _discover_shopee_dirs(
         root,
         ("Liberações_Shopee", "Liberacoes_Shopee", "Liberações Shopee", "Liberacoes Shopee"),
-    ) or _find_subdir_by_tokens(root, ("libera", "shopee"))
-    if pasta_vendas is None:
+        ("libera", "shopee"),
+    )
+    if not pastas_vendas:
         return pd.DataFrame()
 
+    vendas_files = _union_sales_files_sorted(pastas_vendas)
     vendas_parts: list[pd.DataFrame] = []
-    for file_rank, path in enumerate(list_sales_files(pasta_vendas)):
+    for file_rank, path in enumerate(vendas_files):
         raw = read_sales_file(path)
         col_pedido = _find_col(raw, {"ID do pedido", "Order ID"})
         if not col_pedido:
@@ -338,7 +413,7 @@ def _build_conciliacao_shopee(base_dir: str | Path) -> pd.DataFrame:
     vendas = vendas.drop(columns=["_file_rank"], errors="ignore")
 
     lib_parts: list[pd.DataFrame] = []
-    lib_files = list_liberacoes_files(pasta_lib) if pasta_lib is not None else []
+    lib_files = _union_liberacoes_files_sorted(pastas_lib)
     for file_rank, path in enumerate(lib_files):
         raw = read_input_file(path)
         col_pedido = _find_col(

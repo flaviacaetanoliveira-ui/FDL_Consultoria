@@ -139,6 +139,62 @@ def _union_liberacoes_files_sorted(folders: list[Path]) -> list[Path]:
     return sorted(by_res.values(), key=lambda x: x.stat().st_mtime, reverse=True)
 
 
+def _discover_amazon_vendas_dirs(root: Path) -> list[Path]:
+    """
+    Pastas de export de pedidos/transações Amazon (layout Mega Fácil e similares).
+
+    Espelha a convenção ``Vendas_ML`` / ``Vendas_Shopee``: ``Vendas_Amazon`` ao nível do
+    ``base_dir`` da empresa (ou um nível abaixo).
+    """
+    return _discover_shopee_dirs(
+        root,
+        ("Vendas_Amazon", "Vendas Amazon", "vendas_amazon"),
+        ("vendas", "amazon"),
+    )
+
+
+def _discover_amazon_liberacoes_dirs(root: Path) -> list[Path]:
+    """Pasta de extrato/repositório ou liberações Amazon (ex.: ``Liberações_Amazon``)."""
+    return _discover_shopee_dirs(
+        root,
+        (
+            "Liberações_Amazon",
+            "Liberacoes_Amazon",
+            "Liberações Amazon",
+            "Liberacoes Amazon",
+        ),
+        ("libera", "amazon"),
+    )
+
+
+def _amazon_classify_split_layout_files(folders: list[Path]) -> tuple[list[Path], list[Path]]:
+    """
+    Junta CSV/XLS de ``Vendas_Amazon`` e ``Liberações_Amazon`` e separa pelo **nome** do ficheiro.
+
+    Na prática os exports podem estar em pastas «trocadas» (ex.: Repositório em ``Vendas_Amazon`` e
+    Transações em ``Liberações_Amazon``).
+    """
+    by_res: dict[str, Path] = {}
+    for folder in folders:
+        if not folder.is_dir():
+            continue
+        try:
+            for p in list_sales_files(folder):
+                by_res[str(p.resolve())] = p
+        except FileNotFoundError:
+            continue
+    all_sorted = sorted(by_res.values(), key=lambda x: x.stat().st_mtime, reverse=True)
+    trans: list[Path] = []
+    repo: list[Path] = []
+    for p in all_sorted:
+        nn = _normalize_name(p.name)
+        if "repositorio" in nn:
+            repo.append(p)
+        elif "transa" in nn:
+            trans.append(p)
+    return trans, repo
+
+
 def _dedup_shopee_liberacao_linhas(part: pd.DataFrame) -> pd.DataFrame:
     """
     Export Shopee (aba Renda): o mesmo crédito pode aparecer em linhas repetidas (sobretudo em 2026);
@@ -226,20 +282,53 @@ def _parse_amazon_repo_datetime_series(s: pd.Series) -> pd.Series:
 
 def _build_conciliacao_amazon(base_dir: str | Path) -> pd.DataFrame:
     root = Path(base_dir)
-    pasta_amz = _first_existing(root, ("Amazon", "amazon"))
-    if pasta_amz is None:
-        return pd.DataFrame()
+    trans_files: list[Path] = []
+    repo_files: list[Path] = []
 
-    trans_files = sorted(
-        [p for p in pasta_amz.rglob("*") if p.is_file() and "transa" in _normalize_name(p.name) and p.suffix.lower() in {".csv", ".xlsx", ".xls"}],
-        key=lambda x: x.stat().st_mtime,
-        reverse=True,
-    )
-    repo_files = sorted(
-        [p for p in pasta_amz.rglob("*") if p.is_file() and "repositorio" in _normalize_name(p.name) and p.suffix.lower() in {".csv", ".xlsx", ".xls"}],
-        key=lambda x: x.stat().st_mtime,
-        reverse=True,
-    )
+    # Layout legado: uma pasta ``Amazon/`` com ficheiros «transações» e «repositório» no nome.
+    pasta_amz = _first_existing(root, ("Amazon", "amazon"))
+    if pasta_amz is not None:
+        trans_files = sorted(
+            [
+                p
+                for p in pasta_amz.rglob("*")
+                if p.is_file()
+                and "transa" in _normalize_name(p.name)
+                and p.suffix.lower() in {".csv", ".xlsx", ".xls"}
+            ],
+            key=lambda x: x.stat().st_mtime,
+            reverse=True,
+        )
+        repo_files = sorted(
+            [
+                p
+                for p in pasta_amz.rglob("*")
+                if p.is_file()
+                and "repositorio" in _normalize_name(p.name)
+                and p.suffix.lower() in {".csv", ".xlsx", ".xls"}
+            ],
+            key=lambda x: x.stat().st_mtime,
+            reverse=True,
+        )
+
+    # Layout Mega Fácil / grupo: pastas ``Vendas_Amazon`` + ``Liberações_Amazon`` — o papel é
+    # inferido pelo nome do ficheiro (transações vs repositório), não pela pasta.
+    vd = _discover_amazon_vendas_dirs(root)
+    ld = _discover_amazon_liberacoes_dirs(root)
+    seen_amz: set[str] = set()
+    split_dirs: list[Path] = []
+    for p in vd + ld:
+        k = str(p.resolve())
+        if k not in seen_amz:
+            seen_amz.add(k)
+            split_dirs.append(p)
+    if split_dirs:
+        trans_split, repo_split = _amazon_classify_split_layout_files(split_dirs)
+        if not trans_files:
+            trans_files = trans_split
+        if not repo_files:
+            repo_files = repo_split
+
     if not trans_files or not repo_files:
         return pd.DataFrame()
 

@@ -9186,7 +9186,10 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         m_data = _dp_filt.notna() & (_dd >= _ini_ts) & (_dd < _fim_ts)
         tabela = tabela.loc[m_data].copy()
     tabela = _excluir_linhas_fora_conciliacao(tabela)
-    
+    if "Data de pagamento" in tabela.columns:
+        _dp_somente_tabela = _parse_data_pagamento_final(_first_series(tabela, "Data de pagamento"))
+        tabela = tabela.loc[_dp_somente_tabela.notna()].copy()
+
     if "Plataforma" in base.columns:
         n_plat = len(plats)
         # Multiselect vazio = não filtra por plataforma (mostra todas) — não confundir com «nenhuma linha».
@@ -9207,6 +9210,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         _pag_caption += " — **filtro por data inativo** (sem datas na coluna de período)"
     st.caption(
         f"Plataforma **{plataforma_label}** · Atualizado **{ts_proc}** · {_pag_caption}"
+        " · Tabela e resumo: só linhas com **data de pagamento**."
     )
 
     _fdl_ui_gap_tight()
@@ -9220,7 +9224,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 
     st.markdown(
         '<p class="fdl-repasse-section-title">Resumo por ação</p>'
-        '<p class="fdl-repasse-section-note">Tamanho da fila e distribuição por ação sugerida no recorte atual.</p>',
+        '<p class="fdl-repasse-section-note">Apenas linhas com data de pagamento. '
+        "Tamanho da fila e distribuição por ação sugerida no recorte atual.</p>",
         unsafe_allow_html=True,
     )
     if _repasse_vendas_liberacoes_only():

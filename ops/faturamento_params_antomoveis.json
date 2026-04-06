@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "cliente_root": "C:/Users/diieg/OneDrive - FDL Consultoria/Cursor/Anto Moveis/cliente_1",
+  "cliente_slug": "default",
+  "custo_xlsx": "Custo.xlsx",
+  "aliquota_imposto": 0.12,
+  "aliquota_despesas_fixas": 0.05,
+  "permite_faturamento_sem_nf": false,
+  "coluna_base_imposto": ["Base fiscal item", "Valor total"],
+  "notas_saida_dir": "notas_saida",
+  "empresas": [
+    {
+      "org_id": "antomoveis",
+      "empresa": "Antomóveis",
+      "pedidos_dir": "Pedidos"
+    }
+  ]
+}

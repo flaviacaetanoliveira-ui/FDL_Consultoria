@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-06T11:18:30Z",
+  "generated_at": "2026-04-06T11:30:52Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "default",
   "empresa": "_multi",
@@ -138,7 +138,7 @@
     "sheet": "Planilha1",
     "custo_reader": "header_row_0"
   },
-  "data_processamento": "2026-04-06T11:18:30Z",
+  "data_processamento": "2026-04-06T11:30:52Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,
@@ -198,8 +198,8 @@
     }
   ],
   "status_custo_counts": {
-    "CUSTO_OK": 1073,
-    "SKU_SEM_CORRESPONDENCIA": 23
+    "CUSTO_OK": 1069,
+    "SKU_SEM_CORRESPONDENCIA": 27
   },
   "params_mensais_path": null,
   "notas_saida_dir_default": "notas_saida",

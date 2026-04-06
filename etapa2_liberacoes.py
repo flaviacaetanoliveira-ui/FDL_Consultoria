@@ -83,8 +83,13 @@ def _score_header_row(row_values: Iterable[object]) -> int:
     return score
 
 
-def detect_excel_header_row(path: Path, max_rows: int = 50) -> int:
-    preview = pd.read_excel(path, header=None, nrows=max_rows, engine="openpyxl")
+def detect_excel_header_row(
+    path: Path, max_rows: int = 50, sheet_name: str | int | None = None
+) -> int:
+    kw: dict[str, object] = {"header": None, "nrows": max_rows, "engine": "openpyxl"}
+    if sheet_name is not None:
+        kw["sheet_name"] = sheet_name
+    preview = pd.read_excel(path, **kw)
     best_idx = 0
     best_score = -1
 
@@ -95,6 +100,34 @@ def detect_excel_header_row(path: Path, max_rows: int = 50) -> int:
             best_idx = i
 
     return 0 if best_score <= 0 else int(best_idx)
+
+
+def resolve_shopee_liberacoes_sheet(path: Path) -> str | int | None:
+    """Export Shopee de liberações costuma ter os lançamentos na 4ª aba («Renda»)."""
+    ext = path.suffix.lower()
+    if ext not in {".xlsx", ".xls"}:
+        return None
+    xl = pd.ExcelFile(path, engine="openpyxl")
+    for sn in xl.sheet_names:
+        if normalize_col_name(sn) == "renda":
+            return sn
+    if len(xl.sheet_names) >= 4:
+        return 3
+    return None
+
+
+def read_shopee_liberacoes_input_file(path: Path) -> pd.DataFrame:
+    """Lê liberações Shopee na aba correta (nome «renda» ou 4ª planilha); CSV inalterado."""
+    ext = path.suffix.lower()
+    if ext not in {".xlsx", ".xls"}:
+        return read_input_file(path)
+    target = resolve_shopee_liberacoes_sheet(path)
+    if target is None:
+        return read_input_file(path)
+    header_row = detect_excel_header_row(path, sheet_name=target)
+    return pd.read_excel(
+        path, sheet_name=target, header=header_row, engine="openpyxl"
+    )
 
 
 def read_input_file(path: Path) -> pd.DataFrame:

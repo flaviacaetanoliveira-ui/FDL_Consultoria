@@ -10,7 +10,7 @@ import pandas as pd
 from carregamento_bases import carregar_bases_consolidadas
 from fdl_paths import BASE_DIR
 from etapa1_vendas import list_sales_files, parse_brl_number, read_sales_file
-from etapa2_liberacoes import list_liberacoes_files, read_input_file
+from etapa2_liberacoes import list_liberacoes_files, read_shopee_liberacoes_input_file
 
 
 def classificar_status_financeiro(df: pd.DataFrame, tolerancia: float = 0.01) -> pd.Series:
@@ -415,7 +415,7 @@ def _build_conciliacao_shopee(base_dir: str | Path) -> pd.DataFrame:
     lib_parts: list[pd.DataFrame] = []
     lib_files = _union_liberacoes_files_sorted(pastas_lib)
     for file_rank, path in enumerate(lib_files):
-        raw = read_input_file(path)
+        raw = read_shopee_liberacoes_input_file(path)
         col_pedido = _find_col(
             raw,
             {"ID do pedido", "Order ID", "EXTERNAL_REFERENCE", "External Reference"},

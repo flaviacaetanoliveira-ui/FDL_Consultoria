@@ -621,6 +621,7 @@ def test_apply_nf_panel_resultado_frete_nota_lista_soma_frete() -> None:
             "valor_venda": [630.0],
             "frete": [122.01],
             "resultado": [26.55],
+            "comercial_incompleto": [False],
         }
     )
     out = apply_nf_panel_resultado_frete_nota_lista(df)
@@ -635,6 +636,7 @@ def test_apply_nf_panel_resultado_frete_nota_lista_apos_gap_fallback() -> None:
             "valor_venda": [630.0],
             "n_linhas_pedido": [1],
             "resultado": [26.55],
+            "comercial_incompleto": [False],
         }
     )
     out = apply_nf_panel_resultado_frete_nota_lista(apply_nf_panel_frete_gap_fallback(df))
@@ -662,6 +664,7 @@ def test_build_nf_grain_imputa_frete_gap_uma_linha_sem_mudar_resultado_bruto() -
             "Resultado": [26.55],
             "Descrição": ["X"],
             "faturamento_nota_vinculada": [True],
+            "Status_Custo": ["CUSTO_OK"],
         }
     )
     st = FaturamentoRecorteMinState((), ())
@@ -673,6 +676,7 @@ def test_build_nf_grain_imputa_frete_gap_uma_linha_sem_mudar_resultado_bruto() -
         nf_d_fim=date(2025, 6, 30),
     )
     assert not w
+    assert out.iloc[0]["comercial_incompleto"] is False
     assert abs(float(out.iloc[0]["valor_venda"]) - 630.0) < 1e-6
     assert abs(float(out.iloc[0]["frete"]) - 122.01) < 0.02
     assert abs(float(out.iloc[0]["resultado"]) - 26.55) < 0.02

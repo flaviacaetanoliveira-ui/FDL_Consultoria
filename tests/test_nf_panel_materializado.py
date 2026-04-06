@@ -33,6 +33,7 @@ def _line_one_nf() -> pd.DataFrame:
             "Resultado": [10.0],
             "Descrição": ["X"],
             "faturamento_nota_vinculada": [True],
+            "Status_Custo": ["CUSTO_OK"],
         }
     )
 
@@ -45,6 +46,7 @@ def test_build_nf_panel_sem_fiscal_aplica_gap_e_resultado() -> None:
     assert nf_panel_materializado_dataframe_valid(panel)
     assert abs(float(panel.iloc[0]["frete"]) - 122.0) < 1e-6
     assert abs(float(panel.iloc[0]["resultado"]) - 132.0) < 1e-6
+    assert panel.iloc[0]["comercial_incompleto"] is False
 
 
 def test_build_nf_panel_contract_columns_present() -> None:
@@ -79,7 +81,7 @@ def test_build_nf_panel_contract_columns_present() -> None:
 
 
 def test_nf_materializado_invariante_com_grain() -> None:
-    """Contrato ``dataset_faturamento_nf.parquet`` inalterado."""
+    """Colunas numéricas alinhadas ao grão NF (``build_nf_grain_dataframe``)."""
     line = _line_one_nf()
     got = build_nf_materializado_dataframe(line)
     assert list(got.columns) == list(NF_FIRST_CONTRACT_COLUMNS)

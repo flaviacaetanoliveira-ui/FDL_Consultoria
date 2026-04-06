@@ -56,6 +56,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         "n_linhas_pedido",
         "produto_resumo",
         "faturamento_nota_vinculada",
+        "comercial_incompleto",
     ]
     if df_fiscal.empty:
         return pd.DataFrame(columns=cols_out)
@@ -85,6 +86,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         merged["n_linhas_pedido"] = 0
         merged["produto_resumo"] = "—"
         merged["faturamento_nota_vinculada"] = False
+        merged["comercial_incompleto"] = False
     else:
         co = df_commercial.copy()
         co["_jo"] = (
@@ -116,6 +118,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
             "n_linhas_pedido",
             "produto_resumo",
             "faturamento_nota_vinculada",
+            "comercial_incompleto",
         ]
         use = [c for c in take if c in co.columns]
         fill_commercial = [
@@ -131,6 +134,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
             "n_linhas_pedido",
             "produto_resumo",
             "faturamento_nota_vinculada",
+            "comercial_incompleto",
         ]
 
         co_n = co.loc[co["_jo"].ne(""), use].drop_duplicates(
@@ -175,11 +179,14 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
             "n_linhas_pedido",
             "produto_resumo",
             "faturamento_nota_vinculada",
+            "comercial_incompleto",
         ):
             if _c not in merged.columns:
                 if _c == "n_linhas_pedido":
                     merged[_c] = 0
                 elif _c == "faturamento_nota_vinculada":
+                    merged[_c] = False
+                elif _c == "comercial_incompleto":
                     merged[_c] = False
                 elif _c == "plataforma_resumo":
                     merged[_c] = "—"
@@ -187,13 +194,17 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
                     merged[_c] = "—"
                 else:
                     merged[_c] = 0.0
+        merged["comercial_incompleto"] = merged["comercial_incompleto"].fillna(False).astype(bool)
         merged["valor_venda"] = pd.to_numeric(merged["valor_venda"], errors="coerce").fillna(0.0)
         merged["comissao"] = pd.to_numeric(merged["comissao"], errors="coerce").fillna(0.0)
         merged["custo_produto"] = pd.to_numeric(merged["custo_produto"], errors="coerce").fillna(0.0)
         merged["frete"] = pd.to_numeric(merged["frete"], errors="coerce").fillna(0.0)
         merged["imposto"] = pd.to_numeric(merged["imposto"], errors="coerce").fillna(0.0)
         merged["despesa_fixa"] = pd.to_numeric(merged["despesa_fixa"], errors="coerce").fillna(0.0)
-        merged["resultado"] = pd.to_numeric(merged["resultado"], errors="coerce").fillna(0.0)
+        rnum = pd.to_numeric(merged["resultado"], errors="coerce")
+        m_inc = merged["comercial_incompleto"].astype(bool)
+        merged["resultado"] = rnum
+        merged.loc[~m_inc, "resultado"] = merged.loc[~m_inc, "resultado"].fillna(0.0)
         merged["n_linhas_pedido"] = (
             pd.to_numeric(merged["n_linhas_pedido"], errors="coerce").fillna(0).astype(int)
         )
@@ -246,6 +257,7 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
             "n_linhas_pedido": merged["n_linhas_pedido"].astype(int),
             "produto_resumo": merged["produto_resumo"],
             "faturamento_nota_vinculada": fv,
+            "comercial_incompleto": merged["comercial_incompleto"].astype(bool),
         }
     )
     return out[cols_out]

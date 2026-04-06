@@ -43,6 +43,7 @@ NF_PANEL_REQUIRED_COLUMNS: frozenset[str] = frozenset(
         "n_linhas_pedido",
         "produto_resumo",
         "faturamento_nota_vinculada",
+        "comercial_incompleto",
     }
 )
 
@@ -64,6 +65,10 @@ def _commercial_nf_to_panel_shape(df_nf: pd.DataFrame) -> pd.DataFrame:
     vf = pd.to_numeric(out["valor_faturado_nf"], errors="coerce").fillna(0.0)
     out["diferenca"] = vv - vf
     out["plataforma"] = out["plataforma_resumo"].astype(str)
+    if "comercial_incompleto" not in out.columns:
+        out["comercial_incompleto"] = False
+    else:
+        out["comercial_incompleto"] = out["comercial_incompleto"].fillna(False).astype(bool)
     return out
 
 
@@ -97,5 +102,5 @@ def build_nf_panel_materializado_dataframe(
         base["plataforma"] = base["plataforma_resumo"].fillna("").astype(str)
     need = sorted(NF_PANEL_REQUIRED_COLUMNS - frozenset(base.columns))
     for c in need:
-        base[c] = pd.NA
+        base[c] = False if c == "comercial_incompleto" else pd.NA
     return base[list(sorted(NF_PANEL_REQUIRED_COLUMNS))].copy()

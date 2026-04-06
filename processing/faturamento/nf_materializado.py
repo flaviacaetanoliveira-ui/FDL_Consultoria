@@ -15,7 +15,7 @@ from faturamento_dre_recorte_minimo import (
     faturamento_min_series_nf_emissao_bounds_dates,
 )
 
-SCHEMA_VERSION_NF_FIRST = 1
+SCHEMA_VERSION_NF_FIRST = 2
 
 # Ordem canónica do contrato (sem ``plataforma_resumo`` — substituída por ``plataforma``).
 NF_FIRST_CONTRACT_COLUMNS: tuple[str, ...] = (
@@ -38,6 +38,7 @@ NF_FIRST_CONTRACT_COLUMNS: tuple[str, ...] = (
     "diferenca",
     "resultado",
     "faturamento_nota_vinculada",
+    "comercial_incompleto",
     "schema_version_nf",
 )
 
@@ -86,10 +87,14 @@ def build_nf_materializado_dataframe(df_line: pd.DataFrame) -> pd.DataFrame:
                 out[c] = True
             elif c == "schema_version_nf":
                 out[c] = SCHEMA_VERSION_NF_FIRST
+            elif c == "comercial_incompleto":
+                out[c] = False
             else:
                 out[c] = pd.NA
 
     out["faturamento_nota_vinculada"] = out["faturamento_nota_vinculada"].fillna(False).astype(bool)
+    if "comercial_incompleto" in out.columns:
+        out["comercial_incompleto"] = out["comercial_incompleto"].fillna(False).astype(bool)
     out["schema_version_nf"] = pd.to_numeric(out["schema_version_nf"], errors="coerce").fillna(
         SCHEMA_VERSION_NF_FIRST
     ).astype(int)

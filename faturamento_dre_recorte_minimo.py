@@ -13,6 +13,8 @@ from typing import Any, Mapping
 
 import pandas as pd
 
+from processing.faturamento.config import STATUS_CUSTO_OK
+
 from faturamento_dre_recorte import (
     _BR_TZ,
     _fdl_fr_etiquetas_empresa_recorte,
@@ -343,6 +345,7 @@ def build_nf_grain_dataframe(
         "n_linhas_pedido",
         "produto_resumo",
         "faturamento_nota_vinculada",
+        "comercial_incompleto",
     ]
     if df_raw.empty or not ok_nf_dates or nf_d_fim < nf_d_ini:
         return pd.DataFrame(columns=cols_out), tuple(warn)
@@ -441,9 +444,24 @@ def build_nf_grain_dataframe(
         fre = float(_nf_grain_frete_numeric(gr).sum())
         imp = float(pd.to_numeric(gr["Imposto"], errors="coerce").fillna(0.0).sum()) if "Imposto" in gr.columns else 0.0
         desp_fix = float(NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA * v_venda)
-        res_raw = (
-            float(pd.to_numeric(gr["Resultado"], errors="coerce").fillna(0.0).sum()) if "Resultado" in gr.columns else 0.0
+
+        res_num = (
+            pd.to_numeric(gr["Resultado"], errors="coerce") if "Resultado" in gr.columns else pd.Series(dtype=float)
         )
+        if "Status_Custo" in gr.columns:
+            sc = gr["Status_Custo"].astype(str).str.strip()
+            sc = sc.mask(sc.str.lower().isin({"nan", "none", "<na>", ""}), "")
+            ok_s = sc.eq(STATUS_CUSTO_OK)
+            any_bad_status = bool((~ok_s).any())
+        else:
+            any_bad_status = False
+        any_nan_res = bool(len(res_num) and res_num.isna().any())
+        comercial_incompleto = any_bad_status or any_nan_res
+
+        if not comercial_incompleto and "Resultado" in gr.columns:
+            res_raw = float(res_num.fillna(0.0).sum())
+        else:
+            res_raw = float("nan")
 
         emi = pd.to_datetime(gr["Nota_Data_Emissao"], errors="coerce", dayfirst=False)
         emi_first = emi.min()
@@ -470,11 +488,13 @@ def build_nf_grain_dataframe(
         else:
             plat_res = "—"
 
-        if has_desp_fix_col:
+        if comercial_incompleto or (isinstance(res_raw, float) and pd.isna(res_raw)):
+            res = float("nan")
+        elif has_desp_fix_col:
             df_lin_sum = float(pd.to_numeric(gr["Despesas Fixas"], errors="coerce").fillna(0.0).sum())
-            res = res_raw + df_lin_sum - desp_fix
+            res = float(res_raw) + df_lin_sum - desp_fix
         else:
-            res = res_raw
+            res = float(res_raw)
 
         _eps_f = 1e-9
         gap_nf = vl_nf - v_venda
@@ -547,6 +567,7 @@ def build_nf_grain_dataframe(
                 "n_linhas_pedido": int(len(gr)),
                 "produto_resumo": prod_res,
                 "faturamento_nota_vinculada": vinc,
+                "comercial_incompleto": bool(comercial_incompleto),
             }
         )
 
@@ -602,8 +623,16 @@ def apply_nf_panel_resultado_frete_nota_lista(df: pd.DataFrame, *, eps: float = 
     m = (vv > eps) & (gap > eps) & (fr > eps) & ((fr - gap).abs() <= tol)
     if not m.any():
         return out
-    res = pd.to_numeric(out["resultado"], errors="coerce").fillna(0.0)
-    out.loc[m, "resultado"] = (res.loc[m] + fr.loc[m]).astype(float)
+    res = pd.to_numeric(out["resultado"], errors="coerce")
+    inc = (
+        out["comercial_incompleto"].fillna(False).astype(bool)
+        if "comercial_incompleto" in out.columns
+        else pd.Series(False, index=out.index)
+    )
+    m_ok = m & (~inc) & res.notna()
+    if not m_ok.any():
+        return out
+    out.loc[m_ok, "resultado"] = (res.loc[m_ok] + pd.to_numeric(out.loc[m_ok, "frete"], errors="coerce")).astype(float)
     return out
 
 
@@ -691,7 +720,7 @@ def compute_nf_panel_kpis(df_nf: pd.DataFrame) -> dict[str, float | int]:
         "frete": float(pd.to_numeric(df_nf["frete"], errors="coerce").fillna(0.0).sum()),
         "imposto": float(pd.to_numeric(df_nf["imposto"], errors="coerce").fillna(0.0).sum()),
         "despesa_fixa": float(pd.to_numeric(df_nf["despesa_fixa"], errors="coerce").fillna(0.0).sum()),
-        "resultado": float(pd.to_numeric(df_nf["resultado"], errors="coerce").fillna(0.0).sum()),
+        "resultado": float(pd.to_numeric(df_nf["resultado"], errors="coerce").sum()),
         "n_nf": int(len(df_nf)),
     }
 

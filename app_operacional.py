@@ -6424,10 +6424,11 @@ def _faturamento_dre_apply_produto_e_sinal_venda(
     df_nf: pd.DataFrame,
     *,
     produtos_sel: tuple[str, ...],
-    venda_sinal: str,
+    sinal_resultado: str,
 ) -> pd.DataFrame:
     """
-    Refina o quadro NF (já no recorte empresa/plataforma/emissão) por resumo de produto e sinal de ``valor_venda``.
+    Refina o quadro NF por ``produto_resumo`` e pelo **sinal do resultado comercial** (lucro / prejuízo / zerado),
+    ou por ``comercial_incompleto`` (ex.: custo em falta na base). Valores vêm do materializado — sem recalcular DRE.
     """
     if df_nf.empty:
         return df_nf
@@ -6436,15 +6437,24 @@ def _faturamento_dre_apply_produto_e_sinal_venda(
     if sel_p and "produto_resumo" in out.columns:
         pr = out["produto_resumo"].fillna("").astype(str).str.strip()
         out = out.loc[pr.isin(sel_p)].copy()
-    vs = str(venda_sinal or "todos").strip().lower()
-    if vs not in {"", "todos"} and "valor_venda" in out.columns:
-        vv = pd.to_numeric(out["valor_venda"], errors="coerce").fillna(0.0)
-        if vs == "positiva":
-            out = out.loc[vv > 0.0].copy()
-        elif vs == "negativa":
-            out = out.loc[vv < 0.0].copy()
-        elif vs == "zero":
-            out = out.loc[vv.eq(0.0)].copy()
+    sr = str(sinal_resultado or "todos").strip().lower()
+    if sr in {"", "todos"}:
+        return out
+    if sr == "incompletas":
+        if "comercial_incompleto" not in out.columns:
+            return out
+        inc = out["comercial_incompleto"].fillna(False).astype(bool)
+        return out.loc[inc].copy()
+    if "resultado" not in out.columns:
+        return out
+    res = pd.to_numeric(out["resultado"], errors="coerce")
+    _eps = 1e-9
+    if sr == "lucro":
+        out = out.loc[res.notna() & (res > _eps)].copy()
+    elif sr == "prejuizo":
+        out = out.loc[res.notna() & (res < -_eps)].copy()
+    elif sr == "zerado":
+        out = out.loc[res.notna() & (res.abs() <= _eps)].copy()
     return out
 
 
@@ -6652,7 +6662,7 @@ def _render_faturamento_dre_minimal(
                 "Limpar filtros desta vista",
                 key="fdl_fat_min_reset",
                 use_container_width=True,
-                help="Repor empresa, plataforma, datas de emissão NF, produto e sinal da venda ao padrão.",
+                help="Repor empresa, plataforma, datas de emissão NF, produto e sinal do resultado ao padrão.",
             ):
                 for _k in (
                     "fdl_fat_min_emp",
@@ -6662,6 +6672,7 @@ def _render_faturamento_dre_minimal(
                     "fdl_fat_min_nf_bounds_sig",
                     "fdl_fat_min_prod",
                     "fdl_fat_min_venda_sinal",
+                    "fdl_fat_min_sinal_resultado",
                 ):
                     st.session_state.pop(_k, None)
                 st.rerun()
@@ -6759,9 +6770,16 @@ def _render_faturamento_dre_minimal(
         df_nf = apply_nf_panel_frete_gap_fallback(df_nf)
         df_nf = apply_nf_panel_resultado_frete_nota_lista(df_nf)
 
-    if "fdl_fat_min_venda_sinal" not in st.session_state:
-        # Com Parquet fiscal, «Todas» inclui NFs só no Bling (sem pedido no materializado) → colunas «—».
-        st.session_state["fdl_fat_min_venda_sinal"] = "positiva" if use_fiscal_kpi else "todos"
+    if "fdl_fat_min_sinal_resultado" not in st.session_state:
+        _old_sinal = st.session_state.pop("fdl_fat_min_venda_sinal", None)
+        _mig = {"positiva": "lucro", "negativa": "prejuizo", "zero": "zerado", "todos": "todos"}
+        if _old_sinal is not None:
+            st.session_state["fdl_fat_min_sinal_resultado"] = _mig.get(
+                str(_old_sinal).strip().lower(), "todos"
+            )
+        else:
+            # Com fiscal: por omissão só lucro explícito; «Todas» mostra também NFs só fiscais / lista zero.
+            st.session_state["fdl_fat_min_sinal_resultado"] = "lucro" if use_fiscal_kpi else "todos"
 
     # Modo fiscal: df_nf = merge fiscal + comercial (base antes de produto/sinal). KPIs e tabela usam df_nf_panel.
     _prod_opts: list[str] = []
@@ -6785,21 +6803,21 @@ def _render_faturamento_dre_minimal(
         else:
             st.caption("Sem «produto_resumo» no recorte atual — filtro por produto indisponível.")
         _venda_sinal_ui = st.selectbox(
-            "Sinal da venda (lista por NF)",
-            options=("todos", "positiva", "negativa", "zero"),
+            "Sinal do resultado (por NF)",
+            options=("todos", "lucro", "prejuizo", "zerado", "incompletas"),
             format_func=lambda x: {
-                "todos": "Todas (positiva, negativa e zero)",
-                "positiva": "Só venda positiva (lista > 0)",
-                "negativa": "Só venda negativa (lista < 0)",
-                "zero": "Só venda zero (lista = 0)",
+                "todos": "Todas (lucro, prejuízo, zerado e incompletas)",
+                "lucro": "Só lucro (resultado > 0)",
+                "prejuizo": "Só prejuízo (resultado < 0)",
+                "zerado": "Só resultado zerado",
+                "incompletas": "Só dados incompletos (ex.: custo em falta)",
             }[x],
-            key="fdl_fat_min_venda_sinal",
+            key="fdl_fat_min_sinal_resultado",
             help=(
-                "Filtra pelo **valor da venda (lista)** agregado à NF (lado comercial). "
-                "**Só venda positiva** exclui notas em que a lista é 0 — incluindo notas **só fiscais** "
-                "(emitidas no Bling mas sem pedido ligado no materializado): deixam de aparecer na tabela. "
-                "Use **Todas** para ver também essas NFs (com «—» em Pedido/Produtos). "
-                "Não altera o valor faturado (NF) vindo do Parquet fiscal."
+                "Usa o **resultado comercial** e o indicador **comercial_incompleto** já gravados no materializado "
+                "(Parquet), sem recalcular no app. **Lucro / prejuízo** ignoram linhas sem resultado válido (NaN). "
+                "**Dados incompletos** = pelo menos uma linha de pedido com custo não OK ou resultado ausente no grão "
+                "NF — reveja a planilha de custo / SKUs / itens da nota e volte a materializar."
             ),
         )
 
@@ -6809,10 +6827,19 @@ def _render_faturamento_dre_minimal(
         if str(x).strip()
     )
     _venda_sinal = str(_venda_sinal_ui or "todos").strip().lower()
+    if (
+        _venda_sinal == "incompletas"
+        and not df_nf.empty
+        and "comercial_incompleto" not in df_nf.columns
+    ):
+        st.info(
+            "O ficheiro materializado não tem a coluna **comercial_incompleto**. "
+            "Execute de novo a materialização de faturamento para filtrar por dados incompletos."
+        )
     df_nf_panel = _faturamento_dre_apply_produto_e_sinal_venda(
         df_nf,
         produtos_sel=_prod_sel,
-        venda_sinal=_venda_sinal,
+        sinal_resultado=_venda_sinal,
     )
     _kp = compute_nf_panel_kpis(df_nf_panel)
 
@@ -6982,6 +7009,7 @@ def _render_faturamento_dre_minimal(
         "Imposto",
         "Desp. fixa",
         "Resultado",
+        "Info dados",
         "Margem %",
     ]
 
@@ -7012,6 +7040,12 @@ def _render_faturamento_dre_minimal(
             if "custo_produto" in _df_nf_table.columns
             else pd.Series(0.0, index=_df_nf_table.index, dtype=float)
         )
+        _inc_flag = (
+            _df_nf_table["comercial_incompleto"].fillna(False).astype(bool)
+            if "comercial_incompleto" in _df_nf_table.columns
+            else pd.Series(False, index=_df_nf_table.index, dtype=bool)
+        )
+        _info_dados = _inc_flag.map(lambda b: "Falta custo / dados" if b else "—")
         _disp_nf_full = pd.DataFrame(
             {
                 "Emissão": _series_nf_emissao_pt_br(
@@ -7037,6 +7071,7 @@ def _render_faturamento_dre_minimal(
                 "Imposto": pd.to_numeric(_df_nf_table["imposto"], errors="coerce"),
                 "Desp. fixa": pd.to_numeric(_df_nf_table["despesa_fixa"], errors="coerce"),
                 "Resultado": pd.to_numeric(_df_nf_table["resultado"], errors="coerce"),
+                "Info dados": _info_dados.astype(str),
                 "Margem %": (_marg_ratio * 100.0),
             }
         )
@@ -7159,6 +7194,9 @@ def _render_faturamento_dre_minimal(
             if use_fiscal_kpi
             else "Resultado ÷ Venda (lista); alinhado ao KPI «Margem %» do painel."
         ),
+        "Info dados": (
+            "Materializado: **comercial_incompleto** — custo ou resultado incompletos nas linhas desta NF; rever base de custo / SKUs."
+        ),
     }
     _nf_col_width: dict[str, str] = {
         "Emissão": "small",
@@ -7178,6 +7216,7 @@ def _render_faturamento_dre_minimal(
         "Imposto": "small",
         "Desp. fixa": "small",
         "Resultado": "medium",
+        "Info dados": "medium",
         "Margem %": "small",
     }
     for _cn in _nf_table_cols_order:

@@ -80,8 +80,31 @@ def _coalesce_nota_fiscal_em_numero_da_nota(out: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _per_row_aliquotas_v2(df: pd.DataFrame, params: FaturamentoParamsV2) -> tuple[pd.Series, pd.Series]:
+    imp_map = {
+        e.org_id: float(e.aliquota_imposto if e.aliquota_imposto is not None else params.aliquota_imposto)
+        for e in params.empresas
+    }
+    desp_map = {
+        e.org_id: float(
+            e.aliquota_despesas_fixas if e.aliquota_despesas_fixas is not None else params.aliquota_despesas_fixas
+        )
+        for e in params.empresas
+    }
+    oid = df["org_id"].astype(str).str.strip()
+    s_imp = oid.map(lambda x: imp_map.get(x, params.aliquota_imposto)).astype(float)
+    s_desp = oid.map(lambda x: desp_map.get(x, params.aliquota_despesas_fixas)).astype(float)
+    return s_imp, s_desp
+
+
 def _normalize_pedidos_export(df: pd.DataFrame) -> pd.DataFrame:
-    """Exports ML frequentes: «Código (SKU)»; colunas de NF por vezes ausentes."""
+    """
+    Ajustes leves entre exports equivalentes (ML / mesmo layout «completo»).
+
+    O faturamento exige as colunas de ``REQUIRED_PEDIDO_COLUMNS`` (incl. «Quantidade»,
+    «Preço de lista», «Valor total», «Número do pedido») — export padrão completo do ML
+    ou ficheiros no mesmo layout; não se inventam valores quando faltam.
+    """
     out = df.copy()
     if "Código" not in out.columns and "Código (SKU)" in out.columns:
         out = out.rename(columns={"Código (SKU)": "Código"})
@@ -227,12 +250,15 @@ def _build_faturamento_dataset_v2(
     base_resolved = resolve_coluna_base_imposto(df, params.coluna_base_imposto)
 
     data_proc = _utc_now_iso()
+    s_imp, s_desp = _per_row_aliquotas_v2(df, params)
     df = compute_financial_columns_regras_fechadas(
         df,
         df_params_mensais=params_mensais_df,
         fallback_aliquota_imposto=params.aliquota_imposto,
         fallback_despesa_fixa=params.aliquota_despesas_fixas,
         data_processamento_iso=data_proc,
+        per_row_aliquota_imposto=s_imp,
+        per_row_despesa_fixa=s_desp,
     )
     df = apply_faturamento_flags(df, permite_sem_nf=df["_permite_sem_nf"])
     df = df.drop(columns=["_permite_sem_nf"], errors="ignore")
@@ -253,6 +279,17 @@ def _build_faturamento_dataset_v2(
         "coluna_base_imposto_resolvida": base_resolved,
         "aliquota_imposto": params.aliquota_imposto,
         "aliquota_despesas_fixas": params.aliquota_despesas_fixas,
+        "aliquota_por_org_id": {
+            e.org_id: {
+                "aliquota_imposto": float(
+                    e.aliquota_imposto if e.aliquota_imposto is not None else params.aliquota_imposto
+                ),
+                "aliquota_despesas_fixas": float(
+                    e.aliquota_despesas_fixas if e.aliquota_despesas_fixas is not None else params.aliquota_despesas_fixas
+                ),
+            }
+            for e in params.empresas
+        },
         "permite_faturamento_sem_nf_default": params.permite_faturamento_sem_nf_default,
         "data_processamento": data_proc,
         "row_count": len(df),

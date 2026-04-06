@@ -1,0 +1,501 @@
+{
+  "generated_at": "2026-04-06T21:11:04Z",
+  "pipeline_revision": "faturamento-v3",
+  "cliente": "cliente_2",
+  "empresa": "_multi",
+  "modulo": "faturamento",
+  "cliente_id": "cliente_2",
+  "empresa_id": "_multi",
+  "cnpj": null,
+  "row_count": 14762,
+  "columns": [
+    "Data",
+    "Data do faturamento",
+    "Situação",
+    "Número do pedido multiloja",
+    "Código",
+    "Descrição",
+    "Número",
+    "Nome da Loja",
+    "Nome da plataforma",
+    "Custo de Frete",
+    "Taxa de Comissão",
+    "pedidos_arquivo",
+    "Existe Nota Fiscal gerada",
+    "Número da nota",
+    "Número do pedido",
+    "Quantidade",
+    "Preço de lista",
+    "Valor total",
+    "empresa",
+    "org_id",
+    "cliente_slug",
+    "SKU_Normalizado",
+    "Custo_Unitario",
+    "Status_Custo",
+    "Flag_SKU_Sem_Custo",
+    "Flag_Produto_Sem_Correspondencia_SKU",
+    "Flag_SKU_Duplicado_Na_Tabela_Custo",
+    "Flag_ML_Comissao_Frete_Rateado",
+    "Vl_Venda",
+    "Frete_Plataforma",
+    "Nota_Numero_Normalizado",
+    "Nota_Valor_Liquido_Total",
+    "Nota_Data_Emissao",
+    "Nota_Situacao",
+    "faturamento_nota_vinculada",
+    "Nota_Valor_Liquido_Rateado",
+    "Nota_Rateio_Participacao",
+    "flag_faturamento_rateio_vl_venda_zero",
+    "Base_Imposto",
+    "Flag_Custo_Origem_NF",
+    "Total dos Produtos",
+    "Nome do Transportador",
+    "Outras Despesas",
+    "Preço unitário",
+    "Desconto",
+    "Preço de custo",
+    "Nome",
+    "UF",
+    "CPF/CNPJ",
+    "Preço de custo - Fornecedor",
+    "Desconto proporcional total",
+    "Frete proporcional",
+    "Frete Mercado Envios",
+    "Frete transportadora própria",
+    "Receita_Bruta",
+    "Custo_Produto_Total",
+    "Imposto",
+    "Despesas Fixas",
+    "Resultado",
+    "Resultado_Pct",
+    "Aliquota_Imposto_Utilizada",
+    "Aliquota_Despesas_Fixas_Utilizada",
+    "Data_Processamento",
+    "faturamento_com_nf",
+    "faturamento_sem_nf",
+    "faturamento_consolidado",
+    "flag_preco_lista_zero",
+    "flag_divergencia_preco_lista_valor_total",
+    "Flag_Base_Imposto_Ausente",
+    "_ab_sem_nf_np",
+    "cliente_id",
+    "empresa_id",
+    "cnpj"
+  ],
+  "params_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\V2\\ops\\faturamento_params_cliente_2_gama_star_eap.json",
+  "aliquota_imposto_usada": 0.11,
+  "aliquota_despesas_fixas_usada": 0.05,
+  "permite_faturamento_sem_nf": false,
+  "pedidos_fonte": [
+    {
+      "org_id": "gama_home",
+      "empresa": "Gama Home",
+      "pedidos_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos",
+      "arquivos": [
+        "Gama Home - Pedidos Dez 2025.csv",
+        "Gama Home - Pedidos Nov 2025.csv",
+        "Gama Home - Pedidos Abr 2026.csv",
+        "Gama Home - Pedidos Fev 2026.csv",
+        "Gama Home - Pedidos Jan 2026.csv",
+        "Gama Home - Pedidos Mar 2026.csv"
+      ],
+      "ficheiros_detalhe": [
+        {
+          "arquivo": "Gama Home - Pedidos Dez 2025.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2025\\Gama Home - Pedidos Dez 2025.csv",
+          "mtime_iso": "2026-01-29T20:52:54Z"
+        },
+        {
+          "arquivo": "Gama Home - Pedidos Nov 2025.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2025\\Gama Home - Pedidos Nov 2025.csv",
+          "mtime_iso": "2026-01-29T20:52:45Z"
+        },
+        {
+          "arquivo": "Gama Home - Pedidos Abr 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2026\\Gama Home - Pedidos Abr 2026.csv",
+          "mtime_iso": "2026-04-06T09:41:10Z"
+        },
+        {
+          "arquivo": "Gama Home - Pedidos Fev 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2026\\Gama Home - Pedidos Fev 2026.csv",
+          "mtime_iso": "2026-03-29T23:13:38Z"
+        },
+        {
+          "arquivo": "Gama Home - Pedidos Jan 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2026\\Gama Home - Pedidos Jan 2026.csv",
+          "mtime_iso": "2026-03-29T23:13:14Z"
+        },
+        {
+          "arquivo": "Gama Home - Pedidos Mar 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2026\\Gama Home - Pedidos Mar 2026.csv",
+          "mtime_iso": "2026-04-02T09:51:18Z"
+        }
+      ],
+      "arquivo": "6 ficheiros CSV",
+      "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos",
+      "mtime_iso": "2026-04-02T09:51:18Z",
+      "pedidos_dedupe_multiloja_codigo": "applied",
+      "pedidos_linhas_antes": 2755,
+      "pedidos_linhas_depois": 2750,
+      "pedidos_linhas_removidas": 5
+    },
+    {
+      "org_id": "mega_star",
+      "empresa": "Mega Star",
+      "pedidos_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos",
+      "arquivos": [
+        "Mega Star - Pedidos Dez 2025.csv",
+        "Mega Star - Pedidos Nov 2025.csv",
+        "Mega Star - Pedidos Abr 2026.csv",
+        "Mega Star - Pedidos Fev 2026.csv",
+        "Mega Star - Pedidos Jan 2026.csv",
+        "Mega Star - Pedidos Mar 2026.csv"
+      ],
+      "ficheiros_detalhe": [
+        {
+          "arquivo": "Mega Star - Pedidos Dez 2025.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2025\\Mega Star - Pedidos Dez 2025.csv",
+          "mtime_iso": "2026-01-29T21:26:35Z"
+        },
+        {
+          "arquivo": "Mega Star - Pedidos Nov 2025.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2025\\Mega Star - Pedidos Nov 2025.csv",
+          "mtime_iso": "2026-01-29T21:25:52Z"
+        },
+        {
+          "arquivo": "Mega Star - Pedidos Abr 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2026\\Mega Star - Pedidos Abr 2026.csv",
+          "mtime_iso": "2026-04-06T09:44:04Z"
+        },
+        {
+          "arquivo": "Mega Star - Pedidos Fev 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2026\\Mega Star - Pedidos Fev 2026.csv",
+          "mtime_iso": "2026-03-29T23:06:34Z"
+        },
+        {
+          "arquivo": "Mega Star - Pedidos Jan 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2026\\Mega Star - Pedidos Jan 2026.csv",
+          "mtime_iso": "2026-01-29T21:26:57Z"
+        },
+        {
+          "arquivo": "Mega Star - Pedidos Mar 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2026\\Mega Star - Pedidos Mar 2026.csv",
+          "mtime_iso": "2026-04-02T09:54:17Z"
+        }
+      ],
+      "arquivo": "6 ficheiros CSV",
+      "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos",
+      "mtime_iso": "2026-04-02T09:54:17Z",
+      "pedidos_dedupe_multiloja_codigo": "applied",
+      "pedidos_linhas_antes": 5120,
+      "pedidos_linhas_depois": 5093,
+      "pedidos_linhas_removidas": 27
+    },
+    {
+      "org_id": "moveis_eap",
+      "empresa": "Móveis EAP",
+      "pedidos_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos",
+      "arquivos": [
+        "Móveis EAP - Pedidos Dez 2025.csv",
+        "Móveis EAP - Pedidos Nov 2025.csv",
+        "Móveis EAP - Pedidos Abr2026.csv",
+        "Móveis EAP - Pedidos Fev 2026.csv",
+        "Móveis EAP - Pedidos Jan 2026.csv",
+        "Móveis EAP - Pedidos Mar 2026.csv"
+      ],
+      "ficheiros_detalhe": [
+        {
+          "arquivo": "Móveis EAP - Pedidos Dez 2025.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2025\\Móveis EAP - Pedidos Dez 2025.csv",
+          "mtime_iso": "2026-01-29T21:44:25Z"
+        },
+        {
+          "arquivo": "Móveis EAP - Pedidos Nov 2025.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2025\\Móveis EAP - Pedidos Nov 2025.csv",
+          "mtime_iso": "2026-01-29T21:43:54Z"
+        },
+        {
+          "arquivo": "Móveis EAP - Pedidos Abr2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2026\\Móveis EAP - Pedidos Abr2026.csv",
+          "mtime_iso": "2026-04-06T09:38:26Z"
+        },
+        {
+          "arquivo": "Móveis EAP - Pedidos Fev 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2026\\Móveis EAP - Pedidos Fev 2026.csv",
+          "mtime_iso": "2026-03-29T23:24:02Z"
+        },
+        {
+          "arquivo": "Móveis EAP - Pedidos Jan 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2026\\Móveis EAP - Pedidos Jan 2026.csv",
+          "mtime_iso": "2026-03-29T23:23:05Z"
+        },
+        {
+          "arquivo": "Móveis EAP - Pedidos Mar 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2026\\Móveis EAP - Pedidos Mar 2026.csv",
+          "mtime_iso": "2026-04-02T09:35:44Z"
+        }
+      ],
+      "arquivo": "6 ficheiros CSV",
+      "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos",
+      "mtime_iso": "2026-04-02T09:35:44Z",
+      "pedidos_dedupe_multiloja_codigo": "applied",
+      "pedidos_linhas_antes": 6944,
+      "pedidos_linhas_depois": 6919,
+      "pedidos_linhas_removidas": 25
+    }
+  ],
+  "custo_fonte": {
+    "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Custo.xlsx",
+    "sheet": "Planilha1",
+    "custo_reader": "header_row_0"
+  },
+  "data_processamento": "2026-04-06T21:11:04Z",
+  "validation_ok": true,
+  "app_mirror_csv": "dataset_faturamento_app.csv",
+  "schema_version": 2,
+  "cliente_slug": "cliente_2",
+  "cliente_root": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2",
+  "coluna_base_imposto_resolvida": "Valor total",
+  "coluna_base_imposto_candidatas": [
+    "Base fiscal item",
+    "Valor total"
+  ],
+  "empresas_fonte": [
+    {
+      "org_id": "gama_home",
+      "empresa": "Gama Home",
+      "pedidos_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos",
+      "arquivos": [
+        "Gama Home - Pedidos Dez 2025.csv",
+        "Gama Home - Pedidos Nov 2025.csv",
+        "Gama Home - Pedidos Abr 2026.csv",
+        "Gama Home - Pedidos Fev 2026.csv",
+        "Gama Home - Pedidos Jan 2026.csv",
+        "Gama Home - Pedidos Mar 2026.csv"
+      ],
+      "ficheiros_detalhe": [
+        {
+          "arquivo": "Gama Home - Pedidos Dez 2025.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2025\\Gama Home - Pedidos Dez 2025.csv",
+          "mtime_iso": "2026-01-29T20:52:54Z"
+        },
+        {
+          "arquivo": "Gama Home - Pedidos Nov 2025.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2025\\Gama Home - Pedidos Nov 2025.csv",
+          "mtime_iso": "2026-01-29T20:52:45Z"
+        },
+        {
+          "arquivo": "Gama Home - Pedidos Abr 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2026\\Gama Home - Pedidos Abr 2026.csv",
+          "mtime_iso": "2026-04-06T09:41:10Z"
+        },
+        {
+          "arquivo": "Gama Home - Pedidos Fev 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2026\\Gama Home - Pedidos Fev 2026.csv",
+          "mtime_iso": "2026-03-29T23:13:38Z"
+        },
+        {
+          "arquivo": "Gama Home - Pedidos Jan 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2026\\Gama Home - Pedidos Jan 2026.csv",
+          "mtime_iso": "2026-03-29T23:13:14Z"
+        },
+        {
+          "arquivo": "Gama Home - Pedidos Mar 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2026\\Gama Home - Pedidos Mar 2026.csv",
+          "mtime_iso": "2026-04-02T09:51:18Z"
+        }
+      ],
+      "arquivo": "6 ficheiros CSV",
+      "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos",
+      "mtime_iso": "2026-04-02T09:51:18Z",
+      "pedidos_dedupe_multiloja_codigo": "applied",
+      "pedidos_linhas_antes": 2755,
+      "pedidos_linhas_depois": 2750,
+      "pedidos_linhas_removidas": 5
+    },
+    {
+      "org_id": "mega_star",
+      "empresa": "Mega Star",
+      "pedidos_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos",
+      "arquivos": [
+        "Mega Star - Pedidos Dez 2025.csv",
+        "Mega Star - Pedidos Nov 2025.csv",
+        "Mega Star - Pedidos Abr 2026.csv",
+        "Mega Star - Pedidos Fev 2026.csv",
+        "Mega Star - Pedidos Jan 2026.csv",
+        "Mega Star - Pedidos Mar 2026.csv"
+      ],
+      "ficheiros_detalhe": [
+        {
+          "arquivo": "Mega Star - Pedidos Dez 2025.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2025\\Mega Star - Pedidos Dez 2025.csv",
+          "mtime_iso": "2026-01-29T21:26:35Z"
+        },
+        {
+          "arquivo": "Mega Star - Pedidos Nov 2025.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2025\\Mega Star - Pedidos Nov 2025.csv",
+          "mtime_iso": "2026-01-29T21:25:52Z"
+        },
+        {
+          "arquivo": "Mega Star - Pedidos Abr 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2026\\Mega Star - Pedidos Abr 2026.csv",
+          "mtime_iso": "2026-04-06T09:44:04Z"
+        },
+        {
+          "arquivo": "Mega Star - Pedidos Fev 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2026\\Mega Star - Pedidos Fev 2026.csv",
+          "mtime_iso": "2026-03-29T23:06:34Z"
+        },
+        {
+          "arquivo": "Mega Star - Pedidos Jan 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2026\\Mega Star - Pedidos Jan 2026.csv",
+          "mtime_iso": "2026-01-29T21:26:57Z"
+        },
+        {
+          "arquivo": "Mega Star - Pedidos Mar 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2026\\Mega Star - Pedidos Mar 2026.csv",
+          "mtime_iso": "2026-04-02T09:54:17Z"
+        }
+      ],
+      "arquivo": "6 ficheiros CSV",
+      "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos",
+      "mtime_iso": "2026-04-02T09:54:17Z",
+      "pedidos_dedupe_multiloja_codigo": "applied",
+      "pedidos_linhas_antes": 5120,
+      "pedidos_linhas_depois": 5093,
+      "pedidos_linhas_removidas": 27
+    },
+    {
+      "org_id": "moveis_eap",
+      "empresa": "Móveis EAP",
+      "pedidos_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos",
+      "arquivos": [
+        "Móveis EAP - Pedidos Dez 2025.csv",
+        "Móveis EAP - Pedidos Nov 2025.csv",
+        "Móveis EAP - Pedidos Abr2026.csv",
+        "Móveis EAP - Pedidos Fev 2026.csv",
+        "Móveis EAP - Pedidos Jan 2026.csv",
+        "Móveis EAP - Pedidos Mar 2026.csv"
+      ],
+      "ficheiros_detalhe": [
+        {
+          "arquivo": "Móveis EAP - Pedidos Dez 2025.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2025\\Móveis EAP - Pedidos Dez 2025.csv",
+          "mtime_iso": "2026-01-29T21:44:25Z"
+        },
+        {
+          "arquivo": "Móveis EAP - Pedidos Nov 2025.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2025\\Móveis EAP - Pedidos Nov 2025.csv",
+          "mtime_iso": "2026-01-29T21:43:54Z"
+        },
+        {
+          "arquivo": "Móveis EAP - Pedidos Abr2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2026\\Móveis EAP - Pedidos Abr2026.csv",
+          "mtime_iso": "2026-04-06T09:38:26Z"
+        },
+        {
+          "arquivo": "Móveis EAP - Pedidos Fev 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2026\\Móveis EAP - Pedidos Fev 2026.csv",
+          "mtime_iso": "2026-03-29T23:24:02Z"
+        },
+        {
+          "arquivo": "Móveis EAP - Pedidos Jan 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2026\\Móveis EAP - Pedidos Jan 2026.csv",
+          "mtime_iso": "2026-03-29T23:23:05Z"
+        },
+        {
+          "arquivo": "Móveis EAP - Pedidos Mar 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2026\\Móveis EAP - Pedidos Mar 2026.csv",
+          "mtime_iso": "2026-04-02T09:35:44Z"
+        }
+      ],
+      "arquivo": "6 ficheiros CSV",
+      "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos",
+      "mtime_iso": "2026-04-02T09:35:44Z",
+      "pedidos_dedupe_multiloja_codigo": "applied",
+      "pedidos_linhas_antes": 6944,
+      "pedidos_linhas_depois": 6919,
+      "pedidos_linhas_removidas": 25
+    }
+  ],
+  "status_custo_counts": {
+    "CUSTO_OK": 14762
+  },
+  "params_mensais_path": null,
+  "notas_saida_dir_default": "notas_saida",
+  "notas_por_empresa": [
+    {
+      "org_id": "gama_home",
+      "notas_saida_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\notas_saida",
+      "notas_linhas_apos_filtro": 2280,
+      "notas_arquivos_linhas_brutas": 2283,
+      "notas_vazio": false,
+      "notas_frete_fallback_grupos_nf": 104,
+      "notas_nf_distintas": 2114,
+      "custo_nf_enriquecido_linhas_pedido": 0,
+      "custo_nf_itens_col_codigo": "Código",
+      "custo_nf_itens_col_quantidade": "Quantidade",
+      "custo_nf_itens_linhas_com_custo": 2279,
+      "custo_nf_itens_nf_com_total_positivo": 2251,
+      "ml_fee_rateio_grupos_comissao": 6,
+      "ml_fee_rateio_grupos_frete": 0,
+      "ml_fee_rateio_linhas_tocadas": 12,
+      "pedidos_dedupe_multiloja_codigo": "applied",
+      "pedidos_linhas_antes": 2755,
+      "pedidos_linhas_depois": 2750,
+      "pedidos_linhas_removidas": 5
+    },
+    {
+      "org_id": "mega_star",
+      "notas_saida_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\notas_saida",
+      "notas_linhas_apos_filtro": 4437,
+      "notas_arquivos_linhas_brutas": 4443,
+      "notas_vazio": false,
+      "notas_frete_fallback_grupos_nf": 227,
+      "notas_nf_distintas": 4184,
+      "custo_nf_enriquecido_linhas_pedido": 0,
+      "custo_nf_itens_col_codigo": "Código",
+      "custo_nf_itens_col_quantidade": "Quantidade",
+      "custo_nf_itens_linhas_com_custo": 4437,
+      "custo_nf_itens_nf_com_total_positivo": 4397,
+      "ml_fee_rateio_grupos_comissao": 14,
+      "ml_fee_rateio_grupos_frete": 3,
+      "ml_fee_rateio_linhas_tocadas": 28,
+      "pedidos_dedupe_multiloja_codigo": "applied",
+      "pedidos_linhas_antes": 5120,
+      "pedidos_linhas_depois": 5093,
+      "pedidos_linhas_removidas": 27
+    },
+    {
+      "org_id": "moveis_eap",
+      "notas_saida_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\notas_saida",
+      "notas_linhas_apos_filtro": 17253,
+      "notas_arquivos_linhas_brutas": 17296,
+      "notas_vazio": false,
+      "notas_frete_fallback_grupos_nf": 39,
+      "notas_rateio_uniforme_vl_venda_zero": 2684,
+      "notas_nf_distintas": 5479,
+      "custo_nf_enriquecido_linhas_pedido": 0,
+      "custo_nf_itens_col_codigo": "Código",
+      "custo_nf_itens_col_quantidade": "Quantidade",
+      "custo_nf_itens_linhas_com_custo": 15691,
+      "custo_nf_itens_nf_com_total_positivo": 15612,
+      "ml_fee_rateio_grupos_comissao": 8,
+      "ml_fee_rateio_grupos_frete": 2,
+      "ml_fee_rateio_linhas_tocadas": 16,
+      "pedidos_dedupe_multiloja_codigo": "applied",
+      "pedidos_linhas_antes": 6944,
+      "pedidos_linhas_depois": 6919,
+      "pedidos_linhas_removidas": 25
+    }
+  ],
+  "dataset_faturamento_nf_parquet": "dataset_faturamento_nf.parquet",
+  "nf_first_row_count": 11777,
+  "schema_version_nf_first": 2,
+  "dataset_faturamento_nf_panel_parquet": "dataset_faturamento_nf_panel.parquet",
+  "nf_panel_row_count": 23809,
+  "dataset_faturamento_fiscal_parquet": "dataset_faturamento_fiscal.parquet",
+  "schema_version_fiscal": 1,
+  "fiscal_row_count": 23809
+}

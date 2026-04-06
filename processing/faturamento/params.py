@@ -42,6 +42,8 @@ class EmpresaFaturamentoEntry:
     pedidos_dir: str
     permite_faturamento_sem_nf: bool | None
     notas_saida_dir: str | None = None
+    aliquota_imposto: float | None = None
+    aliquota_despesas_fixas: float | None = None
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,18 @@ def _sanitize_slug_segment(raw: str) -> str:
 def _as_float(name: str, raw: Any) -> float:
     if raw is None:
         raise FaturamentoParamsError(f"Parâmetro obrigatório ausente: {name}")
+    try:
+        v = float(raw)
+    except (TypeError, ValueError) as e:
+        raise FaturamentoParamsError(f"{name} deve ser numérico (ex.: 0.12 no JSON com ponto).") from e
+    if v < 0 or v > 1:
+        raise FaturamentoParamsError(f"{name} deve estar entre 0 e 1 (decimal, ex.: 0.12).")
+    return v
+
+
+def _optional_float(name: str, raw: Any) -> float | None:
+    if raw is None or (isinstance(raw, str) and not str(raw).strip()):
+        return None
     try:
         v = float(raw)
     except (TypeError, ValueError) as e:
@@ -175,6 +189,8 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
             raise FaturamentoParamsError(f"Pasta de pedidos não existe: {ped_path}")
         ns_emp = e.get("notas_saida_dir")
         ns_emp_s = str(ns_emp).strip() if ns_emp is not None and str(ns_emp).strip() else None
+        ai_e = _optional_float(f"empresas[{i}].aliquota_imposto", e.get("aliquota_imposto"))
+        ad_e = _optional_float(f"empresas[{i}].aliquota_despesas_fixas", e.get("aliquota_despesas_fixas"))
         entries.append(
             EmpresaFaturamentoEntry(
                 org_id=_sanitize_slug_segment(oid),
@@ -182,6 +198,8 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
                 pedidos_dir=pdir,
                 permite_faturamento_sem_nf=_optional_bool(e.get("permite_faturamento_sem_nf")),
                 notas_saida_dir=ns_emp_s,
+                aliquota_imposto=ai_e,
+                aliquota_despesas_fixas=ad_e,
             )
         )
 

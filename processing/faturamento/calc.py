@@ -136,6 +136,8 @@ def compute_financial_columns_regras_fechadas(
     fallback_aliquota_imposto: float,
     fallback_despesa_fixa: float,
     data_processamento_iso: str,
+    per_row_aliquota_imposto: pd.Series | None = None,
+    per_row_despesa_fixa: pd.Series | None = None,
 ) -> pd.DataFrame:
     """
     Resultado = Vl_Venda - Frete_Plataforma - Comissão - Custo_Produto_Total - Outras - Imposto - Despesas Fixas.
@@ -203,6 +205,20 @@ def compute_financial_columns_regras_fechadas(
     org_ids = out["org_id"].astype(str).str.strip() if "org_id" in out.columns else pd.Series("", index=out.index)
     emps = out["empresa"].astype(str).str.strip() if "empresa" in out.columns else pd.Series("", index=out.index)
 
+    def _fb_imp_at(i: object) -> float:
+        if per_row_aliquota_imposto is not None:
+            v = per_row_aliquota_imposto.reindex(out.index).loc[i]
+            if pd.notna(v):
+                return float(v)
+        return fallback_aliquota_imposto
+
+    def _fb_desp_at(i: object) -> float:
+        if per_row_despesa_fixa is not None:
+            v = per_row_despesa_fixa.reindex(out.index).loc[i]
+            if pd.notna(v):
+                return float(v)
+        return fallback_despesa_fixa
+
     if df_params_mensais is not None and not df_params_mensais.empty:
         for i in out.index:
             oid = str(org_ids.loc[i])
@@ -216,9 +232,9 @@ def compute_financial_columns_regras_fechadas(
                     _, d = lookup_parametros_mensais(oid, emp, str(cp), df_params_mensais)
                     ali_desp.loc[i] = d
                 except FaturamentoParamsError:
-                    ali_desp.loc[i] = fallback_despesa_fixa
+                    ali_desp.loc[i] = _fb_desp_at(i)
             else:
-                ali_desp.loc[i] = fallback_despesa_fixa
+                ali_desp.loc[i] = _fb_desp_at(i)
 
             if not vinc:
                 ali_imp.loc[i] = 0.0
@@ -227,13 +243,20 @@ def compute_financial_columns_regras_fechadas(
                     ai, _ = lookup_parametros_mensais(oid, emp, str(cn), df_params_mensais)
                     ali_imp.loc[i] = ai
                 except FaturamentoParamsError:
-                    ali_imp.loc[i] = fallback_aliquota_imposto
+                    ali_imp.loc[i] = _fb_imp_at(i)
             else:
-                ali_imp.loc[i] = fallback_aliquota_imposto
+                ali_imp.loc[i] = _fb_imp_at(i)
     else:
         mask_nf = out["faturamento_nota_vinculada"].fillna(False).astype(bool)
-        ali_imp.loc[mask_nf] = fallback_aliquota_imposto
-        ali_desp[:] = fallback_despesa_fixa
+        if per_row_aliquota_imposto is not None:
+            s_imp = per_row_aliquota_imposto.reindex(out.index)
+            ali_imp.loc[mask_nf] = s_imp.loc[mask_nf].fillna(fallback_aliquota_imposto).astype(float)
+        else:
+            ali_imp.loc[mask_nf] = fallback_aliquota_imposto
+        if per_row_despesa_fixa is not None:
+            ali_desp = per_row_despesa_fixa.reindex(out.index).fillna(fallback_despesa_fixa).astype(float)
+        else:
+            ali_desp[:] = fallback_despesa_fixa
 
     out["Imposto"] = base_rateada * ali_imp
     out["Despesas Fixas"] = out["Vl_Venda"].fillna(0.0).astype(float) * ali_desp

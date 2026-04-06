@@ -341,19 +341,33 @@ def enrich_pedidos_com_notas(
     out["flag_faturamento_rateio_vl_venda_zero"] = False
 
     bad_groups: list[str] = []
+    n_rateio_uniforme = 0
     for nfk, sub in out.groupby("Nota_Numero_Normalizado", sort=False):
         nfk_s = str(nfk).strip()
         if not nfk_s:
             continue
         g_idx = sub.index.tolist()
+        total_nf = sub["Nota_Valor_Liquido_Total"].iloc[0]
+        tnf = float(total_nf) if pd.notna(total_nf) else 0.0
         w = to_numeric_br(_df_col_as_series(sub, "Vl_Venda")).fillna(0.0)
         s = float(w.sum())
         if s <= 0.0 or math.isnan(s):
+            if len(g_idx) >= 1 and tnf > 0.0 and not math.isnan(tnf):
+                n_rateio_uniforme += 1
+                out.loc[g_idx, "flag_faturamento_rateio_vl_venda_zero"] = True
+                n = len(g_idx)
+                parts = pd.Series(1.0 / n, index=sub.index, dtype=float)
+                alloc = (parts * tnf).astype(float)
+                if n > 1:
+                    last_i = g_idx[-1]
+                    rest = tnf - float(alloc.drop(index=last_i).sum())
+                    alloc.loc[last_i] = rest
+                out.loc[g_idx, "Nota_Rateio_Participacao"] = parts.loc[g_idx]
+                out.loc[g_idx, "Nota_Valor_Liquido_Rateado"] = alloc.loc[g_idx]
+                continue
             out.loc[g_idx, "flag_faturamento_rateio_vl_venda_zero"] = True
             bad_groups.append(nfk_s)
             continue
-        total_nf = sub["Nota_Valor_Liquido_Total"].iloc[0]
-        tnf = float(total_nf) if pd.notna(total_nf) else 0.0
         parts = (w / s).astype(float)
         alloc = (parts * tnf).astype(float)
         if len(g_idx) > 1:
@@ -394,6 +408,9 @@ def enrich_pedidos_com_notas(
 
     if n_fb:
         meta["notas_frete_fallback_grupos_nf"] = n_fb
+
+    if n_rateio_uniforme:
+        meta["notas_rateio_uniforme_vl_venda_zero"] = int(n_rateio_uniforme)
 
     if bad_groups:
         u = sorted(set(bad_groups))

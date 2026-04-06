@@ -6424,11 +6424,13 @@ def _faturamento_dre_apply_produto_e_sinal_venda(
     df_nf: pd.DataFrame,
     *,
     produtos_sel: tuple[str, ...],
-    sinal_resultado: str,
+    sinais_resultado: tuple[str, ...],
 ) -> pd.DataFrame:
     """
-    Refina o quadro NF por ``produto_resumo`` e pelo **sinal do resultado comercial** (lucro / prejuízo / zerado),
-    ou por ``comercial_incompleto`` (ex.: custo em falta na base). Valores vêm do materializado — sem recalcular DRE.
+    Refina o quadro NF por ``produto_resumo`` e pelo **sinal do resultado comercial** (lucro e/ou prejuízo).
+
+    ``sinais_resultado`` pode incluir ``lucro``, ``prejuizo`` ou ambos (união). Vazio ou inválido = ambos.
+    Ignora NFs sem ``resultado`` numérico (ex. NaN). Valores vêm do materializado — sem recalcular DRE.
     """
     if df_nf.empty:
         return df_nf
@@ -6437,25 +6439,20 @@ def _faturamento_dre_apply_produto_e_sinal_venda(
     if sel_p and "produto_resumo" in out.columns:
         pr = out["produto_resumo"].fillna("").astype(str).str.strip()
         out = out.loc[pr.isin(sel_p)].copy()
-    sr = str(sinal_resultado or "todos").strip().lower()
-    if sr in {"", "todos"}:
-        return out
-    if sr == "incompletas":
-        if "comercial_incompleto" not in out.columns:
-            return out
-        inc = out["comercial_incompleto"].fillna(False).astype(bool)
-        return out.loc[inc].copy()
+    raw = [str(x).strip().lower() for x in sinais_resultado if str(x).strip()]
+    sel = {x for x in raw if x in {"lucro", "prejuizo"}}
+    if not sel:
+        sel = {"lucro", "prejuizo"}
     if "resultado" not in out.columns:
         return out
     res = pd.to_numeric(out["resultado"], errors="coerce")
     _eps = 1e-9
-    if sr == "lucro":
-        out = out.loc[res.notna() & (res > _eps)].copy()
-    elif sr == "prejuizo":
-        out = out.loc[res.notna() & (res < -_eps)].copy()
-    elif sr == "zerado":
-        out = out.loc[res.notna() & (res.abs() <= _eps)].copy()
-    return out
+    mask = pd.Series(False, index=out.index)
+    if "lucro" in sel:
+        mask |= res.notna() & (res > _eps)
+    if "prejuizo" in sel:
+        mask |= res.notna() & (res < -_eps)
+    return out.loc[mask].copy()
 
 
 def _render_faturamento_dre_minimal(
@@ -6673,6 +6670,7 @@ def _render_faturamento_dre_minimal(
                     "fdl_fat_min_prod",
                     "fdl_fat_min_venda_sinal",
                     "fdl_fat_min_sinal_resultado",
+                    "fdl_fat_min_sinais_resultado",
                 ):
                     st.session_state.pop(_k, None)
                 st.rerun()
@@ -6770,17 +6768,6 @@ def _render_faturamento_dre_minimal(
         df_nf = apply_nf_panel_frete_gap_fallback(df_nf)
         df_nf = apply_nf_panel_resultado_frete_nota_lista(df_nf)
 
-    if "fdl_fat_min_sinal_resultado" not in st.session_state:
-        _old_sinal = st.session_state.pop("fdl_fat_min_venda_sinal", None)
-        _mig = {"positiva": "lucro", "negativa": "prejuizo", "zero": "zerado", "todos": "todos"}
-        if _old_sinal is not None:
-            st.session_state["fdl_fat_min_sinal_resultado"] = _mig.get(
-                str(_old_sinal).strip().lower(), "todos"
-            )
-        else:
-            # Com fiscal: por omissão só lucro explícito; «Todas» mostra também NFs só fiscais / lista zero.
-            st.session_state["fdl_fat_min_sinal_resultado"] = "lucro" if use_fiscal_kpi else "todos"
-
     # Modo fiscal: df_nf = merge fiscal + comercial (base antes de produto/sinal). KPIs e tabela usam df_nf_panel.
     _prod_opts: list[str] = []
     if not df_nf.empty and "produto_resumo" in df_nf.columns:
@@ -6792,7 +6779,7 @@ def _render_faturamento_dre_minimal(
             }
         )
     with st.container(border=True):
-        st.subheader("Recorte comercial (produto / sinal da venda)")
+        st.subheader("Recorte comercial (produto / resultado)")
         if _prod_opts:
             _multiselect_stable(
                 "fdl_fat_min_prod",
@@ -6802,22 +6789,45 @@ def _render_faturamento_dre_minimal(
             )
         else:
             st.caption("Sem «produto_resumo» no recorte atual — filtro por produto indisponível.")
-        _venda_sinal_ui = st.selectbox(
-            "Sinal do resultado (por NF)",
-            options=("todos", "lucro", "prejuizo", "zerado", "incompletas"),
+        _k_sinais = "fdl_fat_min_sinais_resultado"
+        if _k_sinais not in st.session_state:
+            _leg = st.session_state.get("fdl_fat_min_sinal_resultado")
+            _leg_vs = st.session_state.get("fdl_fat_min_venda_sinal")
+            if isinstance(_leg, str):
+                _s = _leg.strip().lower()
+                if _s == "lucro":
+                    st.session_state[_k_sinais] = ["lucro"]
+                elif _s == "prejuizo":
+                    st.session_state[_k_sinais] = ["prejuizo"]
+                else:
+                    st.session_state[_k_sinais] = ["lucro", "prejuizo"]
+                st.session_state.pop("fdl_fat_min_sinal_resultado", None)
+            elif isinstance(_leg_vs, str):
+                _m = {"positiva": "lucro", "negativa": "prejuizo"}
+                _one = _m.get(_leg_vs.strip().lower())
+                st.session_state[_k_sinais] = (
+                    [_one] if _one else ["lucro", "prejuizo"]
+                )
+            else:
+                st.session_state[_k_sinais] = ["lucro", "prejuizo"]
+        _prev_s = st.session_state.get(_k_sinais)
+        if not isinstance(_prev_s, list):
+            st.session_state[_k_sinais] = ["lucro", "prejuizo"]
+        else:
+            _filt = [x for x in _prev_s if x in ("lucro", "prejuizo")]
+            st.session_state[_k_sinais] = _filt if _filt else ["lucro", "prejuizo"]
+        st.multiselect(
+            "Resultado comercial (por NF)",
+            options=("lucro", "prejuizo"),
             format_func=lambda x: {
-                "todos": "Todas (lucro, prejuízo, zerado e incompletas)",
-                "lucro": "Só lucro (resultado > 0)",
-                "prejuizo": "Só prejuízo (resultado < 0)",
-                "zerado": "Só resultado zerado",
-                "incompletas": "Só dados incompletos (ex.: custo em falta)",
+                "lucro": "Venda com lucro (resultado > 0)",
+                "prejuizo": "Venda com prejuízo (resultado < 0)",
             }[x],
-            key="fdl_fat_min_sinal_resultado",
+            key=_k_sinais,
             help=(
-                "Usa o **resultado comercial** e o indicador **comercial_incompleto** já gravados no materializado "
-                "(Parquet), sem recalcular no app. **Lucro / prejuízo** ignoram linhas sem resultado válido (NaN). "
-                "**Dados incompletos** = pelo menos uma linha de pedido com custo não OK ou resultado ausente no grão "
-                "NF — reveja a planilha de custo / SKUs / itens da nota e volte a materializar."
+                "Pode selecionar **uma ou as duas** opções: união de NFs com lucro e/ou com prejuízo. "
+                "Usa o **resultado** já gravado no materializado (Parquet), sem recalcular no app. "
+                "NFs sem resultado válido (NaN) não entram em nenhum dos dois grupos."
             ),
         )
 
@@ -6826,20 +6836,16 @@ def _render_faturamento_dre_minimal(
         for x in (st.session_state.get("fdl_fat_min_prod") or [])
         if str(x).strip()
     )
-    _venda_sinal = str(_venda_sinal_ui or "todos").strip().lower()
-    if (
-        _venda_sinal == "incompletas"
-        and not df_nf.empty
-        and "comercial_incompleto" not in df_nf.columns
-    ):
-        st.info(
-            "O ficheiro materializado não tem a coluna **comercial_incompleto**. "
-            "Execute de novo a materialização de faturamento para filtrar por dados incompletos."
-        )
+    _sinais_ui = st.session_state.get("fdl_fat_min_sinais_resultado")
+    _sinais_tuple = (
+        tuple(str(x).strip().lower() for x in _sinais_ui if str(x).strip())
+        if isinstance(_sinais_ui, list)
+        else ("lucro", "prejuizo")
+    )
     df_nf_panel = _faturamento_dre_apply_produto_e_sinal_venda(
         df_nf,
         produtos_sel=_prod_sel,
-        sinal_resultado=_venda_sinal,
+        sinais_resultado=_sinais_tuple,
     )
     _kp = compute_nf_panel_kpis(df_nf_panel)
 

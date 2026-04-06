@@ -1254,6 +1254,22 @@ def _faturamento_resolve_disk_path(path_s: str) -> Path:
     return p
 
 
+def _faturamento_materialized_cliente_slug_override() -> str:
+    """
+    Slug só para o path V2 canónico de faturamento (opcional).
+
+    Útil quando ``FDL_MATERIALIZED_CLIENTE_SLUG`` serve repasse/frete multiempresa (ex.: cliente_2)
+    mas o faturamento materializado vive em outro segmento (ex.: ``default`` para Antomóveis).
+    """
+    raw = os.environ.get("FDL_MATERIALIZED_CLIENTE_SLUG_FATURAMENTO", "").strip()
+    if raw:
+        return raw
+    try:
+        return str(st.secrets.get("FDL_MATERIALIZED_CLIENTE_SLUG_FATURAMENTO", "")).strip()
+    except Exception:
+        return ""
+
+
 def _faturamento_v2_canonical_dataset_path_str() -> str:
     """
     ``data_products/<cliente_slug>/faturamento/current/``.
@@ -1261,20 +1277,45 @@ def _faturamento_v2_canonical_dataset_path_str() -> str:
     Prioridade: ``dataset.parquet`` (artefato principal da materialização, colunas completas),
     depois ``dataset_faturamento_app.csv`` (espelho para export). Se o CSV ficar velho ao lado
     de um Parquet novo, ler o CSV primeiro duplicava comissão/frete após correções no pipeline.
+
+    Ordem de pastas: override ``FDL_MATERIALIZED_CLIENTE_SLUG_FATURAMENTO`` → slug geral
+    ``FDL_MATERIALIZED_CLIENTE_SLUG`` →, se o utilizador tem **só** Antomóveis, tentativa extra
+    em ``default/`` (materialização típica desse tenant no repositório).
     """
-    slug = _materialized_cliente_slug().strip()
-    if not slug:
-        return ""
     root = _materialized_data_products_root().strip().strip("/\\")
-    base = Path(root) / slug / "faturamento" / "current"
-    if not base.is_absolute():
-        base = (_REPO_APP_ROOT / base).resolve()
-    else:
-        base = base.resolve()
-    for name in ("dataset.parquet", "dataset_faturamento_app.csv"):
-        cand = base / name
-        if cand.is_file():
-            return str(cand.resolve())
+
+    def _path_for_slug(slug: str) -> str:
+        if not slug:
+            return ""
+        base = Path(root) / slug / "faturamento" / "current"
+        if not base.is_absolute():
+            base = (_REPO_APP_ROOT / base).resolve()
+        else:
+            base = base.resolve()
+        for name in ("dataset.parquet", "dataset_faturamento_app.csv"):
+            cand = base / name
+            if cand.is_file():
+                return str(cand.resolve())
+        return ""
+
+    slugs: list[str] = []
+    ov = _faturamento_materialized_cliente_slug_override().strip()
+    if ov:
+        slugs.append(ov)
+    main = _materialized_cliente_slug().strip()
+    if main and main not in slugs:
+        slugs.append(main)
+    if (
+        len(_app_ctx.organizations) == 1
+        and _app_ctx.organizations[0].org_id == "antomoveis"
+        and "default" not in slugs
+    ):
+        slugs.append("default")
+
+    for s in slugs:
+        got = _path_for_slug(s)
+        if got:
+            return got
     return ""
 
 

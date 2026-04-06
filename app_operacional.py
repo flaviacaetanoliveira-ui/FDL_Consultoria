@@ -3662,7 +3662,7 @@ def _column_config_conciliacao(
             "Período",
             format="DD/MM/YYYY",
             width="small",
-            help="Data usada no filtro da vista (pagamento quando existe; senão emissão — ex.: Shopee).",
+            help="Data do filtro/ordenação: coluna materializada ou pagamento → emissão se pagamento vazio.",
         )
     if "Data de pagamento" in df.columns:
         cfg["Data de pagamento"] = DatetimeColumn(
@@ -9005,6 +9005,29 @@ def _drop_duplicate_columns_keep_first(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[:, ~df.columns.duplicated()].copy()
 
 
+def _effective_periodo_repasse_series(df: pd.DataFrame) -> tuple[pd.Series, str]:
+    """
+    Datas para filtro e ordenação do repasse: usa ``Data período repasse`` quando existe no dataset
+    materializado; caso contrário replica o critério da etapa4b (pagamento quando há data; senão emissão)
+    apenas a partir das colunas já carregadas — sem ler fontes brutas nem refazer o pipeline.
+    """
+    if "Data período repasse" in df.columns:
+        s = _parse_data_pagamento_final(_first_series(df, "Data período repasse"))
+        return s, "Data período repasse"
+    pay = _parse_data_pagamento_final(_first_series(df, "Data de pagamento"))
+    col_em = _resolve_col_data_emissao(list(df.columns))
+    emi = _parse_data_emissao_final(df[col_em]) if col_em else pd.Series(pd.NaT, index=df.index)
+    pay_dt = pd.to_datetime(pay, errors="coerce")
+    emi_dt = pd.to_datetime(emi, errors="coerce")
+    out = pay_dt.copy()
+    need_emi = pay_dt.isna() & emi_dt.notna()
+    out = out.where(~need_emi, emi_dt)
+    return (
+        out,
+        "Data de pagamento / emissão (regenere o repasse para gravar **Data período repasse** no Parquet)",
+    )
+
+
 def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     """
     Filtros + validação de ações + fila/tabela de repasse.
@@ -9020,10 +9043,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     _fdl_repasse_inject_panel_styles()
     _fdl_ui_gap_tight()
 
-    # Coluna materializada na tabela final (etapa4b); CSVs antigos só têm «Data de pagamento».
-    _col_periodo_repasse = (
-        "Data período repasse" if "Data período repasse" in base.columns else "Data de pagamento"
-    )
+    dp_series_full, _periodo_src_label = _effective_periodo_repasse_series(base)
 
     # Chaves de widget por org: sem isto, ao mudar de empresa o estado do Streamlit podia manter
     # limites/valores de outra org e parecer que o calendário «começa» na data errada.
@@ -9032,12 +9052,12 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     with st.container(border=True):
         st.markdown('<p class="fdl-repasse-filtros-h">Filtros</p>', unsafe_allow_html=True)
         st.markdown(
-            '<p class="fdl-repasse-caption">Recorte pelo período conforme a coluna <strong>Data período repasse</strong> '
-            "da tabela final (materializada no pipeline). CSV legado: só <strong>Data de pagamento</strong>. "
+            '<p class="fdl-repasse-caption">Recorte pelo <strong>período de repasse</strong>: coluna materializada '
+            "<strong>Data período repasse</strong> quando existe no Parquet; em bases antigas usa pagamento e, "
+            "se vazio, <strong>data de emissão</strong> (mesmo critério da etapa4b, só sobre linhas já carregadas). "
             "Plataforma, ação, situação e busca.</p>",
             unsafe_allow_html=True,
         )
-        dp_series_full = _parse_data_pagamento_final(_first_series(base, _col_periodo_repasse))
         _d_min, _d_max, has_dp_base = _series_datetime_bounds_dates(dp_series_full)
         today_rep = datetime.now(_BR_TZ).date()
         picker_min = min(_d_min, today_rep - timedelta(days=3 * 365))
@@ -9158,7 +9178,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         )
         tabela = tabela[m_busca]
     
-    _dp_filt = _parse_data_pagamento_final(_first_series(tabela, _col_periodo_repasse))
+    _dp_filt = _effective_periodo_repasse_series(tabela)[0]
     if _dp_filt.notna().any():
         _dd = _dp_filt.dt.normalize()
         _ini_ts = pd.Timestamp(data_pag_ini)
@@ -9181,7 +9201,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     
     _pag_caption = (
         f"Período: **{data_pag_ini.strftime('%d/%m/%Y')}** a **{data_pag_fim.strftime('%d/%m/%Y')}** "
-        f"({_col_periodo_repasse})"
+        f"({_periodo_src_label})"
     )
     if not has_dp_base:
         _pag_caption += " — **filtro por data inativo** (sem datas na coluna de período)"
@@ -9285,10 +9305,8 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             if "Data de pagamento" in tabela.columns
             else pd.Series("", index=tabela_exibir.index)
         )
-        if "Data período repasse" in tabela.columns:
-            tabela_exibir["Período repasse"] = _parse_data_pagamento_final(
-                tabela.loc[tabela_exibir.index, "Data período repasse"]
-            )
+        _periodo_tab, _ = _effective_periodo_repasse_series(tabela)
+        tabela_exibir["Período repasse"] = _periodo_tab.loc[tabela_exibir.index]
         tabela_exibir["Valor da nota"] = tabela_exibir["Valor da nota"].fillna(0.0)
         tabela_exibir["Valor a receber"] = tabela_exibir["Valor a receber"].fillna(0.0)
         tabela_exibir["Valor pago"] = tabela_exibir["Valor pago"].fillna(0.0)

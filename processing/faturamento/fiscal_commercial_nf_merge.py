@@ -194,7 +194,9 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
                     merged[_c] = "—"
                 else:
                     merged[_c] = 0.0
-        merged["comercial_incompleto"] = merged["comercial_incompleto"].fillna(False).astype(bool)
+        merged["comercial_incompleto"] = (
+            merged["comercial_incompleto"].astype("boolean").fillna(False).astype(bool)
+        )
         merged["valor_venda"] = pd.to_numeric(merged["valor_venda"], errors="coerce").fillna(0.0)
         merged["comissao"] = pd.to_numeric(merged["comissao"], errors="coerce").fillna(0.0)
         merged["custo_produto"] = pd.to_numeric(merged["custo_produto"], errors="coerce").fillna(0.0)
@@ -211,7 +213,9 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         merged["plataforma_resumo"] = merged["plataforma_resumo"].fillna("—").astype(str)
         merged["pedido_resumo"] = merged["pedido_resumo"].fillna("—")
         merged["produto_resumo"] = merged["produto_resumo"].fillna("—")
-        merged["faturamento_nota_vinculada"] = merged["faturamento_nota_vinculada"].fillna(False)
+        merged["faturamento_nota_vinculada"] = (
+            merged["faturamento_nota_vinculada"].astype("boolean").fillna(False).astype(bool)
+        )
 
     _eps_f = 1e-9
     if "Frete_Nota_Export" in merged.columns:

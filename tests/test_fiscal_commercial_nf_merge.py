@@ -37,6 +37,7 @@ def _comm_row(**kwargs: object) -> pd.DataFrame:
         "n_linhas_pedido": 1,
         "produto_resumo": "Prod A",
         "faturamento_nota_vinculada": True,
+        "comercial_incompleto": False,
     }
     base.update(kwargs)
     return pd.DataFrame([base])

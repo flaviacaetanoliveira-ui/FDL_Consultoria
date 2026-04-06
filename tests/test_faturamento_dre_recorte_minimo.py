@@ -6,6 +6,7 @@ from datetime import date
 
 import pandas as pd
 
+from processing.faturamento.config import STATUS_CUSTO_OK
 from faturamento_dre_recorte_minimo import (
     FaturamentoRecorteMinState,
     apply_nf_panel_custo_from_line_grain,
@@ -676,12 +677,48 @@ def test_build_nf_grain_imputa_frete_gap_uma_linha_sem_mudar_resultado_bruto() -
         nf_d_fim=date(2025, 6, 30),
     )
     assert not w
-    assert out.iloc[0]["comercial_incompleto"] is False
+    assert bool(out.iloc[0]["comercial_incompleto"]) is False
     assert abs(float(out.iloc[0]["valor_venda"]) - 630.0) < 1e-6
     assert abs(float(out.iloc[0]["frete"]) - 122.01) < 0.02
     assert abs(float(out.iloc[0]["resultado"]) - 26.55) < 0.02
     adj = apply_nf_panel_resultado_frete_nota_lista(out)
     assert abs(float(adj.iloc[0]["resultado"]) - 148.56) < 0.02
+
+
+def test_build_nf_grain_comercial_incompleto_quando_algum_resultado_nan() -> None:
+    """Qualquer linha com ``Resultado`` ausente marca NF incompleta e ``resultado`` agregado = NaN."""
+    df = pd.DataFrame(
+        {
+            "empresa": ["A", "A"],
+            "org_id": ["o1", "o1"],
+            "Nota_Numero_Normalizado": ["NF1", "NF1"],
+            "Nota_Valor_Liquido_Total": [100.0, 100.0],
+            "Nota_Data_Emissao": pd.to_datetime(["2025-06-10", "2025-06-10"]),
+            "Nota_Situacao": ["Autorizada", "Autorizada"],
+            "Quantidade": [1.0, 1.0],
+            "Preço de lista": [10.0, 10.0],
+            "Nome da plataforma": ["ML", "ML"],
+            "Número do pedido multiloja": ["P1", "P1"],
+            "Taxa de Comissão": [0.0, 0.0],
+            "Frete_Plataforma": [0.0, 0.0],
+            "Imposto": [0.0, 0.0],
+            "Resultado": [5.0, float("nan")],
+            "Descrição": ["X", "Y"],
+            "faturamento_nota_vinculada": [True, True],
+            "Status_Custo": [STATUS_CUSTO_OK, STATUS_CUSTO_OK],
+        }
+    )
+    st = FaturamentoRecorteMinState((), ())
+    out, w = build_nf_grain_dataframe(
+        df,
+        st,
+        ok_nf_dates=True,
+        nf_d_ini=date(2025, 6, 1),
+        nf_d_fim=date(2025, 6, 30),
+    )
+    assert not w and len(out) == 1
+    assert bool(out.iloc[0]["comercial_incompleto"]) is True
+    assert pd.isna(out.iloc[0]["resultado"])
 
 
 def test_apply_nf_panel_frete_gap_fallback_um_pedido() -> None:

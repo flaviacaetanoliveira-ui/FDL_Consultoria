@@ -7,6 +7,7 @@ from datetime import date
 import pandas as pd
 
 from faturamento_dre_recorte_minimo import FaturamentoRecorteMinState, build_nf_grain_dataframe
+from processing.faturamento.config import STATUS_CUSTO_OK
 from processing.faturamento.nf_materializado import (
     NF_FIRST_CONTRACT_COLUMNS,
     SCHEMA_VERSION_NF_FIRST,
@@ -35,6 +36,7 @@ def _line_df() -> pd.DataFrame:
             "Resultado": [10.0, -5.0],
             "Descrição": ["X", "Y"],
             "faturamento_nota_vinculada": [True, True],
+            "Status_Custo": [STATUS_CUSTO_OK, STATUS_CUSTO_OK],
         }
     )
 
@@ -59,6 +61,8 @@ def test_build_nf_materializado_matches_grain_and_contract() -> None:
     )
     assert float(ref.iloc[0]["valor_venda"]) == float(got.iloc[0]["valor_venda"])
     assert float(ref.iloc[0]["resultado"]) == float(got.iloc[0]["resultado"])
+    assert bool(got.iloc[0]["comercial_incompleto"]) is False
+    assert bool(ref.iloc[0]["comercial_incompleto"]) is False
 
 
 def test_nf_first_contract_rejects_empty() -> None:

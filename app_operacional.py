@@ -48,9 +48,6 @@ from processing.faturamento.normalize import (
 )
 from faturamento_dre_recorte_minimo import (
     _min_cal_limits,
-    apply_nf_panel_frete_gap_fallback,
-    apply_nf_panel_resultado_frete_nota_lista,
-    build_nf_grain_dataframe,
     compute_nf_panel_kpis,
     faturamento_min_series_nf_emissao_bounds_dates,
     faturamento_recorte_min_state_from_session,
@@ -6464,10 +6461,8 @@ def _render_faturamento_dre_minimal(
     org_display_name: str,
 ) -> None:
     """
-    Painel **NF-first**: período = **emissão da NF**; **plataforma** restringe o lado **comercial** (pedidos).
-
-    Com ``dataset_faturamento_fiscal.parquet`` válido ao lado do materializado, o **valor faturado (NF)** e a
-    coluna «Faturado» usam esse artefato (Bling); caso contrário mantém-se o faturado do grão comercial (NF-first).
+    Painel **NF-first** só a partir de ``dataset_faturamento_nf_panel.parquet``: merge fiscal↔comercial, frete e
+    **resultado** já calculados na materialização — **sem** grão, merge ou ajustes comerciais no Streamlit.
     """
     _fdl_fat_min_inject_ui_styles()
     _oid = str(org_id)
@@ -6501,8 +6496,36 @@ def _render_faturamento_dre_minimal(
     )
 
     st.caption(
-        "Período por emissão da NF. Faturado (NF) usa o export fiscal Parquet quando o ficheiro está disponível."
+        "Período por emissão da NF. A tabela e os totais vêm **apenas** de "
+        "**`dataset_faturamento_nf_panel.parquet`** (materialização — sem recalcular no app)."
     )
+
+    if not use_nf_panel_baked_effective:
+        st.error(
+            "Esta vista **só** funciona com o painel NF materializado "
+            "(`dataset_faturamento_nf_panel.parquet`). Não há fallback com cálculo no browser."
+        )
+        st.caption(
+            "Execute a **materialização de faturamento** (pipeline habitual) para gerar ou atualizar esse ficheiro "
+            "na pasta do materializado do cliente."
+        )
+        _pe = load_info.get("faturamento_nf_panel_error")
+        if _pe:
+            st.caption(f"Erro ao ler o painel: `{html.escape(str(_pe))}`")
+        elif not use_nf_panel_baked:
+            st.caption(
+                "O painel não foi carregado: ficheiro em falta na pasta do materializado ou leitura ainda não tentada."
+            )
+        elif not isinstance(_df_nf_panel, pd.DataFrame):
+            st.caption("Estado interno: dataframe do painel indisponível.")
+        elif _df_nf_panel.empty:
+            st.info("O painel NF está **vazio** após o escopo (org / consolidado).")
+        elif _is_admin_mode():
+            st.warning(
+                "Contrato do painel incompleto (faltam colunas obrigatórias). "
+                "Rematerialize o faturamento com a versão atual do pipeline."
+            )
+        return
 
     if df.empty and not use_nf_materializado:
         st.info(
@@ -6510,18 +6533,6 @@ def _render_faturamento_dre_minimal(
             "e o **escopo** (empresa ativa / consolidado) na barra lateral."
         )
         return
-
-    if not use_nf_materializado:
-        missing = _faturamento_painel_missing_schema_columns(df)
-        if missing:
-            if _is_admin_mode():
-                st.warning(
-                    "Estrutura de faturamento incompleta para a vista mínima. "
-                    f"Faltam: {', '.join(missing[:12])}{'…' if len(missing) > 12 else ''}."
-                )
-            else:
-                st.warning("Não foi possível apresentar o faturamento. Contacte o suporte.")
-            return
 
     _bounds_parts: list[pd.DataFrame] = []
     _base_bounds = df_nf_pre if use_nf_materializado else df
@@ -6536,8 +6547,8 @@ def _render_faturamento_dre_minimal(
     )
     if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame) and df_nf_pre.empty:
         st.info(
-            "Sem notas no **materializado NF-first** para este escopo. Confirme materialização "
-            "(`dataset_faturamento_nf.parquet`) e **escopo** (org / consolidado)."
+            "Sem linhas no **painel NF** para este escopo. Confirme materialização "
+            "(`dataset_faturamento_nf_panel.parquet`) e **escopo** (org / consolidado)."
         )
         return
     nf_min, nf_max, ok_nf_dates = faturamento_min_series_nf_emissao_bounds_dates(_df_bounds)
@@ -6687,86 +6698,32 @@ def _render_faturamento_dre_minimal(
         if _nf_kpi_fim < _nf_kpi_ini:
             _nf_kpi_fim = _nf_kpi_ini
 
-    if use_nf_materializado:
-        # ``dataset_faturamento_nf_panel.parquet`` = merge fiscal + frete/resultado já calculados na materialização.
-        # ``dataset_faturamento_nf.parquet`` = só grão comercial (contrato NF-first).
-        df_nf_lines = _faturamento_nf_apply_minimal_recorte(
-            df_nf_pre,
-            empresas_sel=_min_state.empresas,
-            plataformas_sel=_min_state.plataformas,
-            nf_d_ini=_nf_kpi_ini,
-            nf_d_fim=_nf_kpi_fim,
-            ok_nf_dates=ok_nf_dates,
-        )
-        if use_nf_panel_baked_effective:
-            df_nf_commercial = df_nf_lines.copy()
-            if "plataforma_resumo" not in df_nf_commercial.columns:
-                if "plataforma" in df_nf_commercial.columns:
-                    df_nf_commercial["plataforma_resumo"] = (
-                        df_nf_commercial["plataforma"].fillna("").astype(str)
-                    )
-                else:
-                    df_nf_commercial["plataforma_resumo"] = "—"
-            _wrn_nf = ()
-        elif nf_first_contract_dataframe_valid(df_nf_pre):
-            df_nf_commercial = df_nf_lines.copy()
-            if "plataforma_resumo" not in df_nf_commercial.columns:
-                if "plataforma" in df_nf_commercial.columns:
-                    df_nf_commercial["plataforma_resumo"] = (
-                        df_nf_commercial["plataforma"].fillna("").astype(str)
-                    )
-                else:
-                    df_nf_commercial["plataforma_resumo"] = "—"
-            _wrn_nf = ()
-        else:
-            df_nf_commercial, _wrn_nf = build_nf_grain_dataframe(
-                df_nf_lines,
-                _min_state,
-                ok_nf_dates=ok_nf_dates,
-                nf_d_ini=_nf_kpi_ini,
-                nf_d_fim=_nf_kpi_fim,
+    # Só chegamos aqui com painel materializado válido: recorte = filtrar linhas já agregadas (sem recomputar DRE).
+    df_nf_lines = _faturamento_nf_apply_minimal_recorte(
+        df_nf_pre,
+        empresas_sel=_min_state.empresas,
+        plataformas_sel=_min_state.plataformas,
+        nf_d_ini=_nf_kpi_ini,
+        nf_d_fim=_nf_kpi_fim,
+        ok_nf_dates=ok_nf_dates,
+    )
+    df_nf_commercial = df_nf_lines.copy()
+    if "plataforma_resumo" not in df_nf_commercial.columns:
+        if "plataforma" in df_nf_commercial.columns:
+            df_nf_commercial["plataforma_resumo"] = (
+                df_nf_commercial["plataforma"].fillna("").astype(str)
             )
-    else:
-        df_nf_commercial, _wrn_nf = build_nf_grain_dataframe(
-            df,
-            _min_state,
-            ok_nf_dates=ok_nf_dates,
-            nf_d_ini=_nf_kpi_ini,
-            nf_d_fim=_nf_kpi_fim,
-        )
-    for _m in _wrn_nf:
-        st.warning(_m)
+        else:
+            df_nf_commercial["plataforma_resumo"] = "—"
 
     use_fiscal_kpi = bool(
         use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame) and fiscal_contract_dataframe_valid(df_fiscal_pre)
     )
-    df_fiscal_cut = pd.DataFrame()
-    if use_nf_panel_baked_effective:
-        if use_fiscal_kpi:
-            df_nf = df_nf_commercial.copy()
-            if _min_state.plataformas:
-                df_nf = _nf_panel_filter_merged_fiscal_by_plataforma_resumo(
-                    df_nf, _min_state.plataformas
-                )
-        else:
-            df_nf = df_nf_commercial.copy()
-    elif use_fiscal_kpi:
-        df_fiscal_cut = _faturamento_fiscal_apply_minimal_recorte(
-            df_fiscal_pre,
-            empresas_sel=_min_state.empresas,
-            nf_d_ini=_nf_kpi_ini,
-            nf_d_fim=_nf_kpi_fim,
-            ok_nf_dates=ok_nf_dates,
+    df_nf = df_nf_commercial.copy()
+    if use_fiscal_kpi and _min_state.plataformas:
+        df_nf = _nf_panel_filter_merged_fiscal_by_plataforma_resumo(
+            df_nf, _min_state.plataformas
         )
-        df_nf = _merge_fiscal_base_with_commercial_nf(df_fiscal_cut, df_nf_commercial)
-        if _min_state.plataformas:
-            df_nf = _nf_panel_filter_merged_fiscal_by_plataforma_resumo(df_nf, _min_state.plataformas)
-    else:
-        df_nf = df_nf_commercial
-
-    if not use_nf_panel_baked_effective:
-        df_nf = apply_nf_panel_frete_gap_fallback(df_nf)
-        df_nf = apply_nf_panel_resultado_frete_nota_lista(df_nf)
 
     # Modo fiscal: df_nf = merge fiscal + comercial (base antes de produto/sinal). KPIs e tabela usam df_nf_panel.
     _prod_opts: list[str] = []
@@ -6863,38 +6820,19 @@ def _render_faturamento_dre_minimal(
     if _is_admin_mode():
         with st.expander("Diagnóstico materializado (admin)", expanded=False):
             _fdl_fat_min_aside(
-                "<strong>Recorte temporal</strong>: <strong>emissão da NF</strong>. "
-                "<strong>Comercial</strong> — venda (lista), comissão, frete, imposto, despesa fixa, resultado e margem: "
-                "somas dos <strong>pedidos ligados</strong> à NF; <strong>Plataforma</strong> filtra só esse lado. "
-                "Se o frete reflete o excesso do faturado (NF) sobre a lista (típico frete na nota de saída), o "
-                "<strong>resultado</strong> inclui a correção +frete (comissão e imposto mantêm as regras das linhas). "
-                "<strong>Fiscal</strong> — valor faturado (NF) e coluna «Faturado»: "
-                "<strong>1× por NF</strong> via <code>dataset_faturamento_fiscal.parquet</code> quando válido; "
-                "caso contrário, valor líquido do grão NF-first. Despesa fixa = 5% sobre venda (lista) por NF."
+                "<strong>Fonte única</strong>: <code>dataset_faturamento_nf_panel.parquet</code> — merge fiscal↔comercial, "
+                "frete, resultado e colunas de exibição <strong>pré-calculados na materialização</strong>. "
+                "Neste ecrã só há <strong>filtros</strong> (datas, empresa, plataforma, produto, lucro/prejuízo) sobre essas linhas."
             )
             if use_fiscal_parquet:
                 _fdl_fat_min_aside(
-                    "Com Parquet fiscal ativo, o merge é <em>left join</em> fiscal + comercial; "
-                    "se o filtro <strong>Plataforma</strong> tiver opções, a tabela e os KPIs deste bloco ficam só com NFs "
-                    "cuja <code>plataforma_resumo</code> corresponde à seleção.",
+                    "O join fiscal já está refletido no painel materializado. Com filtro <strong>Plataforma</strong>, "
+                    "a tabela mostra só NFs cuja <code>plataforma_resumo</code> corresponde à seleção.",
                     tight=True,
                 )
-            if use_nf_materializado:
-                _fdl_fat_min_aside(
-                    "Fonte comercial: <strong>materializado NF-first</strong>"
-                    + (
-                        " · painel com merge fiscal + frete/resultado <strong>pré-calculados</strong> "
-                        "(<code>dataset_faturamento_nf_panel.parquet</code>) — sem recalcular no Streamlit."
-                        if load_info.get("faturamento_nf_panel_baked")
-                        else "."
-                    ),
-                    tight=True,
-                )
-            else:
-                _fdl_fat_min_aside(
-                    "Fonte comercial: <strong>agregação em memória</strong> (grão pedido).",
-                    tight=True,
-                )
+            if load_info.get("faturamento_nf_panel_path"):
+                _pp = html.escape(str(load_info.get("faturamento_nf_panel_path")))
+                _fdl_fat_min_aside(f"Path painel NF: <code>{_pp}</code>", tight=True)
             if use_nf_materializado and load_info.get("faturamento_nf_first_path"):
                 _p = html.escape(str(load_info.get("faturamento_nf_first_path")))
                 _fdl_fat_min_aside(f"Path Parquet NF-first: <code>{_p}</code>", tight=True)
@@ -6947,8 +6885,15 @@ def _render_faturamento_dre_minimal(
                     f"<strong>Estado fiscal:</strong> {' · '.join(html.escape(str(x)) for x in _fiscal_why)}"
                 )
             if use_fiscal_kpi:
+                _df_fiscal_cut_admin = _faturamento_fiscal_apply_minimal_recorte(
+                    df_fiscal_pre,
+                    empresas_sel=_min_state.empresas,
+                    nf_d_ini=_nf_kpi_ini,
+                    nf_d_fim=_nf_kpi_fim,
+                    ok_nf_dates=ok_nf_dates,
+                )
                 _aud_sum = float(
-                    pd.to_numeric(df_fiscal_cut["Valor_Liquido_NF"], errors="coerce").fillna(0.0).sum()
+                    pd.to_numeric(_df_fiscal_cut_admin["Valor_Liquido_NF"], errors="coerce").fillna(0.0).sum()
                 )
                 _kp_vf = float(_kp["valor_faturado_nf"])
                 _match = abs(_aud_sum - _kp_vf) < 0.02

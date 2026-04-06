@@ -12,4 +12,5 @@ Valor pago	float64
 Diferença	float64
 Data de pagamento	object
 Data de emissão	object
+Data período repasse	object
 empresa	object

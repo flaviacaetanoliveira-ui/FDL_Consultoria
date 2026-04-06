@@ -476,6 +476,40 @@ def build_liberacoes(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     return liberacoes_tratadas, liberacoes_agregadas
 
 
+def _deduplicar_liberacoes_concatenadas(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Vários ficheiros em Liberações_ML (mensal + anual, ou cópias) repetem o mesmo lançamento.
+    Sem deduplicar, o ``groupby`` na etapa3 soma ``Valor pago`` em duplicata (ex.: exactamente 2×).
+    """
+    if df.empty:
+        return df
+    out = df.copy()
+    if "Data de pagamento" in out.columns:
+        out["__dp_key"] = pd.to_datetime(out["Data de pagamento"], errors="coerce").dt.strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+    else:
+        out["__dp_key"] = ""
+    subset = [
+        c
+        for c in (
+            "EXTERNAL_REFERENCE",
+            "ORDER_ID",
+            "PACK_ID",
+            "__dp_key",
+            "NET_CREDIT_AMOUNT",
+            "NET_DEBIT_AMOUNT",
+            "Valor pago líquido",
+            "Valor pago",
+            "RECORD_TYPE",
+            "DESCRIPTION",
+        )
+        if c in out.columns
+    ]
+    out = out.drop_duplicates(subset=subset, keep="first").drop(columns=["__dp_key"], errors="ignore")
+    return out.reset_index(drop=True)
+
+
 def build_liberacoes_from_folder(folder: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     files = list_liberacoes_files(folder)
     if not files:
@@ -496,6 +530,7 @@ def build_liberacoes_from_folder(folder: Path) -> tuple[pd.DataFrame, pd.DataFra
         tratadas_por_arquivo.append(liberacoes_tratadas)
 
     liberacoes_tratadas_all = pd.concat(tratadas_por_arquivo, ignore_index=True)
+    liberacoes_tratadas_all = _deduplicar_liberacoes_concatenadas(liberacoes_tratadas_all)
     base = liberacoes_tratadas_all[
         liberacoes_tratadas_all["EXTERNAL_REFERENCE"].fillna("").astype(str).str.strip().ne("")
     ].copy()

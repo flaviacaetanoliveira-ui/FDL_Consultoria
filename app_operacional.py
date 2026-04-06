@@ -244,6 +244,14 @@ def _enabled_finance_modules() -> set[str]:
     return out & valid or {"repasse", "frete", "faturamento"}
 
 
+def _user_perfil_acesso_operacional_only() -> bool:
+    """Cadastro ``perfil_acesso=operacional``: só Repasse/Frete (sem Faturamento nem Comercial na sidebar)."""
+    if not st.session_state.get("logged_in"):
+        return False
+    p = str(st.session_state.get("fdl_perfil_acesso", "completo")).strip().lower()
+    return p == "operacional"
+
+
 def _repasse_sem_bling() -> bool:
     """Cliente sem Bling: ações operacionais usam «Baixado» em vez de «Baixar no Bling»."""
     raw = os.environ.get("FDL_REPASSE_SEM_BLING", "").strip().lower()
@@ -320,6 +328,12 @@ if st.session_state["op_financeiro_view"] not in _enabled_modules:
     st.session_state["op_financeiro_view"] = "repasse" if "repasse" in _enabled_modules else "frete"
 
 if "faturamento" not in _enabled_modules and st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY) in (
+    FDL_PRODUCT_AREA_FATURAMENTO_DRE,
+    FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS,
+):
+    st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FINANCEIRO
+
+if _user_perfil_acesso_operacional_only() and st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY) in (
     FDL_PRODUCT_AREA_FATURAMENTO_DRE,
     FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS,
 ):
@@ -5886,7 +5900,7 @@ def _render_comercial_pedidos_kpi_cards(kpis: dict[str, float | int]) -> None:
                 vcom,
                 tier="primary",
                 accent=True,
-                title="Valor comercial: Σ Preço de lista × Quantidade · só pedidos atendidos · sem NF.",
+                title="Valor comercial: Σ Vl_Venda (materializado) ou lista×qtd · só pedidos atendidos · sem NF.",
             ),
         ]
     )
@@ -6238,7 +6252,8 @@ def _render_comercial_pedidos_analise(
     with st.container(border=True):
         st.markdown('<p class="fdl-cp-filtros-h">Filtros</p>', unsafe_allow_html=True)
         st.markdown(
-            '<p class="fdl-cp-caption">Só <strong>pedidos atendidos</strong> · valores = <strong>preço lista × qtd</strong> · sem NF.</p>',
+            '<p class="fdl-cp-caption">Só <strong>pedidos atendidos</strong> · valores = coluna <strong>Vl_Venda</strong> '
+            "da tabela materializada (se existir); senão <strong>preço lista × qtd</strong> · sem NF.</p>",
             unsafe_allow_html=True,
         )
         if emp_opts:
@@ -6324,7 +6339,7 @@ def _render_comercial_pedidos_analise(
     with st.container(border=True):
         st.markdown(
             '<p class="fdl-cp-title-main">ABC por receita</p>'
-            '<p class="fdl-cp-title-sub">Onde está a receita comercial · Pareto 80% / 95% · mesma base lista × qtd</p>',
+            '<p class="fdl-cp-title-sub">Onde está a receita comercial · Pareto 80% / 95% · base = Vl_Venda materializado (ou lista×qtd)</p>',
             unsafe_allow_html=True,
         )
         if abc_v.empty:
@@ -6340,7 +6355,7 @@ def _render_comercial_pedidos_analise(
                 "Valor comercial (lista)": TextColumn(
                     "Receita (lista)",
                     width="medium",
-                    help="Σ preço lista × qtd no recorte (pedidos atendidos).",
+                    help="Σ Vl_Venda no recorte (pedidos atendidos); senão lista×qtd.",
                 ),
                 "Part %": TextColumn(
                     "Part. %",
@@ -6444,17 +6459,17 @@ def _render_comercial_pedidos_analise(
                 "Valor lista mês -2": TextColumn(
                     "R$ lista M-2",
                     width="small",
-                    help="Receita comercial (preço lista × qtd) no 1º mês fechado.",
+                    help="Σ Vl_Venda (ou lista×qtd) no 1º mês fechado.",
                 ),
                 "Valor lista mês -1": TextColumn(
                     "R$ lista M-1",
                     width="small",
-                    help="Receita comercial no mês intermediário.",
+                    help="Σ Vl_Venda (ou lista×qtd) no mês intermediário.",
                 ),
                 "Valor lista mês atual": TextColumn(
                     "R$ lista últ.",
                     width="small",
-                    help="Receita comercial no último mês fechado.",
+                    help="Σ Vl_Venda (ou lista×qtd) no último mês fechado.",
                 ),
                 "Tendência": TextColumn(
                     "Tendência",
@@ -9580,10 +9595,15 @@ if _fv == "frete":
     tabela_geral = pd.DataFrame()
     info = frete_info
     _fdl_global_trace("frete: dados carregados")
-elif _fdl_product_area in (
-    FDL_PRODUCT_AREA_FATURAMENTO_DRE,
-    FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS,
-) and "faturamento" in _enabled_modules:
+elif (
+    _fdl_product_area
+    in (
+        FDL_PRODUCT_AREA_FATURAMENTO_DRE,
+        FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS,
+    )
+    and "faturamento" in _enabled_modules
+    and not _user_perfil_acesso_operacional_only()
+):
     _allowed_org_key = ",".join(sorted(o.org_id for o in _app_ctx.organizations))
     _fdl_global_trace("faturamento_dre: a carregar _load_faturamento_dataframe_cached")
     with st.spinner("A carregar dados de Faturamento…"):
@@ -9832,7 +9852,7 @@ with st.sidebar:
     _empresas_usuario = list(st.session_state["empresas_permitidas"])
     _nomes_nav = nomes_permitidos_com_registro(_empresas_usuario)
 
-    _has_gerencial = "faturamento" in _enabled_modules
+    _has_gerencial = "faturamento" in _enabled_modules and not _user_perfil_acesso_operacional_only()
     _has_operacional = "repasse" in _enabled_modules or "frete" in _enabled_modules
     _first_nav_section = True
 
@@ -9866,8 +9886,8 @@ with st.sidebar:
             type="primary" if _sb_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS else "secondary",
             on_click=_sb_nav_set_comercial_pedidos,
             help=(
-                "Análise comercial sobre pedidos atendidos (Data, Preço de lista × Quantidade), sem NF. "
-                "Filtros no painel; base consolidada como Faturamento & DRE."
+                "Análise comercial sobre pedidos atendidos; receita por linha = **Vl_Venda** da tabela materializada "
+                "(fallback lista×qtd). Sem NF. Filtros no painel; base consolidada como Faturamento & DRE."
             ),
         )
 

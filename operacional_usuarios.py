@@ -3,6 +3,9 @@ Cadastro local de usuários do app operacional.
 
 Controle de acesso por cliente (rótulo exibido na UI) e lista de empresas permitidas.
 
+Opcional por utilizador: ``perfil_acesso`` — ``"completo"`` (padrão): Gerencial + Operacional na sidebar;
+``"operacional"``: só **Repasse** e **Frete** (sem Faturamento & DRE e sem Comercial & pedidos).
+
 Senhas: pode usar texto em `senha` (legado / dev) ou `senha_pbkdf2` (salt + hash, sem plain no repo).
 Opcional: defina `FDL_GAMA_HOME_LOGIN_PASSWORD` em variável de ambiente ou em st.secrets
 (Streamlit Cloud) para validar em texto — útil para rodar sem redeploy; não commite esse valor.
@@ -108,6 +111,12 @@ def _senha_ok(row: dict[str, Any], senha: str) -> bool:
     return str(row.get("senha", "")) == senha
 
 
+def normalizar_perfil_acesso(raw: object) -> str:
+    """Devolve ``completo`` ou ``operacional`` (únicos valores suportados na UI)."""
+    p = str(raw if raw is not None else "completo").strip().lower()
+    return p if p in ("completo", "operacional") else "completo"
+
+
 # Chaves devem ser e-mail em minúsculas para lookup direto.
 USUARIOS: dict[str, dict[str, Any]] = {
     "flavia.caetanoliveira@gmail.com": {
@@ -124,6 +133,13 @@ USUARIOS: dict[str, dict[str, Any]] = {
         "senha_pbkdf2": _GAMA_PBKDF2,
         "cliente": "Grupo Mega Fácil",
         "empresas": ["Gama Home", "Mega Fácil", "Mega Star", "Móveis EAP"],
+        "perfil_acesso": "operacional",
+    },
+    "adm@megafacilmoveis.com.br": {
+        "senha": "Mega@facil",
+        "cliente": "Grupo Mega Fácil",
+        "empresas": ["Gama Home", "Mega Fácil", "Mega Star", "Móveis EAP"],
+        "perfil_acesso": "completo",
     },
     "esquilomoveis1@gmail.com": {
         "nome": "Flávio",
@@ -164,7 +180,7 @@ def _login_email_allowed(email_norm: str) -> bool:
 def autenticar(email: str, senha: str) -> dict[str, str | list[str]] | None:
     """
     Valida e-mail e senha. Retorna payload para a sessão ou None.
-    Campos retornados: email, cliente, empresas.
+    Campos retornados: email, cliente, empresas, perfil_acesso (completo | operacional).
     """
     email_norm = _norm_email(email)
     if not _login_email_allowed(email_norm):
@@ -181,4 +197,5 @@ def autenticar(email: str, senha: str) -> dict[str, str | list[str]] | None:
         "email": _norm_email(email),
         "cliente": str(row.get("cliente", "")),
         "empresas": [str(x) for x in empresas],
+        "perfil_acesso": normalizar_perfil_acesso(row.get("perfil_acesso")),
     }

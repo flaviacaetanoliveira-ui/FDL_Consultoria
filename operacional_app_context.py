@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import streamlit as st
 
-from operacional_usuarios import USUARIOS, autenticar, normalizar_email
+from operacional_usuarios import USUARIOS, autenticar, normalizar_email, normalizar_perfil_acesso
 
 
 @dataclass(frozen=True)
@@ -641,6 +641,9 @@ def require_app_user() -> AppUserContext:
                         st.session_state["usuario"] = email.strip()
                         st.session_state["cliente"] = row["cliente"]
                         st.session_state["empresas_permitidas"] = list(row["empresas"])
+                        st.session_state["fdl_perfil_acesso"] = normalizar_perfil_acesso(
+                            row.get("perfil_acesso")
+                        )
                         st.session_state[SESSION_ACTIVE_ORG_KEY] = None
                         st.rerun()
                     else:
@@ -667,7 +670,7 @@ def require_app_user() -> AppUserContext:
 
 def logout_operacional_user() -> None:
     st.session_state["logged_in"] = False
-    for _k in ("usuario", "cliente", "empresas_permitidas"):
+    for _k in ("usuario", "cliente", "empresas_permitidas", "fdl_perfil_acesso"):
         st.session_state.pop(_k, None)
     st.session_state[SESSION_ACTIVE_ORG_KEY] = None
 

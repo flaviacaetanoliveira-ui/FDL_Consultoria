@@ -1,8 +1,10 @@
 """
-Análise comercial sobre a tabela de **pedidos** (grão linha): apenas **atendidos**, sem NF / lógica fiscal.
+Análise comercial sobre a tabela **materializada** de faturamento (grão linha): apenas **atendidos**,
+sem lógica fiscal no app.
 
-Usado pela área «Comercial & pedidos» no app operacional; métricas baseadas em
-**Preço de lista** e **Quantidade**.
+Valores de receita comercial por linha usam **`Vl_Venda`** quando a coluna existe no Parquet
+(tabela final do pipeline); só faz fallback para **Preço de lista × Quantidade** em bases antigas
+sem essa coluna.
 """
 
 from __future__ import annotations
@@ -128,8 +130,13 @@ def filter_ui(
 
 
 def valor_comercial_lista_series(df: pd.DataFrame) -> pd.Series:
+    """
+    Valor comercial por linha: prioriza ``Vl_Venda`` já gravado na materialização; fallback q×lista.
+    """
     if df.empty:
         return pd.Series(dtype=float)
+    if "Vl_Venda" in df.columns:
+        return pd.to_numeric(df["Vl_Venda"], errors="coerce").fillna(0.0).astype(float)
     q = pd.to_numeric(df["Quantidade"], errors="coerce").fillna(0.0) if "Quantidade" in df.columns else 0.0
     pl = pd.to_numeric(df["Preço de lista"], errors="coerce").fillna(0.0) if "Preço de lista" in df.columns else 0.0
     return q * pl

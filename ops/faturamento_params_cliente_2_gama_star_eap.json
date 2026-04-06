@@ -32,6 +32,14 @@
       "notas_saida_dir": "Móveis EAP/notas_saida",
       "aliquota_imposto": 0.11,
       "aliquota_despesas_fixas": 0.05
+    },
+    {
+      "org_id": "mega_facil",
+      "empresa": "Mega Fácil",
+      "pedidos_dir": "Mega Facil/Pedidos",
+      "notas_saida_dir": "Mega Facil/notas_saida",
+      "aliquota_imposto": 0.11,
+      "aliquota_despesas_fixas": 0.05
     }
   ]
 }

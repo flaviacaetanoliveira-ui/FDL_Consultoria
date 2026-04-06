@@ -6784,7 +6784,7 @@ def _render_faturamento_dre_minimal(
             )
         else:
             st.caption("Sem «produto_resumo» no recorte atual — filtro por produto indisponível.")
-        st.selectbox(
+        _venda_sinal_ui = st.selectbox(
             "Sinal da venda (lista por NF)",
             options=("todos", "positiva", "negativa", "zero"),
             format_func=lambda x: {
@@ -6802,13 +6802,15 @@ def _render_faturamento_dre_minimal(
                 "Não altera o valor faturado (NF) vindo do Parquet fiscal."
             ),
         )
+    else:
+        _venda_sinal_ui = str(st.session_state.get("fdl_fat_min_venda_sinal", "todos"))
 
     _prod_sel = tuple(
         str(x).strip()
         for x in (st.session_state.get("fdl_fat_min_prod") or [])
         if str(x).strip()
     )
-    _venda_sinal = str(st.session_state.get("fdl_fat_min_venda_sinal", "todos")).strip().lower()
+    _venda_sinal = str(_venda_sinal_ui or "todos").strip().lower()
     df_nf_panel = _faturamento_dre_apply_produto_e_sinal_venda(
         df_nf,
         produtos_sel=_prod_sel,

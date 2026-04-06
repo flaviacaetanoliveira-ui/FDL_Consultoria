@@ -13,7 +13,7 @@ from fdl_paths import resolve_pasta_vendas_ml
 
 # Incrementar quando o pipeline de bases mudar (ex.: conceito de Valor pago nas liberações).
 # Invalida st.cache_data sem depender só do botão «Atualizar dados».
-PIPELINE_DATA_REVISION = 5
+PIPELINE_DATA_REVISION = 6
 
 try:
     import streamlit as st

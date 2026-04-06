@@ -139,6 +139,26 @@ def _union_liberacoes_files_sorted(folders: list[Path]) -> list[Path]:
     return sorted(by_res.values(), key=lambda x: x.stat().st_mtime, reverse=True)
 
 
+def _dedup_shopee_liberacao_linhas(part: pd.DataFrame) -> pd.DataFrame:
+    """
+    Export Shopee (aba Renda): o mesmo crédito pode aparecer em linhas repetidas (sobretudo em 2026);
+    antes do ``groupby`` por pedido com ``sum``, isso duplicava ``Valor pago``. Colapsa por
+    pedido + dia civil do pagamento + valor arredondado (paridade com liberações ML).
+    """
+    if part.empty or "N° de venda" not in part.columns:
+        return part
+    out = part.copy()
+    sk = out["N° de venda"].fillna("").astype(str).str.strip()
+    day = pd.to_datetime(out["Data de pagamento"], errors="coerce").dt.normalize()
+    vp = pd.to_numeric(out["Valor pago"], errors="coerce").round(2)
+    out["_sk"], out["_day"], out["_vp"] = sk, day, vp
+    m = sk.ne("") & vp.notna()
+    ok = out.loc[m].drop_duplicates(subset=["_sk", "_day", "_vp"], keep="first")
+    rest = out.loc[~m].drop(columns=["_sk", "_day", "_vp"], errors="ignore")
+    ok = ok.drop(columns=["_sk", "_day", "_vp"], errors="ignore")
+    return pd.concat([ok, rest], ignore_index=True)
+
+
 def _read_amazon_repo_file(path: Path) -> pd.DataFrame:
     """
     Repositório Amazon tem cabeçalho real após linhas descritivas.
@@ -450,6 +470,7 @@ def _build_conciliacao_shopee(base_dir: str | Path) -> pd.DataFrame:
         part = part[part["N° de venda"].ne("")].copy()
         if part.empty:
             continue
+        part = _dedup_shopee_liberacao_linhas(part)
         # Consolida por pedido no ficheiro (pode haver múltiplos lançamentos por pedido).
         part = part.groupby("N° de venda", as_index=False).agg(
             {"Data de pagamento": "min", "Valor pago": "sum"}

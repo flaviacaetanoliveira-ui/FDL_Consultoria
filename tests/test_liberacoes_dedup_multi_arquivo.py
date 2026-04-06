@@ -26,6 +26,33 @@ def test_dedup_remove_linhas_identicas_repetidas() -> None:
     assert float(out["Valor pago"].iloc[0]) == 188.91
 
 
+def test_dedup_colapsa_mesmo_credito_com_descricao_ou_hora_diferente() -> None:
+    """Exports sobrepostos: mesmo N° venda, mesmo valor, mesmo dia; só muda descrição ou hora."""
+    base = {
+        "EXTERNAL_REFERENCE": "VENDA2026",
+        "ORDER_ID": "1",
+        "PACK_ID": "",
+        "Data de pagamento": pd.Timestamp("2026-02-03 18:00:00"),
+        "NET_CREDIT_AMOUNT": 219.59,
+        "NET_DEBIT_AMOUNT": 0.0,
+        "Valor pago líquido": 219.59,
+        "Valor pago": 219.59,
+        "RECORD_TYPE": "release",
+        "DESCRIPTION": "payment",
+    }
+    alt = {
+        **base,
+        "Data de pagamento": pd.Timestamp("2026-02-03 12:00:00"),
+        "DESCRIPTION": "Payment",
+        "NET_CREDIT_AMOUNT": 219.6,
+        "Valor pago": 219.59,
+        "Valor pago líquido": 219.59,
+    }
+    out = _deduplicar_liberacoes_concatenadas(pd.DataFrame([base, alt]))
+    assert len(out) == 1
+    assert float(out["Valor pago"].iloc[0]) == 219.59
+
+
 def test_dedup_mantem_lancamentos_distintos() -> None:
     a = {
         "EXTERNAL_REFERENCE": "A",

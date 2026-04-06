@@ -480,6 +480,11 @@ def _deduplicar_liberacoes_concatenadas(df: pd.DataFrame) -> pd.DataFrame:
     """
     Vários ficheiros em Liberações_ML (mensal + anual, ou cópias) repetem o mesmo lançamento.
     Sem deduplicar, o ``groupby`` na etapa3 soma ``Valor pago`` em duplicata (ex.: exactamente 2×).
+
+    1) Linhas byte-a-byte iguais (incl. tipo/descrição).
+    2) Mesmo evento económico com texto/hora ligeiramente diferente entre exports — típico em 2026
+       quando dois CSV repetem o mesmo crédito: chave **venda + dia civil do pagamento + Valor pago**
+       (alinhado à preferência EXTERNAL_REFERENCE, senão PACK_ID, como na etapa3).
     """
     if df.empty:
         return df
@@ -490,7 +495,7 @@ def _deduplicar_liberacoes_concatenadas(df: pd.DataFrame) -> pd.DataFrame:
         )
     else:
         out["__dp_key"] = ""
-    subset = [
+    subset_estrito = [
         c
         for c in (
             "EXTERNAL_REFERENCE",
@@ -506,8 +511,33 @@ def _deduplicar_liberacoes_concatenadas(df: pd.DataFrame) -> pd.DataFrame:
         )
         if c in out.columns
     ]
-    out = out.drop_duplicates(subset=subset, keep="first").drop(columns=["__dp_key"], errors="ignore")
-    return out.reset_index(drop=True)
+    out = out.drop_duplicates(subset=subset_estrito, keep="first").drop(
+        columns=["__dp_key"], errors="ignore"
+    )
+
+    ext = out.get("EXTERNAL_REFERENCE", pd.Series("", index=out.index, dtype=str))
+    ext = ext.fillna("").astype(str).str.strip()
+    pack = out.get("PACK_ID", pd.Series("", index=out.index, dtype=str))
+    pack = pack.fillna("").astype(str).str.strip()
+    sale_key = ext.where(ext.ne(""), pack)
+    missing = sale_key.eq("")
+    sale_key = sale_key.where(
+        ~missing, "__noref_" + pd.Series(range(len(out)), dtype=str, index=out.index)
+    )
+
+    dtp = out.get("Data de pagamento", pd.Series(pd.NaT, index=out.index))
+    day = pd.to_datetime(dtp, errors="coerce").dt.normalize()
+    vp = pd.to_numeric(out.get("Valor pago", pd.Series(pd.NA, index=out.index)), errors="coerce").round(2)
+
+    out["__sk"] = sale_key
+    out["__day"] = day
+    out["__vp"] = vp
+    m_ok = vp.notna()
+    part_ok = out.loc[m_ok].drop_duplicates(subset=["__sk", "__day", "__vp"], keep="first")
+    part_na = out.loc[~m_ok].drop(columns=["__sk", "__day", "__vp"], errors="ignore")
+    part_ok = part_ok.drop(columns=["__sk", "__day", "__vp"], errors="ignore")
+    out = pd.concat([part_ok, part_na], ignore_index=True)
+    return out
 
 
 def build_liberacoes_from_folder(folder: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:

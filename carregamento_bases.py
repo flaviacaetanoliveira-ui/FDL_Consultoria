@@ -11,9 +11,10 @@ from etapa1_vendas import build_vendas_tratadas_from_folder
 from etapa2_liberacoes import build_liberacoes_from_folder
 from fdl_paths import resolve_pasta_vendas_ml
 
-# Incrementar quando o pipeline de bases mudar (ex.: conceito de Valor pago nas liberações).
+# Incrementar quando o pipeline de bases mudar (ex.: conceito de Valor pago nas liberações)
+# ou após atualização em massa das pastas-fonte dos clientes (invalida caches do app).
 # Invalida st.cache_data sem depender só do botão «Atualizar dados».
-PIPELINE_DATA_REVISION = 6
+PIPELINE_DATA_REVISION = 7
 
 try:
     import streamlit as st

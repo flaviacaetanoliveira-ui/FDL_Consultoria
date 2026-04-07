@@ -1185,6 +1185,34 @@ def _repasse_materialized_url_str() -> str:
         return ""
 
 
+def _repasse_resolved_materialized_file() -> Path | None:
+    """Path absoluto do CSV/XLSX de repasse materializado, se existir (mesma resolução que ``_load_data``)."""
+    path_s = (_repasse_materialized_path_str() or "").strip()
+    if not path_s:
+        return None
+    path = Path(path_s).expanduser()
+    if not path.is_absolute():
+        path = (_REPO_APP_ROOT / path).resolve()
+    else:
+        path = path.resolve()
+    return path if path.is_file() else None
+
+
+def _repasse_materialized_source_stat_token() -> str:
+    """
+    mtime e tamanho do ficheiro consolidado na chave de cache do repasse.
+    Após rematerializar com o mesmo path, o Streamlit deixa de servir dados antigos (antes só TTL 900s).
+    """
+    try:
+        p = _repasse_resolved_materialized_file()
+        if p is None:
+            return "repasse_no_file"
+        stt = p.stat()
+        return f"repasse_file|mtime_ns={stt.st_mtime_ns}|size={stt.st_size}"
+    except OSError:
+        return "repasse_stat_err"
+
+
 def _frete_consume_mode() -> str:
     raw = os.environ.get("FDL_FRETE_CONSUME_MODE", "").strip().lower()
     if raw in {"materialized", "live"}:
@@ -3402,7 +3430,7 @@ def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
 
 
 def _repasse_load_cache_signature(org_id: str) -> str:
-    """Chave de cache do carregamento repasse: muda com org, revisão e caminhos de materialização."""
+    """Chave de cache do carregamento repasse: muda com org, revisão, caminhos e mtime do ficheiro materializado."""
     return "|".join(
         [
             str(org_id),
@@ -3412,6 +3440,7 @@ def _repasse_load_cache_signature(org_id: str) -> str:
             str(_repasse_materialized_url_str()).strip(),
             _data_source_mode(),
             str(_strict_materialized()),
+            _repasse_materialized_source_stat_token(),
         ]
     )
 

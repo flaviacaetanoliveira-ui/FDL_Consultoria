@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-05T18:47:05Z",
-  "source_signature": "fdc603c4652c86ce6505dd9f127bb3f5",
+  "generated_at": "2026-04-07T09:49:12Z",
+  "source_signature": "178a5b81ce652cdf7c94f4dff1e4a04b",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "let_decor",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "let_decor",
   "cnpj": null,
-  "row_count": 10919,
+  "row_count": 11122,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -24,6 +24,7 @@
     "Diferença",
     "Data de pagamento",
     "Data de emissão",
+    "Data período repasse",
     "empresa",
     "cliente_id",
     "empresa_id",
@@ -33,7 +34,7 @@
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
-    "linhas": 10919,
+    "linhas": 11122,
     "arquivos_contas_lidos": 0,
     "col_situacao": "",
     "col_numero": ""

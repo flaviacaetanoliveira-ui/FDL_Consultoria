@@ -7067,6 +7067,9 @@ def _render_faturamento_dre_minimal(
     # KPIs e DRE gerencial: mesmo universo das NFs no **período de emissão** (+ empresa / plataforma).
     # Não cortar por produto nem por lucro/prejuízo — a tabela abaixo continua a usar ``df_nf_panel``.
     _kp = compute_nf_panel_kpis(df_nf)
+    _kp_tbl_cmp: dict[str, float | int] | None = (
+        compute_nf_panel_kpis(df_nf_panel) if len(df_nf_panel) != len(df_nf) else None
+    )
 
     _base_n = (
         len(df_nf_pre)
@@ -7079,6 +7082,19 @@ def _render_faturamento_dre_minimal(
     if len(df_nf_panel) != len(df_nf):
         _cap_tbl += " após produto / resultado comercial"
     st.caption(f"{_cap_nf}. {_cap_tbl} · base {_base_n}{_base_tail}")
+    _n_kpi = int(_kp["n_nf"])
+    _n_tbl = len(df_nf_panel)
+    if _n_tbl == _n_kpi:
+        st.caption(
+            "Os **cards** e a **tabela** usam o **mesmo** conjunto de notas — os totais batem linha a linha."
+        )
+    else:
+        st.caption(
+            f"**{_n_kpi - _n_tbl}** nota(s) entram nos **cards** (filtros de emissão) mas **não** na tabela "
+            "(produto / lucro·prejuízo). **Venda** e **faturado** nos cards **incluem** essas notas. "
+            "O **resultado em R$** pode ficar **igual** ao que obterias só pela tabela se essas notas tiverem "
+            "resultado em branco ou ~zero (a soma ignora NaN)."
+        )
 
     if _is_admin_mode():
         with st.expander("Diagnóstico materializado (admin)", expanded=False):
@@ -7088,6 +7104,20 @@ def _render_faturamento_dre_minimal(
                 "<strong>KPIs</strong> usam só período de emissão NF + empresa + plataforma; "
                 "<strong>produto / lucro·prejuízo</strong> filtram apenas a <strong>tabela</strong>."
             )
+            if _kp_tbl_cmp is not None:
+                _vv_k = float(_kp["valor_venda"])
+                _vv_t = float(_kp_tbl_cmp["valor_venda"])
+                _vf_k = float(_kp["valor_faturado_nf"])
+                _vf_t = float(_kp_tbl_cmp["valor_faturado_nf"])
+                _rs_k = float(_kp["resultado"])
+                _rs_t = float(_kp_tbl_cmp["resultado"])
+                _fdl_fat_min_aside(
+                    "<strong>Conferência (KPIs = emissão · Tabela = recorte comercial)</strong> — "
+                    f"venda lista: <strong>{_vv_k:.2f}</strong> vs <strong>{_vv_t:.2f}</strong>; "
+                    f"faturado NF: <strong>{_vf_k:.2f}</strong> vs <strong>{_vf_t:.2f}</strong>; "
+                    f"Σ resultado: <strong>{_rs_k:.2f}</strong> vs <strong>{_rs_t:.2f}</strong>.",
+                    tight=True,
+                )
             if use_fiscal_parquet:
                 _fdl_fat_min_aside(
                     "O join fiscal já está refletido no painel materializado. Com filtro <strong>Plataforma</strong>, "

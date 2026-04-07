@@ -9051,25 +9051,22 @@ def _devolucoes_is_dup_suffix_col(name: object) -> bool:
     return bool(re.search(r"\.\d+$", str(name or "")))
 
 
-def _devolucoes_is_operational_date_col(name: str) -> bool:
-    if name == "Data da venda" or _devolucoes_is_dup_suffix_col(name):
-        return False
-    n = str(name).lower()
-    if "data" not in n:
-        return False
-    if name in {"lib_ultima_data_pagamento"}:
-        return False
-    return True
-
-
 def _devolucoes_audit_column_names() -> tuple[str, ...]:
     return (
-        "arquivo_origem_venda",
+        "vinculo_tipo",
+        "vinculo_confianca",
         "vinculo_detalhe",
+        "reembolso_valor_inferido",
+        "lib_n_eventos",
+        "lib_ultima_data_pagamento",
         "lib_descricoes_amostra",
         "lib_soma_net_debito",
+        "jaci_cep_15155038",
         "jaci_endereco_score",
         "jaci_endereco_normalizado",
+        "arquivo_origem_venda",
+        "candidato_motivo",
+        "empresa",
         "cliente_id",
         "empresa_id",
         "cnpj",
@@ -9077,49 +9074,37 @@ def _devolucoes_audit_column_names() -> tuple[str, ...]:
     )
 
 
-def _devolucoes_cols_tabela_principal(d: pd.DataFrame) -> list[str]:
-    """
-    Colunas visíveis por defeito: leitura operacional (sem export ML largo nem auditoria).
-    """
-    pool_ex = _devolucoes_pool_excluded_redundant(d)
-    g1 = (
-        "N° de venda",
-        "Data da venda",
-        "status_interno",
-        "acao_sugerida",
-        "status_ml_texto",
-        "classificacao_reembolso",
-        "reembolso_valor_inferido",
-        "vinculo_tipo",
-        "vinculo_confianca",
-        "empresa",
-    )
-    g2 = (
-        "Total (BRL)",
-        "Cancelamentos e reembolsos (BRL)",
-        "lib_n_eventos",
-        "lib_ultima_data_pagamento",
-        "jaci_cep_15155038",
-    )
-    out: list[str] = []
-    seen: set[str] = set()
+# Colunas de origem usadas só na tabela principal enxuta (o resto vai para a camada técnica).
+_DEVOLUCOES_SLIM_SOURCE_COLS: tuple[str, ...] = (
+    "N° de venda",
+    "Data da venda",
+    "status_interno",
+    "acao_sugerida",
+    "status_ml_texto",
+    "classificacao_reembolso",
+)
 
-    def _add(names: tuple[str, ...]) -> None:
-        for c in names:
-            if c in d.columns and c not in pool_ex and c not in seen:
-                seen.add(c)
-                out.append(c)
 
-    _add(g1)
-    _add(g2)
-    _add(("candidato_motivo",))
-    for c in d.columns:
-        if c in pool_ex or c in seen:
-            continue
-        if _devolucoes_is_operational_date_col(c):
-            seen.add(c)
-            out.append(c)
-    return out
+def _devolucoes_build_fila_operacional_view(d: pd.DataFrame) -> pd.DataFrame:
+    """DataFrame só para exibição: 7 colunas com rótulos de negócio."""
+    idx = d.index
+    out: dict[str, object] = {}
+    out["N.º da venda"] = d["N° de venda"] if "N° de venda" in d.columns else pd.Series("", index=idx)
+    out["Data"] = d["Data da venda"] if "Data da venda" in d.columns else pd.Series("", index=idx)
+    out["Situação"] = d["status_interno"] if "status_interno" in d.columns else pd.Series("", index=idx)
+    out["O que fazer"] = d["acao_sugerida"] if "acao_sugerida" in d.columns else pd.Series("", index=idx)
+    out["Mensagem do Mercado Livre"] = (
+        d["status_ml_texto"] if "status_ml_texto" in d.columns else pd.Series("", index=idx)
+    )
+    out["Reembolso"] = (
+        d["classificacao_reembolso"] if "classificacao_reembolso" in d.columns else pd.Series("", index=idx)
+    )
+    if "lib_n_eventos" in d.columns:
+        _ln = pd.to_numeric(d["lib_n_eventos"], errors="coerce").fillna(0)
+        out["Liberações"] = _ln.map(lambda x: "Com registro" if int(x) > 0 else "Sem registro")
+    else:
+        out["Liberações"] = pd.Series("Sem registro", index=idx)
+    return pd.DataFrame(out, index=idx)
 
 
 def _devolucoes_cols_tabela_detalhe(d: pd.DataFrame, principais: list[str]) -> list[str]:
@@ -9160,14 +9145,18 @@ def _painel_devolucoes_operacional(
     """Painel só leitura sobre o materializado (candidatas a devolução)."""
     _is_admin = _is_admin_mode()
     n = int(len(df))
+    st.markdown("### Fila de devoluções — Mercado Livre")
+    st.markdown(
+        "Vendas com devolução, retorno físico, reembolso ligado ao caso ou revisão operacional. "
+        "Cancelamentos comerciais isolados já foram excluídos da fila."
+    )
     st.caption(
-        f"Fila **Controle de Devoluções**: candidatas com sinal real de devolução / retorno físico / disputa correlata "
-        f"(cancelamento comercial isolado já excluído no materializado). **{n}** vendas · Atualizado **{ts_proc}**"
+        f"Use os indicadores e os filtros para priorizar o que precisa de ação agora. "
+        f"**{_fmt_int_ptbr(n)}** vendas neste ficheiro · Atualizado **{ts_proc}**"
     )
     if df.empty:
         st.info(
-            "Não há linhas no recorte materializado. Corra o job de materialização com `--modulo devolucoes` "
-            "ou verifique se existem vendas com devolução, reembolso, mediação, reclamação ou eventos correlatos nas liberações."
+            "Não há vendas nesta fila. Quando houver devoluções ou casos correlatos materializados, elas aparecerão aqui."
         )
         return
 
@@ -9189,8 +9178,8 @@ def _painel_devolucoes_operacional(
     n_vinc = int((_lib_n > 0).sum())
 
     st.markdown(
-        '<p class="fdl-frete-section-title">Indicadores operacionais</p>'
-        '<p class="fdl-frete-section-note">Contagens por <strong>status interno</strong> — use os filtros abaixo para isolar cada fila.</p>',
+        '<p class="fdl-frete-section-title">Indicadores</p>'
+        '<p class="fdl-frete-section-note">Contagens por tipo de situação nesta fila.</p>',
         unsafe_allow_html=True,
     )
     with st.container(border=True):
@@ -9199,45 +9188,45 @@ def _painel_devolucoes_operacional(
             st.metric(
                 "Conferência física pendente",
                 _fmt_int_ptbr(n_conf),
-                help="Devolução, retorno ao vendedor, prazo para confirmar recebimento ou equivalente no texto do ML.",
+                help="Devolução ou retorno ao vendedor: conferir recebimento ou situação física do pacote.",
             )
         with k2:
             st.metric(
-                "Revisar financeiramente",
+                "Revisar no financeiro",
                 _fmt_int_ptbr(n_rev),
-                help="Situação com movimento de valores a validar no Mercado Pago / liberações.",
+                help="Há movimento de valores para conferir no Mercado Pago ou nas liberações.",
             )
         with k3:
             st.metric(
-                "Cobrar plataforma",
+                "Cobrar Mercado Livre",
                 _fmt_int_ptbr(n_cob),
-                help="Irregularidade ou falha de envio atribuível ao fluxo do Mercado Livre.",
+                help="Problema de envio ou falha atribuível ao fluxo do Mercado Livre.",
             )
         with k4:
             st.metric(
-                "Pagamento liberado ao vendedor",
+                "Dinheiro liberado para você",
                 _fmt_int_ptbr(n_pag),
-                help="Reclamação encerrada ou crédito liberado a favor da loja.",
+                help="Caso encerrado ou valor liberado a favor da loja.",
             )
         with k5:
             st.metric(
                 "Reembolso ao comprador",
                 _fmt_int_ptbr(n_reemb),
-                help="Estorno ou acordo com dinheiro devolvido ao comprador.",
+                help="Estorno ou devolução de dinheiro ao comprador.",
             )
         k6, k7, _sp = st.columns([1, 1, 2])
         with k6:
-            st.metric("Total na fila", _fmt_int_ptbr(n), help="Todas as candidatas neste ficheiro materializado.")
+            st.metric("Total na fila", _fmt_int_ptbr(n), help="Total de linhas neste ficheiro materializado.")
         with k7:
             st.metric(
-                "Com vínculo em liberações",
+                "Com registro em liberações",
                 _fmt_int_ptbr(n_vinc),
-                help="Pelo menos um evento nas liberações ML ligado a esta venda.",
+                help="Pelo menos um lançamento nas liberações do Mercado Livre ligado a esta venda.",
             )
 
     st.markdown(
         '<p class="fdl-frete-section-title">Filtros</p>'
-        '<p class="fdl-frete-section-note">Comece pelo <strong>recorte rápido</strong> ou refine com <strong>status</strong> e <strong>a sugerida</strong>.</p>',
+        '<p class="fdl-frete-section-note">A empresa é a selecionada no painel (igual repasse e frete).</p>',
         unsafe_allow_html=True,
     )
 
@@ -9246,32 +9235,33 @@ def _painel_devolucoes_operacional(
         "Revisar financeiramente",
         "Cobrar plataforma",
     )
-    _opts_rapido = (
-        "Todos",
-        "Só os 3 prioritários (conferência / financeiro / ML)",
-        "Conferência física pendente",
-        "Revisar financeiramente",
-        "Cobrar plataforma",
-        "Pagamento liberado ao vendedor",
-        "Reembolso ao comprador",
-        "Personalizado (multiselect)",
-    )
+    _recorte_devolucoes: list[tuple[str, str]] = [
+        ("Todos", "__all__"),
+        ("Só os 3 prioritários (conferência / financeiro / ML)", "__prio3__"),
+        ("Conferência física pendente", "Conferência física pendente"),
+        ("Revisar no financeiro", "Revisar financeiramente"),
+        ("Cobrar Mercado Livre", "Cobrar plataforma"),
+        ("Dinheiro liberado para você", "Pagamento liberado ao vendedor"),
+        ("Reembolso ao comprador", "Reembolso ao comprador"),
+        ("Personalizado (escolha em Situação)", "__custom__"),
+    ]
+    _recorte_labels = [t[0] for t in _recorte_devolucoes]
 
-    f0, f0b = st.columns([1.2, 2])
-    with f0:
-        recorte = st.selectbox(
-            "Recorte rápido (status)",
-            options=list(_opts_rapido),
-            index=0,
-            key="fdl_devolucoes_recorte_rapido",
-        )
-    with f0b:
-        busca = st.text_input(
-            "Buscar N.º de venda (contém)",
-            "",
-            key="fdl_devolucoes_busca_venda",
-            placeholder="Ex.: 20000158…",
-        )
+    recorte_i = st.selectbox(
+        "Recorte rápido",
+        options=range(len(_recorte_labels)),
+        format_func=lambda i: _recorte_labels[i],
+        index=0,
+        key="fdl_devolucoes_recorte_rapido",
+    )
+    recorte_val = _recorte_devolucoes[int(recorte_i)][1]
+
+    busca = st.text_input(
+        "Busca por n.º da venda (contém)",
+        "",
+        key="fdl_devolucoes_busca_venda",
+        placeholder="Ex.: 20000158…",
+    )
 
     opts_si_full = (
         sorted({str(x) for x in d["status_interno"].dropna().unique()})
@@ -9287,145 +9277,156 @@ def _painel_devolucoes_operacional(
     )
     opts_ac = [x for x in opts_ac if str(x).strip()]
 
+    opts_mot = (
+        sorted({str(x) for x in d["candidato_motivo"].dropna().unique()})
+        if "candidato_motivo" in d.columns
+        else []
+    )
+    opts_mot = [x for x in opts_mot if str(x).strip()]
+
     f1, f2 = st.columns(2)
     with f1:
         si = st.multiselect(
-            "Status interno (vários)",
+            "Situação",
             options=opts_si_full,
             default=[],
             key="fdl_devolucoes_status_interno",
-            help="Vazio = não restringe por aqui. Use em conjunto com «Recorte rápido» = Personalizado.",
+            help="Vazio = não filtra. Use com «Recorte rápido» = Personalizado.",
         )
     with f2:
         ac = st.multiselect(
-            "Ação sugerida (vários)",
+            "O que fazer",
             options=opts_ac,
             default=[],
             key="fdl_devolucoes_acao_sugerida",
-            help="Filtra pela coluna operacional «O que fazer» — linguagem curta definida no materializado.",
+            help="Filtra pela ação sugerida para a operação.",
         )
 
-    f3, f4 = st.columns(2)
-    with f3:
-        opts_mot = (
-            sorted({str(x) for x in d["candidato_motivo"].dropna().unique()})
-            if "candidato_motivo" in d.columns
-            else []
-        )
-        mot = st.multiselect("Motivo da candidatura", options=opts_mot, default=[], key="fdl_devolucoes_motivo")
-    with f4:
-        st.caption(
-            "**Dica:** para ver só o que precisa de atenção imediata, escolha «Só os 3 prioritários» no recorte rápido."
-        )
+    filt_lib = st.selectbox(
+        "Só com registro em liberações",
+        options=["Todos", "Com registro", "Sem registro"],
+        index=0,
+        key="fdl_devolucoes_filtro_lib",
+        help="«Com registro»: pelo menos um evento nas liberações ML para esta venda.",
+    )
 
-    if busca.strip():
+    mot: list[str] = []
+    if len(opts_mot) > 1:
+        with st.expander("Filtros avançados", expanded=False):
+            mot = st.multiselect(
+                "Motivo da fila",
+                options=opts_mot,
+                default=[],
+                key="fdl_devolucoes_motivo",
+                help="Por que a venda entrou na fila materializada (materializado).",
+            )
+
+    if busca.strip() and "N° de venda" in d.columns:
         d = d[d["N° de venda"].astype(str).str.contains(busca.strip(), case=False, na=False)]
 
-    if recorte == "Só os 3 prioritários (conferência / financeiro / ML)" and "status_interno" in d.columns:
+    if recorte_val == "__prio3__" and "status_interno" in d.columns:
         d = d[d["status_interno"].astype(str).str.strip().isin(_prio3)]
-    elif recorte not in ("Todos", "Personalizado (multiselect)") and "status_interno" in d.columns:
-        d = d[d["status_interno"].astype(str).str.strip() == recorte]
+    elif recorte_val not in ("__all__", "__custom__") and "status_interno" in d.columns:
+        d = d[d["status_interno"].astype(str).str.strip() == recorte_val]
 
-    # Multiselect de status só com «Todos» ou «Personalizado» — evita conflito com recorte fixo.
-    if "status_interno" in d.columns and recorte in ("Todos", "Personalizado (multiselect)") and si:
+    if "status_interno" in d.columns and recorte_val in ("__all__", "__custom__") and si:
         d = d[d["status_interno"].astype(str).isin(si)]
 
     if ac and "acao_sugerida" in d.columns:
         d = d[d["acao_sugerida"].astype(str).isin(ac)]
+
+    if filt_lib == "Com registro" and "lib_n_eventos" in d.columns:
+        d = d[pd.to_numeric(d["lib_n_eventos"], errors="coerce").fillna(0) > 0]
+    elif filt_lib == "Sem registro" and "lib_n_eventos" in d.columns:
+        d = d[pd.to_numeric(d["lib_n_eventos"], errors="coerce").fillna(0) <= 0]
+
     if mot and "candidato_motivo" in d.columns:
         d = d[d["candidato_motivo"].astype(str).isin(mot)]
 
     d = d.copy()
-    _cols_princ = _devolucoes_cols_tabela_principal(d)
-    _cols_det = _devolucoes_cols_tabela_detalhe(d, _cols_princ)
-    d_main = d[_cols_princ]
+    _cols_det = _devolucoes_cols_tabela_detalhe(d, list(_DEVOLUCOES_SLIM_SOURCE_COLS))
+    d_fila = _devolucoes_build_fila_operacional_view(d)
 
-    def _devolucoes_column_config_for(cols: list[str]) -> dict[str, object] | None:
-        cfg: dict[str, object] = {}
-        if "N° de venda" in cols:
-            cfg["N° de venda"] = st.column_config.TextColumn("N.º de venda", width="small")
-        if "Data da venda" in cols:
-            cfg["Data da venda"] = st.column_config.TextColumn("Data da venda", width="small")
-        if "status_interno" in cols:
-            cfg["status_interno"] = st.column_config.TextColumn("Status interno", width="medium")
-        if "acao_sugerida" in cols:
-            cfg["acao_sugerida"] = st.column_config.TextColumn(
-                "Ação sugerida",
-                width="large",
-                help="O que a operação deve fazer nesta venda.",
-            )
-        if "status_ml_texto" in cols:
-            cfg["status_ml_texto"] = st.column_config.TextColumn(
-                "Texto Mercado Livre",
-                width="large",
-                help="Única coluna principal com o status original do export (evita duplicar «Descrição do status»).",
-            )
-        if "classificacao_reembolso" in cols:
-            cfg["classificacao_reembolso"] = st.column_config.TextColumn("Classificação reembolso", width="small")
-        if "reembolso_valor_inferido" in cols:
-            cfg["reembolso_valor_inferido"] = st.column_config.NumberColumn(
-                "Reembolso inferido (BRL)",
-                format="%.2f",
-            )
-        if "vinculo_tipo" in cols:
-            cfg["vinculo_tipo"] = st.column_config.TextColumn("Vínculo (tipo)", width="small")
-        if "vinculo_confianca" in cols:
-            cfg["vinculo_confianca"] = st.column_config.TextColumn("Vínculo (confiança)", width="small")
-        if "empresa" in cols:
-            cfg["empresa"] = st.column_config.TextColumn("Empresa", width="small")
-        if "Total (BRL)" in cols:
-            cfg["Total (BRL)"] = st.column_config.NumberColumn("Total (BRL)", format="%.2f")
-        if "Cancelamentos e reembolsos (BRL)" in cols:
-            cfg["Cancelamentos e reembolsos (BRL)"] = st.column_config.NumberColumn(
-                "Cancelam. / reemb. (BRL)",
-                format="%.2f",
-            )
-        if "lib_n_eventos" in cols:
-            cfg["lib_n_eventos"] = st.column_config.NumberColumn("Eventos liberações", format="%d")
-        if "lib_ultima_data_pagamento" in cols:
-            cfg["lib_ultima_data_pagamento"] = st.column_config.TextColumn("Últ. pag. liberações", width="small")
-        if "jaci_cep_15155038" in cols:
-            cfg["jaci_cep_15155038"] = st.column_config.CheckboxColumn("CEP Jaci")
-        if "candidato_motivo" in cols:
-            cfg["candidato_motivo"] = st.column_config.TextColumn("Motivo fila", width="small")
-        return cfg or None
+    _cfg_fila: dict[str, object] = {
+        "N.º da venda": st.column_config.TextColumn("N.º da venda", width="small"),
+        "Data": st.column_config.TextColumn("Data", width="small"),
+        "Situação": st.column_config.TextColumn("Situação", width="medium"),
+        "O que fazer": st.column_config.TextColumn(
+            "O que fazer",
+            width="medium",
+            help="Próximo passo sugerido para a loja.",
+        ),
+        "Mensagem do Mercado Livre": st.column_config.TextColumn(
+            "Mensagem do Mercado Livre",
+            width="large",
+            help="Texto do export de vendas (não duplicamos «Descrição do status» quando é o mesmo conteúdo).",
+        ),
+        "Reembolso": st.column_config.TextColumn("Reembolso", width="small"),
+        "Liberações": st.column_config.TextColumn("Liberações", width="small"),
+    }
 
-    _h_main = min(620, 140 + min(len(d_main), 20) * 34)
+    _h_main = min(620, 140 + min(len(d_fila), 20) * 34)
     st.markdown(
-        '<p class="fdl-frete-section-title">Fila operacional</p>'
-        '<p class="fdl-frete-section-note">Colunas essenciais primeiro: venda, datas, decisão interna, texto ML, reembolso e vínculo com liberações.</p>',
+        '<p class="fdl-frete-section-title">Fila</p>'
+        '<p class="fdl-frete-section-note">Uma linha por venda: situação, ação e mensagem do ML. Detalhes técnicos ficam abaixo, fechados por defeito.</p>',
         unsafe_allow_html=True,
     )
     st.dataframe(
-        d_main,
+        d_fila,
         use_container_width=True,
         hide_index=True,
         height=_h_main,
-        column_config=_devolucoes_column_config_for(list(d_main.columns)),
+        column_config=_cfg_fila,
     )
 
     if _cols_det:
-        _h_det = min(480, 120 + min(len(d), 12) * 28)
-        with st.expander("Export Mercado Livre completo e auditoria técnica", expanded=False):
+        _h_det = min(420, 120 + min(len(d), 10) * 26)
+        with st.expander("Detalhes técnicos e export completo", expanded=False):
             st.caption(
-                f"**{_fmt_int_ptbr(len(_cols_det))}** colunas adicionais (detalhe de venda, IDs, amostras de liberação, colunas duplicadas «.1», etc.). "
-                "Fechado por defeito para não poluir a leitura."
+                f"**{_fmt_int_ptbr(len(_cols_det))}** colunas: valores, vínculo fino com liberações, Jaci, ficheiro de origem, restante do export ML e colunas duplicadas («.1»). "
+                "Para auditoria e conferência profunda — não necessário no dia a dia."
             )
+
+            def _devolucoes_column_config_tecnico(cols: list[str]) -> dict[str, object] | None:
+                cfg: dict[str, object] = {}
+                if "reembolso_valor_inferido" in cols:
+                    cfg["reembolso_valor_inferido"] = st.column_config.NumberColumn(
+                        "Reembolso inferido (BRL)",
+                        format="%.2f",
+                    )
+                if "Total (BRL)" in cols:
+                    cfg["Total (BRL)"] = st.column_config.NumberColumn("Total (BRL)", format="%.2f")
+                if "Cancelamentos e reembolsos (BRL)" in cols:
+                    cfg["Cancelamentos e reembolsos (BRL)"] = st.column_config.NumberColumn(
+                        "Cancelam. / reemb. (BRL)",
+                        format="%.2f",
+                    )
+                if "lib_n_eventos" in cols:
+                    cfg["lib_n_eventos"] = st.column_config.NumberColumn("Eventos liberações", format="%d")
+                if "lib_ultima_data_pagamento" in cols:
+                    cfg["lib_ultima_data_pagamento"] = st.column_config.TextColumn("Últ. pag. liberações", width="small")
+                if "jaci_cep_15155038" in cols:
+                    cfg["jaci_cep_15155038"] = st.column_config.CheckboxColumn("CEP Jaci")
+                if "candidato_motivo" in cols:
+                    cfg["candidato_motivo"] = st.column_config.TextColumn("Motivo fila", width="small")
+                if "empresa" in cols:
+                    cfg["empresa"] = st.column_config.TextColumn("Empresa", width="small")
+                return cfg or None
+
             st.dataframe(
                 d[_cols_det],
                 use_container_width=True,
                 hide_index=True,
                 height=_h_det,
-                column_config=_devolucoes_column_config_for([c for c in _cols_det if c in d.columns]),
+                column_config=_devolucoes_column_config_tecnico([c for c in _cols_det if c in d.columns]),
             )
 
     st.caption(
-        f"**{_fmt_int_ptbr(len(d_main))}** linhas no recorte · **Prioridade/Alerta** não é mostrada (o **status interno** já concentra a fila). "
-        "A coluna **Texto Mercado Livre** é o status original do export; **Descrição do status** não é repetida quando é redundante."
+        f"**{_fmt_int_ptbr(len(d_fila))}** linhas após filtros · Vista principal só com o essencial para operar."
     )
 
     if _is_admin:
-        with st.expander("Admin — colunas técnicas", expanded=False):
+        with st.expander("Admin — caminho do materializado", expanded=False):
             st.caption(str(load_info.get("devolucoes_path_resolved", "")))
 
 

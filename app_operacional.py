@@ -4989,7 +4989,8 @@ def _render_fdl_fat_dre_nf_kpi_cards(
         "5% do Valor da venda (Σ Quantidade × Preço de lista) agregado à NF, por nota."
     )
     _ht_res = (
-        "Comercial: Σ resultado por NF a partir dos pedidos ligados (não confundir com o valor líquido da NF fiscal)."
+        "Comercial: Σ resultado por NF (pedidos ligados), nas **mesmas NFs** do período de emissão + empresa + plataforma. "
+        "Não confundir com o valor líquido da NF fiscal."
         if valor_faturado_from_fiscal_parquet
         else (
             "Valores já consolidados no materializado NF-first (Resultado / Despesa fixa)."
@@ -5001,7 +5002,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
         )
     )
     _ht_mg = (
-        "Somente comercial: Σ Resultado ÷ Σ Valor da venda (lista) (Quantidade × Preço de lista no recorte). "
+        "Somente comercial: Σ Resultado ÷ Σ Valor da venda (lista) sobre as **mesmas NFs** dos filtros de emissão. "
         "O valor faturado fiscal e a diferença não entram nesta conta. "
         "Se Σ Valor da venda = 0, exibe traço."
         if valor_faturado_from_fiscal_parquet
@@ -6749,8 +6750,9 @@ def _render_faturamento_dre_minimal(
     )
 
     st.caption(
-        "Período por emissão da NF. A tabela e os totais vêm **apenas** de "
-        "**`dataset_faturamento_nf_panel.parquet`** (materialização — sem recalcular no app)."
+        "Dados de **`dataset_faturamento_nf_panel.parquet`** (materializado — sem recalcular no app). "
+        "**Cards e DRE gerencial:** todas as NFs com **emissão** no período + empresa + plataforma (filtros de cima). "
+        "**Tabela:** pode ficar mais restrita com produto / resultado comercial (bloco abaixo)."
     )
 
     if not use_nf_panel_baked_effective:
@@ -6995,7 +6997,11 @@ def _render_faturamento_dre_minimal(
                 "fdl_fat_min_prod",
                 "Produto (resumo na NF)",
                 _prod_opts,
-                help="**Vazio** = todos. Corresponde à coluna «Produtos» da tabela (agregado por NF).",
+                help=(
+                    "**Vazio** = todos. **Só filtra a tabela** de NFs abaixo; os cards de KPI e a DRE gerencial "
+                    "continuam com o universo de emissão + empresa + plataforma. "
+                    "Corresponde à coluna «Produtos» (agregado por NF)."
+                ),
             )
         else:
             st.caption("Sem «produto_resumo» no recorte atual — filtro por produto indisponível.")
@@ -7036,7 +7042,8 @@ def _render_faturamento_dre_minimal(
             key=_k_sinais,
             help=(
                 "Pode selecionar **uma ou as duas** opções: união de NFs com lucro e/ou com prejuízo. "
-                "Usa o **resultado** já gravado no materializado (Parquet), sem recalcular no app. "
+                "**Só filtra a tabela** abaixo; os cards de KPI e a DRE gerencial somam **todas** as NFs do recorte de emissão. "
+                "Usa o **resultado** já gravado no materializado (Parquet). "
                 "NFs sem resultado válido (NaN) não entram em nenhum dos dois grupos."
             ),
         )

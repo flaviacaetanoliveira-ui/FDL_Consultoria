@@ -7394,7 +7394,6 @@ def _render_faturamento_dre_minimal(
         "Desp. fixa",
         "ADS 3,5%",
         "ADS fixo",
-        "ADS total",
         "Resultado",
         "Info dados",
         "Margem %",
@@ -7443,11 +7442,6 @@ def _render_faturamento_dre_minimal(
             if "custo_ads_fixo" in _df_nf_table.columns
             else pd.Series(0.0, index=_df_nf_table.index, dtype=float)
         )
-        _ads_t_s = (
-            pd.to_numeric(_df_nf_table["custo_ads"], errors="coerce").fillna(0.0)
-            if "custo_ads" in _df_nf_table.columns
-            else (_ads_v_s + _ads_f_s)
-        )
         _disp_nf_full = pd.DataFrame(
             {
                 "Emissão": _series_nf_emissao_pt_br(
@@ -7474,7 +7468,6 @@ def _render_faturamento_dre_minimal(
                 "Desp. fixa": pd.to_numeric(_df_nf_table["despesa_fixa"], errors="coerce"),
                 "ADS 3,5%": _ads_v_s,
                 "ADS fixo": _ads_f_s,
-                "ADS total": _ads_t_s,
                 "Resultado": pd.to_numeric(_df_nf_table["resultado"], errors="coerce"),
                 "Info dados": _info_dados.astype(str),
                 "Margem %": (_marg_ratio * 100.0),
@@ -7538,7 +7531,6 @@ def _render_faturamento_dre_minimal(
             "Desp. fixa",
             "ADS 3,5%",
             "ADS fixo",
-            "ADS total",
             "Resultado",
         ):
             _disp_nf_ui[_money_col] = _disp_nf_ui[_money_col].map(_nf_tbl_money_str)
@@ -7594,7 +7586,6 @@ def _render_faturamento_dre_minimal(
         ),
         "ADS 3,5%": "3,5% × venda (lista) nesta NF — custo de mídia (materializado).",
         "ADS fixo": "R$ 2,00 quando a venda (lista) > 0 nesta NF (materializado).",
-        "ADS total": "Soma ADS variável + fixo; já descontado do «Resultado».",
         "Resultado": (
             "Comercial: resultado consolidado por NF **já líquido de ADS** (materializado)."
             if use_fiscal_kpi
@@ -7628,7 +7619,6 @@ def _render_faturamento_dre_minimal(
         "Desp. fixa": "small",
         "ADS 3,5%": "small",
         "ADS fixo": "small",
-        "ADS total": "small",
         "Resultado": "medium",
         "Info dados": "medium",
         "Margem %": "small",

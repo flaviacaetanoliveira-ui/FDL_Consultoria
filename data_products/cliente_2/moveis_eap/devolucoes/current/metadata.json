@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-07T13:18:22Z",
+  "generated_at": "2026-04-07T14:07:54Z",
   "source_signature": "5ac3e69943ea81867260939abf89d32e",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "moveis_eap",
   "cnpj": null,
-  "row_count": 458,
+  "row_count": 236,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -106,11 +106,13 @@
     "org_id": "moveis_eap",
     "dataset_empresa": "Móveis EAP",
     "cliente_id": "cliente_2",
-    "row_count_candidatas": 458,
+    "row_count_pre_filtro_devolucao": 265,
+    "row_count_excluidas_cancel_comercial": 29,
+    "row_count_candidatas": 236,
     "row_count_vendas_total": 6215,
     "row_count_liberacoes": 3584,
     "sales_from_lib_financial": 140,
-    "classificador_operacional_revision": "operacional-2026-04"
+    "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
   "row_count_vendas_total": 6215,
   "row_count_liberacoes": 3584,

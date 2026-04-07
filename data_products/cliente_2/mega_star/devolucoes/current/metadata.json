@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-07T13:18:12Z",
+  "generated_at": "2026-04-07T14:07:30Z",
   "source_signature": "ce15fd0b1493000ca3f7e43770ab98f7",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_star",
   "cnpj": null,
-  "row_count": 146,
+  "row_count": 49,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -105,11 +105,13 @@
     "org_id": "mega_star",
     "dataset_empresa": "Mega Star",
     "cliente_id": "cliente_2",
-    "row_count_candidatas": 146,
+    "row_count_pre_filtro_devolucao": 75,
+    "row_count_excluidas_cancel_comercial": 26,
+    "row_count_candidatas": 49,
     "row_count_vendas_total": 1094,
     "row_count_liberacoes": 3941,
     "sales_from_lib_financial": 197,
-    "classificador_operacional_revision": "operacional-2026-04"
+    "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
   "row_count_vendas_total": 1094,
   "row_count_liberacoes": 3941,

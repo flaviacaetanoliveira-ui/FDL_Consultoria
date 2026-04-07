@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-07T13:18:09Z",
+  "generated_at": "2026-04-07T14:07:20Z",
   "source_signature": "f4128c39a8cbe1cd1f519d16805dfd85",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_facil",
   "cnpj": null,
-  "row_count": 2289,
+  "row_count": 1507,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -110,11 +110,13 @@
     "org_id": "mega_facil",
     "dataset_empresa": "Mega Fácil",
     "cliente_id": "cliente_2",
-    "row_count_candidatas": 2289,
+    "row_count_pre_filtro_devolucao": 1865,
+    "row_count_excluidas_cancel_comercial": 358,
+    "row_count_candidatas": 1507,
     "row_count_vendas_total": 18995,
     "row_count_liberacoes": 34232,
     "sales_from_lib_financial": 2223,
-    "classificador_operacional_revision": "operacional-2026-04"
+    "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
   "row_count_vendas_total": 18995,
   "row_count_liberacoes": 34232,

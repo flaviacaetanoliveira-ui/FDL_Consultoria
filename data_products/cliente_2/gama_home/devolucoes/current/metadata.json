@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-07T13:18:14Z",
+  "generated_at": "2026-04-07T14:07:27Z",
   "source_signature": "975f34ac609a550caef90640997ca56b",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "gama_home",
   "cnpj": null,
-  "row_count": 30,
+  "row_count": 20,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -105,11 +105,13 @@
     "org_id": "gama_home",
     "dataset_empresa": "Gama Home",
     "cliente_id": "cliente_2",
-    "row_count_candidatas": 30,
+    "row_count_pre_filtro_devolucao": 21,
+    "row_count_excluidas_cancel_comercial": 1,
+    "row_count_candidatas": 20,
     "row_count_vendas_total": 347,
     "row_count_liberacoes": 675,
     "sales_from_lib_financial": 25,
-    "classificador_operacional_revision": "operacional-2026-04"
+    "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
   "row_count_vendas_total": 347,
   "row_count_liberacoes": 675,

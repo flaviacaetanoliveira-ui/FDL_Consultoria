@@ -1,6 +1,7 @@
 """
 Dataset materializado «Controle de Devoluções»: 1 linha por venda, só **candidatas**
-(devolução, reembolso, mediação, reclamação, revisão ou sinais financeiros nas liberações).
+com **sinal real de devolução / retorno físico / disputa pós-venda correlata** (ou vínculo
+financeiro nas liberações). Cancelamento comercial isolado não entra na fila materializada.
 """
 from __future__ import annotations
 
@@ -25,7 +26,7 @@ from fdl_paths import resolve_pasta_vendas_ml
 
 PIPELINE_REVISION_DEVOLUCOES = "devolucoes-v1"
 # Classificador operacional (texto ML + reforço conservador das liberações); bump quando mudar regras.
-CLASSIFICADOR_DEVOLUCOES_REVISION = "operacional-2026-04"
+CLASSIFICADOR_DEVOLUCOES_REVISION = "operacional-2026-04-devolucao-fila"
 
 JACI_CEP_DIGITS = "15155038"
 TOL_MONEY = 0.02
@@ -47,7 +48,9 @@ _LIB_SIGNAL_WORDS = (
     "charge back",
 )
 
-_SALE_SIGNAL_WORDS = (
+# Gatilhos na linha de venda — **sem** cancelado/cancelada genéricos (estes só contam junto de
+# ``_text_has_strong_devolucao`` em ``_sale_row_candidate``).
+_SALE_SIGNAL_WORDS_CORE = (
     "devolu",
     "reembols",
     "devolvido",
@@ -58,10 +61,79 @@ _SALE_SIGNAL_WORDS = (
     "revisao",
     "em disputa",
     "disputa",
-    "cancelado",
-    "cancelada",
     "estorno",
 )
+
+
+def _text_has_cancel_mention(t: str) -> bool:
+    if not t:
+        return False
+    return any(x in t for x in ("cancelada", "cancelado", "cancelou", "cancelamos", " cancelar"))
+
+
+def _text_has_strong_devolucao(t: str) -> bool:
+    """
+    Sinal forte de fluxo de devolução / retorno físico (texto já normalizado).
+    Usado no gate de candidatura (cancel + devolução) e na exclusão da fila materializada.
+    """
+    if not t:
+        return False
+    needles = (
+        "devolu",
+        "devolvido",
+        "devolvemos",
+        "devolveremos o produto",
+        "retornou para voce",
+        "produto retornou",
+        "receber o produto",
+        "como o produto chegou",
+        "iniciar a devoluc",
+        "devolucao finalizada",
+        "embalando o pacote para devolv",
+        "etiqueta de devoluc",
+        "pacote para devolv",
+        "recusada pela pessoa",
+        "nao encontramos ninguem no endereco",
+        "endereco de entrega da pessoa que realizou a compra estava incorreto",
+        "nao foi possivel entregar o pacote a pessoa que realizou a compra",
+    )
+    return any(n in t for n in needles)
+
+
+def _is_no_enviar_pacote_sem_devolucao_real(status_raw: object) -> bool:
+    """«Não envie o pacote» sem qualquer sinal de devolução no mesmo texto."""
+    t = _norm_status_ml(status_raw)
+    if "certifique-se de nao enviar este pacote" not in t and "nao enviar este pacote" not in t:
+        return False
+    return not _text_has_strong_devolucao(t)
+
+
+def _is_reclamacao_arrependimento_sem_devolucao_real(status_raw: object) -> bool:
+    """Reclamação por arrependimento sem menção a devolução / retorno físico."""
+    t = _norm_status_ml(status_raw)
+    if "arrependeu" not in t and "arrepender" not in t:
+        return False
+    if "reclama" not in t and "reclamacao" not in t:
+        return False
+    return not _text_has_strong_devolucao(t)
+
+
+def _excluir_da_fila_devolucoes_materializada(row: pd.Series) -> bool:
+    """
+    Linhas a **remover** do Parquet de devoluções (cancelamento comercial / pré-envio sem devolução).
+    Mesmo com vínculo em liberações, «não envie o pacote» / arrependimento sem devolução física saem.
+    """
+    sm = row.get("status_ml_texto", "")
+    t = _norm_status_ml(sm)
+    si = str(row.get("status_interno", "") or "").strip()
+
+    if si == "Cancelada pelo comprador" and not _text_has_strong_devolucao(t):
+        return True
+    if _is_no_enviar_pacote_sem_devolucao_real(sm):
+        return True
+    if _is_reclamacao_arrependimento_sem_devolucao_real(sm):
+        return True
+    return False
 
 def _strip_accents(s: str) -> str:
     return "".join(ch for ch in unicodedata.normalize("NFKD", s) if not unicodedata.combining(ch))
@@ -149,7 +221,6 @@ _CLASSIFICACAO_REGRAS: tuple[tuple[tuple[str, ...], str, str], ...] = (
             "ja pode iniciar a devoluc",
             "pode iniciar a devoluc",
             "avisamos a pessoa que efetuou a compra que ja pode iniciar a devoluc",
-            "certifique-se de nao enviar este pacote",
             "se voce nao nos avisar dentro do prazo como o produto chegou",
             "entendemos que voce recebeu o produto conforme o esperado",
             "nao foi possivel entregar o pacote a pessoa que realizou a compra. nao se preocupe, devolveremos o produto nas mesmas condicoes de quando voce o enviou",
@@ -171,7 +242,6 @@ _CLASSIFICACAO_REGRAS: tuple[tuple[tuple[str, ...], str, str], ...] = (
             "fale conosco no menu da venda",
             "caso nao chegue ate",
             "o comprador abriu uma reclamacao porque a embalagem estava em ordem mas o produto nao funciona",
-            "o comprador abriu uma reclamacao porque se arrependeu da compra",
         ),
         "Mediação em andamento",
         "Responder prazo ML / ofertar solução",
@@ -438,12 +508,13 @@ def _lib_row_financial_signal(r: pd.Series) -> bool:
 
 def _sale_row_candidate(row: pd.Series, status_col: str) -> bool:
     blob = _norm_text(" ".join(str(row.get(c, "")) for c in row.index if c not in {"arquivo_origem_venda"}))
-    if any(w in blob for w in _SALE_SIGNAL_WORDS):
+    st = _norm_text(row.get(status_col, "")) if status_col and status_col in row.index else ""
+    combined = f"{blob} {st}".strip()
+
+    if any(w in combined for w in _SALE_SIGNAL_WORDS_CORE):
         return True
-    if status_col and status_col in row.index:
-        st = _norm_text(row.get(status_col, ""))
-        if any(w in st for w in _SALE_SIGNAL_WORDS):
-            return True
+    if _text_has_cancel_mention(combined) and _text_has_strong_devolucao(combined):
+        return True
     # Colunas típicas booleanas / valores
     for c in row.index:
         nc = norm_col_vendas(c)
@@ -456,7 +527,7 @@ def _sale_row_candidate(row: pd.Series, status_col: str) -> bool:
         if "cancel" in nc and "reembols" in nc:
             num = parse_brl_number(pd.Series([row.get(c)])).iloc[0]
             if pd.notna(num) and float(num) > TOL_MONEY:
-                return True
+                return _text_has_strong_devolucao(combined)
     return False
 
 
@@ -696,6 +767,18 @@ def build_devolucoes_dataset(
     candidatas["org_id"] = org_id
     candidatas["empresa"] = dataset_empresa
 
+    # Exceção rara: texto bateu em «Cancelada pelo comprador» mas o mesmo status menciona devolução física.
+    _mask_cancel_com_devolu = (candidatas["status_interno"] == "Cancelada pelo comprador") & candidatas[
+        "status_ml_texto"
+    ].map(lambda x: _text_has_strong_devolucao(_norm_status_ml(x)))
+    candidatas.loc[_mask_cancel_com_devolu, "status_interno"] = "Outros — revisar texto ML"
+    candidatas.loc[_mask_cancel_com_devolu, "acao_sugerida"] = "Revisar detalhe no ML"
+
+    _n_pre = int(len(candidatas))
+    _mask_drop = candidatas.apply(_excluir_da_fila_devolucoes_materializada, axis=1)
+    candidatas = candidatas.loc[~_mask_drop].reset_index(drop=True)
+    meta["row_count_pre_filtro_devolucao"] = _n_pre
+    meta["row_count_excluidas_cancel_comercial"] = int(_mask_drop.sum())
     meta["row_count_candidatas"] = int(len(candidatas))
     meta["row_count_vendas_total"] = int(len(vendas))
     meta["row_count_liberacoes"] = int(len(lib))

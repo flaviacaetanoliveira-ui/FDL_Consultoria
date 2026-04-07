@@ -34,7 +34,13 @@ def _detect_custo_header_row(raw: pd.DataFrame) -> tuple[int, int, int] | None:
                 continue
             if h in ("codigo sku", "sku") or (h == "codigo" and sj is None):
                 sj = j
-            if h == "custo unit" or h == "preco de custo com ipi" or ("custo" in h and "unit" in h):
+            # «PREÇO DE CUSTO com IPI» (layout legado) ou «VALOR DE COMPRA» (sem sufixo MEGA/OUTRAS).
+            if (
+                h == "custo unit"
+                or h == "preco de custo com ipi"
+                or ("custo" in h and "unit" in h)
+                or h == "valor de compra"
+            ):
                 pj = j
         if sj is not None and pj is not None and sj != pj:
             return (i, sj, pj)

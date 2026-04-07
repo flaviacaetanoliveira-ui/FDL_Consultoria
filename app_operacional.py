@@ -9037,16 +9037,101 @@ def _render_frete_operacional_ui(
         return
 
 
-def _devolucoes_prioridade_badge(status_interno: object) -> str:
-    """Rótulo curto só para leitura na tabela (não existe no materializado)."""
-    si = str(status_interno or "").strip()
-    if si == "Conferência física pendente":
-        return "Conferência física"
-    if si == "Revisar financeiramente":
-        return "Revisar financeiro"
-    if si == "Cobrar plataforma":
-        return "Cobrar ML"
-    return ""
+def _devolucoes_display_columns(d: pd.DataFrame) -> list[str]:
+    """
+    Ordem de colunas para a tabela de devoluções: operação primeiro, secundárias no meio,
+    auditoria / duplicadas (.1) no fim. Não altera dados — só apresentação.
+    """
+    import re
+
+    def _dup_suffix(name: object) -> bool:
+        return bool(re.search(r"\.\d+$", str(name or "")))
+
+    def _is_operational_date_col(name: str) -> bool:
+        if name == "Data da venda" or _dup_suffix(name):
+            return False
+        n = str(name).lower()
+        if "data" not in n:
+            return False
+        # já cobertas em blocos fixos ou auditoria
+        if name in {"lib_ultima_data_pagamento"}:
+            return False
+        return True
+
+    pool_excluded: set[str] = set()
+    if "status_ml_texto" in d.columns and "Descrição do status" in d.columns:
+        pool_excluded.add("Descrição do status")
+
+    g1 = (
+        "N° de venda",
+        "Data da venda",
+        "status_interno",
+        "acao_sugerida",
+        "status_ml_texto",
+        "classificacao_reembolso",
+        "reembolso_valor_inferido",
+        "vinculo_tipo",
+        "vinculo_confianca",
+        "empresa",
+    )
+    g2_head = (
+        "Total (BRL)",
+        "Cancelamentos e reembolsos (BRL)",
+        "lib_n_eventos",
+        "lib_ultima_data_pagamento",
+        "jaci_cep_15155038",
+        "candidato_motivo",
+    )
+    g2_tail = ("Comprador", "Plataforma")
+    g3_audit = (
+        "arquivo_origem_venda",
+        "vinculo_detalhe",
+        "lib_descricoes_amostra",
+        "lib_soma_net_debito",
+        "jaci_endereco_score",
+        "jaci_endereco_normalizado",
+        "cliente_id",
+        "empresa_id",
+        "cnpj",
+        "org_id",
+    )
+    g3_set = set(g3_audit)
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def _add(names: tuple[str, ...]) -> None:
+        for c in names:
+            if c in d.columns and c not in pool_excluded and c not in seen:
+                seen.add(c)
+                ordered.append(c)
+
+    _add(g1)
+    _add(g2_head)
+    for c in d.columns:
+        if c in pool_excluded or c in seen:
+            continue
+        if _is_operational_date_col(c):
+            seen.add(c)
+            ordered.append(c)
+    _add(g2_tail)
+    for c in d.columns:
+        if c in pool_excluded or c in seen:
+            continue
+        if c in g3_set or _dup_suffix(c):
+            continue
+        seen.add(c)
+        ordered.append(c)
+    for c in g3_audit:
+        if c in d.columns and c not in pool_excluded and c not in seen:
+            seen.add(c)
+            ordered.append(c)
+    for c in d.columns:
+        if c in pool_excluded or c in seen:
+            continue
+        seen.add(c)
+        ordered.append(c)
+    return ordered
 
 
 def _painel_devolucoes_operacional(
@@ -9231,46 +9316,15 @@ def _painel_devolucoes_operacional(
         d = d[d["candidato_motivo"].astype(str).isin(mot)]
 
     d = d.copy()
-    d["Prioridade"] = d["status_interno"].map(_devolucoes_prioridade_badge) if "status_interno" in d.columns else ""
-
-    pref = [
-        c
-        for c in (
-            "N° de venda",
-            "Prioridade",
-            "status_interno",
-            "acao_sugerida",
-            "empresa",
-            "status_ml_texto",
-            "candidato_motivo",
-            "classificacao_reembolso",
-            "reembolso_valor_inferido",
-            "vinculo_tipo",
-            "vinculo_confianca",
-            "vinculo_detalhe",
-            "lib_n_eventos",
-            "lib_ultima_data_pagamento",
-            "lib_descricoes_amostra",
-            "lib_soma_net_debito",
-            "jaci_cep_15155038",
-            "jaci_endereco_score",
-            "arquivo_origem_venda",
-        )
-        if c in d.columns
-    ]
-    rest = [c for c in d.columns if c not in pref]
-    d_show = d[pref + rest]
+    _cols_show = _devolucoes_display_columns(d)
+    d_show = d[_cols_show]
 
     _h = min(620, 140 + min(len(d_show), 20) * 34)
     _cfg: dict[str, object] = {}
     if "N° de venda" in d_show.columns:
         _cfg["N° de venda"] = st.column_config.TextColumn("N.º de venda", width="small")
-    if "Prioridade" in d_show.columns:
-        _cfg["Prioridade"] = st.column_config.TextColumn(
-            "Alerta",
-            width="small",
-            help="Conferência física, revisão financeira ou cobrança ML — vazio nas demais filas.",
-        )
+    if "Data da venda" in d_show.columns:
+        _cfg["Data da venda"] = st.column_config.TextColumn("Data da venda", width="small")
     if "status_interno" in d_show.columns:
         _cfg["status_interno"] = st.column_config.TextColumn("Status interno", width="medium")
     if "acao_sugerida" in d_show.columns:
@@ -9281,6 +9335,17 @@ def _painel_devolucoes_operacional(
         )
     if "status_ml_texto" in d_show.columns:
         _cfg["status_ml_texto"] = st.column_config.TextColumn("Situação no Mercado Livre", width="large")
+    if "classificacao_reembolso" in d_show.columns:
+        _cfg["classificacao_reembolso"] = st.column_config.TextColumn("Classificação reembolso", width="small")
+    if "reembolso_valor_inferido" in d_show.columns:
+        _cfg["reembolso_valor_inferido"] = st.column_config.NumberColumn(
+            "Reembolso inferido (BRL)",
+            format="%.2f",
+        )
+    if "vinculo_tipo" in d_show.columns:
+        _cfg["vinculo_tipo"] = st.column_config.TextColumn("Vínculo (tipo)", width="small")
+    if "vinculo_confianca" in d_show.columns:
+        _cfg["vinculo_confianca"] = st.column_config.TextColumn("Vínculo (confiança)", width="small")
     if "empresa" in d_show.columns:
         _cfg["empresa"] = st.column_config.TextColumn("Empresa", width="small")
 
@@ -9292,7 +9357,9 @@ def _painel_devolucoes_operacional(
         column_config=_cfg or None,
     )
     st.caption(
-        f"**{_fmt_int_ptbr(len(d_show))}** linhas no recorte · Coluna **Ação sugerida** resume o tratamento; **Situação no Mercado Livre** é o texto original do export."
+        f"**{_fmt_int_ptbr(len(d_show))}** linhas no recorte · À esquerda: **venda, datas, status interno, ação e situação no ML**; "
+        f"valores e liberações no meio; **colunas técnicas / duplicadas (.1)** à direita. "
+        f"**Descrição do status** do export não é repetida quando já existe **Situação no Mercado Livre**."
     )
 
     if _is_admin:

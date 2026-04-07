@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-05T18:41:53Z",
-  "source_signature": "9170bf204667af7f255cc1189d39b65e",
+  "generated_at": "2026-04-07T09:43:00Z",
+  "source_signature": "fc6c723babeaecdcdccc73e96d2de2d0",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_star",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_star",
   "cnpj": null,
-  "row_count": 1532,
+  "row_count": 3118,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -24,6 +24,7 @@
     "Diferença",
     "Data de pagamento",
     "Data de emissão",
+    "Data período repasse",
     "empresa",
     "cliente_id",
     "empresa_id",
@@ -33,7 +34,7 @@
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
-    "linhas": 1532,
+    "linhas": 3118,
     "arquivos_contas_lidos": 5,
     "col_situacao": "Situação",
     "col_numero": "Número"

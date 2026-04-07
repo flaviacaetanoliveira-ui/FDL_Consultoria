@@ -15,6 +15,9 @@ import os
 # O mesmo secrets.toml do repo pode apontar outro cliente (ex.: cliente_2). Este entrypoint é só Flávio:
 # o V2 canónico do faturamento vive em data_products/cliente_5/faturamento/current/.
 os.environ["FDL_MATERIALIZED_CLIENTE_SLUG"] = "cliente_5"
+os.environ.setdefault("FDL_MATERIALIZED_PATH_MODE", "dynamic")
+os.environ.setdefault("FDL_REPASSE_CONSUME_MODE", "materialized")
+os.environ.setdefault("FDL_FRETE_CONSUME_MODE", "materialized")
 
 from fdl_streamlit_bootstrap import run_operacional_app
 

@@ -6364,6 +6364,32 @@ def _comercial_trend_styler(trend_tbl: pd.DataFrame):
     return sty
 
 
+def _comercial_trend_tbl_apply_ui_filters(
+    trend_tbl: pd.DataFrame,
+    *,
+    produtos_sel: tuple[str, ...],
+    tendencias_sel: tuple[str, ...],
+    sugestoes_sel: tuple[str, ...],
+) -> pd.DataFrame:
+    """Recorta a tabela de tendência pelos multiselects (vazio = sem filtro nessa dimensão)."""
+    if trend_tbl.empty:
+        return trend_tbl
+    out = trend_tbl
+    sel_p = tuple(str(x).strip() for x in produtos_sel if str(x).strip())
+    if sel_p and "Produto" in out.columns:
+        pr = out["Produto"].fillna("").astype(str).str.strip()
+        out = out.loc[pr.isin(sel_p)].copy()
+    sel_t = tuple(str(x).strip() for x in tendencias_sel if str(x).strip())
+    if sel_t and "Tendência" in out.columns:
+        tt = out["Tendência"].fillna("").astype(str).str.strip()
+        out = out.loc[tt.isin(sel_t)].copy()
+    sel_s = tuple(str(x).strip() for x in sugestoes_sel if str(x).strip())
+    if sel_s and "Sugestão de compra" in out.columns:
+        ss = out["Sugestão de compra"].fillna("").astype(str).str.strip()
+        out = out.loc[ss.isin(sel_s)].copy()
+    return out
+
+
 def _render_comercial_pedidos_analise(
     df: pd.DataFrame,
     load_info: dict[str, object],
@@ -6484,9 +6510,18 @@ def _render_comercial_pedidos_analise(
                 "Limpar filtros desta vista",
                 key="fdl_cp_reset",
                 use_container_width=True,
-                help="Repor marca, plataforma e período ao padrão do carregamento.",
+                help="Repor marca, plataforma, período e filtros da tabela Tendência e compra.",
             ):
-                for _k in ("fdl_cp_emp", "fdl_cp_plat", "fdl_cp_d_ini", "fdl_cp_d_fim", "fdl_cp_bounds_sig"):
+                for _k in (
+                    "fdl_cp_emp",
+                    "fdl_cp_plat",
+                    "fdl_cp_d_ini",
+                    "fdl_cp_d_fim",
+                    "fdl_cp_bounds_sig",
+                    "fdl_cp_tr_prod",
+                    "fdl_cp_tr_tend",
+                    "fdl_cp_tr_sug",
+                ):
                     st.session_state.pop(_k, None)
                 st.rerun()
 
@@ -6619,58 +6654,138 @@ def _render_comercial_pedidos_analise(
                 unsafe_allow_html=True,
             )
         else:
-            st.markdown(_comercial_trend_summary_html(trend_tbl), unsafe_allow_html=True)
-            _tr_cfg: dict[str, object] = {
-                "SKU": TextColumn("SKU", width="small", help="Código do SKU."),
-                "Produto": TextColumn("Produto", width="medium", help="Descrição resumida."),
-                "Qtd mês -2": TextColumn(
-                    "Unid. M-2",
-                    width="small",
-                    help="Unidades vendidas no 1º mês civil fechado da janela (mais antigo).",
-                ),
-                "Qtd mês -1": TextColumn(
-                    "Unid. M-1",
-                    width="small",
-                    help="Unidades vendidas no mês intermediário.",
-                ),
-                "Qtd mês atual": TextColumn(
-                    "Unid. último",
-                    width="small",
-                    help="Unidades vendidas no último mês civil fechado da janela.",
-                ),
-                "Valor lista mês -2": TextColumn(
-                    "R$ lista M-2",
-                    width="small",
-                    help="Σ Vl_Venda (ou lista×qtd) no 1º mês fechado.",
-                ),
-                "Valor lista mês -1": TextColumn(
-                    "R$ lista M-1",
-                    width="small",
-                    help="Σ Vl_Venda (ou lista×qtd) no mês intermediário.",
-                ),
-                "Valor lista mês atual": TextColumn(
-                    "R$ lista últ.",
-                    width="small",
-                    help="Σ Vl_Venda (ou lista×qtd) no último mês fechado.",
-                ),
-                "Tendência": TextColumn(
-                    "Tendência",
-                    width="medium",
-                    help="Combina evolução de unidades e de receita (lista) nos 3 meses; «insuficiente» = pouco volume para ler tendência.",
-                ),
-                "Sugestão de compra": TextColumn(
-                    "Sugestão compra",
-                    width="large",
-                    help="Orientação a partir da classe ABC (receita) e da tendência de giro — mesma regra de cálculo.",
-                ),
-            }
-            _tr_cfg = {k: v for k, v in _tr_cfg.items() if k in trend_tbl.columns}
-            st.dataframe(
-                _comercial_trend_styler(trend_tbl),
-                use_container_width=True,
-                height=min(480, 44 + min(len(trend_tbl), 18) * 34),
-                column_config=_tr_cfg or None,
+            _tr_prod_opts = sorted(
+                {
+                    str(x).strip()
+                    for x in trend_tbl["Produto"].dropna().unique()
+                    if str(x).strip()
+                }
             )
+            _tr_tend_opts = sorted(
+                {
+                    str(x).strip()
+                    for x in trend_tbl["Tendência"].dropna().unique()
+                    if str(x).strip()
+                }
+            ) if "Tendência" in trend_tbl.columns else []
+            _tr_sug_opts = sorted(
+                {
+                    str(x).strip()
+                    for x in trend_tbl["Sugestão de compra"].dropna().unique()
+                    if str(x).strip()
+                }
+            ) if "Sugestão de compra" in trend_tbl.columns else []
+
+            st.markdown(
+                '<p class="fdl-cp-caption">Filtros abaixo aplicam-se <strong>só</strong> a esta tabela e à barra de resumo.</p>',
+                unsafe_allow_html=True,
+            )
+            _f_tr = st.columns((1, 1, 1))
+            with _f_tr[0]:
+                _multiselect_stable(
+                    "fdl_cp_tr_prod",
+                    "Produto (tabela tendência)",
+                    _tr_prod_opts,
+                    help="**Vazio** = todos os produtos. Correspondência exata ao texto da coluna Produto.",
+                )
+            with _f_tr[1]:
+                _multiselect_stable(
+                    "fdl_cp_tr_tend",
+                    "Tendência",
+                    _tr_tend_opts,
+                    help="**Vazio** = todas. Filtra pela classificação de tendência (ex.: crescente, decrescente).",
+                )
+            with _f_tr[2]:
+                _multiselect_stable(
+                    "fdl_cp_tr_sug",
+                    "Sugestão de compra",
+                    _tr_sug_opts,
+                    help="**Vazio** = todas. Filtra pelo texto completo da sugestão.",
+                )
+
+            _sel_tr_p = tuple(
+                str(x).strip()
+                for x in (st.session_state.get("fdl_cp_tr_prod") or [])
+                if str(x).strip()
+            )
+            _sel_tr_t = tuple(
+                str(x).strip()
+                for x in (st.session_state.get("fdl_cp_tr_tend") or [])
+                if str(x).strip()
+            )
+            _sel_tr_s = tuple(
+                str(x).strip()
+                for x in (st.session_state.get("fdl_cp_tr_sug") or [])
+                if str(x).strip()
+            )
+            trend_disp = _comercial_trend_tbl_apply_ui_filters(
+                trend_tbl,
+                produtos_sel=_sel_tr_p,
+                tendencias_sel=_sel_tr_t,
+                sugestoes_sel=_sel_tr_s,
+            )
+
+            if trend_disp.empty:
+                st.warning(
+                    "Nenhuma linha com a combinação de filtros de **Produto**, **Tendência** e **Sugestão de compra**. "
+                    "Limpe um dos filtros ou repor com **Limpar filtros desta vista**."
+                )
+            else:
+                st.caption(
+                    f"**{len(trend_disp)}** linha(s) após filtros da tabela (total sem filtro de tabela: **{len(trend_tbl)}**)."
+                )
+                st.markdown(_comercial_trend_summary_html(trend_disp), unsafe_allow_html=True)
+                _tr_cfg: dict[str, object] = {
+                    "SKU": TextColumn("SKU", width="small", help="Código do SKU."),
+                    "Produto": TextColumn("Produto", width="medium", help="Descrição resumida."),
+                    "Qtd mês -2": TextColumn(
+                        "Unid. M-2",
+                        width="small",
+                        help="Unidades vendidas no 1º mês civil fechado da janela (mais antigo).",
+                    ),
+                    "Qtd mês -1": TextColumn(
+                        "Unid. M-1",
+                        width="small",
+                        help="Unidades vendidas no mês intermediário.",
+                    ),
+                    "Qtd mês atual": TextColumn(
+                        "Unid. último",
+                        width="small",
+                        help="Unidades vendidas no último mês civil fechado da janela.",
+                    ),
+                    "Valor lista mês -2": TextColumn(
+                        "R$ lista M-2",
+                        width="small",
+                        help="Σ Vl_Venda (ou lista×qtd) no 1º mês fechado.",
+                    ),
+                    "Valor lista mês -1": TextColumn(
+                        "R$ lista M-1",
+                        width="small",
+                        help="Σ Vl_Venda (ou lista×qtd) no mês intermediário.",
+                    ),
+                    "Valor lista mês atual": TextColumn(
+                        "R$ lista últ.",
+                        width="small",
+                        help="Σ Vl_Venda (ou lista×qtd) no último mês fechado.",
+                    ),
+                    "Tendência": TextColumn(
+                        "Tendência",
+                        width="medium",
+                        help="Combina evolução de unidades e de receita (lista) nos 3 meses; «insuficiente» = pouco volume para ler tendência.",
+                    ),
+                    "Sugestão de compra": TextColumn(
+                        "Sugestão compra",
+                        width="large",
+                        help="Orientação a partir da classe ABC (receita) e da tendência de giro — mesma regra de cálculo.",
+                    ),
+                }
+                _tr_cfg = {k: v for k, v in _tr_cfg.items() if k in trend_disp.columns}
+                st.dataframe(
+                    _comercial_trend_styler(trend_disp),
+                    use_container_width=True,
+                    height=min(480, 44 + min(len(trend_disp), 18) * 34),
+                    column_config=_tr_cfg or None,
+                )
 
 
 def _faturamento_dre_apply_produto_e_sinal_venda(

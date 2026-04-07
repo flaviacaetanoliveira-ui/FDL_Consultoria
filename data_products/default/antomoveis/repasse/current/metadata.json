@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-05T18:50:56Z",
-  "source_signature": "e35a3290f8980e020c3c1d33023da2bd",
+  "generated_at": "2026-04-07T09:51:41Z",
+  "source_signature": "93e48089666f5492c991a7792c41f7bf",
   "pipeline_revision": "phase1-v1",
   "cliente": "default",
   "empresa": "antomoveis",
@@ -8,7 +8,7 @@
   "cliente_id": "default",
   "empresa_id": "antomoveis",
   "cnpj": null,
-  "row_count": 1489,
+  "row_count": 1558,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -24,6 +24,7 @@
     "Diferença",
     "Data de pagamento",
     "Data de emissão",
+    "Data período repasse",
     "empresa",
     "cliente_id",
     "empresa_id",
@@ -33,7 +34,7 @@
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
-    "linhas": 1489,
+    "linhas": 1558,
     "arquivos_contas_lidos": 4,
     "col_situacao": "Situação",
     "col_numero": "Número"

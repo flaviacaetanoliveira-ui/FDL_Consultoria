@@ -4966,10 +4966,10 @@ def _render_fdl_fat_dre_nf_kpi_cards(
 
     _ht_vf = (
         "Fiscal (Bling): soma dos valores líquidos das NFs (1 linha por nota no Parquet), "
-        "com data de emissão dentro do período e filtros de empresa aplicados. "
+        "com data de emissão dentro do período, empresa e — neste painel — plataforma quando filtrada. "
         "Deve alinhar ao relatório de notas de saída do Bling no mesmo intervalo de emissão e escopo de empresas "
         "(canceladas/denegadas costumam estar excluídas na geração do Parquet). "
-        "Plataforma não altera este total. Não usa o valor líquido vindo só do grão NF-first de pedidos."
+        "Não usa o valor líquido vindo só do grão NF-first de pedidos."
         if valor_faturado_from_fiscal_parquet
         else (
             "Soma de Nota_Valor_Liquido_Total uma vez por NF no período de emissão da NF "
@@ -6978,7 +6978,7 @@ def _render_faturamento_dre_minimal(
             df_nf, _min_state.plataformas
         )
 
-    # Modo fiscal: df_nf = merge fiscal + comercial (base antes de produto/sinal). KPIs e tabela usam df_nf_panel.
+    # Modo fiscal: df_nf = merge fiscal + comercial (base antes de produto/sinal). KPIs usam df_nf; tabela usa df_nf_panel.
     _prod_opts: list[str] = []
     if not df_nf.empty and "produto_resumo" in df_nf.columns:
         _prod_opts = sorted(

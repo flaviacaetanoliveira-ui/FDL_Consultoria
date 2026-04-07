@@ -4971,16 +4971,18 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     fat_dre_faturado_mode: str = "nf_first",
 ) -> None:
     """
-    Cards executivos NF-first (Faturamento & DRE): duas linhas, hierarquia visual;
-    sem alterar totais — apenas exibição. Todos os totais vêm do mesmo ``kp`` (mesmo universo de NFs).
+    Cards executivos NF-first (Faturamento & DRE): duas linhas, hierarquia visual.
+    Com Parquet fiscal, ``valor_venda`` / ``valor_faturado_nf`` / ``diferenca`` podem ser período fiscal + empresa;
+    ``_margem_denominador_venda`` (opcional) alinha a margem ao recorte da tabela.
     """
     vv = float(kp["valor_venda"])
     res = float(kp["resultado"])
+    vv_margem = float(kp.get("_margem_denominador_venda", kp["valor_venda"]))
     vf_str = (
         _fmt_brl_ptbr_celula(kp["valor_faturado_nf"]) if ok_nf_dates else "—"
     )
     dif_str = _fmt_brl_ptbr_celula(kp["diferenca"]) if ok_nf_dates else "—"
-    margem_str = _margem_sobre_venda_str(res, vv)
+    margem_str = _margem_sobre_venda_str(res, vv_margem)
 
     _ht_vf = (
         "Fiscal (Bling / SDS): soma dos **Valor_Liquido_NF** (1 linha por nota no Parquet fiscal), "
@@ -4995,11 +4997,9 @@ def _render_fdl_fat_dre_nf_kpi_cards(
         )
     )
     _ht_dif = (
-        "Ponte comercial × fiscal: Σ **valor da venda (lista)** no recorte atual (emissão + empresa + plataforma + "
-        "produto / sinal quando filtrados) **menos** o total **fiscal** (todas as NFs emitidas no período nas "
-        "empresas escolhidas, sem cortar por plataforma/produto/sinal). "
-        "Interpretação: compara o comercial filtrado ao faturamento bruto do período; desvios são esperados quando há "
-        "filtros comerciais ou NFs sem pedido ligado (venda 0 na tabela)."
+        "Σ **valor da venda (lista)** e Σ **faturado (NF)** no **mesmo** universo: **data de emissão** no período + "
+        "**empresa** (sem filtro de plataforma, produto ou lucro/prejuízo). "
+        "Reflete a ponte lista × líquido da nota nesse conjunto de NFs."
         if valor_faturado_from_fiscal_parquet
         else "Valor da venda total menos valor faturado total (NF) no recorte."
     )
@@ -5022,9 +5022,9 @@ def _render_fdl_fat_dre_nf_kpi_cards(
         )
     )
     _ht_mg = (
-        "Σ Resultado ÷ Σ Valor da venda (lista) no **mesmo** recorte que a tabela e os restantes cards. "
-        "O valor faturado fiscal e a diferença não entram nesta conta. "
-        "Se Σ Valor da venda = 0, exibe traço."
+        "Σ Resultado ÷ Σ Valor da venda (lista) no **recorte da tabela** (plataforma / produto / sinal). "
+        "O card «Valor da venda» acima usa o **período fiscal** completo (emissão + empresa). "
+        "Se Σ Valor da venda no recorte = 0, exibe traço."
         if valor_faturado_from_fiscal_parquet
         else (
             "Σ Resultado ÷ Σ Valor da venda no recorte. Valor da venda = Quantidade × Preço de lista. "
@@ -5060,8 +5060,8 @@ def _render_fdl_fat_dre_nf_kpi_cards(
                 _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00",
                 tier="primary",
                 title=(
-                    "Comercial: Σ Quantidade × Preço de lista, agregado por NF no recorte (pedidos ligados). "
-                    "Filtro Plataforma aplica-se aqui."
+                    "Comercial: Σ Quantidade × Preço de lista por NF com **emissão no período** e **empresa** selecionada(s). "
+                    "**Não** corta por plataforma, produto nem lucro/prejuízo — alinhado ao card «Faturado (NF) · fiscal»."
                     if valor_faturado_from_fiscal_parquet
                     else "Σ Quantidade × Preço de lista no recorte (grão NF)."
                 ),
@@ -7161,7 +7161,8 @@ def _render_faturamento_dre_minimal(
                 _prod_opts,
                 help=(
                     "**Vazio** = todos. Filtra **tabela**, totais comerciais nos **cards** e **DRE** (mesmo conjunto de NFs). "
-                    "O card **Valor faturado (NF) · fiscal** (com Parquet fiscal) segue só emissão+empresa. "
+                    "Os cards **Valor da venda** e **Faturado (NF) · fiscal** (com Parquet fiscal) seguem só "
+                    "emissão+empresa (período fiscal). "
                     "Corresponde à coluna «Produtos» (agregado por NF)."
                 ),
             )
@@ -7205,7 +7206,7 @@ def _render_faturamento_dre_minimal(
             help=(
                 "Pode selecionar **uma ou as duas** opções: união de NFs com lucro e/ou com prejuízo. "
                 "Filtra **tabela**, totais comerciais nos **cards** e **DRE** (mesmo conjunto de NFs). "
-                "O total **Valor faturado (NF) · fiscal** não é filtrado por este critério (âncora = notas emitidas no período). "
+                "Os totais **Valor da venda** e **Faturado (NF) · fiscal** não usam este filtro (período fiscal + empresa). "
                 "Usa o **resultado** já gravado no materializado (Parquet). "
                 "NFs sem resultado válido (NaN) não entram em nenhum dos dois sinais."
             ),
@@ -7227,9 +7228,8 @@ def _render_faturamento_dre_minimal(
         produtos_sel=_prod_sel,
         sinais_resultado=_sinais_tuple,
     )
-    # KPIs comerciais (venda, resultado, ADS, …): ``df_nf_panel`` (emissão + empresa + plataforma + produto / sinal).
-    # Com Parquet fiscal, o card «Valor faturado (NF)» segue o **âncora fiscal**: Σ ``Valor_Liquido_NF`` só com
-    # empresa + período de emissão (igual a ``_faturamento_fiscal_apply_minimal_recorte``) — alinhado ao Bling / SDS.
+    # Com Parquet fiscal: card «Valor da venda» + «Faturado» + «Diferença» = **só** emissão NF no período + empresa
+    # (sem plataforma / produto / sinal). Restantes totais comerciais vêm de ``df_nf_panel`` (recorte da tabela).
     _kp_em = compute_nf_panel_kpis(df_nf)
     _kp = compute_nf_panel_kpis(df_nf_panel)
     _df_fiscal_kpi_anchor: pd.DataFrame | None = None
@@ -7257,8 +7257,19 @@ def _render_faturamento_dre_minimal(
                 .fillna(0.0)
                 .sum()
             )
+            _df_nf_so_periodo_fiscal = _faturamento_nf_apply_minimal_recorte(
+                df_nf_pre,
+                empresas_sel=_min_state.empresas,
+                plataformas_sel=(),
+                nf_d_ini=_nf_kpi_ini,
+                nf_d_fim=_nf_kpi_fim,
+                ok_nf_dates=ok_nf_dates,
+            )
+            _kp_periodo_fiscal = compute_nf_panel_kpis(_df_nf_so_periodo_fiscal)
+            _kp_cards["valor_venda"] = float(_kp_periodo_fiscal["valor_venda"])
             _kp_cards["valor_faturado_nf"] = _vf_fiscal_anchor
             _kp_cards["diferenca"] = float(_kp_cards["valor_venda"]) - _vf_fiscal_anchor
+            _kp_cards["_margem_denominador_venda"] = float(_kp["valor_venda"])
 
     _base_n = (
         len(df_nf_pre)
@@ -7288,8 +7299,10 @@ def _render_faturamento_dre_minimal(
             _fdl_fat_min_aside(
                 "<strong>Fonte única</strong>: <code>dataset_faturamento_nf_panel.parquet</code> — merge fiscal↔comercial, "
                 "frete, resultado e colunas de exibição <strong>pré-calculados na materialização</strong>. "
-                "<strong>Tabela e totais comerciais</strong>: mesmo quadro após produto / lucro·prejuízo. "
-                "<strong>Valor faturado (NF) · fiscal</strong> (com Parquet fiscal): âncora só emissão + empresa."
+                "<strong>Tabela e totais comerciais</strong> (resultado, encargos, ADS): mesmo quadro após produto / "
+                "lucro·prejuízo e plataforma. "
+                "<strong>Valor da venda (lista)</strong>, <strong>Valor faturado (NF) · fiscal</strong> e "
+                "<strong>Diferença</strong> (com Parquet fiscal): **só** emissão no período + empresa."
             )
             if len(df_nf_panel) != len(df_nf):
                 _fdl_fat_min_aside(
@@ -7378,8 +7391,9 @@ def _render_faturamento_dre_minimal(
                     tight=True,
                 )
                 _fdl_fat_min_aside(
-                    "O total **Valor faturado (NF)** no card = soma fiscal (emissão + empresa), **sem** cortar por "
-                    "plataforma, produto ou sinal. A **tabela** e os restantes totais comerciais seguem o recorte abaixo.",
+                    "Os cards **Valor da venda (lista)** e **Valor faturado (NF)** usam o mesmo universo: emissão no "
+                    "período + empresa (sem plataforma / produto / sinal). A **tabela**, **DRE** e **margem %** "
+                    "seguem o recorte comercial (incl. plataforma e bloco produto/resultado).",
                     tight=True,
                 )
             if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame):
@@ -7401,7 +7415,7 @@ def _render_faturamento_dre_minimal(
 
     _fdl_fat_min_vsp(size="md")
     _render_fdl_fat_dre_nf_gerencial(
-        kp=_kp_cards,
+        kp=_kp,
         ok_nf_dates=ok_nf_dates,
         valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
     )

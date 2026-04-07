@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-07T09:41:33Z",
-  "source_signature": "83ea29fb2a37cbc64cb58e1670fffca8",
+  "generated_at": "2026-04-07T10:06:01Z",
+  "source_signature": "3a4778fa07bd313c5c8ce08199ba1ad5",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_facil",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_facil",
   "cnpj": null,
-  "row_count": 18954,
+  "row_count": 18995,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -103,7 +103,7 @@
     "vendas_arquivo": "Mega Facil - Vendas ML 2026.xlsx, Mega Facil - Vendas ML 2025.xlsx",
     "frete_arquivo": "Mega Facil - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 18954,
+    "linhas": 18995,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

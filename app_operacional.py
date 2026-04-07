@@ -23,6 +23,18 @@ import zipfile
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+
+# Bases grandes (ex.: repasse Mega Fácil) excedem o limite default do Styler (262144 células) e o
+# Streamlit rebenta com StreamlitAPIException ao renderizar ``st.dataframe(..., column_config=…)``.
+try:
+    _fdl_styler_max = int(os.environ.get("FDL_STYLER_MAX_ELEMENTS", "2097152").strip())
+except ValueError:
+    _fdl_styler_max = 2_097_152
+try:
+    pd.set_option("styler.render.max_elements", _fdl_styler_max)
+except Exception:
+    pass
+
 import streamlit as st
 from streamlit.column_config import DatetimeColumn, NumberColumn, SelectboxColumn, TextColumn
 from openpyxl.styles import numbers as oxl_number_formats

@@ -108,6 +108,21 @@ def _normalize_pedidos_export(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     if "Código" not in out.columns and "Código (SKU)" in out.columns:
         out = out.rename(columns={"Código (SKU)": "Código"})
+    _col_multiloja = "Número do pedido multiloja"
+    if _col_multiloja not in out.columns:
+        for alias in (
+            "Numero do pedido multiloja",
+            "Nº do pedido multiloja",
+            "Nº do Pedido Multiloja",
+            "Pedido multiloja",
+            "Número pedido multiloja",
+        ):
+            if alias in out.columns:
+                out = out.rename(columns={alias: _col_multiloja})
+                break
+    if _col_multiloja not in out.columns and "Número do pedido" in out.columns:
+        # Export incompleto: sem coluna multiloja — usar o próprio nº do pedido (1 linha = 1 chave de taxa).
+        out[_col_multiloja] = out["Número do pedido"]
     if "Existe Nota Fiscal gerada" not in out.columns:
         out["Existe Nota Fiscal gerada"] = ""
     if "Número da nota" not in out.columns:

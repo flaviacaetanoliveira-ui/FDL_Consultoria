@@ -1,20 +1,21 @@
 {
-  "generated_at": "2026-04-06 07:00:05",
+  "generated_at": "2026-04-07 07:00:07",
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
-  "rows": 1547,
+  "rows": 1558,
   "arquivos_contas_lidos": 4,
   "acao_sugerida_counts": {
-    "Baixar no Bling": 1238,
-    "Ok": 205,
-    "Verificar recebimento": 88,
-    "Analisar diferença": 16
+    "Baixar no Bling": 1248,
+    "Ok": 206,
+    "Revisar venda zerada": 48,
+    "Verificar recebimento": 35,
+    "Analisar diferença": 21
   },
   "situacao_counts": {
-    "": 1265,
+    "": 1269,
     "Pago": 215,
-    "Atrasada": 67
+    "Atrasada": 74
   },
-  "sum_valor_pago": 697809.19,
-  "sum_valor_receber": 711350.0900000001,
-  "sum_diferenca_abs": 14346.099999999999
+  "sum_valor_pago": 732905.6,
+  "sum_valor_receber": 716233.6000000001,
+  "sum_diferenca_abs": 44461.22
 }

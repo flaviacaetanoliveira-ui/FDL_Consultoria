@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-06T11:30:52Z",
+  "generated_at": "2026-04-07T10:12:07Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "default",
   "empresa": "_multi",
@@ -7,35 +7,33 @@
   "cliente_id": "default",
   "empresa_id": "_multi",
   "cnpj": null,
-  "row_count": 1096,
+  "row_count": 1114,
   "columns": [
-    "Nome",
-    "Desconto proporcional",
-    "Frete proporcional",
-    "Valor total",
     "Data",
-    "Total dos Produtos",
     "Data do faturamento",
-    "Data de criação",
     "Situação",
     "Número do pedido multiloja",
-    "Existe Nota Fiscal gerada",
-    "Número",
-    "Nome da plataforma",
     "Código",
-    "Nome - Lista de preço",
-    "Taxa de Comissão",
+    "Descrição",
+    "Número",
+    "Nome da Loja",
+    "Nome da plataforma",
     "Custo de Frete",
+    "Taxa de Comissão",
+    "Total dos Produtos",
     "Número do pedido",
     "Nome do Transportador",
     "Outras Despesas",
-    "Desconto proporcional total",
     "Quantidade",
+    "Valor total",
     "Preço unitário",
-    "Descrição",
+    "Desconto proporcional total",
+    "Preço de custo",
     "Preço de lista",
-    "Desconto",
+    "Nome",
+    "CPF/CNPJ",
     "pedidos_arquivo",
+    "Existe Nota Fiscal gerada",
     "Número da nota",
     "empresa",
     "org_id",
@@ -101,35 +99,35 @@
         {
           "arquivo": "Anto Moveis - Pedidos Dez 2025.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2025\\Anto Moveis - Pedidos Dez 2025.csv",
-          "mtime_iso": "2026-04-05T23:02:30Z"
+          "mtime_iso": "2026-04-06T23:03:05Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Abr 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-06T09:31:18Z"
+          "mtime_iso": "2026-04-07T09:39:11Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Fev 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Fev 2026.csv",
-          "mtime_iso": "2026-03-30T23:49:27Z"
+          "mtime_iso": "2026-04-06T23:03:57Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Jan 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Jan 2026.csv",
-          "mtime_iso": "2026-03-30T23:49:17Z"
+          "mtime_iso": "2026-04-06T23:03:33Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Mar 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Mar 2026.csv",
-          "mtime_iso": "2026-04-02T09:23:18Z"
+          "mtime_iso": "2026-04-06T23:04:17Z"
         }
       ],
       "arquivo": "5 ficheiros CSV",
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos",
-      "mtime_iso": "2026-04-02T09:23:18Z",
+      "mtime_iso": "2026-04-06T23:04:17Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 1101,
-      "pedidos_linhas_depois": 1096,
+      "pedidos_linhas_antes": 1119,
+      "pedidos_linhas_depois": 1114,
       "pedidos_linhas_removidas": 5
     }
   ],
@@ -138,7 +136,7 @@
     "sheet": "Planilha1",
     "custo_reader": "header_row_0"
   },
-  "data_processamento": "2026-04-06T11:30:52Z",
+  "data_processamento": "2026-04-07T10:12:07Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,
@@ -165,40 +163,40 @@
         {
           "arquivo": "Anto Moveis - Pedidos Dez 2025.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2025\\Anto Moveis - Pedidos Dez 2025.csv",
-          "mtime_iso": "2026-04-05T23:02:30Z"
+          "mtime_iso": "2026-04-06T23:03:05Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Abr 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-06T09:31:18Z"
+          "mtime_iso": "2026-04-07T09:39:11Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Fev 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Fev 2026.csv",
-          "mtime_iso": "2026-03-30T23:49:27Z"
+          "mtime_iso": "2026-04-06T23:03:57Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Jan 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Jan 2026.csv",
-          "mtime_iso": "2026-03-30T23:49:17Z"
+          "mtime_iso": "2026-04-06T23:03:33Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Mar 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Mar 2026.csv",
-          "mtime_iso": "2026-04-02T09:23:18Z"
+          "mtime_iso": "2026-04-06T23:04:17Z"
         }
       ],
       "arquivo": "5 ficheiros CSV",
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos",
-      "mtime_iso": "2026-04-02T09:23:18Z",
+      "mtime_iso": "2026-04-06T23:04:17Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 1101,
-      "pedidos_linhas_depois": 1096,
+      "pedidos_linhas_antes": 1119,
+      "pedidos_linhas_depois": 1114,
       "pedidos_linhas_removidas": 5
     }
   ],
   "status_custo_counts": {
-    "CUSTO_OK": 1069,
+    "CUSTO_OK": 1087,
     "SKU_SEM_CORRESPONDENCIA": 27
   },
   "params_mensais_path": null,
@@ -207,31 +205,31 @@
     {
       "org_id": "antomoveis",
       "notas_saida_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\notas_saida",
-      "notas_linhas_apos_filtro": 1417,
-      "notas_arquivos_linhas_brutas": 1489,
+      "notas_linhas_apos_filtro": 1443,
+      "notas_arquivos_linhas_brutas": 1515,
       "notas_vazio": false,
-      "notas_frete_fallback_grupos_nf": 110,
-      "notas_nf_distintas": 649,
+      "notas_frete_fallback_grupos_nf": 111,
+      "notas_nf_distintas": 666,
       "custo_nf_enriquecido_linhas_pedido": 0,
       "custo_nf_itens_col_codigo": "Código",
       "custo_nf_itens_col_quantidade": "Quantidade",
-      "custo_nf_itens_linhas_com_custo": 1221,
-      "custo_nf_itens_nf_com_total_positivo": 1221,
+      "custo_nf_itens_linhas_com_custo": 1245,
+      "custo_nf_itens_nf_com_total_positivo": 1244,
       "ml_fee_rateio_grupos_comissao": 1,
       "ml_fee_rateio_grupos_frete": 0,
       "ml_fee_rateio_linhas_tocadas": 2,
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 1101,
-      "pedidos_linhas_depois": 1096,
+      "pedidos_linhas_antes": 1119,
+      "pedidos_linhas_depois": 1114,
       "pedidos_linhas_removidas": 5
     }
   ],
   "dataset_faturamento_nf_parquet": "dataset_faturamento_nf.parquet",
-  "nf_first_row_count": 649,
+  "nf_first_row_count": 666,
   "schema_version_nf_first": 2,
   "dataset_faturamento_nf_panel_parquet": "dataset_faturamento_nf_panel.parquet",
-  "nf_panel_row_count": 1415,
+  "nf_panel_row_count": 1440,
   "dataset_faturamento_fiscal_parquet": "dataset_faturamento_fiscal.parquet",
   "schema_version_fiscal": 1,
-  "fiscal_row_count": 1415
+  "fiscal_row_count": 1440
 }

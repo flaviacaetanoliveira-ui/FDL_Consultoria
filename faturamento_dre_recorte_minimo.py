@@ -31,6 +31,10 @@ from faturamento_dre_recorte import (
 # (Σ Quantidade × Preço de lista nas linhas ligadas à nota).
 NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA = 0.05
 
+# Custo de mídia (ADS) por NF no painel materializado: % sobre valor_venda + valor fixo por venda com lista > 0.
+NF_FIRST_PANEL_ADS_ALIQUOTA = 0.035
+NF_FIRST_PANEL_ADS_FIXO_POR_VENDA = 2.0
+
 
 def nf_grain_plataforma_match_key(raw: object) -> str:
     """
@@ -316,8 +320,9 @@ def build_nf_grain_dataframe(
     ``Frete_Plataforma`` / ``Custo de Frete``.
 
     **Resultado:** Σ ``Resultado`` das linhas. Com coluna ``Despesas Fixas``: Σ ``Resultado`` + Σ ``Despesas Fixas``
-    − ``despesa_fixa`` (5% × ``valor_venda`` na NF). O painel aplica depois
-    ``apply_nf_panel_resultado_frete_nota_lista`` quando o frete coincide com o excesso NF−lista (frete na saída).
+    − ``despesa_fixa`` (5% × ``valor_venda`` na NF). No **painel materializado** aplicam-se ainda o ajuste de frete
+    (``apply_nf_panel_resultado_frete_nota_lista``) e o custo **ADS** (3,5% × ``valor_venda`` + fixo por NF com venda > 0),
+    que reduz ``resultado``.
 
     **Despesa fixa:** ``NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA`` × ``valor_venda`` (por NF).
 
@@ -636,6 +641,31 @@ def apply_nf_panel_resultado_frete_nota_lista(df: pd.DataFrame, *, eps: float = 
     return out
 
 
+def apply_nf_panel_custo_ads(df: pd.DataFrame, *, eps: float = 1e-9) -> pd.DataFrame:
+    """
+    Custo de **ADS** por NF: ``NF_FIRST_PANEL_ADS_ALIQUOTA × valor_venda`` + fixo por venda com lista > 0.
+
+    Grava ``custo_ads_variavel``, ``custo_ads_fixo`` e ``custo_ads`` (soma) e **subtrai** ``custo_ads`` de
+    ``resultado`` (NaN permanece NaN). Sem ``valor_venda`` / ``resultado`` não altera.
+    """
+    need = {"valor_venda", "resultado"}
+    if df.empty or not need.issubset(df.columns):
+        return df
+    out = df.copy()
+    vv = pd.to_numeric(out["valor_venda"], errors="coerce").fillna(0.0)
+    m_sale = vv > eps
+    ads_var = (vv * float(NF_FIRST_PANEL_ADS_ALIQUOTA)).astype(float)
+    ads_fix = pd.Series(0.0, index=out.index, dtype=float)
+    ads_fix.loc[m_sale] = float(NF_FIRST_PANEL_ADS_FIXO_POR_VENDA)
+    ads_tot = ads_var + ads_fix
+    out["custo_ads_variavel"] = ads_var
+    out["custo_ads_fixo"] = ads_fix.astype(float)
+    out["custo_ads"] = ads_tot.astype(float)
+    res = pd.to_numeric(out["resultado"], errors="coerce")
+    out["resultado"] = res - ads_tot
+    return out
+
+
 def apply_nf_panel_custo_from_line_grain(
     df_nf: pd.DataFrame,
     df_line: pd.DataFrame,
@@ -700,6 +730,9 @@ def compute_nf_panel_kpis(df_nf: pd.DataFrame) -> dict[str, float | int]:
         "frete": 0.0,
         "imposto": 0.0,
         "despesa_fixa": 0.0,
+        "custo_ads_variavel": 0.0,
+        "custo_ads_fixo": 0.0,
+        "custo_ads": 0.0,
         "resultado": 0.0,
         "n_nf": 0,
     }
@@ -720,6 +753,19 @@ def compute_nf_panel_kpis(df_nf: pd.DataFrame) -> dict[str, float | int]:
         "frete": float(pd.to_numeric(df_nf["frete"], errors="coerce").fillna(0.0).sum()),
         "imposto": float(pd.to_numeric(df_nf["imposto"], errors="coerce").fillna(0.0).sum()),
         "despesa_fixa": float(pd.to_numeric(df_nf["despesa_fixa"], errors="coerce").fillna(0.0).sum()),
+        "custo_ads_variavel": float(
+            pd.to_numeric(df_nf["custo_ads_variavel"], errors="coerce").fillna(0.0).sum()
+        )
+        if "custo_ads_variavel" in df_nf.columns
+        else 0.0,
+        "custo_ads_fixo": float(
+            pd.to_numeric(df_nf["custo_ads_fixo"], errors="coerce").fillna(0.0).sum()
+        )
+        if "custo_ads_fixo" in df_nf.columns
+        else 0.0,
+        "custo_ads": float(pd.to_numeric(df_nf["custo_ads"], errors="coerce").fillna(0.0).sum())
+        if "custo_ads" in df_nf.columns
+        else 0.0,
         "resultado": float(pd.to_numeric(df_nf["resultado"], errors="coerce").sum()),
         "n_nf": int(len(df_nf)),
     }

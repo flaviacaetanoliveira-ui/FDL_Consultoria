@@ -9,6 +9,9 @@ import pandas as pd
 from processing.faturamento.config import STATUS_CUSTO_OK
 from faturamento_dre_recorte_minimo import (
     FaturamentoRecorteMinState,
+    NF_FIRST_PANEL_ADS_ALIQUOTA,
+    NF_FIRST_PANEL_ADS_FIXO_POR_VENDA,
+    apply_nf_panel_custo_ads,
     apply_nf_panel_custo_from_line_grain,
     apply_nf_panel_frete_gap_fallback,
     apply_nf_panel_resultado_frete_nota_lista,
@@ -758,3 +761,21 @@ def test_apply_nf_panel_frete_gap_fallback_nao_sobrescreve_frete_comercial() -> 
     )
     out = apply_nf_panel_frete_gap_fallback(df)
     assert abs(float(out.iloc[0]["frete"]) - 10.0) < 1e-9
+
+
+def test_apply_nf_panel_custo_ads_subtracts_from_resultado() -> None:
+    df = pd.DataFrame(
+        {
+            "valor_venda": [100.0, 0.0],
+            "resultado": [50.0, 10.0],
+        }
+    )
+    out = apply_nf_panel_custo_ads(df)
+    v0 = 100.0 * NF_FIRST_PANEL_ADS_ALIQUOTA
+    assert abs(float(out.iloc[0]["custo_ads_variavel"]) - v0) < 1e-9
+    assert abs(float(out.iloc[0]["custo_ads_fixo"]) - NF_FIRST_PANEL_ADS_FIXO_POR_VENDA) < 1e-9
+    assert abs(float(out.iloc[0]["custo_ads"]) - (v0 + NF_FIRST_PANEL_ADS_FIXO_POR_VENDA)) < 1e-9
+    assert abs(float(out.iloc[0]["resultado"]) - (50.0 - v0 - NF_FIRST_PANEL_ADS_FIXO_POR_VENDA)) < 1e-9
+    assert abs(float(out.iloc[1]["custo_ads_fixo"])) < 1e-9
+    assert abs(float(out.iloc[1]["custo_ads_variavel"])) < 1e-9
+    assert abs(float(out.iloc[1]["resultado"]) - 10.0) < 1e-9

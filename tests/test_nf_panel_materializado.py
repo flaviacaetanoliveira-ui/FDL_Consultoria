@@ -9,6 +9,7 @@ import pandas as pd
 from faturamento_dre_recorte_minimo import FaturamentoRecorteMinState, build_nf_grain_dataframe
 from processing.faturamento.nf_materializado import NF_FIRST_CONTRACT_COLUMNS, build_nf_materializado_dataframe
 from processing.faturamento.nf_panel_materializado import (
+    NF_PANEL_REQUIRED_COLUMNS,
     build_nf_panel_materializado_dataframe,
     nf_panel_materializado_dataframe_valid,
 )
@@ -45,7 +46,11 @@ def test_build_nf_panel_sem_fiscal_aplica_gap_e_resultado() -> None:
     panel = build_nf_panel_materializado_dataframe(df_nf, pd.DataFrame())
     assert nf_panel_materializado_dataframe_valid(panel)
     assert abs(float(panel.iloc[0]["frete"]) - 122.0) < 1e-6
-    assert abs(float(panel.iloc[0]["resultado"]) - 132.0) < 1e-6
+    # Resultado após frete na nota = 132; ADS = 3,5%×630 + 2 = 24,05 → 107,95
+    assert abs(float(panel.iloc[0]["resultado"]) - 107.95) < 1e-5
+    assert abs(float(panel.iloc[0]["custo_ads_variavel"]) - 22.05) < 1e-5
+    assert abs(float(panel.iloc[0]["custo_ads_fixo"]) - 2.0) < 1e-6
+    assert abs(float(panel.iloc[0]["custo_ads"]) - 24.05) < 1e-5
     assert bool(panel.iloc[0]["comercial_incompleto"]) is False
 
 
@@ -53,32 +58,7 @@ def test_build_nf_panel_contract_columns_present() -> None:
     line = _line_one_nf()
     df_nf = build_nf_materializado_dataframe(line)
     panel = build_nf_panel_materializado_dataframe(df_nf, pd.DataFrame())
-    exp = sorted(
-        {
-            "org_id",
-            "Nota_Numero_Normalizado",
-            "Nota_Data_Emissao",
-            "Nota_Situacao",
-            "empresa",
-            "valor_faturado_nf",
-            "valor_venda",
-            "diferenca",
-            "comissao",
-            "custo_produto",
-            "frete",
-            "imposto",
-            "despesa_fixa",
-            "resultado",
-            "plataforma_resumo",
-            "plataforma",
-            "pedido_resumo",
-            "n_linhas_pedido",
-            "produto_resumo",
-            "faturamento_nota_vinculada",
-            "comercial_incompleto",
-        }
-    )
-    assert list(panel.columns) == exp
+    assert list(panel.columns) == sorted(NF_PANEL_REQUIRED_COLUMNS)
 
 
 def test_nf_materializado_invariante_com_grain() -> None:

@@ -4989,8 +4989,8 @@ def _render_fdl_fat_dre_nf_kpi_cards(
         "5% do Valor da venda (Σ Quantidade × Preço de lista) agregado à NF, por nota."
     )
     _ht_res = (
-        "Comercial: Σ resultado por NF (pedidos ligados), nas **mesmas NFs** que a tabela "
-        "(emissão + empresa + plataforma + produto / lucro·prejuízo quando filtrados). "
+        "Comercial: Σ resultado por NF **já líquido de ADS** (3,5% sobre venda lista + R$ 2 por NF com venda > 0), "
+        "nas **mesmas NFs** que a tabela (emissão + empresa + plataforma + produto / lucro·prejuízo quando filtrados). "
         "NFs sem resultado numérico (NaN) não somam no total. "
         "Não confundir com o valor líquido da NF fiscal."
         if valor_faturado_from_fiscal_parquet
@@ -5113,6 +5113,18 @@ def _render_fdl_fat_dre_nf_kpi_cards(
                 _fmt_brl_ptbr_celula(kp["despesa_fixa"]) or "R$ 0,00",
                 tier="secondary",
                 title=_ht_df,
+            ),
+            _card(
+                "ADS 3,5% (lista)",
+                _fmt_brl_ptbr_celula(kp.get("custo_ads_variavel", 0.0)) or "R$ 0,00",
+                tier="secondary",
+                title="Σ 3,5% × valor da venda (lista) por NF no recorte (materializado).",
+            ),
+            _card(
+                "ADS fixo (R$/NF)",
+                _fmt_brl_ptbr_celula(kp.get("custo_ads_fixo", 0.0)) or "R$ 0,00",
+                tier="secondary",
+                title="Σ R$ 2,00 por NF com venda (lista) > 0 — mesma regra do painel materializado.",
             ),
         ]
     )
@@ -5278,6 +5290,8 @@ def _render_fdl_fat_dre_nf_gerencial(
     enc_fre = _fmt_brl_ptbr_encargo_dre(kp["frete"])
     enc_imp = _fmt_brl_ptbr_encargo_dre(kp["imposto"])
     enc_df = _fmt_brl_ptbr_encargo_dre(kp["despesa_fixa"])
+    enc_ads_v = _fmt_brl_ptbr_encargo_dre(float(kp.get("custo_ads_variavel", 0.0)))
+    enc_ads_f = _fmt_brl_ptbr_encargo_dre(float(kp.get("custo_ads_fixo", 0.0)))
 
     def _dre_row(
         lab: str,
@@ -5422,12 +5436,24 @@ def _render_fdl_fat_dre_nf_gerencial(
             "Despesa fixa",
             enc_df,
             encargo=True,
-            enc_last=True,
             title=(
                 "Σ despesa fixa comercial (5% sobre valor de venda lista por NF) no recorte."
                 if valor_faturado_from_fiscal_parquet
                 else "Σ despesa fixa (5% sobre valor de venda por NF) no recorte."
             ),
+        )
+        + _dre_row(
+            "ADS 3,5% (venda lista)",
+            enc_ads_v,
+            encargo=True,
+            title="Custo de mídia variável: 3,5% sobre o valor de venda (lista) por NF, já materializado no painel.",
+        )
+        + _dre_row(
+            "ADS fixo (por NF com venda)",
+            enc_ads_f,
+            encargo=True,
+            enc_last=True,
+            title="R$ 2,00 por NF com valor de venda (lista) > 0 — materializado no painel.",
         )
         + (
             '<div class="fdl-fat-dre-block-h">Fechamento</div>'
@@ -5448,7 +5474,8 @@ def _render_fdl_fat_dre_nf_gerencial(
             "</div></div>"
             '<p class="fdl-fat-dre-foot fdl-fat-dre-foot--final">'
             + (
-                "Margem = Σ resultado ÷ Σ receita de venda (lista), mesmo recorte que a tabela (produto/sinal quando aplicável); "
+                "Resultado e margem já consideram **ADS** (3,5% lista + fixo por NF). "
+                "Margem = Σ resultado ÷ Σ receita de venda (lista), mesmo recorte que a tabela; "
                 "valor faturado fiscal não entra. Sem CMV nesta fase."
                 if valor_faturado_from_fiscal_parquet
                 else "Margem = resultado ÷ receita de venda (lista). Sem CMV nesta fase."
@@ -7365,6 +7392,9 @@ def _render_faturamento_dre_minimal(
         "Frete",
         "Imposto",
         "Desp. fixa",
+        "ADS 3,5%",
+        "ADS fixo",
+        "ADS total",
         "Resultado",
         "Info dados",
         "Margem %",
@@ -7403,6 +7433,21 @@ def _render_faturamento_dre_minimal(
             else pd.Series(False, index=_df_nf_table.index, dtype=bool)
         )
         _info_dados = _inc_flag.map(lambda b: "Falta custo / dados" if b else "—")
+        _ads_v_s = (
+            pd.to_numeric(_df_nf_table["custo_ads_variavel"], errors="coerce").fillna(0.0)
+            if "custo_ads_variavel" in _df_nf_table.columns
+            else pd.Series(0.0, index=_df_nf_table.index, dtype=float)
+        )
+        _ads_f_s = (
+            pd.to_numeric(_df_nf_table["custo_ads_fixo"], errors="coerce").fillna(0.0)
+            if "custo_ads_fixo" in _df_nf_table.columns
+            else pd.Series(0.0, index=_df_nf_table.index, dtype=float)
+        )
+        _ads_t_s = (
+            pd.to_numeric(_df_nf_table["custo_ads"], errors="coerce").fillna(0.0)
+            if "custo_ads" in _df_nf_table.columns
+            else (_ads_v_s + _ads_f_s)
+        )
         _disp_nf_full = pd.DataFrame(
             {
                 "Emissão": _series_nf_emissao_pt_br(
@@ -7427,6 +7472,9 @@ def _render_faturamento_dre_minimal(
                 "Frete": pd.to_numeric(_df_nf_table["frete"], errors="coerce"),
                 "Imposto": pd.to_numeric(_df_nf_table["imposto"], errors="coerce"),
                 "Desp. fixa": pd.to_numeric(_df_nf_table["despesa_fixa"], errors="coerce"),
+                "ADS 3,5%": _ads_v_s,
+                "ADS fixo": _ads_f_s,
+                "ADS total": _ads_t_s,
                 "Resultado": pd.to_numeric(_df_nf_table["resultado"], errors="coerce"),
                 "Info dados": _info_dados.astype(str),
                 "Margem %": (_marg_ratio * 100.0),
@@ -7488,6 +7536,9 @@ def _render_faturamento_dre_minimal(
             "Frete",
             "Imposto",
             "Desp. fixa",
+            "ADS 3,5%",
+            "ADS fixo",
+            "ADS total",
             "Resultado",
         ):
             _disp_nf_ui[_money_col] = _disp_nf_ui[_money_col].map(_nf_tbl_money_str)
@@ -7541,10 +7592,13 @@ def _render_faturamento_dre_minimal(
             if use_fiscal_kpi
             else "5% sobre valor da venda agregado à NF."
         ),
+        "ADS 3,5%": "3,5% × venda (lista) nesta NF — custo de mídia (materializado).",
+        "ADS fixo": "R$ 2,00 quando a venda (lista) > 0 nesta NF (materializado).",
+        "ADS total": "Soma ADS variável + fixo; já descontado do «Resultado».",
         "Resultado": (
-            "Comercial: resultado consolidado por NF (mesma regra do painel)."
+            "Comercial: resultado consolidado por NF **já líquido de ADS** (materializado)."
             if use_fiscal_kpi
-            else "Resultado consolidado por NF (mesma regra do painel)."
+            else "Resultado consolidado por NF **já líquido de ADS** (materializado)."
         ),
         "Margem %": (
             "Comercial: Resultado ÷ Venda (lista) nesta NF; não usa valor faturado fiscal."
@@ -7572,6 +7626,9 @@ def _render_faturamento_dre_minimal(
         "Frete": "small",
         "Imposto": "small",
         "Desp. fixa": "small",
+        "ADS 3,5%": "small",
+        "ADS fixo": "small",
+        "ADS total": "small",
         "Resultado": "medium",
         "Info dados": "medium",
         "Margem %": "small",
@@ -7602,7 +7659,7 @@ def _render_faturamento_dre_minimal(
         _tbl_cap_body = (
             f"{len(_disp_nf_ui)} linha(s) (= NFs fiscais no recorte). "
             "Legenda: «Faturado (NF)» e o universo de linhas = <strong>fiscal</strong> (Parquet, 1 NF por linha). "
-            "«Venda (lista)», «Diferença», encargos, «Resultado» e «Margem %» = <strong>comercial</strong> "
+            "«Venda (lista)», «Diferença», encargos, **ADS**, «Resultado» e «Margem %» = <strong>comercial</strong> "
             "(pedidos; sem pedido → venda 0). Emissão em ordem decrescente; export CSV com texto completo."
         )
     else:

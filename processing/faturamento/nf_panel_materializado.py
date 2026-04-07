@@ -1,8 +1,8 @@
 """
-Painel NF-first **pré-calculado** (merge fiscal↔comercial + frete gap + resultado frete/NF).
+Painel NF-first **pré-calculado** (merge fiscal↔comercial + frete gap + resultado frete/NF + custo ADS).
 
-Gravado em ``dataset_faturamento_nf_panel.parquet`` na materialização para o Streamlit **não** repetir
-esses passos em cada rerun.
+Inclui custo de **ADS** (3,5% sobre ``valor_venda`` + R$ 2 por NF com venda lista > 0), gravado em colunas
+``custo_ads_*`` e descontado de ``resultado``. Gravado em ``dataset_faturamento_nf_panel.parquet``.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 import pandas as pd
 
 from faturamento_dre_recorte_minimo import (
+    apply_nf_panel_custo_ads,
     apply_nf_panel_frete_gap_fallback,
     apply_nf_panel_resultado_frete_nota_lista,
 )
@@ -36,6 +37,9 @@ NF_PANEL_REQUIRED_COLUMNS: frozenset[str] = frozenset(
         "frete",
         "imposto",
         "despesa_fixa",
+        "custo_ads_variavel",
+        "custo_ads_fixo",
+        "custo_ads",
         "resultado",
         "plataforma_resumo",
         "plataforma",
@@ -97,6 +101,7 @@ def build_nf_panel_materializado_dataframe(
 
     base = apply_nf_panel_frete_gap_fallback(base)
     base = apply_nf_panel_resultado_frete_nota_lista(base)
+    base = apply_nf_panel_custo_ads(base)
     if "plataforma" not in base.columns:
         base = base.copy()
         base["plataforma"] = base["plataforma_resumo"].fillna("").astype(str)

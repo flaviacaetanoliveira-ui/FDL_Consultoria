@@ -1714,22 +1714,40 @@ def _load_faturamento_materialized_dataframe(path_s: str, url_s: str) -> pd.Data
 
 
 def _faturamento_nf_parquet_path_from_materialized_path(path_s: str) -> Path | None:
-    """``dataset_faturamento_nf.parquet`` no mesmo diretório que o materializado linha ou dentro da pasta apontada."""
+    """
+    ``dataset_faturamento_nf.parquet`` no mesmo diretório que o materializado linha ou dentro da pasta apontada.
+
+    Fallback V2: ``data_products/<slug>/faturamento/current/`` quando o path explícito aponta para uma cópia
+    sem os Parquets (alinhado a ``_faturamento_fiscal_parquet_resolve``).
+    """
     if not (path_s or "").strip():
         return None
+    resolved: Path | None = None
     try:
         p = Path(path_s).expanduser()
         if not p.is_absolute():
             p = (_REPO_APP_ROOT / p).resolve()
         if p.is_dir():
             cand = p / "dataset_faturamento_nf.parquet"
-            return cand if cand.is_file() else None
-        if not p.is_file():
-            return None
-        cand = p.parent / "dataset_faturamento_nf.parquet"
-        return cand if cand.is_file() else None
+            resolved = cand if cand.is_file() else None
+        elif p.is_file():
+            cand = p.parent / "dataset_faturamento_nf.parquet"
+            resolved = cand if cand.is_file() else None
     except OSError:
-        return None
+        resolved = None
+    if resolved is not None:
+        return resolved
+    v2s = _faturamento_v2_canonical_dataset_path_str()
+    if v2s:
+        try:
+            v2file = _faturamento_resolve_disk_path(v2s)
+            if v2file.is_file():
+                cand = v2file.parent / "dataset_faturamento_nf.parquet"
+                if cand.is_file():
+                    return cand.resolve()
+        except OSError:
+            pass
+    return None
 
 
 def _faturamento_nf_panel_parquet_path_from_materialized_path(path_s: str) -> Path | None:

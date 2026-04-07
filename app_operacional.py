@@ -224,6 +224,16 @@ def _dynamic_materialized_frete_rel_path(org_id: str) -> str:
     return f"{root}/{cliente}/{oid}/frete/current/dataset_frete_app.csv"
 
 
+def _dynamic_materialized_devolucoes_rel_path(org_id: str) -> str:
+    """``data_products/<slug>/<org_id>/devolucoes/current/`` — o app prefere ``dataset.parquet`` se existir ao lado do CSV."""
+    cliente = _materialized_cliente_slug()
+    if not cliente or not (org_id or "").strip():
+        return ""
+    root = _materialized_data_products_root().strip().strip("/\\")
+    oid = org_id.strip()
+    return f"{root}/{cliente}/{oid}/devolucoes/current/dataset_devolucoes_app.csv"
+
+
 _fdl_global_trace("01: início app_operacional (módulo reexecutado)")
 _app_ctx = require_app_user()
 _fdl_global_trace("02: após autenticação (require_app_user)")
@@ -252,12 +262,12 @@ def _enabled_finance_modules() -> set[str]:
     if not raw:
         return {"repasse", "frete", "faturamento"}
     out = {x.strip().lower() for x in raw.split(",") if x.strip()}
-    valid = {"repasse", "frete", "faturamento"}
+    valid = {"repasse", "frete", "devolucoes", "faturamento"}
     return out & valid or {"repasse", "frete", "faturamento"}
 
 
 def _user_perfil_acesso_operacional_only() -> bool:
-    """Cadastro ``perfil_acesso=operacional``: só Repasse/Frete (sem Faturamento nem Comercial na sidebar)."""
+    """Cadastro ``perfil_acesso=operacional``: só módulos operacionais (Repasse/Frete/Devoluções), sem Faturamento nem Comercial na sidebar."""
     if not st.session_state.get("logged_in"):
         return False
     p = str(st.session_state.get("fdl_perfil_acesso", "completo")).strip().lower()
@@ -317,7 +327,7 @@ def _filtrar_df_col_empresa_por_contexto(df: pd.DataFrame) -> pd.DataFrame:
 
 if "op_financeiro_view" not in st.session_state:
     st.session_state["op_financeiro_view"] = "repasse"
-elif st.session_state["op_financeiro_view"] not in ("repasse", "frete", "faturamento"):
+elif st.session_state["op_financeiro_view"] not in ("repasse", "frete", "devolucoes", "faturamento"):
     st.session_state["op_financeiro_view"] = "repasse"
 
 _enabled_modules = _enabled_finance_modules()
@@ -333,11 +343,16 @@ if SESSION_FDL_PRODUCT_AREA_KEY not in st.session_state:
 if st.session_state.get("op_financeiro_view") == "faturamento":
     st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FATURAMENTO_DRE
     st.session_state["op_financeiro_view"] = "repasse"
-if st.session_state["op_financeiro_view"] not in ("repasse", "frete"):
+if st.session_state["op_financeiro_view"] not in ("repasse", "frete", "devolucoes"):
     st.session_state["op_financeiro_view"] = "repasse"
 
 if st.session_state["op_financeiro_view"] not in _enabled_modules:
-    st.session_state["op_financeiro_view"] = "repasse" if "repasse" in _enabled_modules else "frete"
+    for _cand in ("repasse", "frete", "devolucoes"):
+        if _cand in _enabled_modules:
+            st.session_state["op_financeiro_view"] = _cand
+            break
+    else:
+        st.session_state["op_financeiro_view"] = "repasse" if "repasse" in _enabled_modules else "frete"
 
 if "faturamento" not in _enabled_modules and st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY) in (
     FDL_PRODUCT_AREA_FATURAMENTO_DRE,
@@ -551,6 +566,11 @@ def _sb_nav_set_repasse() -> None:
 
 def _sb_nav_set_frete() -> None:
     st.session_state["op_financeiro_view"] = "frete"
+    st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FINANCEIRO
+
+
+def _sb_nav_set_devolucoes() -> None:
+    st.session_state["op_financeiro_view"] = "devolucoes"
     st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FINANCEIRO
 
 
@@ -1260,6 +1280,124 @@ def _frete_materialized_url_str() -> str:
         return str(st.secrets.get("FDL_FRETE_MATERIALIZED_URL", "")).strip()
     except Exception:
         return ""
+
+
+def _devolucoes_consume_mode() -> str:
+    """Devoluções: nesta fase só há consumo por artefato materializado (sem pipeline live no app)."""
+    raw = os.environ.get("FDL_DEVOLUCOES_CONSUME_MODE", "").strip().lower()
+    if raw in {"materialized", "live"}:
+        return raw
+    try:
+        s = str(st.secrets.get("FDL_DEVOLUCOES_CONSUME_MODE", "")).strip().lower()
+        if s in {"materialized", "live"}:
+            return s
+    except Exception:
+        pass
+    return "materialized"
+
+
+def _devolucoes_materialized_path_str() -> str:
+    if _materialized_path_mode() == "dynamic":
+        return _dynamic_materialized_devolucoes_rel_path(_active_org.org_id)
+    raw = os.environ.get("FDL_DEVOLUCOES_MATERIALIZED_PATH", "").strip()
+    if raw:
+        return raw
+    try:
+        return str(st.secrets.get("FDL_DEVOLUCOES_MATERIALIZED_PATH", "")).strip()
+    except Exception:
+        return ""
+
+
+def _devolucoes_resolved_load_path() -> Path | None:
+    """Ficheiro efetivo: ``dataset.parquet`` na mesma pasta do CSV dinâmico, senão o próprio CSV."""
+    path_s = (_devolucoes_materialized_path_str() or "").strip()
+    if not path_s:
+        return None
+    p_csv = Path(path_s).expanduser()
+    if not p_csv.is_absolute():
+        p_csv = (_REPO_APP_ROOT / p_csv).resolve()
+    else:
+        p_csv = p_csv.resolve()
+    pq = p_csv.parent / "dataset.parquet"
+    if pq.is_file():
+        return pq
+    if p_csv.is_file():
+        return p_csv
+    return None
+
+
+def _devolucoes_materialized_session_signature() -> str:
+    path_s = (_devolucoes_materialized_path_str() or "").strip()
+    if not path_s:
+        return "devolucoes|empty_path"
+    p_eff = _devolucoes_resolved_load_path()
+    if p_eff is None:
+        return f"devolucoes|missing|{path_s.strip()[:180]}"
+    try:
+        stt = p_eff.stat()
+        return f"devolucoes|{p_eff.resolve()}|{stt.st_mtime_ns}|{stt.st_size}"
+    except OSError:
+        return "devolucoes|stat_err"
+
+
+def _load_devolucoes_materialized_dataframe() -> pd.DataFrame:
+    p_eff = _devolucoes_resolved_load_path()
+    if p_eff is None:
+        raise FileNotFoundError(
+            "Artefato de devoluções não encontrado. Materialize com "
+            "`python processing/materialize_financeiro.py --modulo devolucoes` ou confira o path."
+        )
+    if p_eff.suffix.lower() == ".parquet":
+        return pd.read_parquet(p_eff)
+    return pd.read_csv(p_eff, sep=None, engine="python", encoding="utf-8-sig")
+
+
+def _load_devolucoes_data(org_id: str) -> tuple[pd.DataFrame, dict[str, object], str]:
+    """Lê só o materializado (Parquet preferencial)."""
+    if _strict_materialized() and _devolucoes_consume_mode() == "materialized":
+        path_hint = _devolucoes_materialized_path_str().strip()
+        if not path_hint:
+            raise ValueError(
+                "Devoluções em modo materialized: defina o path dinâmico (slug + org) ou "
+                "FDL_DEVOLUCOES_MATERIALIZED_PATH. " + _STRICT_MATERIALIZED_USER_MSG
+            )
+        p_eff = _devolucoes_resolved_load_path()
+        if p_eff is None:
+            raise ValueError(
+                "Devoluções: ficheiro consolidado não encontrado no disco. " + _STRICT_MATERIALIZED_USER_MSG
+            )
+
+    _ss_key = f"_devolucoes_cache_{org_id}"
+    _sig = _devolucoes_materialized_session_signature()
+    _cached = st.session_state.get(_ss_key)
+    if isinstance(_cached, dict) and _cached.get("source_signature") == _sig:
+        df_c = _cached.get("df_devolucoes")
+        if isinstance(df_c, pd.DataFrame):
+            ts = str(_cached.get("ts_proc", _now_ts_br_str()))
+            info = _cached.get("meta_devolucoes")
+            if isinstance(info, dict):
+                return df_c, info, ts
+
+    df = _load_devolucoes_materialized_dataframe()
+    p_eff = _devolucoes_resolved_load_path()
+    ts_br = _now_ts_br_str()
+    if p_eff is not None and p_eff.is_file():
+        ts_br = _frete_ts_for_path(p_eff)
+    path_disp = _devolucoes_materialized_path_str().strip()
+    info: dict[str, object] = {
+        "origem": "devolucoes_materializado",
+        "devolucoes_consume": "materialized",
+        "devolucoes_materialized_target": path_disp[:500] if path_disp else "",
+        "devolucoes_path_resolved": str(p_eff.resolve()) if p_eff else "",
+        "linhas": int(len(df)),
+    }
+    st.session_state[_ss_key] = {
+        "df_devolucoes": df,
+        "meta_devolucoes": info,
+        "source_signature": _sig,
+        "ts_proc": ts_br,
+    }
+    return df, info, ts_br
 
 
 def _faturamento_consume_mode() -> str:
@@ -8899,6 +9037,269 @@ def _render_frete_operacional_ui(
         return
 
 
+def _devolucoes_prioridade_badge(status_interno: object) -> str:
+    """Rótulo curto só para leitura na tabela (não existe no materializado)."""
+    si = str(status_interno or "").strip()
+    if si == "Conferência física pendente":
+        return "Conferência física"
+    if si == "Revisar financeiramente":
+        return "Revisar financeiro"
+    if si == "Cobrar plataforma":
+        return "Cobrar ML"
+    return ""
+
+
+def _painel_devolucoes_operacional(
+    df: pd.DataFrame, load_info: dict[str, object], ts_proc: str
+) -> None:
+    """Painel só leitura sobre o materializado (candidatas a devolução)."""
+    _is_admin = _is_admin_mode()
+    n = int(len(df))
+    st.caption(
+        f"Fila **só de candidatas** (devolução, reembolso, mediação ou sinais nas liberações). "
+        f"**{n}** vendas neste recorte · Atualizado **{ts_proc}**"
+    )
+    if df.empty:
+        st.info(
+            "Não há linhas no recorte materializado. Corra o job de materialização com `--modulo devolucoes` "
+            "ou verifique se existem vendas com devolução, reembolso, mediação, reclamação ou eventos correlatos nas liberações."
+        )
+        return
+
+    d = df.copy()
+    if "empresa" not in d.columns:
+        d["empresa"] = _dataset_empresa_label()
+
+    si_series = d["status_interno"].fillna("").astype(str).str.strip() if "status_interno" in d.columns else pd.Series("", index=d.index)
+    n_conf = int((si_series == "Conferência física pendente").sum())
+    n_rev = int((si_series == "Revisar financeiramente").sum())
+    n_cob = int((si_series == "Cobrar plataforma").sum())
+    n_pag = int((si_series == "Pagamento liberado ao vendedor").sum())
+    n_reemb = int((si_series == "Reembolso ao comprador").sum())
+    _lib_n = (
+        pd.to_numeric(d["lib_n_eventos"], errors="coerce").fillna(0)
+        if "lib_n_eventos" in d.columns
+        else pd.Series(0, index=d.index)
+    )
+    n_vinc = int((_lib_n > 0).sum())
+
+    st.markdown(
+        '<p class="fdl-frete-section-title">Indicadores operacionais</p>'
+        '<p class="fdl-frete-section-note">Contagens por <strong>status interno</strong> — use os filtros abaixo para isolar cada fila.</p>',
+        unsafe_allow_html=True,
+    )
+    with st.container(border=True):
+        k1, k2, k3, k4, k5 = st.columns(5)
+        with k1:
+            st.metric(
+                "Conferência física pendente",
+                _fmt_int_ptbr(n_conf),
+                help="Devolução, retorno ao vendedor, prazo para confirmar recebimento ou equivalente no texto do ML.",
+            )
+        with k2:
+            st.metric(
+                "Revisar financeiramente",
+                _fmt_int_ptbr(n_rev),
+                help="Situação com movimento de valores a validar no Mercado Pago / liberações.",
+            )
+        with k3:
+            st.metric(
+                "Cobrar plataforma",
+                _fmt_int_ptbr(n_cob),
+                help="Irregularidade ou falha de envio atribuível ao fluxo do Mercado Livre.",
+            )
+        with k4:
+            st.metric(
+                "Pagamento liberado ao vendedor",
+                _fmt_int_ptbr(n_pag),
+                help="Reclamação encerrada ou crédito liberado a favor da loja.",
+            )
+        with k5:
+            st.metric(
+                "Reembolso ao comprador",
+                _fmt_int_ptbr(n_reemb),
+                help="Estorno ou acordo com dinheiro devolvido ao comprador.",
+            )
+        k6, k7, _sp = st.columns([1, 1, 2])
+        with k6:
+            st.metric("Total na fila", _fmt_int_ptbr(n), help="Todas as candidatas neste ficheiro materializado.")
+        with k7:
+            st.metric(
+                "Com vínculo em liberações",
+                _fmt_int_ptbr(n_vinc),
+                help="Pelo menos um evento nas liberações ML ligado a esta venda.",
+            )
+
+    st.markdown(
+        '<p class="fdl-frete-section-title">Filtros</p>'
+        '<p class="fdl-frete-section-note">Comece pelo <strong>recorte rápido</strong> ou refine com <strong>status</strong> e <strong>a sugerida</strong>.</p>',
+        unsafe_allow_html=True,
+    )
+
+    _prio3 = (
+        "Conferência física pendente",
+        "Revisar financeiramente",
+        "Cobrar plataforma",
+    )
+    _opts_rapido = (
+        "Todos",
+        "Só os 3 prioritários (conferência / financeiro / ML)",
+        "Conferência física pendente",
+        "Revisar financeiramente",
+        "Cobrar plataforma",
+        "Pagamento liberado ao vendedor",
+        "Reembolso ao comprador",
+        "Personalizado (multiselect)",
+    )
+
+    f0, f0b = st.columns([1.2, 2])
+    with f0:
+        recorte = st.selectbox(
+            "Recorte rápido (status)",
+            options=list(_opts_rapido),
+            index=0,
+            key="fdl_devolucoes_recorte_rapido",
+        )
+    with f0b:
+        busca = st.text_input(
+            "Buscar N.º de venda (contém)",
+            "",
+            key="fdl_devolucoes_busca_venda",
+            placeholder="Ex.: 20000158…",
+        )
+
+    opts_si_full = (
+        sorted({str(x) for x in d["status_interno"].dropna().unique()})
+        if "status_interno" in d.columns
+        else []
+    )
+    opts_si_full = [x for x in opts_si_full if str(x).strip()]
+
+    opts_ac = (
+        sorted({str(x) for x in d["acao_sugerida"].dropna().unique()})
+        if "acao_sugerida" in d.columns
+        else []
+    )
+    opts_ac = [x for x in opts_ac if str(x).strip()]
+
+    f1, f2 = st.columns(2)
+    with f1:
+        si = st.multiselect(
+            "Status interno (vários)",
+            options=opts_si_full,
+            default=[],
+            key="fdl_devolucoes_status_interno",
+            help="Vazio = não restringe por aqui. Use em conjunto com «Recorte rápido» = Personalizado.",
+        )
+    with f2:
+        ac = st.multiselect(
+            "Ação sugerida (vários)",
+            options=opts_ac,
+            default=[],
+            key="fdl_devolucoes_acao_sugerida",
+            help="Filtra pela coluna operacional «O que fazer» — linguagem curta definida no materializado.",
+        )
+
+    f3, f4 = st.columns(2)
+    with f3:
+        opts_mot = (
+            sorted({str(x) for x in d["candidato_motivo"].dropna().unique()})
+            if "candidato_motivo" in d.columns
+            else []
+        )
+        mot = st.multiselect("Motivo da candidatura", options=opts_mot, default=[], key="fdl_devolucoes_motivo")
+    with f4:
+        st.caption(
+            "**Dica:** para ver só o que precisa de atenção imediata, escolha «Só os 3 prioritários» no recorte rápido."
+        )
+
+    if busca.strip():
+        d = d[d["N° de venda"].astype(str).str.contains(busca.strip(), case=False, na=False)]
+
+    if recorte == "Só os 3 prioritários (conferência / financeiro / ML)" and "status_interno" in d.columns:
+        d = d[d["status_interno"].astype(str).str.strip().isin(_prio3)]
+    elif recorte not in ("Todos", "Personalizado (multiselect)") and "status_interno" in d.columns:
+        d = d[d["status_interno"].astype(str).str.strip() == recorte]
+
+    # Multiselect de status só com «Todos» ou «Personalizado» — evita conflito com recorte fixo.
+    if "status_interno" in d.columns and recorte in ("Todos", "Personalizado (multiselect)") and si:
+        d = d[d["status_interno"].astype(str).isin(si)]
+
+    if ac and "acao_sugerida" in d.columns:
+        d = d[d["acao_sugerida"].astype(str).isin(ac)]
+    if mot and "candidato_motivo" in d.columns:
+        d = d[d["candidato_motivo"].astype(str).isin(mot)]
+
+    d = d.copy()
+    d["Prioridade"] = d["status_interno"].map(_devolucoes_prioridade_badge) if "status_interno" in d.columns else ""
+
+    pref = [
+        c
+        for c in (
+            "N° de venda",
+            "Prioridade",
+            "status_interno",
+            "acao_sugerida",
+            "empresa",
+            "status_ml_texto",
+            "candidato_motivo",
+            "classificacao_reembolso",
+            "reembolso_valor_inferido",
+            "vinculo_tipo",
+            "vinculo_confianca",
+            "vinculo_detalhe",
+            "lib_n_eventos",
+            "lib_ultima_data_pagamento",
+            "lib_descricoes_amostra",
+            "lib_soma_net_debito",
+            "jaci_cep_15155038",
+            "jaci_endereco_score",
+            "arquivo_origem_venda",
+        )
+        if c in d.columns
+    ]
+    rest = [c for c in d.columns if c not in pref]
+    d_show = d[pref + rest]
+
+    _h = min(620, 140 + min(len(d_show), 20) * 34)
+    _cfg: dict[str, object] = {}
+    if "N° de venda" in d_show.columns:
+        _cfg["N° de venda"] = st.column_config.TextColumn("N.º de venda", width="small")
+    if "Prioridade" in d_show.columns:
+        _cfg["Prioridade"] = st.column_config.TextColumn(
+            "Alerta",
+            width="small",
+            help="Conferência física, revisão financeira ou cobrança ML — vazio nas demais filas.",
+        )
+    if "status_interno" in d_show.columns:
+        _cfg["status_interno"] = st.column_config.TextColumn("Status interno", width="medium")
+    if "acao_sugerida" in d_show.columns:
+        _cfg["acao_sugerida"] = st.column_config.TextColumn(
+            "Ação sugerida",
+            width="large",
+            help="O que a operação deve fazer nesta venda.",
+        )
+    if "status_ml_texto" in d_show.columns:
+        _cfg["status_ml_texto"] = st.column_config.TextColumn("Situação no Mercado Livre", width="large")
+    if "empresa" in d_show.columns:
+        _cfg["empresa"] = st.column_config.TextColumn("Empresa", width="small")
+
+    st.dataframe(
+        d_show,
+        use_container_width=True,
+        hide_index=True,
+        height=_h,
+        column_config=_cfg or None,
+    )
+    st.caption(
+        f"**{_fmt_int_ptbr(len(d_show))}** linhas no recorte · Coluna **Ação sugerida** resume o tratamento; **Situação no Mercado Livre** é o texto original do export."
+    )
+
+    if _is_admin:
+        with st.expander("Admin — colunas técnicas", expanded=False):
+            st.caption(str(load_info.get("devolucoes_path_resolved", "")))
+
+
 def _painel_frete_emergencial(
     org_id: str, df_frete: pd.DataFrame, load_info: dict[str, object], ts_proc: str
 ) -> None:
@@ -9596,6 +9997,8 @@ if _fdl_product_area not in (
 _fdl_global_trace(f"rerun: area={_fdl_product_area} vista={_fv}")
 frete_df = pd.DataFrame()
 frete_info: dict[str, object] = {}
+devolucoes_df = pd.DataFrame()
+devolucoes_info: dict[str, object] = {}
 faturamento_df = pd.DataFrame()
 faturamento_info: dict[str, object] = {}
 if _fv == "frete":
@@ -9636,6 +10039,35 @@ if _fv == "frete":
     tabela_geral = pd.DataFrame()
     info = frete_info
     _fdl_global_trace("frete: dados carregados")
+elif _fv == "devolucoes" and "devolucoes" in _enabled_modules:
+    try:
+        _fdl_global_trace("devolucoes: a carregar _load_devolucoes_data")
+        with st.spinner("A carregar fila de Devoluções…"):
+            devolucoes_df, devolucoes_info, ts_proc = _load_devolucoes_data(_active_org.org_id)
+        if _admin_mode:
+            _t_d = str(devolucoes_info.get("devolucoes_materialized_target", ""))[:500]
+            _p_d = str(devolucoes_info.get("devolucoes_path_resolved", ""))[:500]
+            st.caption(f"Devoluções: materializado · alvo=`{_t_d}` · lido=`{_p_d}`")
+    except Exception as exc:
+        if _strict_materialized() and isinstance(exc, ValueError):
+            st.error(str(exc))
+            st.stop()
+        err_text = str(exc).strip() or exc.__class__.__name__
+        if _expose_load_errors():
+            st.error("Erro ao carregar os dados de **Devoluções**.")
+            st.exception(exc)
+        elif _admin_mode:
+            st.warning("Dados de Devoluções indisponíveis no momento.")
+            st.caption(f"Detalhe técnico: {exc}")
+        else:
+            st.warning("Dados indisponíveis no momento. Tente novamente em instantes.")
+            with st.expander("Detalhes para suporte", expanded=False):
+                st.code(err_text, language="text")
+        st.stop()
+
+    tabela_geral = pd.DataFrame()
+    info = devolucoes_info
+    _fdl_global_trace("devolucoes: dados carregados")
 elif (
     _fdl_product_area
     in (
@@ -9894,11 +10326,16 @@ with st.sidebar:
     _nomes_nav = nomes_permitidos_com_registro(_empresas_usuario)
 
     _has_gerencial = "faturamento" in _enabled_modules and not _user_perfil_acesso_operacional_only()
-    _has_operacional = "repasse" in _enabled_modules or "frete" in _enabled_modules
+    _has_operacional = (
+        "repasse" in _enabled_modules
+        or "frete" in _enabled_modules
+        or "devolucoes" in _enabled_modules
+    )
     _first_nav_section = True
 
     _lbl_repasse = "Conciliação de Repasse"
     _lbl_frete = "Conciliação de Frete"
+    _lbl_devolucoes = "Controle de Devoluções"
     _lbl_fat_dre = "Faturamento & DRE"
 
     if _has_gerencial:
@@ -9942,8 +10379,15 @@ with st.sidebar:
         _first_nav_section = False
 
         if _sb_area == FDL_PRODUCT_AREA_FINANCEIRO and _nomes_nav:
+            _op_hints = []
+            if "repasse" in _enabled_modules:
+                _op_hints.append("Repasse")
+            if "frete" in _enabled_modules:
+                _op_hints.append("Frete")
+            if "devolucoes" in _enabled_modules:
+                _op_hints.append("Devoluções")
             st.markdown(
-                '<p class="fdl-sb-org-hint">Repasse · Frete</p>',
+                f'<p class="fdl-sb-org-hint">{" · ".join(_op_hints) or "Operacional"}</p>',
                 unsafe_allow_html=True,
             )
             _org_idx = 0
@@ -9959,7 +10403,7 @@ with st.sidebar:
                 key="operacional_empresa_ativa_select",
                 label_visibility="visible",
                 help=(
-                    "Define qual organização carregar para conciliação de Repasse e Frete. "
+                    "Define qual organização carregar para Repasse, Frete e Devoluções. "
                     "Em Faturamento e Comercial, o recorte por marca fica no filtro Empresa do painel."
                 ),
             )
@@ -9987,6 +10431,17 @@ with st.sidebar:
                 if _sb_area == FDL_PRODUCT_AREA_FINANCEIRO and _sb_view == "frete"
                 else "secondary",
                 on_click=_sb_nav_set_frete,
+            )
+        if "devolucoes" in _enabled_modules:
+            st.button(
+                _lbl_devolucoes,
+                key="fdl_mod_devolucoes",
+                use_container_width=True,
+                type="primary"
+                if _sb_area == FDL_PRODUCT_AREA_FINANCEIRO and _sb_view == "devolucoes"
+                else "secondary",
+                on_click=_sb_nav_set_devolucoes,
+                help="Fila operacional: só vendas candidatas a devolução/reembolso/mediação ou com eventos correlatos nas liberações.",
             )
 
     st.markdown('<div class="fdl-sb-footer-rule" aria-hidden="true"></div>', unsafe_allow_html=True)
@@ -10022,7 +10477,7 @@ with st.sidebar:
     ):
         st.cache_data.clear()
         for _k in list(st.session_state.keys()):
-            if str(_k).startswith("_frete_cache_"):
+            if str(_k).startswith("_frete_cache_") or str(_k).startswith("_devolucoes_cache_"):
                 st.session_state.pop(_k, None)
         st.rerun()
 
@@ -10093,6 +10548,13 @@ elif _fdl_product_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS and "faturamento" i
         kicker_area="Comercial & pedidos",
         compact_spacing=True,
     )
+elif _fv == "devolucoes":
+    _render_financeiro_header(
+        segment="Operacional",
+        title="Controle de Devoluções",
+        subtitle="Fila de candidatas · devolução, reembolso, mediação, reclamação e eventos nas liberações (não é o export completo de vendas).",
+        compact_spacing=True,
+    )
 elif _fv == "repasse":
     _render_financeiro_header(
         segment="Repasse",
@@ -10100,11 +10562,18 @@ elif _fv == "repasse":
         subtitle="Fila de tratativa · repasses, NF e divergências no mesmo recorte.",
         compact_spacing=True,
     )
-else:
+elif _fv == "frete":
     _render_financeiro_header(
         segment="Frete",
         title="Conciliação de Frete",
         subtitle="Frete cobrado vs esperado · anúncios e vendas no mesmo recorte.",
+        compact_spacing=True,
+    )
+else:
+    _render_financeiro_header(
+        segment="Financeiro",
+        title="Financeiro operacional",
+        subtitle="Escolha Repasse, Frete ou Devoluções na barra lateral.",
         compact_spacing=True,
     )
 
@@ -10140,6 +10609,15 @@ elif _fdl_product_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS and "faturamento" i
     except Exception as exc:
         _fdl_global_trace(f"comercial_pedidos: ERRO — {exc.__class__.__name__}")
         st.error("Erro ao renderizar **Comercial & pedidos**.")
+        st.exception(exc)
+elif _fv == "devolucoes" and "devolucoes" in _enabled_modules:
+    try:
+        _fdl_global_trace("devolucoes: painel")
+        _painel_devolucoes_operacional(devolucoes_df, devolucoes_info, ts_proc)
+        _fdl_global_trace("devolucoes: painel concluído")
+    except Exception as exc:
+        _fdl_global_trace(f"devolucoes: ERRO — {exc.__class__.__name__}")
+        st.error("Erro ao renderizar **Controle de Devoluções**.")
         st.exception(exc)
 elif _fv == "frete":
     try:

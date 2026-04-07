@@ -1,8 +1,9 @@
 """
-Materialização paralela (Fase 1): chama as mesmas funções do pipeline operacional
-e grava Parquet + metadata em data_products/<cliente>/<empresa>/<modulo>/current/.
+Materialização paralela (Fase 1): repasse e frete reutilizam o pipeline operacional; **devoluções**
+usa ``processing.devolucoes_ml`` (fila só de candidatas). Saída em
+``data_products/<cliente>/<empresa>/<modulo>/current/``.
 
-Não altera regras de negócio, cálculos ou o app Streamlit.
+O app Streamlit só lê os artefatos materializados (sem recalcular estes módulos ao vivo).
 
 Uso típico (PowerShell):
   $env:FDL_BASE_DIR = "C:\\caminho\\base\\cliente"
@@ -198,6 +199,21 @@ def _write_repasse_app_mirror_csv(df: Any, path: Path) -> None:
 
 def _write_faturamento_app_mirror_csv(df: Any, path: Path) -> None:
     """CSV espelho do faturamento (sem colunas cliente_id/empresa_id/cnpj — ficam no Parquet)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        df.to_csv(tmp, index=False, encoding="utf-8-sig")
+        _atomic_replace(tmp, path)
+    finally:
+        if tmp.is_file():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+
+
+def _write_devolucoes_app_mirror_csv(df: Any, path: Path) -> None:
+    """CSV espelho do módulo devoluções (sem cliente_id/empresa_id/cnpj — ficam no Parquet)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     try:
@@ -440,6 +456,61 @@ def _materialize_frete(
     _write_metadata(out_dir / "metadata.json", meta)
 
 
+def _materialize_devolucoes(
+    *,
+    base_dir: Path,
+    out_dir: Path,
+    path_cliente: str,
+    path_empresa: str,
+    org_id: str,
+    dataset_empresa: str,
+    pipeline_revision: str,
+) -> None:
+    from processing.devolucoes_ml.build import (
+        PIPELINE_REVISION_DEVOLUCOES,
+        build_devolucoes_dataset,
+        build_devolucoes_source_signature,
+    )
+
+    cliente_id, empresa_id, cnpj = _resolve_identity(path_cliente, path_empresa)
+    df, loader_meta = build_devolucoes_dataset(
+        base_dir,
+        org_id=str(org_id).strip(),
+        dataset_empresa=str(dataset_empresa).strip(),
+        cliente_id=cliente_id,
+    )
+    sig = build_devolucoes_source_signature(base_dir)
+    df_out = _enrich_identity_columns(df, cliente_id=cliente_id, empresa_id=empresa_id, cnpj=cnpj)
+
+    generated_at = _utc_now_iso()
+    meta: dict[str, Any] = {
+        "generated_at": generated_at,
+        "source_signature": sig,
+        "pipeline_revision": pipeline_revision,
+        "devolucoes_contract_revision": PIPELINE_REVISION_DEVOLUCOES,
+        "cliente": path_cliente,
+        "empresa": path_empresa,
+        "modulo": "devolucoes",
+        "cliente_id": cliente_id,
+        "empresa_id": empresa_id,
+        "cnpj": cnpj,
+        "row_count": int(len(df_out)),
+        "columns": [str(c) for c in df_out.columns],
+        "source_mode": "local_folder",
+        "base_dir": str(base_dir),
+        "org_id": str(org_id).strip(),
+        "dataset_empresa": str(dataset_empresa).strip(),
+        "app_mirror_csv": "dataset_devolucoes_app.csv",
+        "build_meta": {k: v for k, v in loader_meta.items() if isinstance(v, (str, int, float, bool, type(None)))},
+    }
+    for k in ("row_count_vendas_total", "row_count_liberacoes", "sales_from_lib_financial", "erro"):
+        if k in loader_meta:
+            meta[k] = loader_meta[k]
+    _write_parquet(df_out, out_dir / "dataset.parquet")
+    _write_devolucoes_app_mirror_csv(df, out_dir / "dataset_devolucoes_app.csv")
+    _write_metadata(out_dir / "metadata.json", meta)
+
+
 def _materialize_faturamento(
     *,
     params_path: Path,
@@ -593,13 +664,17 @@ def main() -> int:
     from materialize_lock import MaterializeLockError, acquire_materialize_lock, release_materialize_lock
 
     parser = argparse.ArgumentParser(
-        description="Materializa repasse, frete e/ou faturamento em Parquet + metadata.json em data_products/.../current/"
+        description="Materializa repasse, frete, devoluções e/ou faturamento em Parquet + metadata.json em data_products/.../current/"
     )
     parser.add_argument("--base-dir", default=os.environ.get("FDL_BASE_DIR", "").strip(), help="Pasta raiz do cliente (vendas, liberações, …). Obrigatório para repasse/frete.")
     parser.add_argument("--root", default=str(REPO_ROOT / "data_products"), help="Raiz data_products")
     parser.add_argument("--cliente", default=os.environ.get("FDL_MATERIALIZE_CLIENTE", "").strip(), help="Segmento de pasta cliente")
     parser.add_argument("--empresa", default=os.environ.get("FDL_MATERIALIZE_EMPRESA", "").strip(), help="Segmento de pasta empresa")
-    parser.add_argument("--modulo", choices=("repasse", "frete", "faturamento", "all"), default="all")
+    parser.add_argument(
+        "--modulo",
+        choices=("repasse", "frete", "devolucoes", "faturamento", "all"),
+        default="all",
+    )
     parser.add_argument("--org-id", default=os.environ.get("FDL_MATERIALIZE_ORG_ID", "antomoveis"), help="org_id para carregar_tabela_final_frete_operacional")
     parser.add_argument(
         "--dataset-empresa",
@@ -643,8 +718,8 @@ def main() -> int:
         print("Para --modulo faturamento defina --faturamento-params ou FDL_FATURAMENTO_PARAMS.", file=sys.stderr)
         return 1
 
-    if args.modulo in ("repasse", "frete", "all") and not args.base_dir:
-        print("Defina --base-dir ou FDL_BASE_DIR para repasse/frete.", file=sys.stderr)
+    if args.modulo in ("repasse", "frete", "devolucoes", "all") and not args.base_dir:
+        print("Defina --base-dir ou FDL_BASE_DIR para repasse/frete/devoluções.", file=sys.stderr)
         return 1
 
     base_dir: Path | None
@@ -668,7 +743,7 @@ def main() -> int:
     rev = args.pipeline_revision
 
     if args.modulo == "all":
-        modules: list[str] = ["repasse", "frete"]
+        modules: list[str] = ["repasse", "frete", "devolucoes"]
         if faturamento_params_path:
             modules.append("faturamento")
         else:
@@ -728,6 +803,18 @@ def main() -> int:
                     path_cliente=path_cliente,
                     path_empresa=path_empresa,
                     org_id=str(args.org_id).strip(),
+                    pipeline_revision=rev,
+                )
+            elif mod == "devolucoes":
+                assert base_dir is not None
+                ds_emp = (os.environ.get("FDL_DATASET_EMPRESA") or "").strip() or str(args.empresa).strip()
+                _materialize_devolucoes(
+                    base_dir=base_dir,
+                    out_dir=out_dir,
+                    path_cliente=path_cliente,
+                    path_empresa=path_empresa,
+                    org_id=str(args.org_id).strip(),
+                    dataset_empresa=ds_emp,
                     pipeline_revision=rev,
                 )
             else:

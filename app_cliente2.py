@@ -19,7 +19,8 @@ def _configure_grupo_mega_facil() -> None:
     os.environ.setdefault("FDL_MATERIALIZED_PATH_MODE", "dynamic")
     os.environ.setdefault("FDL_REPASSE_CONSUME_MODE", "materialized")
     os.environ.setdefault("FDL_FRETE_CONSUME_MODE", "materialized")
-    os.environ.setdefault("FDL_ENABLED_FINANCE_MODULES", "repasse,frete,faturamento")
+    os.environ.setdefault("FDL_DEVOLUCOES_CONSUME_MODE", "materialized")
+    os.environ.setdefault("FDL_ENABLED_FINANCE_MODULES", "repasse,frete,devolucoes,faturamento")
 
 
 _configure_grupo_mega_facil()

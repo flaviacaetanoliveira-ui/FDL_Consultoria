@@ -7057,7 +7057,9 @@ def _render_faturamento_dre_minimal(
         produtos_sel=_prod_sel,
         sinais_resultado=_sinais_tuple,
     )
-    _kp = compute_nf_panel_kpis(df_nf_panel)
+    # KPIs e DRE gerencial: mesmo universo das NFs no **período de emissão** (+ empresa / plataforma).
+    # Não cortar por produto nem por lucro/prejuízo — a tabela abaixo continua a usar ``df_nf_panel``.
+    _kp = compute_nf_panel_kpis(df_nf)
 
     _base_n = (
         len(df_nf_pre)
@@ -7065,17 +7067,19 @@ def _render_faturamento_dre_minimal(
         else len(df)
     )
     _base_tail = " no materializado NF" if use_nf_materializado else " no carregamento"
-    _cap_nf = f"{_kp['n_nf']} notas no recorte"
+    _cap_nf = f"KPIs: **{_kp['n_nf']}** notas (emissão NF + empresa + plataforma)"
+    _cap_tbl = f"**Tabela:** **{len(df_nf_panel)}** linhas"
     if len(df_nf_panel) != len(df_nf):
-        _cap_nf += f" ({len(df_nf)} antes de produto/sinal)"
-    st.caption(f"{_cap_nf} · base {_base_n}{_base_tail}")
+        _cap_tbl += " após produto / resultado comercial"
+    st.caption(f"{_cap_nf}. {_cap_tbl} · base {_base_n}{_base_tail}")
 
     if _is_admin_mode():
         with st.expander("Diagnóstico materializado (admin)", expanded=False):
             _fdl_fat_min_aside(
                 "<strong>Fonte única</strong>: <code>dataset_faturamento_nf_panel.parquet</code> — merge fiscal↔comercial, "
                 "frete, resultado e colunas de exibição <strong>pré-calculados na materialização</strong>. "
-                "Neste ecrã só há <strong>filtros</strong> (datas, empresa, plataforma, produto, lucro/prejuízo) sobre essas linhas."
+                "<strong>KPIs</strong> usam só período de emissão NF + empresa + plataforma; "
+                "<strong>produto / lucro·prejuízo</strong> filtram apenas a <strong>tabela</strong>."
             )
             if use_fiscal_parquet:
                 _fdl_fat_min_aside(
@@ -7160,8 +7164,8 @@ def _render_faturamento_dre_minimal(
                 )
                 _fdl_fat_min_aside(
                     "Com Parquet fiscal ativo, o card de auditoria acima usa <strong>Valor_Liquido_NF</strong> no "
-                    "recorte fiscal (emissão + empresa). Os KPIs principais seguem o quadro da tabela (com filtro de "
-                    "plataforma quando aplicável).",
+                    "recorte fiscal (emissão + empresa). Os KPIs principais somam o mesmo universo de NFs "
+                    "(emissão + empresa + plataforma); a tabela pode estar mais restrita (produto / resultado comercial).",
                     tight=True,
                 )
             if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame):

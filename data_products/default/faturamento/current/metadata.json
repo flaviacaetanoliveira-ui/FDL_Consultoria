@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-07T18:59:04Z",
+  "generated_at": "2026-04-07T19:04:19Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "default",
   "empresa": "_multi",
@@ -136,7 +136,7 @@
     "sheet": "Planilha1",
     "custo_reader": "header_row_0"
   },
-  "data_processamento": "2026-04-07T18:59:04Z",
+  "data_processamento": "2026-04-07T19:04:19Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,

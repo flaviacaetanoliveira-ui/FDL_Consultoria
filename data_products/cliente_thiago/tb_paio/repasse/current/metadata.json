@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-05T18:48:53Z",
-  "source_signature": "865b6a483a7b36efcda4511f9058396a",
+  "generated_at": "2026-04-07T09:50:33Z",
+  "source_signature": "cba394a5973da31b96d6f78efd91c83b",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "tb_paio",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "tb_paio",
   "cnpj": null,
-  "row_count": 12714,
+  "row_count": 12903,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -24,6 +24,7 @@
     "Diferença",
     "Data de pagamento",
     "Data de emissão",
+    "Data período repasse",
     "empresa",
     "cliente_id",
     "empresa_id",
@@ -33,7 +34,7 @@
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
-    "linhas": 12714,
+    "linhas": 12903,
     "arquivos_contas_lidos": 0,
     "col_situacao": "",
     "col_numero": ""

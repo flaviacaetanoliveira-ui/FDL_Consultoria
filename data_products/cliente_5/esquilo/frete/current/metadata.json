@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-07T16:23:04Z",
-  "source_signature": "5ba83aefbc0cd9570e72918a61715187",
+  "generated_at": "2026-04-08T16:26:25Z",
+  "source_signature": "564575ed7c6b109e7318693dc3269660",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_5",
   "empresa": "esquilo",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "esquilo",
   "cnpj": null,
-  "row_count": 18079,
+  "row_count": 18183,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -85,23 +85,23 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo",
   "org_id": "esquilo",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Vendas_ML\\2026\\Esquilo - Vendas ML 2026.xlsx",
+    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Vendas_ML\\2026\\Esquilo - Vendas ML 2026.xlsx",
     "vendas_paths": [
-      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Vendas_ML\\2026\\Esquilo - Vendas ML 2026.xlsx",
-      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Vendas_ML\\2025\\Esquilo - Vendas ML 2025.xlsx"
+      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Vendas_ML\\2026\\Esquilo - Vendas ML 2026.xlsx",
+      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Vendas_ML\\2025\\Esquilo - Vendas ML 2025.xlsx"
     ],
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Esquilo - Frete por Anúncio - Atualizado 06032026.xlsx"
+    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Esquilo - Frete por Anúncio - Atualizado 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Esquilo - Vendas ML 2026.xlsx, Esquilo - Vendas ML 2025.xlsx",
     "frete_arquivo": "Esquilo - Frete por Anúncio - Atualizado 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 18079,
+    "linhas": 18183,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

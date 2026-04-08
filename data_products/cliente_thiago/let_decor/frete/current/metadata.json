@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-07T16:26:40Z",
-  "source_signature": "f0b086f8195678330c573124ae5ea2af",
+  "generated_at": "2026-04-08T16:33:57Z",
+  "source_signature": "7e3960b23e3ba952ea9bd74f3b309bd7",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "let_decor",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "let_decor",
   "cnpj": null,
-  "row_count": 11665,
+  "row_count": 11702,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -85,23 +85,23 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
   "org_id": "let_decor",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Vendas_ML\\2026\\Let Decor - Vendas ML 2026.xlsx",
+    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Vendas_ML\\2026\\Let Decor - Vendas ML 2026.xlsx",
     "vendas_paths": [
-      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Vendas_ML\\2026\\Let Decor - Vendas ML 2026.xlsx",
-      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Vendas_ML\\2025\\Let Decor - Vendas ML 2025.xlsx"
+      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Vendas_ML\\2026\\Let Decor - Vendas ML 2026.xlsx",
+      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Vendas_ML\\2025\\Let Decor - Vendas ML 2025.xlsx"
     ],
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Let Decor - Frete por Anúncio 06032026.xlsx"
+    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor\\Let Decor - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Let Decor - Vendas ML 2026.xlsx, Let Decor - Vendas ML 2025.xlsx",
     "frete_arquivo": "Let Decor - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 11665,
+    "linhas": 11702,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-07T16:24:39Z",
-  "source_signature": "b3df5d2872271b51afa9164efd70c060",
+  "generated_at": "2026-04-08T16:29:59Z",
+  "source_signature": "ba62049c6e482c467fb11c29aa9fdd9e",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_5",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "wood",
   "cnpj": null,
-  "row_count": 1976,
+  "row_count": 1979,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -98,25 +98,25 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
   "org_id": "wood",
-  "dataset_empresa": "Móveis EAP",
+  "dataset_empresa": "Wood",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
-    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
+    "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
     "org_id": "wood",
-    "dataset_empresa": "Móveis EAP",
+    "dataset_empresa": "Wood",
     "cliente_id": "cliente_5",
-    "row_count_pre_filtro_devolucao": 2241,
-    "row_count_excluidas_cancel_comercial": 265,
-    "row_count_candidatas": 1976,
-    "row_count_vendas_total": 15598,
-    "row_count_liberacoes": 28377,
-    "sales_from_lib_financial": 2713,
+    "row_count_pre_filtro_devolucao": 2247,
+    "row_count_excluidas_cancel_comercial": 268,
+    "row_count_candidatas": 1979,
+    "row_count_vendas_total": 15661,
+    "row_count_liberacoes": 28442,
+    "sales_from_lib_financial": 2718,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 15598,
-  "row_count_liberacoes": 28377,
-  "sales_from_lib_financial": 2713
+  "row_count_vendas_total": 15661,
+  "row_count_liberacoes": 28442,
+  "sales_from_lib_financial": 2718
 }

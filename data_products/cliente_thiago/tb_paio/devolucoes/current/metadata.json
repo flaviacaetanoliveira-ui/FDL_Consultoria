@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-07T16:28:07Z",
-  "source_signature": "bb585cbd6b85673a57ea54998413cb23",
+  "generated_at": "2026-04-08T16:37:05Z",
+  "source_signature": "2d849e6c48cf80ec14ce9419600a748b",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_thiago",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "tb_paio",
   "cnpj": null,
-  "row_count": 587,
+  "row_count": 588,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -98,25 +98,25 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
   "org_id": "tb_paio",
-  "dataset_empresa": "Móveis EAP",
+  "dataset_empresa": "TB Paio",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
-    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
+    "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
     "org_id": "tb_paio",
-    "dataset_empresa": "Móveis EAP",
+    "dataset_empresa": "TB Paio",
     "cliente_id": "cliente_thiago",
-    "row_count_pre_filtro_devolucao": 729,
-    "row_count_excluidas_cancel_comercial": 142,
-    "row_count_candidatas": 587,
-    "row_count_vendas_total": 13373,
-    "row_count_liberacoes": 21928,
-    "sales_from_lib_financial": 1248,
+    "row_count_pre_filtro_devolucao": 731,
+    "row_count_excluidas_cancel_comercial": 143,
+    "row_count_candidatas": 588,
+    "row_count_vendas_total": 13431,
+    "row_count_liberacoes": 21990,
+    "sales_from_lib_financial": 1254,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 13373,
-  "row_count_liberacoes": 21928,
-  "sales_from_lib_financial": 1248
+  "row_count_vendas_total": 13431,
+  "row_count_liberacoes": 21990,
+  "sales_from_lib_financial": 1254
 }

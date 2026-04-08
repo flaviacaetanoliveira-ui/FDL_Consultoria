@@ -240,6 +240,27 @@ _fdl_global_trace("02: após autenticação (require_app_user)")
 _active_org = get_active_organization(_app_ctx)
 
 
+def _apply_antomoveis_single_tenant_env_defaults() -> None:
+    """
+    Inquilino só Antomóveis (ex.: Everton): alinha leitura da base final a
+    ``data_products/default/antomoveis/...`` mesmo quando o Main file do Streamlit é ``app.py``
+    em vez de ``app_cliente_everton.py``.
+
+    Usa ``os.environ.setdefault`` para não sobrepor variáveis de ambiente já definidas no deploy.
+    """
+    orgs = getattr(_app_ctx, "organizations", None) or ()
+    if len(orgs) != 1 or orgs[0].org_id != "antomoveis":
+        return
+    os.environ.setdefault("FDL_MATERIALIZED_CLIENTE_SLUG", "default")
+    os.environ.setdefault("FDL_MATERIALIZED_PATH_MODE", "dynamic")
+    os.environ.setdefault("FDL_REPASSE_CONSUME_MODE", "materialized")
+    os.environ.setdefault("FDL_FRETE_CONSUME_MODE", "materialized")
+    os.environ.setdefault("FDL_ENABLED_FINANCE_MODULES", "repasse,frete,faturamento")
+
+
+_apply_antomoveis_single_tenant_env_defaults()
+
+
 def _dataset_empresa_label() -> str:
     """Rótulo da coluna `empresa` quando o dataset não a traz; em dynamic alinha à org ativa."""
     if _materialized_path_mode() == "dynamic":
@@ -308,7 +329,11 @@ def _repasse_vendas_liberacoes_only() -> bool:
         return False
 
 
-def _filtrar_df_col_empresa_por_contexto(df: pd.DataFrame) -> pd.DataFrame:
+def _filtrar_df_col_empresa_por_contexto(
+    df: pd.DataFrame,
+    *,
+    repasse_org_scoped_fallback: bool = False,
+) -> pd.DataFrame:
     """
     Em modo fixed/live, restringe às empresas permitidas ou, em cenários multi-empresa no mesmo ficheiro,
     alinha ao contexto.
@@ -316,13 +341,28 @@ def _filtrar_df_col_empresa_por_contexto(df: pd.DataFrame) -> pd.DataFrame:
     Em **dynamic**, cada artefacto já vive em ``data_products/<cliente>/<org_id>/...`` — não filtrar pela
     coluna ``empresa``: muitas materializações usam ``FDL_DATASET_EMPRESA`` global (ex.: «Antomóveis») e o
     filtro por ``display_name`` esvaziava o repasse/faturamento para todas as orgs.
+
+    Com ``repasse_org_scoped_fallback=True``, se o filtro esvaziar o quadro mas o ficheiro materializado
+    de repasse for claramente da org ativa (path/URL contém ``/<org_id>/``), devolve o quadro sem filtrar
+    pela coluna ``empresa`` (rótulo desatualizado na base final).
     """
     if df.empty or "empresa" not in df.columns:
         return df
     if _materialized_path_mode() == "dynamic":
         return df
     empresas = st.session_state["empresas_permitidas"]
-    return df[df["empresa"].isin(empresas)].copy()
+    out = df[df["empresa"].isin(empresas)].copy()
+    if not out.empty or not repasse_org_scoped_fallback:
+        return out
+    oid = (_active_org.org_id or "").strip()
+    if not oid or _repasse_consume_mode() != "materialized":
+        return out
+    path = (_repasse_materialized_path_str() or "").replace("\\", "/").lower()
+    url = (_repasse_materialized_url_str() or "").replace("\\", "/").lower()
+    needle = f"/{oid.lower()}/"
+    if needle in path or needle in url:
+        return df
+    return out
 
 
 if "op_financeiro_view" not in st.session_state:
@@ -10657,7 +10697,10 @@ else:
         tabela_geral = tabela_geral.copy()
         tabela_geral["empresa"] = _dataset_empresa_label()
 
-    tabela_geral = _filtrar_df_col_empresa_por_contexto(tabela_geral)
+    tabela_geral = _filtrar_df_col_empresa_por_contexto(
+        tabela_geral,
+        repasse_org_scoped_fallback=True,
+    )
     info = {**info, "linhas": int(len(tabela_geral))}
     _fdl_global_trace(f"repasse: após filtro empresa ({len(tabela_geral)} linhas)")
 

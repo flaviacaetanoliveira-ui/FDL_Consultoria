@@ -1,3 +1,6 @@
+# Params de faturamento gerados com cliente_root desta máquina (materialização local)
+ops/*_runtime.json
+
 .streamlit/secrets.toml
 __pycache__/
 *.pyc

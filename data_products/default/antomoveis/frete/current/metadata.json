@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-07T16:28:18Z",
-  "source_signature": "6fec841dfcac06f3d67c33e4a6883caf",
+  "generated_at": "2026-04-08T13:01:37Z",
+  "source_signature": "a047279f86fe52b2a582e1df0e856477",
   "pipeline_revision": "phase1-v1",
   "cliente": "default",
   "empresa": "antomoveis",
@@ -8,7 +8,7 @@
   "cliente_id": "default",
   "empresa_id": "antomoveis",
   "cnpj": null,
-  "row_count": 5021,
+  "row_count": 5033,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -84,23 +84,23 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
   "org_id": "antomoveis",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Vendas_ML\\2026\\Anto Móveis - Vendas ML 2026.xlsx",
+    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Vendas_ML\\2026\\Anto Móveis - Vendas ML 2026.xlsx",
     "vendas_paths": [
-      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Vendas_ML\\2026\\Anto Móveis - Vendas ML 2026.xlsx",
-      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Vendas_ML\\2025\\Anto Móveis - Vendas ML 2025.xlsx"
+      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Vendas_ML\\2026\\Anto Móveis - Vendas ML 2026.xlsx",
+      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Vendas_ML\\2025\\Anto Móveis - Vendas ML 2025.xlsx"
     ],
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Anto Móveis - Frete por Anúncio 06032026.xlsx"
+    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Anto Móveis - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Anto Móveis - Vendas ML 2026.xlsx, Anto Móveis - Vendas ML 2025.xlsx",
     "frete_arquivo": "Anto Móveis - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 5021,
+    "linhas": 5033,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

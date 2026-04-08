@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-07T16:19:52Z",
-  "source_signature": "3a4778fa07bd313c5c8ce08199ba1ad5",
+  "generated_at": "2026-04-08T16:18:07Z",
+  "source_signature": "2a0e921c9f5f1eda5546360b7a869bf3",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_facil",
@@ -87,17 +87,17 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil",
   "org_id": "mega_facil",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Vendas_ML\\2026\\Mega Facil - Vendas ML 2026.xlsx",
+    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Vendas_ML\\2026\\Mega Facil - Vendas ML 2026.xlsx",
     "vendas_paths": [
-      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Vendas_ML\\2026\\Mega Facil - Vendas ML 2026.xlsx",
-      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Vendas_ML\\2025\\Mega Facil - Vendas ML 2025.xlsx"
+      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Vendas_ML\\2026\\Mega Facil - Vendas ML 2026.xlsx",
+      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Vendas_ML\\2025\\Mega Facil - Vendas ML 2025.xlsx"
     ],
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Mega Facil - Frete por Anúncio 06032026.xlsx"
+    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Mega Facil - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Mega Facil - Vendas ML 2026.xlsx, Mega Facil - Vendas ML 2025.xlsx",

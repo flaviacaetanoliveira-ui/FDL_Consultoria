@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-07T16:21:38Z",
+  "generated_at": "2026-04-08T16:22:44Z",
   "source_signature": "ce15fd0b1493000ca3f7e43770ab98f7",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
@@ -95,15 +95,15 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
   "org_id": "mega_star",
-  "dataset_empresa": "Móveis EAP",
+  "dataset_empresa": "Mega Star",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
-    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
+    "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
     "org_id": "mega_star",
-    "dataset_empresa": "Móveis EAP",
+    "dataset_empresa": "Mega Star",
     "cliente_id": "cliente_2",
     "row_count_pre_filtro_devolucao": 75,
     "row_count_excluidas_cancel_comercial": 26,

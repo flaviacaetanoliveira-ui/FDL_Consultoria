@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-07T16:21:35Z",
-  "source_signature": "cdcef3ce743dc50c96f414a846c71e8d",
+  "generated_at": "2026-04-08T16:22:38Z",
+  "source_signature": "bb11cf9fa123fdf33e28f7f98c6735a8",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_star",
@@ -82,16 +82,16 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
+  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
   "org_id": "mega_star",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Vendas_ML\\2026\\Mega Star - Vendas ML 2026.xlsx",
+    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Vendas_ML\\2026\\Mega Star - Vendas ML 2026.xlsx",
     "vendas_paths": [
-      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Vendas_ML\\2026\\Mega Star - Vendas ML 2026.xlsx"
+      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Vendas_ML\\2026\\Mega Star - Vendas ML 2026.xlsx"
     ],
-    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Mega Star - Frete por Anúncio 06032026.xlsx"
+    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Mega Star - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Mega Star - Vendas ML 2026.xlsx",

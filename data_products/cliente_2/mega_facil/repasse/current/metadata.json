@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-08T16:17:01Z",
-  "source_signature": "a411e3c2dbff2df9e269615a840de32f",
+  "generated_at": "2026-04-09T10:05:56Z",
+  "source_signature": "21d404e82911f358e2c373bdbec84a17",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_facil",
@@ -31,9 +31,9 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil",
   "loader_info": {
-    "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil",
+    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil",
     "linhas": 25158,
     "arquivos_contas_lidos": 25,
     "col_situacao": "Situação",

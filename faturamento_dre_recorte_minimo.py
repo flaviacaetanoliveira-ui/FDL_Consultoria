@@ -15,6 +15,40 @@ import pandas as pd
 
 from processing.faturamento.config import STATUS_CUSTO_OK
 
+# Mesmo contrato que ``nf_panel_materializado`` (evita import circular com esse módulo).
+_NF_PANEL_ALIGN_REQUIRED: frozenset[str] = frozenset(
+    {
+        "org_id",
+        "Nota_Numero_Normalizado",
+        "Nota_Data_Emissao",
+        "Nota_Situacao",
+        "empresa",
+        "valor_faturado_nf",
+        "valor_venda",
+        "diferenca",
+        "comissao",
+        "custo_produto",
+        "frete",
+        "imposto",
+        "despesa_fixa",
+        "custo_ads_variavel",
+        "custo_ads_fixo",
+        "custo_ads",
+        "resultado",
+        "plataforma_resumo",
+        "plataforma",
+        "pedido_resumo",
+        "n_linhas_pedido",
+        "produto_resumo",
+        "faturamento_nota_vinculada",
+        "comercial_incompleto",
+    }
+)
+
+
+def _nf_panel_dataframe_valid_for_align(df: pd.DataFrame) -> bool:
+    return not df.empty and _NF_PANEL_ALIGN_REQUIRED.issubset(df.columns)
+
 from faturamento_dre_recorte import (
     _BR_TZ,
     _fdl_fr_etiquetas_empresa_recorte,
@@ -279,6 +313,159 @@ def build_faturamento_fiscal_base_slice(
     n_nf = int(len(grouped))
     total = float(vl.sum())
     return grouped, FaturamentoFiscalBaseStats(n_nf=n_nf, valor_liquido_fiscal_sum=total)
+
+
+def _fiscal_base_merge_keys(df: pd.DataFrame) -> list[str]:
+    keys: list[str] = []
+    if "org_id" in df.columns:
+        keys.append("org_id")
+    keys.extend(["empresa", "Nota_Numero_Normalizado"])
+    return keys
+
+
+@dataclass(frozen=True)
+class CommercialCoverageStats:
+    """Cobertura comercial sobre o conjunto base fiscal (N_base notas)."""
+
+    n_total: int
+    n_com_vinculo_pedido_nf: int
+    n_sem_vinculo_ou_so_fiscal: int
+    n_com_venda_lista: int
+    n_sem_resultado: int
+    n_com_resultado_numerico: int
+
+
+def compute_commercial_coverage_stats(df_aligned: pd.DataFrame, *, eps: float = 1e-9) -> CommercialCoverageStats:
+    """
+    Estatísticas para UI: quantas NFs do conjunto base têm vínculo comercial, lista, resultado, etc.
+    """
+    if df_aligned.empty:
+        return CommercialCoverageStats(0, 0, 0, 0, 0, 0)
+    n = int(len(df_aligned))
+    vinc = (
+        df_aligned["faturamento_nota_vinculada"].fillna(False).astype(bool)
+        if "faturamento_nota_vinculada" in df_aligned.columns
+        else pd.Series(False, index=df_aligned.index)
+    )
+    vv = (
+        pd.to_numeric(df_aligned["valor_venda"], errors="coerce").fillna(0.0)
+        if "valor_venda" in df_aligned.columns
+        else pd.Series(0.0, index=df_aligned.index)
+    )
+    res = (
+        pd.to_numeric(df_aligned["resultado"], errors="coerce")
+        if "resultado" in df_aligned.columns
+        else pd.Series(dtype=float, index=df_aligned.index)
+    )
+    n_vinc = int(vinc.sum())
+    n_lista = int((vv > eps).sum())
+    n_sem_res = int(res.isna().sum())
+    n_com_res = int(res.notna().sum())
+    n_so_fiscal = int(((~vinc) & (vv <= eps)).sum())
+    return CommercialCoverageStats(
+        n_total=n,
+        n_com_vinculo_pedido_nf=n_vinc,
+        n_sem_vinculo_ou_so_fiscal=n_so_fiscal,
+        n_com_venda_lista=n_lista,
+        n_sem_resultado=n_sem_res,
+        n_com_resultado_numerico=n_com_res,
+    )
+
+
+def build_nf_panel_aligned_to_fiscal_base(
+    df_fiscal_base: pd.DataFrame,
+    df_panel_empresa_emissao: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Uma linha por NF do **conjunto base fiscal**, com colunas do painel NF preenchidas pelo merge comercial
+    quando existir; caso contrário valores neutros (lista 0, sem vínculo, resultado NaN).
+
+    ``valor_faturado_nf`` em todas as linhas vem de ``Valor_Liquido_NF`` do fiscal base (comparável ao Bling).
+    """
+    if df_fiscal_base.empty:
+        return pd.DataFrame()
+
+    keys = _fiscal_base_merge_keys(df_fiscal_base)
+    for k in keys:
+        if k not in df_fiscal_base.columns:
+            return pd.DataFrame()
+
+    base = df_fiscal_base.copy()
+    base["valor_faturado_nf"] = pd.to_numeric(base["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
+    keep_base = keys + ["valor_faturado_nf", "Nota_Data_Emissao", "Nota_Situacao"]
+    keep_base = [c for c in keep_base if c in base.columns]
+    out = base[keep_base].copy()
+
+    if df_panel_empresa_emissao.empty or not _nf_panel_dataframe_valid_for_align(df_panel_empresa_emissao):
+        return _nf_panel_fill_defaults_for_aligned(out)
+
+    ps = df_panel_empresa_emissao.drop_duplicates(subset=keys, keep="first")
+    drop_ps = [c for c in ("Valor_Liquido_NF", "valor_faturado_nf", "Nota_Data_Emissao", "Nota_Situacao") if c in ps.columns]
+    ps_m = ps.drop(columns=drop_ps, errors="ignore")
+    merged = out.merge(ps_m, on=keys, how="left")
+    merged["valor_faturado_nf"] = pd.to_numeric(
+        df_fiscal_base["Valor_Liquido_NF"], errors="coerce"
+    ).fillna(0.0).to_numpy()
+    return _nf_panel_fill_defaults_for_aligned(merged)
+
+
+def _nf_panel_fill_defaults_for_aligned(df: pd.DataFrame) -> pd.DataFrame:
+    """Garante colunas esperadas por ``compute_nf_panel_kpis`` e textos do painel."""
+    m = df.copy()
+    if "valor_venda" not in m.columns:
+        m["valor_venda"] = 0.0
+    else:
+        m["valor_venda"] = pd.to_numeric(m["valor_venda"], errors="coerce").fillna(0.0)
+    m["valor_faturado_nf"] = pd.to_numeric(m["valor_faturado_nf"], errors="coerce").fillna(0.0)
+    for c, default in (
+        ("comissao", 0.0),
+        ("custo_produto", 0.0),
+        ("frete", 0.0),
+        ("imposto", 0.0),
+        ("despesa_fixa", 0.0),
+        ("custo_ads_variavel", 0.0),
+        ("custo_ads_fixo", 0.0),
+        ("custo_ads", 0.0),
+    ):
+        if c not in m.columns:
+            m[c] = default
+        else:
+            m[c] = pd.to_numeric(m[c], errors="coerce").fillna(0.0)
+    if "resultado" not in m.columns:
+        m["resultado"] = float("nan")
+    else:
+        m["resultado"] = pd.to_numeric(m["resultado"], errors="coerce")
+    if "diferenca" not in m.columns:
+        m["diferenca"] = m["valor_venda"] - m["valor_faturado_nf"]
+    else:
+        d = pd.to_numeric(m["diferenca"], errors="coerce")
+        m["diferenca"] = d.fillna(m["valor_venda"] - m["valor_faturado_nf"])
+    for c, default in (
+        ("plataforma_resumo", "—"),
+        ("plataforma", "—"),
+        ("pedido_resumo", "—"),
+        ("produto_resumo", "—"),
+    ):
+        if c not in m.columns:
+            m[c] = default
+        else:
+            m[c] = m[c].fillna("").astype(str).replace("", "—")
+    if "n_linhas_pedido" not in m.columns:
+        m["n_linhas_pedido"] = 0
+    else:
+        m["n_linhas_pedido"] = pd.to_numeric(m["n_linhas_pedido"], errors="coerce").fillna(0).astype(int)
+    if "faturamento_nota_vinculada" not in m.columns:
+        m["faturamento_nota_vinculada"] = False
+    else:
+        m["faturamento_nota_vinculada"] = m["faturamento_nota_vinculada"].fillna(False).astype(bool)
+    inc_calc = (~m["faturamento_nota_vinculada"]) | m["resultado"].isna()
+    if "comercial_incompleto" not in m.columns:
+        m["comercial_incompleto"] = inc_calc.astype(bool)
+    else:
+        m["comercial_incompleto"] = (
+            m["comercial_incompleto"].fillna(False).astype(bool) | inc_calc.astype(bool)
+        )
+    return m
 
 
 def _nf_grain_groupby_keys(df: pd.DataFrame) -> list[str]:

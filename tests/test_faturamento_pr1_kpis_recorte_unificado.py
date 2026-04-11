@@ -1,8 +1,8 @@
 """
-PR1 Faturamento & DRE: cards/DRE/tabela devem usar o mesmo ``compute_nf_panel_kpis(df_nf_panel)``.
+``compute_nf_panel_kpis``: somas e contagens são consistentes com o subconjunto de linhas passado.
 
-Invariante de dados: filtrar o painel NF (ex.: por plataforma) altera os totais da mesma forma
-que seria esperado ao somar só as linhas visíveis na tabela.
+No app, **cards/DRE** usam KPIs sobre o frame alinhado ao **N_base** (empresa + emissão); a **tabela** usa
+outro recorte (plataforma / produto / sinal). Estes testes cobrem apenas a função pura de agregação.
 """
 
 from __future__ import annotations

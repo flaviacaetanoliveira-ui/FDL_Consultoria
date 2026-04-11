@@ -64,6 +64,11 @@ from processing.repasse_load import (
     read_repasse_parquet,
     repasse_use_parquet_flag,
 )
+from processing.repasse_ui_grid import (
+    REPASSE_UI_GRID_ROW_CAP,
+    repasse_ui_apply_grid_styler,
+    repasse_ui_grid_display_slice,
+)
 from processing.repasse_ui_session import (
     COL_ACAO_LEGACY_UI,
     COL_DATA_PERIODO_REPASSE,
@@ -10416,17 +10421,27 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
                         _obj.append(str(x))
                 tabela_exibir[_ref] = pd.Series(_obj, dtype=object, index=tabela_exibir.index)
     
+    tabela_exibir_grid, _repasse_n_recorte_total, _repasse_grid_truncated = repasse_ui_grid_display_slice(
+        tabela_exibir, cap=REPASSE_UI_GRID_ROW_CAP
+    )
+    if _repasse_grid_truncated:
+        st.info(
+            f"Mostrando apenas as primeiras **{REPASSE_UI_GRID_ROW_CAP:,}** linhas de "
+            f"**{_repasse_n_recorte_total:,}** neste recorte. **Afine os filtros** (período, plataforma, "
+            "ação, situação ou busca) para trabalhar com menos linhas na grelha."
+        )
+
     if _fdl_safe_mode():
         st.warning(
             "**Modo seguro (FDL_SAFE_MODE=1)** — sem fila HTML, sem exports Excel/PDF, "
             "sem `column_config` na tabela (apenas `st.dataframe` simples)."
         )
-        st.metric("Linhas (filtro atual)", len(tabela_exibir))
-        _grid_safe = _dataframe_conciliacao_somente_grid(tabela_exibir)
+        st.metric("Linhas (filtro atual)", _repasse_n_recorte_total)
+        _grid_safe = _dataframe_conciliacao_somente_grid(tabela_exibir_grid)
         st.dataframe(
             _grid_safe,
             use_container_width=True,
-            height=min(560, 140 + max(18 * min(len(tabela_exibir), 80), 120)),
+            height=min(560, 140 + max(18 * min(len(tabela_exibir_grid), 80), 120)),
         )
         st.caption("Desative FDL_SAFE_MODE para voltar à UI completa.")
         return
@@ -10497,16 +10512,20 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 
     _fdl_ui_gap_section_lg()
 
-    tabela_grid = _dataframe_conciliacao_somente_grid(tabela_exibir)
+    tabela_grid = _dataframe_conciliacao_somente_grid(tabela_exibir_grid)
     _cfg_grid = (
         _column_config_conciliacao(tabela_grid, moeda_como_texto=True)
         if not tabela_grid.empty
         else None
     )
-    _n_grid = len(tabela_exibir)
-    _h_grid = min(520, 44 + min(_n_grid, 16) * 34) if _n_grid else 160
+    _n_grid_total = _repasse_n_recorte_total
+    _n_grid_vis = len(tabela_exibir_grid)
+    _h_grid = min(520, 44 + min(_n_grid_vis, 16) * 34) if _n_grid_vis else 160
+    _use_styler = repasse_ui_apply_grid_styler(grid_truncated=_repasse_grid_truncated)
     _disp_grid: object = (
-        _repasse_fila_operacional_styler(tabela_grid) if not tabela_grid.empty else tabela_grid
+        _repasse_fila_operacional_styler(tabela_grid)
+        if (not tabela_grid.empty and _use_styler)
+        else tabela_grid
     )
 
     if tabela_exibir.empty:
@@ -10528,7 +10547,13 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             hide_index=True,
             column_config=_cfg_grid,
         )
-    st.caption(f"{_fmt_int_ptbr(_n_grid)} linhas no recorte.")
+    if _repasse_grid_truncated:
+        st.caption(
+            f"**{_fmt_int_ptbr(_n_grid_total)} linhas** no recorte · na grelha: primeiras "
+            f"**{_fmt_int_ptbr(_n_grid_vis)}** (limite de estabilidade **{REPASSE_UI_GRID_ROW_CAP:,}**)."
+        )
+    else:
+        st.caption(f"{_fmt_int_ptbr(_n_grid_total)} linhas no recorte.")
 
 _admin_mode = _is_admin_mode()
 

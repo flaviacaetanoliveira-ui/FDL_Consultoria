@@ -1,5 +1,5 @@
 """
-Painel NF-first **pré-calculado** (merge fiscal↔comercial + frete gap + resultado frete/NF + custo ADS).
+Painel NF-first **pré-calculado** (merge fiscal↔comercial + gap receita frete + resultado + custo ADS).
 
 Inclui custo de **ADS** (3,5% sobre ``valor_venda`` + R$ 2 por NF com venda lista > 0), gravado em colunas
 ``custo_ads_*`` e descontado de ``resultado``. Gravado em ``dataset_faturamento_nf_panel.parquet``.
@@ -34,7 +34,8 @@ NF_PANEL_REQUIRED_COLUMNS: frozenset[str] = frozenset(
         "diferenca",
         "comissao",
         "custo_produto",
-        "frete",
+        "receita_frete_tp",
+        "tarifa_custo_envio",
         "imposto",
         "despesa_fixa",
         "custo_ads_variavel",

@@ -5229,9 +5229,17 @@ def _render_fdl_fat_dre_nf_kpi_cards(
                 title="Σ Custo_Produto_Total (ou «Custo do Produto») no recorte.",
             ),
             _card(
-                "Frete",
-                _fmt_brl_ptbr_celula(kp["frete"]) or "R$ 0,00",
+                "Receita de frete (TP)",
+                _fmt_brl_ptbr_celula(kp.get("receita_frete_tp", 0.0)) or "R$ 0,00",
                 tier="secondary",
+                title="Soma por NF: valor pago pelo cliente em **transportadora própria** (split do «Custo de Frete») "
+                "+ imputação NF×lista quando aplicável. Não confundir com tarifa de envio.",
+            ),
+            _card(
+                "Tarifa de envio",
+                _fmt_brl_ptbr_celula(kp.get("tarifa_custo_envio", 0.0)) or "R$ 0,00",
+                tier="secondary",
+                title="Soma da coluna **Custo de Frete** do relatório de pedidos (Mercado Envios + demais), por NF.",
             ),
             _card(
                 "Imposto",
@@ -5425,7 +5433,8 @@ def _render_fdl_fat_dre_nf_gerencial(
     res_disp = _fmt_brl_ptbr_celula(kp["resultado"]) or "—"
     enc_com = _fmt_brl_ptbr_encargo_dre(kp["comissao"])
     enc_custo = _fmt_brl_ptbr_encargo_dre(kp.get("custo_produto", 0.0))
-    enc_fre = _fmt_brl_ptbr_encargo_dre(kp["frete"])
+    rec_frete_disp = _fmt_brl_ptbr_celula(float(kp.get("receita_frete_tp", 0.0))) or "R$ 0,00"
+    enc_tarifa = _fmt_brl_ptbr_encargo_dre(float(kp.get("tarifa_custo_envio", 0.0)))
     enc_imp = _fmt_brl_ptbr_encargo_dre(kp["imposto"])
     enc_df = _fmt_brl_ptbr_encargo_dre(kp["despesa_fixa"])
     enc_ads_v = _fmt_brl_ptbr_encargo_dre(float(kp.get("custo_ads_variavel", 0.0)))
@@ -5485,6 +5494,16 @@ def _render_fdl_fat_dre_nf_gerencial(
                 "sem filtro de plataforma, produto ou sinal da tabela."
                 if valor_faturado_from_fiscal_parquet
                 else "Σ Quantidade × Preço de lista no recorte."
+            ),
+        )
+        + _dre_row(
+            "Receita de frete (transportadora própria)",
+            rec_frete_disp,
+            title=(
+                "Valor pago pelo cliente em **transportadora própria** (split do «Custo de Frete» nas linhas de pedido) "
+                "e imputação NF×lista quando aplicável. **Não** inclui tarifa Mercado Envios."
+                if valor_faturado_from_fiscal_parquet
+                else "Parcela TP do frete + gap nota quando aplicável."
             ),
         )
         + _dre_row(
@@ -5551,13 +5570,14 @@ def _render_fdl_fat_dre_nf_gerencial(
             ),
         )
         + _dre_row(
-            "Frete",
-            enc_fre,
+            "Tarifa de envio (Custo de Frete)",
+            enc_tarifa,
             encargo=True,
             title=(
-                "Σ frete comercial (pedidos) no universo **N_base**."
+                "Σ coluna **Custo de Frete** do relatório de pedidos por NF (inclui Mercado Envios e demais). "
+                "Encargo na DRE; separado da **receita de frete TP** acima."
                 if valor_faturado_from_fiscal_parquet
-                else "Σ frete no recorte."
+                else "Σ Custo de Frete do pedido por NF."
             ),
         )
         + _dre_row(
@@ -7712,7 +7732,8 @@ def _render_faturamento_dre_minimal(
         "Diferença",
         "Comissão",
         "Custo produto",
-        "Frete",
+        "Receita frete (TP)",
+        "Tarifa envio",
         "Imposto",
         "Desp. fixa",
         "ADS 3,5%",
@@ -7786,7 +7807,16 @@ def _render_faturamento_dre_minimal(
                 "Diferença": pd.to_numeric(_df_nf_table["diferenca"], errors="coerce"),
                 "Comissão": pd.to_numeric(_df_nf_table["comissao"], errors="coerce"),
                 "Custo produto": pd.to_numeric(_custo_s, errors="coerce").fillna(0.0),
-                "Frete": pd.to_numeric(_df_nf_table["frete"], errors="coerce"),
+                "Receita frete (TP)": pd.to_numeric(
+                    _df_nf_table["receita_frete_tp"], errors="coerce"
+                )
+                if "receita_frete_tp" in _df_nf_table.columns
+                else pd.Series(0.0, index=_df_nf_table.index),
+                "Tarifa envio": pd.to_numeric(
+                    _df_nf_table["tarifa_custo_envio"], errors="coerce"
+                )
+                if "tarifa_custo_envio" in _df_nf_table.columns
+                else pd.Series(0.0, index=_df_nf_table.index),
                 "Imposto": pd.to_numeric(_df_nf_table["imposto"], errors="coerce"),
                 "Desp. fixa": pd.to_numeric(_df_nf_table["despesa_fixa"], errors="coerce"),
                 "ADS 3,5%": _ads_v_s,
@@ -7849,7 +7879,8 @@ def _render_faturamento_dre_minimal(
             "Diferença",
             "Comissão",
             "Custo produto",
-            "Frete",
+            "Receita frete (TP)",
+            "Tarifa envio",
             "Imposto",
             "Desp. fixa",
             "ADS 3,5%",
@@ -7894,12 +7925,16 @@ def _render_faturamento_dre_minimal(
             if use_fiscal_kpi
             else "Σ custo do produto nas linhas de pedido desta NF."
         ),
-        "Frete": (
-            "Prioridade: frete das linhas de pedido; se ~0, usa coluna «Frete» do export de notas no Parquet fiscal "
-            "(após rematerializar); se ainda ~0, com **uma** linha de pedido e faturado > lista, "
-            "preenche com a diferença (caso típico frete ML no líquido da NF)."
+        "Receita frete (TP)": (
+            "Valor pago pelo cliente em **transportadora própria** (split do «Custo de Frete») + imputação NF×lista "
+            "(uma linha) quando aplicável; pode usar «Frete» do export de notas no fiscal se o comercial veio 0."
             if use_fiscal_kpi
-            else None
+            else "Receita de frete TP / gap nota."
+        ),
+        "Tarifa envio": (
+            "Soma da coluna **Custo de Frete** do relatório de pedidos nesta NF (inclui Mercado Envios)."
+            if use_fiscal_kpi
+            else "Σ Custo de Frete do pedido."
         ),
         "Imposto": "Comercial: soma do imposto das linhas de pedido ligadas à NF." if use_fiscal_kpi else None,
         "Desp. fixa": (
@@ -7937,7 +7972,8 @@ def _render_faturamento_dre_minimal(
         "Diferença": "small",
         "Comissão": "small",
         "Custo produto": "medium",
-        "Frete": "small",
+        "Receita frete (TP)": "small",
+        "Tarifa envio": "small",
         "Imposto": "small",
         "Desp. fixa": "small",
         "ADS 3,5%": "small",

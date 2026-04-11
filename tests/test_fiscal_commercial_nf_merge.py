@@ -28,7 +28,8 @@ def _comm_row(**kwargs: object) -> pd.DataFrame:
         "valor_venda": 80.0,
         "comissao": 1.0,
         "custo_produto": 0.0,
-        "frete": 2.0,
+        "receita_frete_tp": 2.0,
+        "tarifa_custo_envio": 2.0,
         "imposto": 0.0,
         "despesa_fixa": 0.0,
         "resultado": 10.0,
@@ -71,22 +72,24 @@ def test_merge_strict_org_only_ignores_fallback() -> None:
 
 
 def test_merge_frete_nota_export_quando_comercial_zero() -> None:
-    """Coluna Frete do CSV de notas no fiscal preenche «frete» do painel se o comercial veio 0."""
+    """``Frete_Nota_Export`` no fiscal preenche ``receita_frete_tp`` se o comercial veio 0."""
     fiscal = _fiscal_row(Valor_Liquido_NF=339.80, Frete_Nota_Export=98.80)
     comm = _comm_row(
         valor_venda=241.0,
-        frete=0.0,
+        receita_frete_tp=0.0,
+        tarifa_custo_envio=0.0,
         Nota_Numero_Normalizado="042480",
     )
     out = merge_fiscal_base_with_commercial_nf_dataframe(fiscal, comm)
-    assert abs(float(out.iloc[0]["frete"]) - 98.80) < 1e-6
+    assert abs(float(out.iloc[0]["receita_frete_tp"]) - 98.80) < 1e-6
+    assert abs(float(out.iloc[0]["tarifa_custo_envio"])) < 1e-9
 
 
 def test_merge_frete_comercial_prevalece_sobre_frete_nota() -> None:
     fiscal = _fiscal_row(Frete_Nota_Export=50.0)
-    comm = _comm_row(frete=2.0, Nota_Numero_Normalizado="042480")
+    comm = _comm_row(receita_frete_tp=2.0, tarifa_custo_envio=2.0, Nota_Numero_Normalizado="042480")
     out = merge_fiscal_base_with_commercial_nf_dataframe(fiscal, comm)
-    assert abs(float(out.iloc[0]["frete"]) - 2.0) < 1e-6
+    assert abs(float(out.iloc[0]["receita_frete_tp"]) - 2.0) < 1e-6
 
 
 def test_merge_prioriza_linha_com_org_quando_ambas_existem() -> None:

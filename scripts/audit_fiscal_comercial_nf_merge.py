@@ -96,7 +96,8 @@ def _load_commercial(path: Path) -> pd.DataFrame:
     for c in (
         "valor_venda",
         "comissao",
-        "frete",
+        "receita_frete_tp",
+        "tarifa_custo_envio",
         "imposto",
         "despesa_fixa",
         "resultado",

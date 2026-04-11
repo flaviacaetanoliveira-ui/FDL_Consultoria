@@ -25,6 +25,28 @@ _PARQUET_PANEL = Path(__file__).resolve().parent.parent / (
 )
 
 
+def _panel_parquet_has_frete_v2_columns(path: Path) -> bool:
+    """Painéis antigos não têm ``receita_frete_tp`` / ``tarifa_custo_envio`` — exige rematerialização."""
+    if not path.is_file():
+        return False
+    try:
+        import pyarrow.parquet as pq
+    except ImportError:
+        return False
+    try:
+        names = pq.read_schema(path).names
+    except Exception:
+        return False
+    return "receita_frete_tp" in names and "tarifa_custo_envio" in names
+
+
+_CLIENTE2_PARQUETS_OK = (
+    _PARQUET_FISCAL.is_file()
+    and _PARQUET_PANEL.is_file()
+    and _panel_parquet_has_frete_v2_columns(_PARQUET_PANEL)
+)
+
+
 def _panel_scope_empresa_emissao_gama_mar2026(panel: pd.DataFrame) -> pd.DataFrame:
     """Espelha empresa + emissão do app, sem plataforma (casefold em empresa)."""
     emp = "Gama Home"
@@ -41,7 +63,10 @@ class TestBuildNfPanelAlignedToFiscalBase(unittest.TestCase):
         out = build_nf_panel_aligned_to_fiscal_base(pd.DataFrame(), panel)
         self.assertTrue(out.empty)
 
-    @unittest.skipUnless(_PARQUET_FISCAL.is_file() and _PARQUET_PANEL.is_file(), "sem Parquets cliente_2")
+    @unittest.skipUnless(
+        _CLIENTE2_PARQUETS_OK,
+        "sem Parquets cliente_2 ou painel sem receita_frete_tp/tarifa_custo_envio (rematerializar)",
+    )
     def test_gama_home_marco_2026_alinha_n_base_e_total_fiscal(self) -> None:
         fiscal = pd.read_parquet(_PARQUET_FISCAL, engine="pyarrow")
         panel = pd.read_parquet(_PARQUET_PANEL, engine="pyarrow")
@@ -61,7 +86,10 @@ class TestBuildNfPanelAlignedToFiscalBase(unittest.TestCase):
         self.assertAlmostEqual(float(kp["valor_faturado_nf"]), 82347.10, places=2)
         self.assertEqual(int(kp["n_nf"]), 438)
 
-    @unittest.skipUnless(_PARQUET_FISCAL.is_file() and _PARQUET_PANEL.is_file(), "sem Parquets cliente_2")
+    @unittest.skipUnless(
+        _CLIENTE2_PARQUETS_OK,
+        "sem Parquets cliente_2 ou painel sem receita_frete_tp/tarifa_custo_envio (rematerializar)",
+    )
     def test_cobertura_comercial_gama_home_marco_2026(self) -> None:
         fiscal = pd.read_parquet(_PARQUET_FISCAL, engine="pyarrow")
         panel = pd.read_parquet(_PARQUET_PANEL, engine="pyarrow")

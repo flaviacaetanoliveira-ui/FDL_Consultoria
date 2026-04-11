@@ -101,7 +101,8 @@ Legenda: **origem** = coluna(s) no materializado **linha**; **regra** = como obt
 | `pedido_resumo` | `Número do pedido multiloja`, `Número do pedido` | **Resumo textual** (igual semântica ao painel atual: um código; ou “N multiloja” / “N pedidos”). | N/A |
 | `produto_resumo` | `Descrição` ou `Nome` | **Resumo textual** (primeiro item; ou “primeiro (+N itens)”). | N/A |
 | `comissao` | `Taxa de Comissão` | **Soma** no grupo. | Só soma. |
-| `frete` | `Frete_Plataforma` ou `Custo de Frete` | **Soma** no grupo (coluna escolhida com a mesma prioridade que hoje no código). | Só soma. |
+| `receita_frete_tp` | `Custo de Frete` + modalidade de envio | **Soma** no grupo da parcela **transportadora própria** (mesma regra que `calc._frete_mercado_envios_vs_transportadora`); gap NF×lista (uma linha) quando aplicável. | Só soma. |
+| `tarifa_custo_envio` | `Custo de Frete` (ou `Frete_Plataforma` se CF ausente) | **Soma** no grupo = tarifa de envio total do relatório de pedidos na NF. | Só soma. |
 | `imposto` | `Imposto` | **Soma** no grupo. | Só soma. |
 | `despesa_fixa` | — | **Derivado:** `0.05 × valor_venda` (após calcular `valor_venda`). | Uma vez por NF. |
 | `diferenca` | — | **Derivado:** `valor_venda - valor_faturado_nf`. | Uma vez por NF. |

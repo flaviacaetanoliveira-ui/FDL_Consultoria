@@ -15,7 +15,7 @@ from faturamento_dre_recorte_minimo import (
     faturamento_min_series_nf_emissao_bounds_dates,
 )
 
-SCHEMA_VERSION_NF_FIRST = 2
+SCHEMA_VERSION_NF_FIRST = 3
 
 # Ordem canónica do contrato (sem ``plataforma_resumo`` — substituída por ``plataforma``).
 NF_FIRST_CONTRACT_COLUMNS: tuple[str, ...] = (
@@ -32,7 +32,8 @@ NF_FIRST_CONTRACT_COLUMNS: tuple[str, ...] = (
     "produto_resumo",
     "comissao",
     "custo_produto",
-    "frete",
+    "receita_frete_tp",
+    "tarifa_custo_envio",
     "imposto",
     "despesa_fixa",
     "diferenca",

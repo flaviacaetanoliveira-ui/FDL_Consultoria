@@ -195,7 +195,8 @@ def test_build_nf_grain_one_nf_two_order_lines() -> None:
     assert float(out.iloc[0]["despesa_fixa"]) == 1.25
     assert float(out.iloc[0]["comissao"]) == 3.0
     assert float(out.iloc[0]["custo_produto"]) == 0.0
-    assert float(out.iloc[0]["frete"]) == 1.0
+    assert float(out.iloc[0]["tarifa_custo_envio"]) == 1.0
+    assert float(out.iloc[0]["receita_frete_tp"]) == 0.0
     assert float(out.iloc[0]["resultado"]) == 5.0
     assert int(out.iloc[0]["n_linhas_pedido"]) == 2
     assert bool(out.iloc[0]["faturamento_nota_vinculada"])
@@ -314,7 +315,8 @@ def test_apply_nf_panel_custo_from_line_grain_preenche_parquet_zerado() -> None:
                 "diferenca": -75.0,
                 "comissao": 3.0,
                 "custo_produto": 0.0,
-                "frete": 1.0,
+                "receita_frete_tp": 0.0,
+                "tarifa_custo_envio": 1.0,
                 "imposto": 6.0,
                 "despesa_fixa": 1.25,
                 "resultado": 5.0,
@@ -409,6 +411,44 @@ def test_build_nf_grain_valor_venda_usa_somente_preco_lista() -> None:
     assert abs(float(out.iloc[0]["valor_venda"]) - 196.8) < 1e-6
 
 
+def test_build_nf_grain_receita_tp_vs_tarifa_com_custo_de_frete() -> None:
+    """``tarifa_custo_envio`` = Σ CF; ``receita_frete_tp`` = só parcela transportadora própria (split calc)."""
+    df = pd.DataFrame(
+        {
+            "empresa": ["A", "A"],
+            "org_id": ["o1", "o1"],
+            "Nota_Numero_Normalizado": ["NFZ", "NFZ"],
+            "Nota_Valor_Liquido_Total": [200.0, 200.0],
+            "Nota_Data_Emissao": pd.to_datetime(["2026-04-01", "2026-04-01"]),
+            "Nota_Situacao": ["Autorizada", "Autorizada"],
+            "Quantidade": [1.0, 1.0],
+            "Preço de lista": [50.0, 50.0],
+            "Nome da plataforma": ["ML", "ML"],
+            "Número do pedido multiloja": ["P1", "P1"],
+            "Taxa de Comissão": [0.0, 0.0],
+            "Custo de Frete": [10.0, 25.0],
+            "Modalidade de envio": ["Coleta do Mercado", "Transportadora Própria XYZ"],
+            "Frete_Plataforma": [0.0, 0.0],
+            "Imposto": [0.0, 0.0],
+            "Resultado": [0.0, 0.0],
+            "Descrição": ["A", "B"],
+            "faturamento_nota_vinculada": [True, True],
+        }
+    )
+    st = FaturamentoRecorteMinState((), ())
+    out, w = build_nf_grain_dataframe(
+        df,
+        st,
+        ok_nf_dates=True,
+        nf_d_ini=date(2026, 4, 1),
+        nf_d_fim=date(2026, 4, 30),
+    )
+    assert not w and len(out) == 1
+    row = out.iloc[0]
+    assert abs(float(row["tarifa_custo_envio"]) - 35.0) < 1e-9
+    assert abs(float(row["receita_frete_tp"]) - 25.0) < 1e-9
+
+
 def test_build_nf_grain_soma_comissao_frete_por_linha() -> None:
     """Dois itens na mesma NF: comissão e frete somam todas as linhas."""
     df = pd.DataFrame(
@@ -443,7 +483,8 @@ def test_build_nf_grain_soma_comissao_frete_por_linha() -> None:
     assert not w and len(out) == 1
     row = out.iloc[0]
     assert abs(float(row["comissao"]) - 218.54) < 1e-6
-    assert abs(float(row["frete"]) - 182.30) < 1e-6
+    assert abs(float(row["tarifa_custo_envio"]) - 182.30) < 1e-6
+    assert float(row["receita_frete_tp"]) == 0.0
     assert abs(float(row["valor_venda"]) - 642.75) < 1e-6
 
 
@@ -623,7 +664,7 @@ def test_apply_nf_panel_resultado_frete_nota_lista_soma_frete() -> None:
         {
             "valor_faturado_nf": [752.01],
             "valor_venda": [630.0],
-            "frete": [122.01],
+            "receita_frete_tp": [122.01],
             "resultado": [26.55],
             "comercial_incompleto": [False],
         }
@@ -635,7 +676,7 @@ def test_apply_nf_panel_resultado_frete_nota_lista_soma_frete() -> None:
 def test_apply_nf_panel_resultado_frete_nota_lista_apos_gap_fallback() -> None:
     df = pd.DataFrame(
         {
-            "frete": [0.0],
+            "receita_frete_tp": [0.0],
             "valor_faturado_nf": [752.01],
             "valor_venda": [630.0],
             "n_linhas_pedido": [1],
@@ -644,7 +685,7 @@ def test_apply_nf_panel_resultado_frete_nota_lista_apos_gap_fallback() -> None:
         }
     )
     out = apply_nf_panel_resultado_frete_nota_lista(apply_nf_panel_frete_gap_fallback(df))
-    assert abs(float(out.iloc[0]["frete"]) - 122.01) < 0.02
+    assert abs(float(out.iloc[0]["receita_frete_tp"]) - 122.01) < 0.02
     assert abs(float(out.iloc[0]["resultado"]) - 148.56) < 0.02
 
 
@@ -682,7 +723,7 @@ def test_build_nf_grain_imputa_frete_gap_uma_linha_sem_mudar_resultado_bruto() -
     assert not w
     assert bool(out.iloc[0]["comercial_incompleto"]) is False
     assert abs(float(out.iloc[0]["valor_venda"]) - 630.0) < 1e-6
-    assert abs(float(out.iloc[0]["frete"]) - 122.01) < 0.02
+    assert abs(float(out.iloc[0]["receita_frete_tp"]) - 122.01) < 0.02
     assert abs(float(out.iloc[0]["resultado"]) - 26.55) < 0.02
     adj = apply_nf_panel_resultado_frete_nota_lista(out)
     assert abs(float(adj.iloc[0]["resultado"]) - 148.56) < 0.02
@@ -727,40 +768,40 @@ def test_build_nf_grain_comercial_incompleto_quando_algum_resultado_nan() -> Non
 def test_apply_nf_panel_frete_gap_fallback_um_pedido() -> None:
     df = pd.DataFrame(
         {
-            "frete": [0.0],
+            "receita_frete_tp": [0.0],
             "valor_faturado_nf": [339.80],
             "valor_venda": [241.0],
             "n_linhas_pedido": [1],
         }
     )
     out = apply_nf_panel_frete_gap_fallback(df)
-    assert abs(float(out.iloc[0]["frete"]) - 98.80) < 1e-6
+    assert abs(float(out.iloc[0]["receita_frete_tp"]) - 98.80) < 1e-6
 
 
 def test_apply_nf_panel_frete_gap_fallback_ignora_varias_linhas_pedido() -> None:
     df = pd.DataFrame(
         {
-            "frete": [0.0],
+            "receita_frete_tp": [0.0],
             "valor_faturado_nf": [339.80],
             "valor_venda": [241.0],
             "n_linhas_pedido": [2],
         }
     )
     out = apply_nf_panel_frete_gap_fallback(df)
-    assert abs(float(out.iloc[0]["frete"])) < 1e-9
+    assert abs(float(out.iloc[0]["receita_frete_tp"])) < 1e-9
 
 
 def test_apply_nf_panel_frete_gap_fallback_nao_sobrescreve_frete_comercial() -> None:
     df = pd.DataFrame(
         {
-            "frete": [10.0],
+            "receita_frete_tp": [10.0],
             "valor_faturado_nf": [339.80],
             "valor_venda": [241.0],
             "n_linhas_pedido": [1],
         }
     )
     out = apply_nf_panel_frete_gap_fallback(df)
-    assert abs(float(out.iloc[0]["frete"]) - 10.0) < 1e-9
+    assert abs(float(out.iloc[0]["receita_frete_tp"]) - 10.0) < 1e-9
 
 
 def test_apply_nf_panel_custo_ads_subtracts_from_resultado() -> None:

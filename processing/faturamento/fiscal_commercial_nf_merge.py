@@ -7,8 +7,9 @@ Quando ainda assim não casa, o caso típico é **org_id** vazio no materializad
 no fiscal (ou o inverso): o merge estrito em (org_id, empresa, NF) falha. O fallback usa só
 (empresa, NF) nas linhas comerciais sem org_id.
 
-**Frete na linha do painel:** mantém o frete **comercial** quando > 0; caso contrário usa
-``Frete_Nota_Export`` do Parquet fiscal (soma da coluna ``Frete`` do export de notas), quando existir.
+**Receita de frete (TP) na linha do painel:** mantém ``receita_frete_tp`` do comercial quando > 0; caso contrário
+usa ``Frete_Nota_Export`` do fiscal (frete na nota). **Tarifa de envio** (``tarifa_custo_envio`` = Custo de Frete
+do pedido) vem só do comercial — sem preenchimento fiscal.
 """
 
 from __future__ import annotations
@@ -47,7 +48,8 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         "diferenca",
         "comissao",
         "custo_produto",
-        "frete",
+        "receita_frete_tp",
+        "tarifa_custo_envio",
         "imposto",
         "despesa_fixa",
         "resultado",
@@ -77,7 +79,8 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         merged["valor_venda"] = 0.0
         merged["comissao"] = 0.0
         merged["custo_produto"] = 0.0
-        merged["frete"] = 0.0
+        merged["receita_frete_tp"] = 0.0
+        merged["tarifa_custo_envio"] = 0.0
         merged["imposto"] = 0.0
         merged["despesa_fixa"] = 0.0
         merged["resultado"] = 0.0
@@ -109,7 +112,8 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
             "valor_venda",
             "comissao",
             "custo_produto",
-            "frete",
+            "receita_frete_tp",
+            "tarifa_custo_envio",
             "imposto",
             "despesa_fixa",
             "resultado",
@@ -125,7 +129,8 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
             "valor_venda",
             "comissao",
             "custo_produto",
-            "frete",
+            "receita_frete_tp",
+            "tarifa_custo_envio",
             "imposto",
             "despesa_fixa",
             "resultado",
@@ -170,7 +175,8 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
             "valor_venda",
             "comissao",
             "custo_produto",
-            "frete",
+            "receita_frete_tp",
+            "tarifa_custo_envio",
             "imposto",
             "despesa_fixa",
             "resultado",
@@ -200,7 +206,8 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         merged["valor_venda"] = pd.to_numeric(merged["valor_venda"], errors="coerce").fillna(0.0)
         merged["comissao"] = pd.to_numeric(merged["comissao"], errors="coerce").fillna(0.0)
         merged["custo_produto"] = pd.to_numeric(merged["custo_produto"], errors="coerce").fillna(0.0)
-        merged["frete"] = pd.to_numeric(merged["frete"], errors="coerce").fillna(0.0)
+        merged["receita_frete_tp"] = pd.to_numeric(merged["receita_frete_tp"], errors="coerce").fillna(0.0)
+        merged["tarifa_custo_envio"] = pd.to_numeric(merged["tarifa_custo_envio"], errors="coerce").fillna(0.0)
         merged["imposto"] = pd.to_numeric(merged["imposto"], errors="coerce").fillna(0.0)
         merged["despesa_fixa"] = pd.to_numeric(merged["despesa_fixa"], errors="coerce").fillna(0.0)
         rnum = pd.to_numeric(merged["resultado"], errors="coerce")
@@ -220,10 +227,11 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
     _eps_f = 1e-9
     if "Frete_Nota_Export" in merged.columns:
         f_nota = pd.to_numeric(merged["Frete_Nota_Export"], errors="coerce").fillna(0.0)
-        f_com = pd.to_numeric(merged["frete"], errors="coerce").fillna(0.0)
-        merged["frete"] = f_com.where(f_com > _eps_f, f_nota)
+        r_com = pd.to_numeric(merged["receita_frete_tp"], errors="coerce").fillna(0.0)
+        merged["receita_frete_tp"] = r_com.where(r_com > _eps_f, f_nota)
     else:
-        merged["frete"] = pd.to_numeric(merged["frete"], errors="coerce").fillna(0.0)
+        merged["receita_frete_tp"] = pd.to_numeric(merged["receita_frete_tp"], errors="coerce").fillna(0.0)
+    merged["tarifa_custo_envio"] = pd.to_numeric(merged["tarifa_custo_envio"], errors="coerce").fillna(0.0)
 
     v_fat = pd.to_numeric(merged["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
     vv = pd.to_numeric(merged["valor_venda"], errors="coerce").fillna(0.0)
@@ -252,7 +260,8 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
             "diferenca": vv - v_fat,
             "comissao": merged["comissao"],
             "custo_produto": merged["custo_produto"],
-            "frete": merged["frete"],
+            "receita_frete_tp": merged["receita_frete_tp"],
+            "tarifa_custo_envio": merged["tarifa_custo_envio"],
             "imposto": merged["imposto"],
             "despesa_fixa": merged["despesa_fixa"],
             "resultado": merged["resultado"],

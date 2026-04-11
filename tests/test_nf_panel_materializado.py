@@ -45,7 +45,8 @@ def test_build_nf_panel_sem_fiscal_aplica_gap_e_resultado() -> None:
     assert not df_nf.empty
     panel = build_nf_panel_materializado_dataframe(df_nf, pd.DataFrame())
     assert nf_panel_materializado_dataframe_valid(panel)
-    assert abs(float(panel.iloc[0]["frete"]) - 122.0) < 1e-6
+    assert abs(float(panel.iloc[0]["receita_frete_tp"]) - 122.0) < 1e-6
+    assert abs(float(panel.iloc[0]["tarifa_custo_envio"])) < 1e-6
     # Resultado após frete na nota = 132; ADS = 3,5%×630 + 2 = 24,05 → 107,95
     assert abs(float(panel.iloc[0]["resultado"]) - 107.95) < 1e-5
     assert abs(float(panel.iloc[0]["custo_ads_variavel"]) - 22.05) < 1e-5

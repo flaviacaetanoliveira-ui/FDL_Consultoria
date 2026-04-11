@@ -58,6 +58,20 @@ from processing.faturamento.normalize import (
     normalize_empresa_fiscal_commercial_join_key,
     normalize_nf_fiscal_commercial_join_key,
 )
+from processing.repasse_contract import REPASSE_ARTIFACT_FILENAME
+from processing.repasse_load import (
+    postprocess_repasse_parquet_dataframe,
+    read_repasse_parquet,
+    repasse_use_parquet_flag,
+)
+from processing.repasse_ui_session import (
+    COL_ACAO_LEGACY_UI,
+    COL_DATA_PERIODO_REPASSE,
+    repasse_ui_acao_column,
+    repasse_ui_apply_filtro_somente_linhas_com_data_pagamento,
+    repasse_ui_apply_pipeline_exclusao_na_ui,
+    repasse_ui_periodo_series_parquet,
+)
 from faturamento_dre_recorte_minimo import (
     _min_cal_limits,
     compute_nf_panel_kpis,
@@ -211,6 +225,8 @@ def _dynamic_materialized_repasse_rel_path(org_id: str) -> str:
         return ""
     root = _materialized_data_products_root().strip().strip("/\\")
     oid = org_id.strip()
+    if _repasse_use_parquet():
+        return f"{root}/{cliente}/{oid}/repasse/current/{REPASSE_ARTIFACT_FILENAME}"
     return f"{root}/{cliente}/{oid}/repasse/current/dataset_repasse_app.csv"
 
 
@@ -1231,6 +1247,15 @@ def _repasse_consume_mode() -> str:
     except Exception:
         pass
     return "live"
+
+
+def _repasse_use_parquet() -> bool:
+    """PR4: FDL_REPASSE_USE_PARQUET=1 → repasse materializado lê dataset.parquet (path dinâmico ou path fixo .parquet)."""
+    try:
+        sec = st.secrets.get("FDL_REPASSE_USE_PARQUET", "")
+    except Exception:
+        sec = ""
+    return repasse_use_parquet_flag(os.environ, secret_raw=sec)
 
 
 def _repasse_materialized_path_str() -> str:
@@ -3458,6 +3483,31 @@ def _load_precomputed_from_disk(
     )
 
 
+@st.cache_data(show_spinner=True)
+def _load_repasse_parquet_from_disk(
+    path_str: str,
+    mtime_ns: int,
+    org_id: str,
+    _revisao: int = OPERACIONAL_CACHE_REVISION,
+) -> tuple[pd.DataFrame, dict[str, object], str]:
+    """PR4: repasse materializado em Parquet — contrato mínimo + validação de empresa_id (sem validação CSV OneDrive)."""
+    del _revisao
+    path = Path(path_str).expanduser().resolve()
+    tabela = read_repasse_parquet(path)
+    tabela = postprocess_repasse_parquet_dataframe(tabela, org_id)
+    if "empresa" not in tabela.columns:
+        tabela = tabela.copy()
+        tabela["empresa"] = _dataset_empresa_label()
+    ts_out = _ts_br_from_mtime_ns(mtime_ns)
+    info: dict[str, object] = {
+        "base_dir": str(path.parent),
+        "linhas": int(len(tabela)),
+        "origem": "materialized_parquet",
+        "arquivo": path.name,
+    }
+    return tabela, info, ts_out
+
+
 def load_precomputed_conciliacao() -> tuple[pd.DataFrame, dict[str, object], str]:
     """
     Lê só o ficheiro já gerado (export Power BI / mirror), sem correr o pipeline.
@@ -3562,10 +3612,11 @@ def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
     path_s = _repasse_materialized_path_str()
     url_s = _repasse_materialized_url_str()
     if _materialized_path_mode() == "dynamic" and not path_s and not url_s:
+        _rep_fname = REPASSE_ARTIFACT_FILENAME if _repasse_use_parquet() else "dataset_repasse_app.csv"
         msg = (
             "Repasse em modo FDL_MATERIALIZED_PATH_MODE=dynamic: defina FDL_MATERIALIZED_CLIENTE_SLUG "
             f"(ex.: cliente_2). Esperado: {_materialized_data_products_root().strip()}/<cliente>/{_active_org.org_id}/"
-            "repasse/current/dataset_repasse_app.csv"
+            f"repasse/current/{_rep_fname}"
         )
         if _strict_materialized():
             raise ValueError(msg + " " + _STRICT_MATERIALIZED_USER_MSG)
@@ -3597,6 +3648,12 @@ def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
             }
         return tabela, info, ts
 
+    if _repasse_use_parquet() and (url_s or "").strip() and not (path_s or "").strip():
+        raise ValueError(
+            "FDL_REPASSE_USE_PARQUET=1: leitura só por URL não suportada para Parquet nesta fase. "
+            "Use FDL_MATERIALIZED_PATH_MODE=dynamic (path local) ou FDL_REPASSE_MATERIALIZED_PATH apontando a um .parquet."
+        )
+
     target_label = path_s or url_s
     try:
         if path_s:
@@ -3605,10 +3662,23 @@ def _load_data() -> tuple[pd.DataFrame, dict[str, object], str]:
                 path = (_REPO_APP_ROOT / path).resolve()
             if not path.is_file():
                 raise FileNotFoundError(f"FDL_REPASSE_MATERIALIZED_PATH não encontrado: {path}")
-            if path.suffix.lower() not in {".csv", ".xlsx", ".xls"}:
-                raise ValueError("FDL_REPASSE_MATERIALIZED_PATH deve ser .csv, .xlsx ou .xls")
-            mtime_ns = int(path.stat().st_mtime_ns)
-            tabela, info, ts = _load_precomputed_from_disk(str(path.resolve()), mtime_ns)
+            suf = path.suffix.lower()
+            if suf == ".parquet":
+                if not _repasse_use_parquet():
+                    raise ValueError(
+                        "Ficheiro repasse .parquet: defina FDL_REPASSE_USE_PARQUET=1 para carregar este formato."
+                    )
+                mtime_ns = int(path.stat().st_mtime_ns)
+                tabela, info, ts = _load_repasse_parquet_from_disk(
+                    str(path.resolve()), mtime_ns, _active_org.org_id
+                )
+            elif suf in {".csv", ".xlsx", ".xls"}:
+                mtime_ns = int(path.stat().st_mtime_ns)
+                tabela, info, ts = _load_precomputed_from_disk(str(path.resolve()), mtime_ns)
+            else:
+                raise ValueError(
+                    "FDL_REPASSE_MATERIALIZED_PATH deve ser .parquet (com FDL_REPASSE_USE_PARQUET=1), .csv, .xlsx ou .xls"
+                )
         else:
             tabela, info, ts = _load_precomputed_from_remote(url_s.strip())
         return (
@@ -3648,6 +3718,7 @@ def _repasse_load_cache_signature(org_id: str) -> str:
             str(_repasse_materialized_url_str()).strip(),
             _data_source_mode(),
             str(_strict_materialized()),
+            str(_repasse_use_parquet()),
             _repasse_materialized_source_stat_token(),
         ]
     )
@@ -9968,6 +10039,18 @@ def _effective_periodo_repasse_series(df: pd.DataFrame) -> tuple[pd.Series, str]
     )
 
 
+def _repasse_ui_periodo_series(df: pd.DataFrame) -> tuple[pd.Series, str]:
+    """PR5: Parquet → só ``Data período repasse``; legado → ``_effective_periodo_repasse_series``."""
+    if _repasse_use_parquet():
+        return repasse_ui_periodo_series_parquet(
+            df,
+            parse_data_periodo_repasse_column=lambda d: _parse_data_pagamento_final(
+                _first_series(d, COL_DATA_PERIODO_REPASSE)
+            ),
+        )
+    return _effective_periodo_repasse_series(df)
+
+
 def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     """
     Filtros + validação de ações + fila/tabela de repasse.
@@ -9979,11 +10062,14 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         st.warning("Sem dados de repasse para esta vista. Contacte o suporte se o problema continuar.")
         return
 
+    _rpq = _repasse_use_parquet()
+    acao_col = repasse_ui_acao_column(use_parquet=_rpq)
+
     _fdl_cp_inject_panel_styles()
     _fdl_repasse_inject_panel_styles()
     _fdl_ui_gap_tight()
 
-    dp_series_full, _periodo_src_label = _effective_periodo_repasse_series(base)
+    dp_series_full, _periodo_src_label = _repasse_ui_periodo_series(base)
 
     # Chaves de widget por org: sem isto, ao mudar de empresa o estado do Streamlit podia manter
     # limites/valores de outra org e parecer que o calendário «começa» na data errada.
@@ -9991,13 +10077,21 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 
     with st.container(border=True):
         st.markdown('<p class="fdl-repasse-filtros-h">Filtros</p>', unsafe_allow_html=True)
-        st.markdown(
-            '<p class="fdl-repasse-caption">Recorte pelo <strong>período de repasse</strong>: coluna materializada '
-            "<strong>Data período repasse</strong> quando existe no Parquet; em bases antigas usa pagamento e, "
-            "se vazio, <strong>data de emissão</strong> (mesmo critério da etapa4b, só sobre linhas já carregadas). "
-            "Plataforma, ação, situação e busca.</p>",
-            unsafe_allow_html=True,
-        )
+        if _rpq:
+            st.markdown(
+                '<p class="fdl-repasse-caption">Recorte pelo <strong>período de repasse</strong> usando apenas a coluna '
+                "materializada <strong>Data período repasse</strong> (valores vazios permanecem fora do intervalo de datas). "
+                "Plataforma, ação, situação e busca.</p>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<p class="fdl-repasse-caption">Recorte pelo <strong>período de repasse</strong>: coluna materializada '
+                "<strong>Data período repasse</strong> quando existe no Parquet; em bases antigas usa pagamento e, "
+                "se vazio, <strong>data de emissão</strong> (mesmo critério da etapa4b, só sobre linhas já carregadas). "
+                "Plataforma, ação, situação e busca.</p>",
+                unsafe_allow_html=True,
+            )
         _d_min, _d_max, has_dp_base = _series_datetime_bounds_dates(dp_series_full)
         today_rep = datetime.now(_BR_TZ).date()
         picker_min = min(_d_min, today_rep - timedelta(days=3 * 365))
@@ -10052,7 +10146,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         acoes = sorted(
             [
                 x
-                for x in base_opts["Ação sugerida operacional"].dropna().unique().tolist()
+                for x in base_opts[acao_col].dropna().unique().tolist()
                 if str(x).strip()
             ]
         )
@@ -10107,7 +10201,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     if "Plataforma" in tabela.columns and sel_plat:
         tabela = tabela[tabela["Plataforma"].isin(sel_plat)]
     if sel_acao:
-        tabela = tabela[tabela["Ação sugerida operacional"].isin(sel_acao)]
+        tabela = tabela[tabela[acao_col].isin(sel_acao)]
     if sel_sit:
         tabela = tabela[tabela["Situação"].isin(sel_sit)]
     if busca:
@@ -10118,17 +10212,19 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         )
         tabela = tabela[m_busca]
     
-    _dp_filt = _effective_periodo_repasse_series(tabela)[0]
+    _dp_filt = _repasse_ui_periodo_series(tabela)[0]
     if _dp_filt.notna().any():
         _dd = _dp_filt.dt.normalize()
         _ini_ts = pd.Timestamp(data_pag_ini)
         _fim_ts = pd.Timestamp(data_pag_fim) + pd.Timedelta(days=1)
         m_data = _dp_filt.notna() & (_dd >= _ini_ts) & (_dd < _fim_ts)
         tabela = tabela.loc[m_data].copy()
-    tabela = _excluir_linhas_fora_conciliacao(tabela)
-    if "Data de pagamento" in tabela.columns:
-        _dp_somente_tabela = _parse_data_pagamento_final(_first_series(tabela, "Data de pagamento"))
-        tabela = tabela.loc[_dp_somente_tabela.notna()].copy()
+    if repasse_ui_apply_pipeline_exclusao_na_ui(use_parquet=_rpq):
+        tabela = _excluir_linhas_fora_conciliacao(tabela)
+    if repasse_ui_apply_filtro_somente_linhas_com_data_pagamento(use_parquet=_rpq):
+        if "Data de pagamento" in tabela.columns:
+            _dp_somente_tabela = _parse_data_pagamento_final(_first_series(tabela, "Data de pagamento"))
+            tabela = tabela.loc[_dp_somente_tabela.notna()].copy()
 
     if "Plataforma" in base.columns:
         n_plat = len(plats)
@@ -10148,9 +10244,13 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
     )
     if not has_dp_base:
         _pag_caption += " — **filtro por data inativo** (sem datas na coluna de período)"
+    _caption_dp_extra = (
+        ""
+        if _rpq
+        else " · Tabela e resumo: só linhas com **data de pagamento**."
+    )
     st.caption(
-        f"Plataforma **{plataforma_label}** · Atualizado **{ts_proc}** · {_pag_caption}"
-        " · Tabela e resumo: só linhas com **data de pagamento**."
+        f"Plataforma **{plataforma_label}** · Atualizado **{ts_proc}** · {_pag_caption}{_caption_dp_extra}"
     )
 
     _fdl_ui_gap_tight()
@@ -10164,16 +10264,21 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
 
     st.markdown(
         '<p class="fdl-repasse-section-title">Resumo por ação</p>'
-        '<p class="fdl-repasse-section-note">Apenas linhas com data de pagamento. '
-        "Tamanho da fila e distribuição por ação sugerida no recorte atual.</p>",
+        + (
+            '<p class="fdl-repasse-section-note">Recorte atual (dataset carregado + filtros de sessão). '
+            "Tamanho da fila e distribuição por ação sugerida.</p>"
+            if _rpq
+            else '<p class="fdl-repasse-section-note">Apenas linhas com data de pagamento. '
+            "Tamanho da fila e distribuição por ação sugerida no recorte atual.</p>"
+        ),
         unsafe_allow_html=True,
     )
     if _repasse_vendas_liberacoes_only():
         acoes_validacao = ["Baixado", "Analisar diferença", "Verificar recebimento"]
     else:
         acoes_validacao = ["Ok", "Baixado" if _repasse_sem_bling() else "Baixar no Bling", "Analisar diferença"]
-    contagens_acao = {a: int(tabela["Ação sugerida operacional"].eq(a).sum()) for a in acoes_validacao}
-    contagens_acao["Zerado"] = int(tabela["Ação sugerida operacional"].eq("Revisar venda zerada").sum())
+    contagens_acao = {a: int(tabela[acao_col].eq(a).sum()) for a in acoes_validacao}
+    contagens_acao["Zerado"] = int(tabela[acao_col].eq("Revisar venda zerada").sum())
     _render_repasse_resumo_por_acao_kpis(contagens_acao, n_linhas=len(tabela))
 
     _fdl_ui_gap_section()
@@ -10188,7 +10293,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             "Valor a receber",
             "Valor pago",
             "Diferença",
-            "Ação sugerida operacional",
+            acao_col,
             "Plataforma",
         ]
     else:
@@ -10201,7 +10306,7 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             "Valor a receber",
             "Diferença",
             "Situação",
-            "Ação sugerida operacional",
+            acao_col,
         ]
     if "Data de pagamento" in tabela.columns:
         exibir_cols.append("Data de pagamento")
@@ -10250,19 +10355,19 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             if "Data de pagamento" in tabela.columns
             else pd.Series("", index=tabela_exibir.index)
         )
-        _periodo_tab, _ = _effective_periodo_repasse_series(tabela)
+        _periodo_tab, _ = _repasse_ui_periodo_series(tabela)
         tabela_exibir["Período repasse"] = _periodo_tab.loc[tabela_exibir.index]
         tabela_exibir["Valor da nota"] = tabela_exibir["Valor da nota"].fillna(0.0)
         tabela_exibir["Valor a receber"] = tabela_exibir["Valor a receber"].fillna(0.0)
         tabela_exibir["Valor pago"] = tabela_exibir["Valor pago"].fillna(0.0)
         tabela_exibir["Diferença"] = tabela_exibir["Diferença"].fillna(0.0)
-        tabela_exibir = tabela_exibir.rename(
-            columns={
-                "N° de venda": "Número da venda",
-                "ID do pedido": "Número do pedido",
-                "Ação sugerida operacional": "Ação sugerida",
-            }
-        )
+        _rename_map: dict[str, str] = {
+            "N° de venda": "Número da venda",
+            "ID do pedido": "Número do pedido",
+        }
+        if COL_ACAO_LEGACY_UI in tabela_exibir.columns:
+            _rename_map[COL_ACAO_LEGACY_UI] = "Ação sugerida"
+        tabela_exibir = tabela_exibir.rename(columns=_rename_map)
         tabela_exibir = _drop_duplicate_columns_keep_first(tabela_exibir)
         tabela_exibir = tabela_exibir.drop(columns=["Total BRL"], errors="ignore")
         _ordem_final = [
@@ -10941,34 +11046,43 @@ _fdl_global_trace("05: após sidebar — antes do hero / painel principal")
 
 if _fv == "repasse" and _fdl_product_area == FDL_PRODUCT_AREA_FINANCEIRO:
     try:
-        _fdl_global_trace("repasse: a preparar base (map_acao / filtros negócio)")
-        _acao_baixa = "Baixado" if _repasse_sem_bling() else "Baixar no Bling"
-        map_acao = {
-            "Ok": "Ok",
-            "Baixar no Bling": _acao_baixa,
-            "Baixado": _acao_baixa,
-            "Analisar manualmente": "Analisar diferença",
-            "Verificar título no Bling": "Verificar recebimento",
-            "Revisar venda zerada": "Revisar venda zerada",
-            "Verificar faturamento": "Verificar faturamento",
-        }
-        tabela_geral["Ação sugerida operacional"] = (
-            tabela_geral["Ação sugerida"].map(map_acao).fillna(tabela_geral["Ação sugerida"])
-        )
-        tabela = tabela_geral.copy()
+        if _repasse_use_parquet():
+            _fdl_global_trace(
+                "repasse: base Parquet (sem map_acao, sem Ação sugerida operacional, sem exclusão/filtro N° venda na UI)"
+            )
+            tabela = tabela_geral.copy()
+            tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
+            tabela_operacional_base = tabela.copy()
+            _fdl_global_trace(f"repasse: base pronta ({len(tabela_operacional_base)} linhas)")
+        else:
+            _fdl_global_trace("repasse: a preparar base (map_acao / filtros negócio)")
+            _acao_baixa = "Baixado" if _repasse_sem_bling() else "Baixar no Bling"
+            map_acao = {
+                "Ok": "Ok",
+                "Baixar no Bling": _acao_baixa,
+                "Baixado": _acao_baixa,
+                "Analisar manualmente": "Analisar diferença",
+                "Verificar título no Bling": "Verificar recebimento",
+                "Revisar venda zerada": "Revisar venda zerada",
+                "Verificar faturamento": "Verificar faturamento",
+            }
+            tabela_geral["Ação sugerida operacional"] = (
+                tabela_geral["Ação sugerida"].map(map_acao).fillna(tabela_geral["Ação sugerida"])
+            )
+            tabela = tabela_geral.copy()
 
-        # Mantém também linhas sem pagamento para não ocultar plataformas
-        # em cenários onde o extrato ainda não foi consolidado.
-        tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
+            # Mantém também linhas sem pagamento para não ocultar plataformas
+            # em cenários onde o extrato ainda não foi consolidado.
+            tabela["Valor pago"] = pd.to_numeric(tabela.get("Valor pago"), errors="coerce")
 
-        # Exibição operacional focada em vendas:
-        # mantém somente linhas com N° de venda preenchido.
-        tabela["N° de venda"] = tabela["N° de venda"].fillna("").astype(str).str.strip()
-        tabela = tabela[tabela["N° de venda"].ne("")].copy()
+            # Exibição operacional focada em vendas:
+            # mantém somente linhas com N° de venda preenchido.
+            tabela["N° de venda"] = tabela["N° de venda"].fillna("").astype(str).str.strip()
+            tabela = tabela[tabela["N° de venda"].ne("")].copy()
 
-        # Base operacional antes dos filtros da UI (mesma regra de negócio de sempre).
-        tabela_operacional_base = tabela.copy()
-        _fdl_global_trace(f"repasse: base pronta ({len(tabela_operacional_base)} linhas)")
+            # Base operacional antes dos filtros da UI (mesma regra de negócio de sempre).
+            tabela_operacional_base = tabela.copy()
+            _fdl_global_trace(f"repasse: base pronta ({len(tabela_operacional_base)} linhas)")
     except Exception as exc:
         _fdl_global_trace(f"repasse: ERRO na preparação da base — {exc.__class__.__name__}")
         st.error("Erro ao preparar a base de **Conciliação de Repasse** (colunas ou dados incompatíveis).")

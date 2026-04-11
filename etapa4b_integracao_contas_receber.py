@@ -13,6 +13,7 @@ import pandas as pd
 from integracao_notas_pedidos import BASE_DIR, build_conciliacao_com_notas
 from operacional_data_config import DATASET_EMPRESA
 from etapa3_conciliacao_vendas_liberacoes_validas import build_conciliacao_vendas_liberacoes_validas
+from processing.repasse_contract import REPASSE_ACTION_COLUMN
 
 
 def _pasta_contas(base_dir: str | Path) -> Path:
@@ -152,13 +153,17 @@ def _nf_merge_key_series(series: pd.Series) -> pd.Series:
     return series.fillna("").astype(str).map(_nf_merge_key_one)
 
 
-def _classificar_acao(row: pd.Series) -> str:
-    sem_bling = os.environ.get("FDL_REPASSE_SEM_BLING", "").strip().lower() in {
+def _repasse_sem_bling() -> bool:
+    return os.environ.get("FDL_REPASSE_SEM_BLING", "").strip().lower() in {
         "1",
         "true",
         "yes",
         "on",
     }
+
+
+def _classificar_acao(row: pd.Series) -> str:
+    sem_bling = _repasse_sem_bling()
     tolerancia = 0.01
     valor_pago = pd.to_numeric(row["Valor pago"], errors="coerce")
     valor_receber = pd.to_numeric(row.get("Valor a receber"), errors="coerce")
@@ -180,6 +185,97 @@ def _classificar_acao(row: pd.Series) -> str:
     return "Baixado" if sem_bling else "Baixar no Bling"
 
 
+def _repasse_serie_numero_nota_valida(s: pd.Series) -> pd.Series:
+    """True quando há identificador de NF (espelha critério usado na UI antes do PR2)."""
+    x = s.fillna("").astype(str).str.strip()
+    lower = x.str.lower()
+    return x.ne("") & ~lower.isin({"none", "nan", "nat", "<na>", "null"})
+
+
+def _excluir_linhas_fora_conciliacao_repasse(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Política equivalente a ``app_operacional._excluir_linhas_fora_conciliacao`` (PR2).
+
+    ML sem NF pode ser removido quando existe outra linha ML com NF; taxas ~3,62 / ~3,54 são removidas.
+    """
+    if df.empty:
+        return df
+    out = df
+    if "Número da nota" in out.columns:
+        mask_nf = _repasse_serie_numero_nota_valida(out["Número da nota"])
+        if "Plataforma" in out.columns:
+            plat = out["Plataforma"].fillna("").astype(str).str.strip().str.lower()
+            is_ml = plat.eq("mercado livre")
+            if is_ml.any():
+                ml_has_nf = bool((mask_nf & is_ml).any())
+                if ml_has_nf:
+                    drop = is_ml & ~mask_nf
+                    out = out.loc[~drop].copy()
+        elif mask_nf.any():
+            out = out.loc[mask_nf].copy()
+    if out.empty or "Total BRL" not in out.columns:
+        return out
+    tb = pd.to_numeric(out["Total BRL"], errors="coerce")
+    for fee in (3.62, 3.54):
+        out = out.loc[~(tb.sub(fee).abs() < 0.005)].copy()
+        tb = pd.to_numeric(out["Total BRL"], errors="coerce")
+    return out
+
+
+def _normalizar_acao_sugerida_canonica(series: pd.Series) -> pd.Series:
+    """
+    Valores finais na coluna canónica REPASSE_ACTION_COLUMN, alinhados ao mapa da UI (sem coluna paralela).
+    """
+    sem_bling = _repasse_sem_bling()
+    acao_baixa = "Baixado" if sem_bling else "Baixar no Bling"
+    mapa = {
+        "Ok": "Ok",
+        "Baixar no Bling": acao_baixa,
+        "Baixado": acao_baixa,
+        "Analisar manualmente": "Analisar diferença",
+        "Verificar título no Bling": "Verificar recebimento",
+        "Revisar venda zerada": "Revisar venda zerada",
+        "Verificar faturamento": "Verificar faturamento",
+    }
+    return series.map(mapa).fillna(series)
+
+
+def _aplicar_contrato_repasse_pos_montagem(
+    final: pd.DataFrame,
+    *,
+    empresa_label: str | None,
+) -> pd.DataFrame:
+    """
+    Pós-processamento único: ação canónica, exclusões de fila, sem linhas sem N° de venda, ``empresa`` explícita.
+
+    Exige colunas já montadas pela etapa4b, incluindo ``Data período repasse`` e classificação bruta em
+    REPASSE_ACTION_COLUMN.
+    """
+    if final.empty:
+        out = final.copy()
+        out["empresa"] = (empresa_label or "").strip() or DATASET_EMPRESA
+        return out
+
+    out = final.copy()
+    if REPASSE_ACTION_COLUMN not in out.columns:
+        raise KeyError(f"Tabela final sem coluna obrigatória {REPASSE_ACTION_COLUMN!r}")
+    if "Data período repasse" not in out.columns:
+        raise KeyError("Tabela final sem coluna obrigatória 'Data período repasse'")
+    if "N° de venda" not in out.columns:
+        raise KeyError("Tabela final sem coluna obrigatória 'N° de venda'")
+
+    out[REPASSE_ACTION_COLUMN] = _normalizar_acao_sugerida_canonica(out[REPASSE_ACTION_COLUMN])
+
+    nv = _norm(out["N° de venda"])
+    out = out.loc[nv.ne("")].copy()
+
+    out = _excluir_linhas_fora_conciliacao_repasse(out)
+
+    label = (empresa_label or "").strip() or DATASET_EMPRESA
+    out["empresa"] = label
+    return out
+
+
 def _repasse_vendas_liberacoes_only() -> bool:
     """
     Cliente sem Bling/notas/contas: monta repasse só com vendas x liberações (etapa3).
@@ -192,7 +288,11 @@ def _repasse_vendas_liberacoes_only() -> bool:
     }
 
 
-def _build_final_from_vendas_liberacoes(root: Path) -> tuple[pd.DataFrame, dict[str, object]]:
+def _build_final_from_vendas_liberacoes(
+    root: Path,
+    *,
+    empresa_label: str | None = None,
+) -> tuple[pd.DataFrame, dict[str, object]]:
     """
     Tabela final no layout do app sem dependências de notas/contas.
     """
@@ -217,7 +317,7 @@ def _build_final_from_vendas_liberacoes(root: Path) -> tuple[pd.DataFrame, dict[
     out["Data de pagamento"] = out["Data de pagamento"].dt.strftime("%Y-%m-%d %H:%M:%S").fillna("")
     out["Data de emissão"] = ""
     out["Data período repasse"] = out["Data de pagamento"]
-    out["Ação sugerida"] = out.apply(_classificar_acao, axis=1)
+    out[REPASSE_ACTION_COLUMN] = out.apply(_classificar_acao, axis=1)
     final = out[
         [
             "N° de venda",
@@ -228,7 +328,7 @@ def _build_final_from_vendas_liberacoes(root: Path) -> tuple[pd.DataFrame, dict[
             "Valor da nota",
             "Plataforma",
             "Situação",
-            "Ação sugerida",
+            REPASSE_ACTION_COLUMN,
             "Valor a receber",
             "Valor pago",
             "Diferença",
@@ -237,7 +337,7 @@ def _build_final_from_vendas_liberacoes(root: Path) -> tuple[pd.DataFrame, dict[
             "Data período repasse",
         ]
     ].copy()
-    final["empresa"] = DATASET_EMPRESA
+    final = _aplicar_contrato_repasse_pos_montagem(final, empresa_label=empresa_label)
     return final, {
         "base_dir": str(root),
         "linhas": int(len(final)),
@@ -328,17 +428,23 @@ def _coluna_data_periodo_repasse(data_pagamento: pd.Series, data_emissao_yyyy_mm
     return pay_fmt.where(~empty_pay, emi_fmt).astype(str)
 
 
-def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.DataFrame, dict[str, object]]:
+def carregar_tabela_final_operacional(
+    base_dir: str | Path = BASE_DIR,
+    *,
+    empresa_label: str | None = None,
+) -> tuple[pd.DataFrame, dict[str, object]]:
     """
     Monta a tabela operacional final.
 
     - **Valor pago** e **Data de pagamento** vêm sempre das **liberações** (etapa3 + integração com notas),
       não do ficheiro de contas a receber.
     - **contas_receber** serve só para enriquecer **Situação** do título (ex.: Bling), via cruzamento por NF.
+
+    ``empresa_label``: rótulo da coluna ``empresa`` na saída; se omitido, usa ``DATASET_EMPRESA`` (legado).
     """
     root = Path(base_dir).resolve()
     if _repasse_vendas_liberacoes_only():
-        return _build_final_from_vendas_liberacoes(root)
+        return _build_final_from_vendas_liberacoes(root, empresa_label=empresa_label)
     base = build_conciliacao_com_notas(filtrar_notas_invalidas=True, base_dir=root).copy()
     base["Número da nota"] = _norm(base["Número da nota"])
 
@@ -373,7 +479,7 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
         pay_before = out["Data de pagamento"]
         out["Data de pagamento"] = _formatar_data_pagamento_mista(out["Data de pagamento"])
         out["Data período repasse"] = _coluna_data_periodo_repasse(pay_before, out["Data de emissão"])
-        out["Ação sugerida"] = out.apply(_classificar_acao, axis=1)
+        out[REPASSE_ACTION_COLUMN] = out.apply(_classificar_acao, axis=1)
         final = out[
             [
                 "N° de venda",
@@ -384,7 +490,7 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
                 "Valor da nota",
                 "Plataforma",
                 "Situação",
-                "Ação sugerida",
+                REPASSE_ACTION_COLUMN,
                 "Valor a receber",
                 "Valor pago",
                 "Diferença",
@@ -393,7 +499,7 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
                 "Data período repasse",
             ]
         ].copy()
-        final["empresa"] = DATASET_EMPRESA
+        final = _aplicar_contrato_repasse_pos_montagem(final, empresa_label=empresa_label)
         return final, {
             "base_dir": str(base_dir),
             "linhas": int(len(final)),
@@ -444,7 +550,7 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
     out["Valor a receber"] = pd.to_numeric(out.get("Total BRL"), errors="coerce")
     out["Valor pago"] = pd.to_numeric(out.get("Valor pago"), errors="coerce")
     out["Diferença"] = out["Valor a receber"] - out["Valor pago"]
-    out["Ação sugerida"] = out.apply(_classificar_acao, axis=1)
+    out[REPASSE_ACTION_COLUMN] = out.apply(_classificar_acao, axis=1)
     if "Data de emissão" in out.columns:
         out["Data de emissão"] = pd.to_datetime(out["Data de emissão"], errors="coerce")
         out["Data de emissão"] = out["Data de emissão"].dt.strftime("%Y-%m-%d").fillna("")
@@ -477,7 +583,7 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
             "Valor da nota",
             "Plataforma",
             "Situação",
-            "Ação sugerida",
+            REPASSE_ACTION_COLUMN,
             "Valor a receber",
             "Valor pago",
             "Diferença",
@@ -486,7 +592,7 @@ def carregar_tabela_final_operacional(base_dir: Path = BASE_DIR) -> tuple[pd.Dat
             "Data período repasse",
         ]
     ].copy()
-    final["empresa"] = DATASET_EMPRESA
+    final = _aplicar_contrato_repasse_pos_montagem(final, empresa_label=empresa_label)
 
     return final, {
         "base_dir": str(base_dir),

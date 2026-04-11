@@ -17,8 +17,9 @@ Cliente 5 (Flávio), origem ``Cliente_4/Esquilo`` → saída ``data_products/cli
 IDs opcionais (metadados e colunas no dataset):
   FDL_CLIENTE_ID, FDL_EMPRESA_ID, FDL_CNPJ
 
-Coluna «empresa» no CSV de repasse: defina ``--dataset-empresa`` (ou ``FDL_DATASET_EMPRESA``) **antes**
-do pipeline; deve coincidir com o nome no app (ex.: Esquilo, Wood).
+Coluna «empresa» no repasse: por defeito deriva do slug ``--empresa`` (mapa alinhado ao app); sobrescreva
+com ``--dataset-empresa`` / ``FDL_DATASET_EMPRESA`` quando necessário. O pipeline recebe
+``empresa_label`` explicitamente na materialização de repasse (PR3).
 
 Debug repasse (stderr + metadata repasse_debug):
   FDL_DEBUG_REPASSE_PIPELINE=1 — liberações, etapa3, notas_saida/contas_receber, merges, colunas finais.
@@ -96,6 +97,38 @@ def _collect_repasse_signature_files(base: Path) -> list[tuple[str, int]]:
 def build_repasse_source_signature(base: Path) -> str:
     payload = json.dumps(_collect_repasse_signature_files(base), ensure_ascii=True)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+
+
+# Slugs de pasta ``--empresa`` / org_id → nome exibido no app (operacional_app_context).
+_REPASSE_EMPRESA_SLUG_TO_LABEL: dict[str, str] = {
+    "antomoveis": "Antomóveis",
+    "gama_home": "Gama Home",
+    "mega_facil": "Mega Fácil",
+    "mega_star": "Mega Star",
+    "moveis_eap": "Móveis EAP",
+    "empresa_3": "Empresa 3",
+    "empresa_4": "Empresa 4",
+    "esquilo": "Esquilo",
+    "wood": "Wood",
+    "bp_ramiro": "BP Ramiro",
+    "fmg": "FMG",
+    "let_decor": "Let Decor",
+    "tb_paio": "TB Paio",
+}
+
+
+def _repasse_empresa_label_for_materialize(path_empresa: str) -> str:
+    """
+    Rótulo da coluna «empresa» no repasse materializado.
+
+    Prioridade: ``FDL_DATASET_EMPRESA`` / ``--dataset-empresa`` (já copiados para o env em ``main``);
+    senão mapa slug de pasta → nome do registo no app; fallback título simples do slug.
+    """
+    explicit = (os.environ.get("FDL_DATASET_EMPRESA") or "").strip()
+    if explicit:
+        return explicit
+    slug = str(path_empresa).strip().lower()
+    return _REPASSE_EMPRESA_SLUG_TO_LABEL.get(slug, slug.replace("_", " ").title() or slug)
 
 
 def build_frete_source_signature(
@@ -341,7 +374,9 @@ def _materialize_repasse(
     from etapa4b_integracao_contas_receber import carregar_tabela_final_operacional
 
     cliente_id, empresa_id, cnpj = _resolve_identity(path_cliente, path_empresa)
-    df, info = carregar_tabela_final_operacional(base_dir)
+    empresa_label = _repasse_empresa_label_for_materialize(path_empresa)
+    # Única fonte de negócio: o mesmo ``df`` alimenta o espelho CSV e o Parquet (este último + identidade).
+    df, info = carregar_tabela_final_operacional(base_dir, empresa_label=empresa_label)
     repasse_debug: dict[str, Any] | None = None
     if _debug_repasse_pipeline_enabled():
         repasse_debug = _emit_repasse_pipeline_debug(base_dir, df)
@@ -359,6 +394,7 @@ def _materialize_repasse(
         "cliente_id": cliente_id,
         "empresa_id": empresa_id,
         "cnpj": cnpj,
+        "repasse_empresa_label": empresa_label,
         "row_count": int(len(df_out)),
         "columns": [str(c) for c in df_out.columns],
         "source_mode": "local_folder",

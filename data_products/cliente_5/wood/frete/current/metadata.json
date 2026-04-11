@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-08T16:29:01Z",
-  "source_signature": "0ad607c6e53bee24ebcb8015126264ea",
+  "generated_at": "2026-04-11T18:14:29Z",
+  "source_signature": "e08f566c0cbfb681816c55b3051fd5e5",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_5",
   "empresa": "wood",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "wood",
   "cnpj": null,
-  "row_count": 15661,
+  "row_count": 15795,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -85,23 +85,23 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood",
   "org_id": "wood",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Vendas_ML\\2026\\Wood - Vendas ML 2026.xlsx",
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Vendas_ML\\2026\\Wood - Vendas ML 2026.xlsx",
     "vendas_paths": [
-      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Vendas_ML\\2026\\Wood - Vendas ML 2026.xlsx",
-      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Vendas_ML\\2025\\Wood - Vendas ML 2025.xlsx"
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Vendas_ML\\2026\\Wood - Vendas ML 2026.xlsx",
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Vendas_ML\\2025\\Wood - Vendas ML 2025.xlsx"
     ],
-    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Wood - Frete por Anúncio 06032026.xlsx"
+    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Wood - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Wood - Vendas ML 2026.xlsx, Wood - Vendas ML 2025.xlsx",
     "frete_arquivo": "Wood - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 15661,
+    "linhas": 15795,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

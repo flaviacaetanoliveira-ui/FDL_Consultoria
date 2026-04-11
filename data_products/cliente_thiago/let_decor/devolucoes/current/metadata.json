@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-08T16:34:45Z",
-  "source_signature": "5b1f83c8686d6faf6bd198914bc97168",
+  "generated_at": "2026-04-11T18:29:09Z",
+  "source_signature": "4c7be7152da95518df574f9dd5f36d43",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_thiago",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "let_decor",
   "cnpj": null,
-  "row_count": 726,
+  "row_count": 725,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -98,25 +98,25 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
   "org_id": "let_decor",
-  "dataset_empresa": "Let Decor",
+  "dataset_empresa": "let_decor",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
-    "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
+    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
     "org_id": "let_decor",
-    "dataset_empresa": "Let Decor",
+    "dataset_empresa": "let_decor",
     "cliente_id": "cliente_thiago",
-    "row_count_pre_filtro_devolucao": 898,
-    "row_count_excluidas_cancel_comercial": 172,
-    "row_count_candidatas": 726,
-    "row_count_vendas_total": 11702,
-    "row_count_liberacoes": 19691,
-    "sales_from_lib_financial": 1443,
+    "row_count_pre_filtro_devolucao": 899,
+    "row_count_excluidas_cancel_comercial": 174,
+    "row_count_candidatas": 725,
+    "row_count_vendas_total": 11773,
+    "row_count_liberacoes": 19841,
+    "sales_from_lib_financial": 1453,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 11702,
-  "row_count_liberacoes": 19691,
-  "sales_from_lib_financial": 1443
+  "row_count_vendas_total": 11773,
+  "row_count_liberacoes": 19841,
+  "sales_from_lib_financial": 1453
 }

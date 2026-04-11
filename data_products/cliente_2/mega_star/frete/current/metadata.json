@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-08T16:22:38Z",
-  "source_signature": "bb11cf9fa123fdf33e28f7f98c6735a8",
+  "generated_at": "2026-04-11T17:59:24Z",
+  "source_signature": "3de9c05924c8c46905b1b668f3d44743",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_star",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_star",
   "cnpj": null,
-  "row_count": 1094,
+  "row_count": 1157,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -82,22 +82,22 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
   "org_id": "mega_star",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Vendas_ML\\2026\\Mega Star - Vendas ML 2026.xlsx",
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Vendas_ML\\2026\\Mega Star - Vendas ML 2026.xlsx",
     "vendas_paths": [
-      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Vendas_ML\\2026\\Mega Star - Vendas ML 2026.xlsx"
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Vendas_ML\\2026\\Mega Star - Vendas ML 2026.xlsx"
     ],
-    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Mega Star - Frete por Anúncio 06032026.xlsx"
+    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Mega Star - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "Mega Star - Vendas ML 2026.xlsx",
     "frete_arquivo": "Mega Star - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 1094,
+    "linhas": 1157,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

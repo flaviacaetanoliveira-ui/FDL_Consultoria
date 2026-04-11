@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-08T16:32:34Z",
-  "source_signature": "4a855fdb5f1882194564549686605f48",
+  "generated_at": "2026-04-11T18:23:38Z",
+  "source_signature": "344d166a139e1a8222d64f192d372920",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_thiago",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "fmg",
   "cnpj": null,
-  "row_count": 540,
+  "row_count": 544,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -98,25 +98,25 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
   "org_id": "fmg",
-  "dataset_empresa": "FMG",
+  "dataset_empresa": "fmg",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
-    "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
+    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
     "org_id": "fmg",
-    "dataset_empresa": "FMG",
+    "dataset_empresa": "fmg",
     "cliente_id": "cliente_thiago",
-    "row_count_pre_filtro_devolucao": 639,
-    "row_count_excluidas_cancel_comercial": 99,
-    "row_count_candidatas": 540,
-    "row_count_vendas_total": 8260,
-    "row_count_liberacoes": 13548,
-    "sales_from_lib_financial": 829,
+    "row_count_pre_filtro_devolucao": 645,
+    "row_count_excluidas_cancel_comercial": 101,
+    "row_count_candidatas": 544,
+    "row_count_vendas_total": 8367,
+    "row_count_liberacoes": 13735,
+    "sales_from_lib_financial": 840,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 8260,
-  "row_count_liberacoes": 13548,
-  "sales_from_lib_financial": 829
+  "row_count_vendas_total": 8367,
+  "row_count_liberacoes": 13735,
+  "sales_from_lib_financial": 840
 }

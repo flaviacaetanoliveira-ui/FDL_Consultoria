@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-08T16:25:47Z",
-  "source_signature": "6e8a956d64b4550dfe950774fff6e650",
+  "generated_at": "2026-04-11T18:06:19Z",
+  "source_signature": "7dca88d0d30016d09af452756f12076c",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_5",
   "empresa": "esquilo",
@@ -8,7 +8,8 @@
   "cliente_id": "cliente_5",
   "empresa_id": "esquilo",
   "cnpj": null,
-  "row_count": 19229,
+  "repasse_empresa_label": "Esquilo",
+  "row_count": 9978,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -31,10 +32,10 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo",
   "loader_info": {
-    "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo",
-    "linhas": 19229,
+    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo",
+    "linhas": 9978,
     "arquivos_contas_lidos": 4,
     "col_situacao": "Situação",
     "col_numero": "Número"

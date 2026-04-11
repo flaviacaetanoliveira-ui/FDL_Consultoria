@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-08T16:22:44Z",
-  "source_signature": "ce15fd0b1493000ca3f7e43770ab98f7",
+  "generated_at": "2026-04-11T17:59:37Z",
+  "source_signature": "cec29374205a1efcf4f886c5ca221488",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_2",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_star",
   "cnpj": null,
-  "row_count": 49,
+  "row_count": 51,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -95,25 +95,25 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
   "org_id": "mega_star",
-  "dataset_empresa": "Mega Star",
+  "dataset_empresa": "mega_star",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
-    "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
+    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
     "org_id": "mega_star",
-    "dataset_empresa": "Mega Star",
+    "dataset_empresa": "mega_star",
     "cliente_id": "cliente_2",
-    "row_count_pre_filtro_devolucao": 75,
-    "row_count_excluidas_cancel_comercial": 26,
-    "row_count_candidatas": 49,
-    "row_count_vendas_total": 1094,
-    "row_count_liberacoes": 3941,
-    "sales_from_lib_financial": 197,
+    "row_count_pre_filtro_devolucao": 78,
+    "row_count_excluidas_cancel_comercial": 27,
+    "row_count_candidatas": 51,
+    "row_count_vendas_total": 1157,
+    "row_count_liberacoes": 4001,
+    "sales_from_lib_financial": 202,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 1094,
-  "row_count_liberacoes": 3941,
-  "sales_from_lib_financial": 197
+  "row_count_vendas_total": 1157,
+  "row_count_liberacoes": 4001,
+  "sales_from_lib_financial": 202
 }

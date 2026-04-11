@@ -211,6 +211,76 @@ def compute_fiscal_nf_conferencia_stats(
     return FatMinFiscalConferenciaStats(n_gr, total)
 
 
+@dataclass(frozen=True)
+class FaturamentoFiscalBaseStats:
+    """Topo do painel: totais sobre o conjunto base fiscal (emitidas + válidas no recorte)."""
+
+    n_nf: int
+    valor_liquido_fiscal_sum: float
+
+
+def build_faturamento_fiscal_base_slice(
+    df_fiscal: pd.DataFrame,
+    *,
+    empresas_sel: tuple[str, ...],
+    nf_d_ini: date,
+    nf_d_fim: date,
+    ok_nf_dates: bool,
+) -> tuple[pd.DataFrame, FaturamentoFiscalBaseStats]:
+    """
+    Recorte **base fiscal** alinhado ao Bling: **empresa** + **emissão** no intervalo + NF com situação válida
+    (exclui cancelada / denegada / inutilizada). Uma linha por NF após agregação por chave canónica.
+
+    Usa ``dataset_faturamento_fiscal.parquet`` (contrato fiscal). **Não** aplica plataforma, produto nem resultado.
+    """
+    empty_stats = FaturamentoFiscalBaseStats(0, 0.0)
+    if df_fiscal.empty or not ok_nf_dates or nf_d_fim < nf_d_ini:
+        return pd.DataFrame(), empty_stats
+
+    need = {"empresa", "Nota_Data_Emissao", "Nota_Numero_Normalizado", "Valor_Liquido_NF"}
+    if not need.issubset(df_fiscal.columns):
+        return pd.DataFrame(), empty_stats
+
+    out = df_fiscal.copy()
+    emp_opts = _fdl_fr_etiquetas_empresa_recorte(out)
+    if emp_opts and empresas_sel:
+        out = _fdl_fr_filtrar_por_etiquetas_empresa(out, list(empresas_sel))
+    if out.empty:
+        return pd.DataFrame(), empty_stats
+
+    if "Nota_Situacao" in out.columns:
+        out = out.loc[~_nf_fiscal_situacao_invalida(out["Nota_Situacao"])].copy()
+    if out.empty:
+        return pd.DataFrame(), empty_stats
+
+    m_period = _fdl_fr_mask_nf_emissao_no_periodo(out["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
+    out = out.loc[m_period].copy()
+    if out.empty:
+        return pd.DataFrame(), empty_stats
+
+    gb_keys: list[str] = []
+    if "org_id" in out.columns:
+        gb_keys.append("org_id")
+    gb_keys.append("empresa")
+    gb_keys.append("Nota_Numero_Normalizado")
+
+    agg_dict: dict[str, str] = {
+        "Nota_Data_Emissao": "min",
+        "Valor_Liquido_NF": "sum",
+    }
+    if "Nota_Situacao" in out.columns:
+        agg_dict["Nota_Situacao"] = "first"
+    for opt in ("Frete_Nota_Export", "Valor_Total_NF", "schema_version_fiscal"):
+        if opt in out.columns:
+            agg_dict[opt] = "first"
+
+    grouped = out.groupby(gb_keys, sort=False).agg(agg_dict).reset_index()
+    vl = pd.to_numeric(grouped["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
+    n_nf = int(len(grouped))
+    total = float(vl.sum())
+    return grouped, FaturamentoFiscalBaseStats(n_nf=n_nf, valor_liquido_fiscal_sum=total)
+
+
 def _nf_grain_groupby_keys(df: pd.DataFrame) -> list[str]:
     keys: list[str] = []
     if "org_id" in df.columns:

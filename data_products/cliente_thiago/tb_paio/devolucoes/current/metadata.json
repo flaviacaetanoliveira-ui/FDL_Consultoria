@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-08T16:37:05Z",
-  "source_signature": "2d849e6c48cf80ec14ce9419600a748b",
+  "generated_at": "2026-04-11T18:35:01Z",
+  "source_signature": "daa9164e53e389fe53230d1105187859",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_thiago",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "tb_paio",
   "cnpj": null,
-  "row_count": 588,
+  "row_count": 589,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -98,25 +98,25 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
   "org_id": "tb_paio",
-  "dataset_empresa": "TB Paio",
+  "dataset_empresa": "tb_paio",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
-    "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
+    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
     "org_id": "tb_paio",
-    "dataset_empresa": "TB Paio",
+    "dataset_empresa": "tb_paio",
     "cliente_id": "cliente_thiago",
-    "row_count_pre_filtro_devolucao": 731,
+    "row_count_pre_filtro_devolucao": 732,
     "row_count_excluidas_cancel_comercial": 143,
-    "row_count_candidatas": 588,
-    "row_count_vendas_total": 13431,
-    "row_count_liberacoes": 21990,
-    "sales_from_lib_financial": 1254,
+    "row_count_candidatas": 589,
+    "row_count_vendas_total": 13513,
+    "row_count_liberacoes": 22180,
+    "sales_from_lib_financial": 1257,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 13431,
-  "row_count_liberacoes": 21990,
-  "sales_from_lib_financial": 1254
+  "row_count_vendas_total": 13513,
+  "row_count_liberacoes": 22180,
+  "sales_from_lib_financial": 1257
 }

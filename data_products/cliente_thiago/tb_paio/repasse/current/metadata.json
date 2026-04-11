@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-08T16:35:22Z",
-  "source_signature": "4f9a2919175e09f53b7750415f0e2ae4",
+  "generated_at": "2026-04-11T18:30:48Z",
+  "source_signature": "a3a3d08c4586aa4fcd5e339c7e6a678f",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "tb_paio",
@@ -8,7 +8,8 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "tb_paio",
   "cnpj": null,
-  "row_count": 12941,
+  "repasse_empresa_label": "TB Paio",
+  "row_count": 9568,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -31,10 +32,10 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
   "loader_info": {
-    "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
-    "linhas": 12941,
+    "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
+    "linhas": 9568,
     "arquivos_contas_lidos": 0,
     "col_situacao": "",
     "col_numero": ""

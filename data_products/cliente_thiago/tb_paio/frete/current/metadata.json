@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-08T16:36:16Z",
-  "source_signature": "b56eb42a672c0cc9b7068a8ac75cf71d",
+  "generated_at": "2026-04-11T18:33:04Z",
+  "source_signature": "0f7a7178b8d6db2c54520a4f6281681c",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "tb_paio",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "tb_paio",
   "cnpj": null,
-  "row_count": 13431,
+  "row_count": 13513,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -85,23 +85,23 @@
     "cnpj"
   ],
   "source_mode": "local_folder",
-  "base_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
+  "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
   "org_id": "tb_paio",
   "fontes": {
     "vendas_url": false,
     "frete_url": false,
-    "vendas_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio\\Vendas_ML\\2026\\TB Paio - Vendas ML 2026.xlsx",
+    "vendas_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio\\Vendas_ML\\2026\\TB Paio - Vendas ML 2026.xlsx",
     "vendas_paths": [
-      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio\\Vendas_ML\\2026\\TB Paio - Vendas ML 2026.xlsx",
-      "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio\\Vendas_ML\\2025\\TB Paio - Vendas ML 2025.xlsx"
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio\\Vendas_ML\\2026\\TB Paio - Vendas ML 2026.xlsx",
+      "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio\\Vendas_ML\\2025\\TB Paio - Vendas ML 2025.xlsx"
     ],
-    "frete_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio\\TB Paio - Frete por Anúncio 06032026.xlsx"
+    "frete_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio\\TB Paio - Frete por Anúncio 06032026.xlsx"
   },
   "loader_meta": {
     "vendas_arquivo": "TB Paio - Vendas ML 2026.xlsx, TB Paio - Vendas ML 2025.xlsx",
     "frete_arquivo": "TB Paio - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 13431,
+    "linhas": 13513,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

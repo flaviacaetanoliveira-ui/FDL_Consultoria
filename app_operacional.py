@@ -5272,7 +5272,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
                 _fmt_brl_ptbr_celula(kp.get("custo_ads_variavel", 0.0)) or "R$ 0,00",
                 tier="secondary",
                 title=(
-                    "Σ 3,5% × venda (lista) por NF no universo **N_base** dos cards."
+                    "Σ 3,5% × venda (lista) por NF no universo dos **cards** (N_base + situação + plataforma se filtrada)."
                     if valor_faturado_from_fiscal_parquet
                     else "Σ 3,5% × valor da venda (lista) por NF no recorte (materializado)."
                 ),
@@ -5282,7 +5282,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
                 _fmt_brl_ptbr_celula(kp.get("custo_ads_fixo", 0.0)) or "R$ 0,00",
                 tier="secondary",
                 title=(
-                    "Σ R$ 2,00 por NF com venda (lista) > 0 no universo **N_base** dos cards."
+                    "Σ R$ 2,00 por NF com venda (lista) > 0 no universo dos **cards** (N_base + situação + plataforma se filtrada)."
                     if valor_faturado_from_fiscal_parquet
                     else "Σ R$ 2,00 por NF com venda (lista) > 0 — mesma regra do painel materializado."
                 ),
@@ -5431,7 +5431,7 @@ def _render_fdl_fat_dre_nf_gerencial(
 ) -> None:
     """
     DRE gerencial a partir dos totais de ``compute_nf_panel_kpis`` (mesmo ``kp`` que os cards).
-    Com fiscal ativo, esse recorte é o universo **N_base** (empresa + emissão), não o da tabela.
+    Com fiscal ativo, o recorte é **N_base** + situação NF (se filtrada) + plataforma (se filtrada); a tabela acrescenta produto/sinal.
     """
     vv = float(kp["valor_venda"])
     res = float(kp["resultado"])
@@ -5505,8 +5505,8 @@ def _render_fdl_fat_dre_nf_gerencial(
             rec_venda,
             lead=True,
             title=(
-                "Comercial: Σ Quantidade × Preço de lista no universo **N_base** (empresa + emissão); "
-                "sem filtro de plataforma, produto ou sinal da tabela."
+                "Comercial: Σ Quantidade × Preço de lista no universo dos **cards** (N_base + situação + plataforma se filtrada); "
+                "sem produto/sinal da tabela."
                 if valor_faturado_from_fiscal_parquet
                 else "Σ Quantidade × Preço de lista no recorte."
             ),
@@ -5530,8 +5530,8 @@ def _render_fdl_fat_dre_nf_gerencial(
             vf_disp,
             ref=True,
             title=(
-                "Soma de **valor_faturado_nf** = **Valor_Liquido_NF** do Parquet fiscal, **N_base** (empresa + emissão) — "
-                "alinhado ao **topo Base fiscal**."
+                "Soma de **valor_faturado_nf** = **Valor_Liquido_NF** do Parquet por NF no universo dos **cards**; o **topo** "
+                "soma o **N_base** completo (sem plataforma). Com **Plataforma** filtrada, este total pode ser menor que o topo."
                 if valor_faturado_from_fiscal_parquet
                 else (
                     "Nota_Valor_Liquido_Total 1× por NF. Contraste com a receita em lista; "
@@ -5548,7 +5548,7 @@ def _render_fdl_fat_dre_nf_gerencial(
             dif_disp,
             bridge=True,
             title=(
-                "Ponte entre receita em lista (pedidos) e total fiscal (notas) no universo **N_base**. "
+                "Ponte entre receita em lista (pedidos) e total fiscal (notas) no universo dos **cards** (N_base + situação + plataforma se filtrada). "
                 "Não é indicador de erro; interpretar à luz de descontos e vínculo pedido–NF."
                 if valor_faturado_from_fiscal_parquet
                 else "Receita lista − faturado NF (totais do recorte)."
@@ -5557,7 +5557,7 @@ def _render_fdl_fat_dre_nf_gerencial(
         + (
             '<p class="fdl-fat-dre-foot-a-note">'
             + (
-                "Faturado NF = referência fiscal **N_base** (Parquet); não soma à receita de lista."
+                "Faturado NF nos cards segue o **Parquet** por NF; com **Plataforma** vazia coincide com o **topo**; não soma à receita de lista."
                 if valor_faturado_from_fiscal_parquet
                 else "Ref. fiscal 1× por NF — não soma à receita de lista."
             )
@@ -5569,7 +5569,7 @@ def _render_fdl_fat_dre_nf_gerencial(
             enc_com,
             encargo=True,
             title=(
-                "Σ comissão comercial (pedidos) no universo **N_base** dos cards."
+                "Σ comissão comercial (pedidos) no universo dos **cards** (N_base + situação + plataforma se filtrada)."
                 if valor_faturado_from_fiscal_parquet
                 else "Σ comissão no recorte."
             ),
@@ -5579,7 +5579,7 @@ def _render_fdl_fat_dre_nf_gerencial(
             enc_custo,
             encargo=True,
             title=(
-                "Σ custo do produto (Custo_Produto_Total / «Custo do Produto») no universo **N_base**."
+                "Σ custo do produto (Custo_Produto_Total / «Custo do Produto») no universo dos **cards**."
                 if valor_faturado_from_fiscal_parquet
                 else "Σ custo do produto no recorte."
             ),

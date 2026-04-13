@@ -94,6 +94,21 @@ def test_merge_receita_frete_vem_somente_fiscal_nao_do_comercial() -> None:
     assert abs(float(out.iloc[0]["tarifa_custo_envio"]) - 2.0) < 1e-6
 
 
+def test_merge_fallback_preenche_custo_plataforma_quando_split_ausente() -> None:
+    """Parquet antigo: só ``tarifa_custo_envio`` → custo plataforma = tarifa para leitura na DRE."""
+    fiscal = _fiscal_row(Frete_Nota_Export=0.0)
+    comm = _comm_row(
+        receita_frete_tp=0.0,
+        tarifa_custo_envio=50.0,
+        Nota_Numero_Normalizado="042480",
+    )
+    comm = comm.drop(columns=["custo_frete_plataforma", "repasse_frete_transportadora_propria"], errors="ignore")
+    out = merge_fiscal_base_with_commercial_nf_dataframe(fiscal, comm)
+    assert abs(float(out.iloc[0]["tarifa_custo_envio"]) - 50.0) < 1e-6
+    assert abs(float(out.iloc[0]["custo_frete_plataforma"]) - 50.0) < 1e-6
+    assert abs(float(out.iloc[0]["repasse_frete_transportadora_propria"])) < 1e-9
+
+
 def test_merge_prioriza_linha_com_org_quando_ambas_existem() -> None:
     """Com linha com org correta e linha sem org, não sobrescrever com fallback errado."""
     fiscal = _fiscal_row(org_id="o1")

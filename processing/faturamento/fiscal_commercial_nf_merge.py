@@ -217,6 +217,12 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         merged["comissao"] = pd.to_numeric(merged["comissao"], errors="coerce").fillna(0.0)
         merged["custo_produto"] = pd.to_numeric(merged["custo_produto"], errors="coerce").fillna(0.0)
         merged["receita_frete_tp"] = pd.to_numeric(merged["receita_frete_tp"], errors="coerce").fillna(0.0)
+        merged["custo_frete_plataforma"] = pd.to_numeric(
+            merged["custo_frete_plataforma"], errors="coerce"
+        ).fillna(0.0)
+        merged["repasse_frete_transportadora_propria"] = pd.to_numeric(
+            merged["repasse_frete_transportadora_propria"], errors="coerce"
+        ).fillna(0.0)
         merged["tarifa_custo_envio"] = pd.to_numeric(merged["tarifa_custo_envio"], errors="coerce").fillna(0.0)
         merged["imposto"] = pd.to_numeric(merged["imposto"], errors="coerce").fillna(0.0)
         merged["despesa_fixa"] = pd.to_numeric(merged["despesa_fixa"], errors="coerce").fillna(0.0)
@@ -240,6 +246,12 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         )
     else:
         merged["receita_frete_tp"] = pd.to_numeric(merged["receita_frete_tp"], errors="coerce").fillna(0.0)
+    merged["custo_frete_plataforma"] = pd.to_numeric(
+        merged["custo_frete_plataforma"], errors="coerce"
+    ).fillna(0.0)
+    merged["repasse_frete_transportadora_propria"] = pd.to_numeric(
+        merged["repasse_frete_transportadora_propria"], errors="coerce"
+    ).fillna(0.0)
     merged["tarifa_custo_envio"] = pd.to_numeric(merged["tarifa_custo_envio"], errors="coerce").fillna(0.0)
 
     v_fat = pd.to_numeric(merged["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
@@ -270,6 +282,8 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
             "comissao": merged["comissao"],
             "custo_produto": merged["custo_produto"],
             "receita_frete_tp": merged["receita_frete_tp"],
+            "custo_frete_plataforma": merged["custo_frete_plataforma"],
+            "repasse_frete_transportadora_propria": merged["repasse_frete_transportadora_propria"],
             "tarifa_custo_envio": merged["tarifa_custo_envio"],
             "imposto": merged["imposto"],
             "despesa_fixa": merged["despesa_fixa"],

@@ -65,6 +65,37 @@ class TestBuildFaturamentoFiscalBaseSlice(unittest.TestCase):
         self.assertEqual(st2.n_nf, 1)
         self.assertAlmostEqual(st2.valor_liquido_fiscal_sum, 50.0)
 
+    def test_situacoes_sel_restringe_base(self) -> None:
+        df = pd.DataFrame(
+            {
+                "org_id": ["o1", "o1"],
+                "empresa": ["Acme", "Acme"],
+                "Nota_Numero_Normalizado": ["A", "B"],
+                "Nota_Data_Emissao": [pd.Timestamp("2026-03-15"), pd.Timestamp("2026-03-15")],
+                "Nota_Situacao": ["Autorizada", "Outra"],
+                "Valor_Liquido_NF": [100.0, 200.0],
+            }
+        )
+        out_all, st_all = build_faturamento_fiscal_base_slice(
+            df,
+            empresas_sel=("Acme",),
+            nf_d_ini=date(2026, 3, 1),
+            nf_d_fim=date(2026, 3, 31),
+            ok_nf_dates=True,
+        )
+        self.assertEqual(st_all.n_nf, 2)
+        out_f, st_f = build_faturamento_fiscal_base_slice(
+            df,
+            empresas_sel=("Acme",),
+            nf_d_ini=date(2026, 3, 1),
+            nf_d_fim=date(2026, 3, 31),
+            ok_nf_dates=True,
+            situacoes_sel=("autorizada",),
+        )
+        self.assertEqual(st_f.n_nf, 1)
+        self.assertAlmostEqual(st_f.valor_liquido_fiscal_sum, 100.0)
+        self.assertEqual(len(out_f), 1)
+
     def test_nao_depends_de_parametros_comerciais_inexistentes(self) -> None:
         """O slice só recebe empresa + datas; não há produto/resultado na API."""
         df = pd.DataFrame(

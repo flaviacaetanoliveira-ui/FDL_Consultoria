@@ -1105,6 +1105,16 @@ def compute_nf_panel_kpis(df_nf: pd.DataFrame) -> dict[str, float | int]:
         )
         if "receita_frete_tp" in df_nf.columns
         else 0.0,
+        "custo_frete_plataforma": float(
+            pd.to_numeric(df_nf["custo_frete_plataforma"], errors="coerce").fillna(0.0).sum()
+        )
+        if "custo_frete_plataforma" in df_nf.columns
+        else 0.0,
+        "repasse_frete_transportadora_propria": float(
+            pd.to_numeric(df_nf["repasse_frete_transportadora_propria"], errors="coerce").fillna(0.0).sum()
+        )
+        if "repasse_frete_transportadora_propria" in df_nf.columns
+        else 0.0,
         "tarifa_custo_envio": float(
             pd.to_numeric(df_nf["tarifa_custo_envio"], errors="coerce").fillna(0.0).sum()
         )

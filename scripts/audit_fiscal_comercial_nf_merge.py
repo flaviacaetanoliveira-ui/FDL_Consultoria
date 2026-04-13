@@ -97,6 +97,8 @@ def _load_commercial(path: Path) -> pd.DataFrame:
         "valor_venda",
         "comissao",
         "receita_frete_tp",
+        "custo_frete_plataforma",
+        "repasse_frete_transportadora_propria",
         "tarifa_custo_envio",
         "imposto",
         "despesa_fixa",

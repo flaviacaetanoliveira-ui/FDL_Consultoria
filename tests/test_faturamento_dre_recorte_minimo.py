@@ -446,6 +446,8 @@ def test_build_nf_grain_receita_tp_vs_tarifa_com_custo_de_frete() -> None:
     assert not w and len(out) == 1
     row = out.iloc[0]
     assert abs(float(row["tarifa_custo_envio"]) - 35.0) < 1e-9
+    assert abs(float(row["custo_frete_plataforma"]) - 10.0) < 1e-9
+    assert abs(float(row["repasse_frete_transportadora_propria"]) - 25.0) < 1e-9
     assert abs(float(row["receita_frete_tp"]) - 25.0) < 1e-9
 
 
@@ -665,6 +667,7 @@ def test_apply_nf_panel_resultado_frete_nota_lista_soma_frete() -> None:
             "valor_faturado_nf": [752.01],
             "valor_venda": [630.0],
             "receita_frete_tp": [122.01],
+            "repasse_frete_transportadora_propria": [0.0],
             "resultado": [26.55],
             "comercial_incompleto": [False],
         }
@@ -673,25 +676,27 @@ def test_apply_nf_panel_resultado_frete_nota_lista_soma_frete() -> None:
     assert abs(float(out.iloc[0]["resultado"]) - 148.56) < 0.02
 
 
-def test_apply_nf_panel_resultado_fiscal_soma_frete_sem_checar_gap() -> None:
-    """Com receita fiscal na NF, incorpora frete ao resultado mesmo se não bater com NF×lista."""
+def test_apply_nf_panel_resultado_soma_receita_nf_menos_repasse() -> None:
+    """Painel: resultado += receita NF − repasse transportadora própria."""
     df = pd.DataFrame(
         {
             "valor_faturado_nf": [500.0],
             "valor_venda": [630.0],
             "receita_frete_tp": [40.0],
+            "repasse_frete_transportadora_propria": [12.0],
             "resultado": [10.0],
             "comercial_incompleto": [False],
         }
     )
-    out = apply_nf_panel_resultado_frete_nota_lista(df, receita_frete_da_nf_fiscal=True)
-    assert abs(float(out.iloc[0]["resultado"]) - 50.0) < 1e-6
+    out = apply_nf_panel_resultado_frete_nota_lista(df)
+    assert abs(float(out.iloc[0]["resultado"]) - 38.0) < 1e-6
 
 
 def test_apply_nf_panel_resultado_frete_nota_lista_apos_gap_fallback() -> None:
     df = pd.DataFrame(
         {
             "receita_frete_tp": [0.0],
+            "repasse_frete_transportadora_propria": [0.0],
             "valor_faturado_nf": [752.01],
             "valor_venda": [630.0],
             "n_linhas_pedido": [1],

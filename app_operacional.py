@@ -5594,14 +5594,25 @@ def _render_fdl_fat_dre_nf_gerencial(
             ),
         )
         + _dre_row(
-            "Tarifa de envio (Custo de Frete)",
-            enc_tarifa,
+            "Custo de frete — logística da plataforma",
+            enc_frete_plat,
             encargo=True,
             title=(
-                "Σ coluna **Custo de Frete** do relatório de pedidos por NF (inclui Mercado Envios e demais). "
-                "Encargo na DRE; separado da **receita de frete TP** acima."
+                "Mercado Envios / coleta ME: soma **Frete_Plataforma** ou parcela ME do «Custo de Frete». "
+                "Já está embutido no **Resultado** por linha (desconto ``Frete_Plataforma``); aqui só leitura gerencial."
                 if valor_faturado_from_fiscal_parquet
-                else "Σ Custo de Frete do pedido por NF."
+                else "Custo de logística da plataforma por NF (mesma base do ``Frete_Plataforma`` no cálculo)."
+            ),
+        )
+        + _dre_row(
+            "Repasse / custo frete — transportadora própria",
+            enc_repasse_tp,
+            encargo=True,
+            title=(
+                "Parcela **transportadora própria** do «Custo de Frete». Repasse ao carrier; abatido no **Resultado** "
+                "do painel junto com a receita de frete da NF."
+                if valor_faturado_from_fiscal_parquet
+                else "Repasse à transportadora própria (split modalidade ≠ ME)."
             ),
         )
         + _dre_row(
@@ -7827,8 +7838,10 @@ def _render_faturamento_dre_minimal(
         "Diferença",
         "Comissão",
         "Custo produto",
-        "Receita frete (TP)",
-        "Tarifa envio",
+        "Receita frete NF",
+        "Frete plataforma",
+        "Repasse transp. própr.",
+        "Frete pedido (Σ)",
         "Imposto",
         "Desp. fixa",
         "ADS 3,5%",
@@ -7902,12 +7915,22 @@ def _render_faturamento_dre_minimal(
                 "Diferença": pd.to_numeric(_df_nf_table["diferenca"], errors="coerce"),
                 "Comissão": pd.to_numeric(_df_nf_table["comissao"], errors="coerce"),
                 "Custo produto": pd.to_numeric(_custo_s, errors="coerce").fillna(0.0),
-                "Receita frete (TP)": pd.to_numeric(
+                "Receita frete NF": pd.to_numeric(
                     _df_nf_table["receita_frete_tp"], errors="coerce"
                 )
                 if "receita_frete_tp" in _df_nf_table.columns
                 else pd.Series(0.0, index=_df_nf_table.index),
-                "Tarifa envio": pd.to_numeric(
+                "Frete plataforma": pd.to_numeric(
+                    _df_nf_table["custo_frete_plataforma"], errors="coerce"
+                )
+                if "custo_frete_plataforma" in _df_nf_table.columns
+                else pd.Series(0.0, index=_df_nf_table.index),
+                "Repasse transp. própr.": pd.to_numeric(
+                    _df_nf_table["repasse_frete_transportadora_propria"], errors="coerce"
+                )
+                if "repasse_frete_transportadora_propria" in _df_nf_table.columns
+                else pd.Series(0.0, index=_df_nf_table.index),
+                "Frete pedido (Σ)": pd.to_numeric(
                     _df_nf_table["tarifa_custo_envio"], errors="coerce"
                 )
                 if "tarifa_custo_envio" in _df_nf_table.columns

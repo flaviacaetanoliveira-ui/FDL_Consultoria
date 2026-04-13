@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-13T00:20:43Z",
+  "generated_at": "2026-04-13T00:24:53Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "cliente_2",
   "empresa": "_multi",
@@ -337,7 +337,7 @@
     "custo_col_sku_index": 1,
     "custo_col_preco_index": 3
   },
-  "data_processamento": "2026-04-13T00:20:42Z",
+  "data_processamento": "2026-04-13T00:24:50Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,

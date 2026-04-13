@@ -254,6 +254,15 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
     ).fillna(0.0)
     merged["tarifa_custo_envio"] = pd.to_numeric(merged["tarifa_custo_envio"], errors="coerce").fillna(0.0)
 
+    # Parquet comercial antigo (sem split): não perder o total de frete na DRE — atribui a tarifa à plataforma.
+    _eps_fb = 1e-9
+    tcf = merged["tarifa_custo_envio"]
+    m_fb = (
+        merged["custo_frete_plataforma"].abs() <= _eps_fb
+    ) & (merged["repasse_frete_transportadora_propria"].abs() <= _eps_fb) & (tcf > _eps_fb)
+    if m_fb.any():
+        merged.loc[m_fb, "custo_frete_plataforma"] = tcf.loc[m_fb].astype(float)
+
     v_fat = pd.to_numeric(merged["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
     vv = pd.to_numeric(merged["valor_venda"], errors="coerce").fillna(0.0)
     org_raw = merged["org_id"] if "org_id" in merged.columns else merged["_jo"]

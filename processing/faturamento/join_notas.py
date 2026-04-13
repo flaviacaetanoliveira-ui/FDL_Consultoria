@@ -231,6 +231,32 @@ def _lookup_nf_para_pedido(k_ped: str, k_ml: str, m_ped: dict[str, str], m_ml: d
     return ""
 
 
+def _apply_numero_coluna_pedido_fallback(
+    out: pd.DataFrame,
+    nf_primary: pd.Series,
+    valid_nf_keys: set[str],
+) -> pd.Series:
+    """
+    Quando o mapa pedido/multiloja → NF das notas de saída não encontra a nota, tenta a coluna
+    genérica «Número» do export de **pedidos** (mesmo nome que o número da NF na planilha Bling),
+    **só** se o valor normalizado existir como ``nf_key`` no recorte de notas já filtrado.
+
+    Isto evita marcar vínculo fiscal inexistente: não há fallback para chave ausente do export de notas.
+    Valores como «-» ou vazio são ignorados.
+    """
+    result = nf_primary.astype(str).str.strip().replace("nan", "")
+    if "Número" not in out.columns or not valid_nf_keys:
+        return result
+    raw = _df_col_as_series(out, "Número").astype(str).str.strip()
+    raw = raw.mask(raw.str.casefold().isin({"", "nan", "none", "<na>", "-", "—", "n/a", "na"}), "")
+    norm = normalize_pedido_join_key(raw).astype(str).str.strip()
+    need = result.eq("")
+    can_use = need & norm.ne("") & norm.isin(valid_nf_keys)
+    result = result.copy()
+    result.loc[can_use] = norm.loc[can_use]
+    return result
+
+
 def enrich_pedidos_com_notas(
     df: pd.DataFrame,
     *,
@@ -315,6 +341,7 @@ def enrich_pedidos_com_notas(
         )
     )
     totais["nf_key"] = totais["nf_key"].astype(str).str.strip()
+    valid_nf_keys = {str(k).strip() for k in totais["nf_key"].tolist() if str(k).strip()}
     m_ped, m_ml = _maps_pedido_para_nf(prep)
 
     k_ped = normalize_pedido_join_key(out["Número do pedido"].astype(str))
@@ -324,7 +351,14 @@ def enrich_pedidos_com_notas(
         index=out.index,
         dtype=object,
     )
+    before_fb = nf_series.astype(str).str.strip().replace("nan", "")
+    nf_series = _apply_numero_coluna_pedido_fallback(out, nf_series, valid_nf_keys)
     out["Nota_Numero_Normalizado"] = nf_series.astype(str).str.strip()
+    n_fb = int(
+        (before_fb.eq("") & out["Nota_Numero_Normalizado"].astype(str).str.strip().ne("")).sum()
+    )
+    if n_fb:
+        meta["notas_fallback_numero_coluna_linhas"] = n_fb
 
     tot_map = totais.set_index("nf_key")["Nota_Valor_Liquido_Total"]
     dt_map = totais.set_index("nf_key")["Nota_Data_Emissao"]

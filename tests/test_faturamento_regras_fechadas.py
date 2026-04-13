@@ -121,11 +121,12 @@ def _write_cenario_vl_zero(base: Path) -> Path:
     with pd.ExcelWriter(root / "custo.xlsx", engine="openpyxl") as xw:
         df_c.to_excel(xw, sheet_name="Planilha1", index=False)
 
+    # Valor líquido da NF = 0: com Vl_Venda zero nas linhas não há rateio uniforme útil → erro fechado.
     pd.DataFrame(
         {
             "Número": ["NFZ"],
             "Número do pedido multiloja": ["MLBZ"],
-            "Valor total líquido": ["10,00"],
+            "Valor total líquido": ["0,00"],
             "Data de emissão": ["15/01/2025"],
             "Situação": ["Autorizada"],
         }

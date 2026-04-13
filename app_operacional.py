@@ -5139,7 +5139,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     )
     _ht_res = (
         "Comercial: Σ resultado por NF **já líquido de ADS** (3,5% × venda lista + R$ 2 por NF com venda > 0), "
-        "sobre o universo **N_base** (empresa + emissão). NFs sem resultado numérico (NaN) **não** entram na soma."
+        "no universo dos cards (N_base + situação + plataforma se filtrada). NFs sem resultado numérico (NaN) **não** entram na soma."
         if valor_faturado_from_fiscal_parquet
         else (
             "Valores já consolidados no materializado NF-first (Resultado / Despesa fixa), no recorte atual dos filtros."
@@ -5151,7 +5151,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
         )
     )
     _ht_mg = (
-        "Σ Resultado ÷ Σ Valor da venda (lista) no universo **N_base** dos cards (empresa + emissão; sem plataforma/produto/sinal)."
+        "Σ Resultado ÷ Σ Valor da venda (lista) no universo dos cards (N_base + situação + plataforma se filtrada; sem produto/sinal)."
         if valor_faturado_from_fiscal_parquet
         else (
             "Σ Resultado ÷ Σ Valor da venda no recorte. Valor da venda = Quantidade × Preço de lista. "
@@ -5187,8 +5187,8 @@ def _render_fdl_fat_dre_nf_kpi_cards(
                 _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00",
                 tier="primary",
                 title=(
-                    "Comercial: Σ Quantidade × Preço de lista por NF no universo **N_base** (empresa + emissão); "
-                    "sem filtro de plataforma, produto ou sinal da tabela."
+                    "Comercial: Σ Quantidade × Preço de lista por NF no universo dos cards (N_base + situação + plataforma se filtrada); "
+                    "sem produto/sinal da tabela."
                     if valor_faturado_from_fiscal_parquet
                     else "Σ Quantidade × Preço de lista no recorte (grão NF)."
                 ),

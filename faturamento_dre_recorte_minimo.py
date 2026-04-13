@@ -115,10 +115,11 @@ def _min_cal_limits(d_min: date, d_max: date) -> tuple[date, date]:
 
 @dataclass(frozen=True)
 class FaturamentoRecorteMinState:
-    """Estado do painel NF-first e filtros comuns (empresa, plataforma). Sem eixo **Data** venda."""
+    """Estado do painel NF-first e filtros comuns (empresa, plataforma, situação NF). Sem eixo **Data** venda."""
 
     empresas: tuple[str, ...]
     plataformas: tuple[str, ...]
+    situacoes_nf: tuple[str, ...] = ()
 
 
 def faturamento_recorte_min_state_from_session(ss: Mapping[str, Any]) -> FaturamentoRecorteMinState:
@@ -131,7 +132,21 @@ def faturamento_recorte_min_state_from_session(ss: Mapping[str, Any]) -> Faturam
     return FaturamentoRecorteMinState(
         empresas=_tup("fdl_fat_min_emp"),
         plataformas=_tup("fdl_fat_min_plat"),
+        situacoes_nf=_tup("fdl_fat_min_nf_sit"),
     )
+
+
+def faturamento_nf_situacao_select_options(df: pd.DataFrame) -> list[str]:
+    """
+    Valores distintos de ``Nota_Situacao`` para multiselect (vazio = sem filtro extra).
+    Exclui rótulos vazios e situações já tratadas como inválidas pelo painel (cancel/deneg/inutil).
+    """
+    if df.empty or "Nota_Situacao" not in df.columns:
+        return []
+    s = df["Nota_Situacao"].fillna("").astype(str).str.strip()
+    s = s[s.ne("") & ~_nf_fiscal_situacao_invalida(s)]
+    uniq = sorted({x for x in s.tolist() if x}, key=lambda t: t.casefold())
+    return uniq
 
 
 def faturamento_min_series_nf_emissao_bounds_dates(df_raw: pd.DataFrame) -> tuple[date, date, bool]:
@@ -262,12 +277,15 @@ def build_faturamento_fiscal_base_slice(
     nf_d_ini: date,
     nf_d_fim: date,
     ok_nf_dates: bool,
+    situacoes_sel: tuple[str, ...] | None = None,
 ) -> tuple[pd.DataFrame, FaturamentoFiscalBaseStats]:
     """
     Recorte **base fiscal** alinhado ao Bling: **empresa** + **emissão** no intervalo + NF com situação válida
     (exclui cancelada / denegada / inutilizada). Uma linha por NF após agregação por chave canónica.
 
     Usa ``dataset_faturamento_fiscal.parquet`` (contrato fiscal). **Não** aplica plataforma, produto nem resultado.
+
+    ``situacoes_sel``: quando não vazio, restringe às situações cujo texto (case-insensitive) está na lista.
     """
     empty_stats = FaturamentoFiscalBaseStats(0, 0.0)
     if df_fiscal.empty or not ok_nf_dates or nf_d_fim < nf_d_ini:
@@ -293,6 +311,14 @@ def build_faturamento_fiscal_base_slice(
     out = out.loc[m_period].copy()
     if out.empty:
         return pd.DataFrame(), empty_stats
+
+    _sit = situacoes_sel or ()
+    if _sit and any(str(x).strip() for x in _sit) and "Nota_Situacao" in out.columns:
+        want = {str(x).strip().casefold() for x in _sit if str(x).strip()}
+        ss = out["Nota_Situacao"].fillna("").astype(str).str.strip()
+        out = out.loc[ss.str.casefold().isin(want)].copy()
+        if out.empty:
+            return pd.DataFrame(), empty_stats
 
     gb_keys: list[str] = []
     if "org_id" in out.columns:

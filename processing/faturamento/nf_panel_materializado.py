@@ -15,6 +15,7 @@ import pandas as pd
 from faturamento_dre_recorte_minimo import (
     apply_nf_panel_custo_ads,
     apply_nf_panel_frete_gap_fallback,
+    apply_nf_panel_frete_repasse_e_plataforma_coerencia,
     apply_nf_panel_resultado_frete_nota_lista,
 )
 
@@ -109,6 +110,7 @@ def build_nf_panel_materializado_dataframe(
 
     if not used_fiscal_merge:
         base = apply_nf_panel_frete_gap_fallback(base)
+    base = apply_nf_panel_frete_repasse_e_plataforma_coerencia(base)
     base = apply_nf_panel_resultado_frete_nota_lista(base)
     base = apply_nf_panel_custo_ads(base)
     if "plataforma" not in base.columns:

@@ -7997,8 +7997,10 @@ def _render_faturamento_dre_minimal(
             "Diferença",
             "Comissão",
             "Custo produto",
-            "Receita frete (TP)",
-            "Tarifa envio",
+            "Receita frete NF",
+            "Frete plataforma",
+            "Repasse transp. própr.",
+            "Frete pedido (Σ)",
             "Imposto",
             "Desp. fixa",
             "ADS 3,5%",
@@ -8043,16 +8045,26 @@ def _render_faturamento_dre_minimal(
             if use_fiscal_kpi
             else "Σ custo do produto nas linhas de pedido desta NF."
         ),
-        "Receita frete (TP)": (
-            "Valor pago pelo cliente em **transportadora própria** (split do «Custo de Frete») + imputação NF×lista "
-            "(uma linha) quando aplicável; pode usar «Frete» do export de notas no fiscal se o comercial veio 0."
+        "Receita frete NF": (
+            "Frete destacado na **nota fiscal** (``Frete_Nota_Export`` no merge fiscal), por NF."
             if use_fiscal_kpi
-            else "Receita de frete TP / gap nota."
+            else "Receita de frete na NF / gap comercial quando sem fiscal."
         ),
-        "Tarifa envio": (
-            "Soma da coluna **Custo de Frete** do relatório de pedidos nesta NF (inclui Mercado Envios)."
+        "Frete plataforma": (
+            "Custo de logística da **plataforma** (ME / «Frete_Plataforma»), após separar do repasse TP quando aplicável."
             if use_fiscal_kpi
-            else "Σ Custo de Frete do pedido."
+            else "Parcela plataforma do frete no pedido."
+        ),
+        "Repasse transp. própr.": (
+            "Repasse à **transportadora própria** (parcela TP do «Custo de Frete»); se o pedido não separa modalidade "
+            "mas a NF cobra frete, imputa-se pass-through até o teto da tarifa da NF."
+            if use_fiscal_kpi
+            else "Repasse TP / imputação alinhada à receita NF."
+        ),
+        "Frete pedido (Σ)": (
+            "Σ **Custo de Frete** (ou «Frete_Plataforma») no pedido — conferência (plataforma + repasse após coerência)."
+            if use_fiscal_kpi
+            else "Σ frete no pedido."
         ),
         "Imposto": "Comercial: soma do imposto das linhas de pedido ligadas à NF." if use_fiscal_kpi else None,
         "Desp. fixa": (
@@ -8090,8 +8102,10 @@ def _render_faturamento_dre_minimal(
         "Diferença": "small",
         "Comissão": "small",
         "Custo produto": "medium",
-        "Receita frete (TP)": "small",
-        "Tarifa envio": "small",
+        "Receita frete NF": "small",
+        "Frete plataforma": "small",
+        "Repasse transp. própr.": "small",
+        "Frete pedido (Σ)": "small",
         "Imposto": "small",
         "Desp. fixa": "small",
         "ADS 3,5%": "small",

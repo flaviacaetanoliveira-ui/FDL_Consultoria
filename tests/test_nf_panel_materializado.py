@@ -74,8 +74,10 @@ def test_build_nf_panel_com_fiscal_nao_substitui_receita_pelo_gap_nf_lista() -> 
     df_nf = build_nf_materializado_dataframe(line)
     panel = build_nf_panel_materializado_dataframe(df_nf, _fiscal_one_nf(frete_nota=90.0))
     assert abs(float(panel.iloc[0]["receita_frete_tp"]) - 90.0) < 1e-6
-    # 10 + 90 - (630*0.035 + 2) = 75,95
-    assert abs(float(panel.iloc[0]["resultado"]) - 75.95) < 1e-4
+    # Receita fiscal (90) ≠ perfil gap (vf−vv=122): coerência imputa repasse=90 → resultado += 90−90;
+    # 10 − (630*0.035 + 2) = −14,05
+    assert abs(float(panel.iloc[0]["repasse_frete_transportadora_propria"]) - 90.0) < 1e-6
+    assert abs(float(panel.iloc[0]["resultado"]) - (-14.05)) < 1e-4
 
 
 def test_build_nf_panel_sem_fiscal_aplica_gap_e_resultado() -> None:

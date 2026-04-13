@@ -30,6 +30,8 @@ _NF_PANEL_ALIGN_REQUIRED: frozenset[str] = frozenset(
         "comissao",
         "custo_produto",
         "receita_frete_tp",
+        "custo_frete_plataforma",
+        "repasse_frete_transportadora_propria",
         "tarifa_custo_envio",
         "imposto",
         "despesa_fixa",
@@ -449,6 +451,8 @@ def _nf_panel_fill_defaults_for_aligned(df: pd.DataFrame) -> pd.DataFrame:
         ("comissao", 0.0),
         ("custo_produto", 0.0),
         ("receita_frete_tp", 0.0),
+        ("custo_frete_plataforma", 0.0),
+        ("repasse_frete_transportadora_propria", 0.0),
         ("tarifa_custo_envio", 0.0),
         ("imposto", 0.0),
         ("despesa_fixa", 0.0),
@@ -515,6 +519,32 @@ def _nf_grain_tarifa_custo_envio_sum(gr: pd.DataFrame) -> float:
     if "Frete_Plataforma" in gr.columns:
         return float(pd.to_numeric(gr["Frete_Plataforma"], errors="coerce").fillna(0.0).sum())
     return 0.0
+
+
+def _nf_grain_custo_frete_plataforma_sum(gr: pd.DataFrame) -> float:
+    """
+    Custo de frete da **plataforma** (Mercado Envios / logística ME), alinhado a ``Frete_Plataforma`` no ``calc``.
+
+    Prioriza a coluna **Frete_Plataforma** quando soma > 0; senão usa a parcela ME do split sobre **Custo de Frete**.
+    """
+    if "Frete_Plataforma" in gr.columns:
+        fp = float(pd.to_numeric(gr["Frete_Plataforma"], errors="coerce").fillna(0.0).sum())
+        if fp > 1e-12:
+            return fp
+    if "Custo de Frete" in gr.columns:
+        cf = pd.to_numeric(gr["Custo de Frete"], errors="coerce").fillna(0.0)
+        frete_me, _ = _frete_mercado_envios_vs_transportadora(gr, cf)
+        return float(frete_me.sum())
+    return 0.0
+
+
+def _nf_grain_repasse_frete_transportadora_propria_sum(gr: pd.DataFrame) -> float:
+    """Repasse / custo da **transportadora própria**: parcela TP do ``Custo de Frete`` (modalidade ≠ ME)."""
+    if "Custo de Frete" not in gr.columns:
+        return 0.0
+    cf = pd.to_numeric(gr["Custo de Frete"], errors="coerce").fillna(0.0)
+    _, frete_tp = _frete_mercado_envios_vs_transportadora(gr, cf)
+    return float(frete_tp.sum())
 
 
 def _nf_grain_receita_frete_tp_sum(gr: pd.DataFrame) -> float:
@@ -619,12 +649,13 @@ def build_nf_grain_dataframe(
     **Comissão / custo produto / frete:** soma por linha de ``Taxa de Comissão``; custo = ``Custo_Produto_Total``
     (ou ``Custo do Produto``) ou, se ausente/só zeros, ``Quantidade × Custo_Unitario``;
     **tarifa_custo_envio** = soma ``Custo de Frete`` (ou ``Frete_Plataforma`` se CF ausente);
-    **receita_frete_tp** = soma da parcela transportadora própria do ``Custo de Frete`` (regra ``calc``).
+    **custo_frete_plataforma** = parcela ME / coluna ``Frete_Plataforma`` (custo logística plataforma);
+    **repasse_frete_transportadora_propria** = parcela TP do ``Custo de Frete`` (repasse à transportadora);
+    **receita_frete_tp** (grão comercial) = parcela TP do CF ou gap NF×lista; no painel com fiscal substitui-se pela NF.
 
-    **Resultado:** Σ ``Resultado`` das linhas. Com coluna ``Despesas Fixas``: Σ ``Resultado`` + Σ ``Despesas Fixas``
-    − ``despesa_fixa`` (5% × ``valor_venda`` na NF). No **painel materializado** aplicam-se ainda o ajuste de frete
-    (``apply_nf_panel_resultado_frete_nota_lista``; com merge fiscal, soma a receita de ``Frete_Nota_Export`` ao
-    ``resultado``) e o custo **ADS** (3,5% × ``valor_venda`` + fixo por NF com venda > 0), que reduz ``resultado``.
+    **Resultado:** Σ ``Resultado`` das linhas (já desconta ``Frete_Plataforma`` por linha, **não** o repasse TP).
+    No **painel materializado**: ``resultado += receita_frete_tp − repasse_frete_transportadora_propria`` (receita fiscal
+    na NF vs repasse pedido) e o custo **ADS** (3,5% × ``valor_venda`` + fixo por NF com venda > 0).
 
     **Despesa fixa:** ``NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA`` × ``valor_venda`` (por NF).
 
@@ -644,6 +675,8 @@ def build_nf_grain_dataframe(
         "comissao",
         "custo_produto",
         "receita_frete_tp",
+        "custo_frete_plataforma",
+        "repasse_frete_transportadora_propria",
         "tarifa_custo_envio",
         "imposto",
         "despesa_fixa",
@@ -750,6 +783,8 @@ def build_nf_grain_dataframe(
         )
         custo_p = _nf_grain_custo_total_for_group(gr, custo_col)
         tarifa_env = _nf_grain_tarifa_custo_envio_sum(gr)
+        c_frete_plat = _nf_grain_custo_frete_plataforma_sum(gr)
+        rep_tp_ped = _nf_grain_repasse_frete_transportadora_propria_sum(gr)
         rec_tp = _nf_grain_receita_frete_tp_sum(gr)
         imp = float(pd.to_numeric(gr["Imposto"], errors="coerce").fillna(0.0).sum()) if "Imposto" in gr.columns else 0.0
         desp_fix = float(NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA * v_venda)
@@ -868,6 +903,8 @@ def build_nf_grain_dataframe(
                 "comissao": com,
                 "custo_produto": custo_p,
                 "receita_frete_tp": rec_tp,
+                "custo_frete_plataforma": c_frete_plat,
+                "repasse_frete_transportadora_propria": rep_tp_ped,
                 "tarifa_custo_envio": tarifa_env,
                 "imposto": imp,
                 "despesa_fixa": desp_fix,
@@ -916,44 +953,37 @@ def apply_nf_panel_resultado_frete_nota_lista(
     *,
     eps: float = 1e-9,
     rel_tol: float = 0.02,
-    receita_frete_da_nf_fiscal: bool = False,
 ) -> pd.DataFrame:
     """
-    Incorpora a **receita de frete** (``receita_frete_tp``) no ``resultado`` quando ela não está em ``valor_venda``.
+    Ajusta ``resultado`` pelo frete: **receita** (``receita_frete_tp`` = ``Frete_Nota_Export`` no merge fiscal ou
+    grão/gap sem fiscal) menos **repasse** à transportadora própria (``repasse_frete_transportadora_propria``).
 
-    * ``receita_frete_da_nf_fiscal=True`` (painel após merge fiscal): soma ``receita_frete_tp`` a todas as linhas
-      comerciais completas com receita > 0 (valor vem de ``Frete_Nota_Export``).
-    * ``False`` (só comercial / sem merge fiscal): mantém a regra antiga — só soma quando ``receita_frete_tp`` está
-      alinhada ao excesso NF×lista (gap), para não duplicar quando a receita veio do split por modalidade no grão.
+    O ``Resultado`` por linha de pedido já desconta ``Frete_Plataforma`` (custo da logística da plataforma / ME),
+    mas **não** desconta a parcela TP do ``Custo de Frete``; por isso o repasse é abatido aqui.
+
+    ``rel_tol`` permanece na assinatura por compatibilidade com chamadas antigas; não é usado.
     """
+    _ = (eps, rel_tol)
     need = {"receita_frete_tp", "resultado"}
     if df.empty or not need.issubset(df.columns):
         return df
     out = df.copy()
     rftp = pd.to_numeric(out["receita_frete_tp"], errors="coerce").fillna(0.0)
+    if "repasse_frete_transportadora_propria" in out.columns:
+        rep = pd.to_numeric(out["repasse_frete_transportadora_propria"], errors="coerce").fillna(0.0)
+    else:
+        rep = pd.Series(0.0, index=out.index, dtype=float)
     res = pd.to_numeric(out["resultado"], errors="coerce")
     inc = (
         out["comercial_incompleto"].fillna(False).astype(bool)
         if "comercial_incompleto" in out.columns
         else pd.Series(False, index=out.index)
     )
-    if receita_frete_da_nf_fiscal:
-        m_ok = (rftp > eps) & (~inc) & res.notna()
-    else:
-        need_gap = {"valor_faturado_nf", "valor_venda"}
-        if not need_gap.issubset(out.columns):
-            return out
-        vf = pd.to_numeric(out["valor_faturado_nf"], errors="coerce").fillna(0.0)
-        vv = pd.to_numeric(out["valor_venda"], errors="coerce").fillna(0.0)
-        gap = vf - vv
-        mx = pd.concat([vv.abs(), vf.abs(), gap.abs()], axis=1).max(axis=1)
-        tol = (rel_tol * mx).clip(lower=eps)
-        m = (vv > eps) & (gap > eps) & (rftp > eps) & ((rftp - gap).abs() <= tol)
-        m_ok = m & (~inc) & res.notna()
+    m_ok = (~inc) & res.notna()
     if not m_ok.any():
         return out
     out.loc[m_ok, "resultado"] = (
-        res.loc[m_ok] + pd.to_numeric(out.loc[m_ok, "receita_frete_tp"], errors="coerce")
+        res.loc[m_ok] + rftp.loc[m_ok].astype(float) - rep.loc[m_ok].astype(float)
     ).astype(float)
     return out
 
@@ -1045,6 +1075,8 @@ def compute_nf_panel_kpis(df_nf: pd.DataFrame) -> dict[str, float | int]:
         "comissao": 0.0,
         "custo_produto": 0.0,
         "receita_frete_tp": 0.0,
+        "custo_frete_plataforma": 0.0,
+        "repasse_frete_transportadora_propria": 0.0,
         "tarifa_custo_envio": 0.0,
         "imposto": 0.0,
         "despesa_fixa": 0.0,

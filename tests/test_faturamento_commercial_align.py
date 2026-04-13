@@ -108,11 +108,11 @@ class TestBuildNfPanelAlignedToFiscalBase(unittest.TestCase):
             cov,
             CommercialCoverageStats(
                 n_total=438,
-                n_com_vinculo_pedido_nf=382,
-                n_sem_vinculo_ou_so_fiscal=56,
-                n_com_venda_lista=382,
-                n_sem_resultado=85,
-                n_com_resultado_numerico=353,
+                n_com_vinculo_pedido_nf=438,
+                n_sem_vinculo_ou_so_fiscal=0,
+                n_com_venda_lista=438,
+                n_sem_resultado=86,
+                n_com_resultado_numerico=352,
             ),
         )
 

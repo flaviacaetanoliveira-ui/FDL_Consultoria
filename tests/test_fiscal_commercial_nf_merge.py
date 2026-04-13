@@ -85,11 +85,13 @@ def test_merge_frete_nota_export_quando_comercial_zero() -> None:
     assert abs(float(out.iloc[0]["tarifa_custo_envio"])) < 1e-9
 
 
-def test_merge_frete_comercial_prevalece_sobre_frete_nota() -> None:
+def test_merge_receita_frete_vem_somente_fiscal_nao_do_comercial() -> None:
+    """Receita de frete no painel = ``Frete_Nota_Export``; comercial não prevalece."""
     fiscal = _fiscal_row(Frete_Nota_Export=50.0)
     comm = _comm_row(receita_frete_tp=2.0, tarifa_custo_envio=2.0, Nota_Numero_Normalizado="042480")
     out = merge_fiscal_base_with_commercial_nf_dataframe(fiscal, comm)
-    assert abs(float(out.iloc[0]["receita_frete_tp"]) - 2.0) < 1e-6
+    assert abs(float(out.iloc[0]["receita_frete_tp"]) - 50.0) < 1e-6
+    assert abs(float(out.iloc[0]["tarifa_custo_envio"]) - 2.0) < 1e-6
 
 
 def test_merge_prioriza_linha_com_org_quando_ambas_existem() -> None:

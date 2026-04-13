@@ -623,8 +623,8 @@ def build_nf_grain_dataframe(
 
     **Resultado:** Σ ``Resultado`` das linhas. Com coluna ``Despesas Fixas``: Σ ``Resultado`` + Σ ``Despesas Fixas``
     − ``despesa_fixa`` (5% × ``valor_venda`` na NF). No **painel materializado** aplicam-se ainda o ajuste de frete
-    (``apply_nf_panel_resultado_frete_nota_lista``) e o custo **ADS** (3,5% × ``valor_venda`` + fixo por NF com venda > 0),
-    que reduz ``resultado``.
+    (``apply_nf_panel_resultado_frete_nota_lista``; com merge fiscal, soma a receita de ``Frete_Nota_Export`` ao
+    ``resultado``) e o custo **ADS** (3,5% × ``valor_venda`` + fixo por NF com venda > 0), que reduz ``resultado``.
 
     **Despesa fixa:** ``NF_FIRST_PANEL_DESPESA_FIXA_ALIQUOTA`` × ``valor_venda`` (por NF).
 
@@ -911,31 +911,45 @@ def apply_nf_panel_frete_gap_fallback(df: pd.DataFrame, *, eps: float = 1e-9) ->
     return out
 
 
-def apply_nf_panel_resultado_frete_nota_lista(df: pd.DataFrame, *, eps: float = 1e-9, rel_tol: float = 0.02) -> pd.DataFrame:
+def apply_nf_panel_resultado_frete_nota_lista(
+    df: pd.DataFrame,
+    *,
+    eps: float = 1e-9,
+    rel_tol: float = 0.02,
+    receita_frete_da_nf_fiscal: bool = False,
+) -> pd.DataFrame:
     """
-    Quando **receita_frete_tp** reflete o excesso do faturado (NF) sobre a **venda (lista)** (frete só na nota),
-    soma essa receita a ``resultado``. Comissão e imposto permanecem como nas linhas de pedido.
+    Incorpora a **receita de frete** (``receita_frete_tp``) no ``resultado`` quando ela não está em ``valor_venda``.
+
+    * ``receita_frete_da_nf_fiscal=True`` (painel após merge fiscal): soma ``receita_frete_tp`` a todas as linhas
+      comerciais completas com receita > 0 (valor vem de ``Frete_Nota_Export``).
+    * ``False`` (só comercial / sem merge fiscal): mantém a regra antiga — só soma quando ``receita_frete_tp`` está
+      alinhada ao excesso NF×lista (gap), para não duplicar quando a receita veio do split por modalidade no grão.
     """
-    need = {"valor_faturado_nf", "valor_venda", "receita_frete_tp", "resultado"}
+    need = {"receita_frete_tp", "resultado"}
     if df.empty or not need.issubset(df.columns):
         return df
     out = df.copy()
-    vf = pd.to_numeric(out["valor_faturado_nf"], errors="coerce").fillna(0.0)
-    vv = pd.to_numeric(out["valor_venda"], errors="coerce").fillna(0.0)
     rftp = pd.to_numeric(out["receita_frete_tp"], errors="coerce").fillna(0.0)
-    gap = vf - vv
-    mx = pd.concat([vv.abs(), vf.abs(), gap.abs()], axis=1).max(axis=1)
-    tol = (rel_tol * mx).clip(lower=eps)
-    m = (vv > eps) & (gap > eps) & (rftp > eps) & ((rftp - gap).abs() <= tol)
-    if not m.any():
-        return out
     res = pd.to_numeric(out["resultado"], errors="coerce")
     inc = (
         out["comercial_incompleto"].fillna(False).astype(bool)
         if "comercial_incompleto" in out.columns
         else pd.Series(False, index=out.index)
     )
-    m_ok = m & (~inc) & res.notna()
+    if receita_frete_da_nf_fiscal:
+        m_ok = (rftp > eps) & (~inc) & res.notna()
+    else:
+        need_gap = {"valor_faturado_nf", "valor_venda"}
+        if not need_gap.issubset(out.columns):
+            return out
+        vf = pd.to_numeric(out["valor_faturado_nf"], errors="coerce").fillna(0.0)
+        vv = pd.to_numeric(out["valor_venda"], errors="coerce").fillna(0.0)
+        gap = vf - vv
+        mx = pd.concat([vv.abs(), vf.abs(), gap.abs()], axis=1).max(axis=1)
+        tol = (rel_tol * mx).clip(lower=eps)
+        m = (vv > eps) & (gap > eps) & (rftp > eps) & ((rftp - gap).abs() <= tol)
+        m_ok = m & (~inc) & res.notna()
     if not m_ok.any():
         return out
     out.loc[m_ok, "resultado"] = (

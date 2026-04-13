@@ -1,5 +1,8 @@
 """
-Painel NF-first **pré-calculado** (merge fiscal↔comercial + gap receita frete + resultado + custo ADS).
+Painel NF-first **pré-calculado** (merge fiscal↔comercial + gap receita só sem fiscal + resultado frete + ADS).
+
+Com fiscal válido, **receita de frete** vem de ``Frete_Nota_Export`` no merge; o gap NF×lista **não** redefine essa
+receita. Sem fiscal, mantém-se o fallback de gap no painel (mesmo universo que o grão comercial).
 
 Inclui custo de **ADS** (3,5% sobre ``valor_venda`` + R$ 2 por NF com venda lista > 0), gravado em colunas
 ``custo_ads_*`` e descontado de ``resultado``. Gravado em ``dataset_faturamento_nf_panel.parquet``.
@@ -88,20 +91,23 @@ def build_nf_panel_materializado_dataframe(
     if df_nf.empty:
         return pd.DataFrame(columns=sorted(NF_PANEL_REQUIRED_COLUMNS))
 
+    used_fiscal_merge = False
     if fiscal_contract_dataframe_valid(df_fiscal) and not df_fiscal.empty:
         comm = df_nf.drop(columns=["schema_version_nf"], errors="ignore").copy()
         comm["plataforma_resumo"] = (
             comm["plataforma"].fillna("").astype(str) if "plataforma" in comm.columns else "—"
         )
         base = merge_fiscal_base_with_commercial_nf_dataframe(df_fiscal, comm)
+        used_fiscal_merge = True
     else:
         base = _commercial_nf_to_panel_shape(df_nf)
 
     if base.empty:
         return pd.DataFrame(columns=sorted(NF_PANEL_REQUIRED_COLUMNS))
 
-    base = apply_nf_panel_frete_gap_fallback(base)
-    base = apply_nf_panel_resultado_frete_nota_lista(base)
+    if not used_fiscal_merge:
+        base = apply_nf_panel_frete_gap_fallback(base)
+    base = apply_nf_panel_resultado_frete_nota_lista(base, receita_frete_da_nf_fiscal=used_fiscal_merge)
     base = apply_nf_panel_custo_ads(base)
     if "plataforma" not in base.columns:
         base = base.copy()

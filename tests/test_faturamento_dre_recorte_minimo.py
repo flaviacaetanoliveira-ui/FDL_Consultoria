@@ -673,6 +673,21 @@ def test_apply_nf_panel_resultado_frete_nota_lista_soma_frete() -> None:
     assert abs(float(out.iloc[0]["resultado"]) - 148.56) < 0.02
 
 
+def test_apply_nf_panel_resultado_fiscal_soma_frete_sem_checar_gap() -> None:
+    """Com receita fiscal na NF, incorpora frete ao resultado mesmo se não bater com NF×lista."""
+    df = pd.DataFrame(
+        {
+            "valor_faturado_nf": [500.0],
+            "valor_venda": [630.0],
+            "receita_frete_tp": [40.0],
+            "resultado": [10.0],
+            "comercial_incompleto": [False],
+        }
+    )
+    out = apply_nf_panel_resultado_frete_nota_lista(df, receita_frete_da_nf_fiscal=True)
+    assert abs(float(out.iloc[0]["resultado"]) - 50.0) < 1e-6
+
+
 def test_apply_nf_panel_resultado_frete_nota_lista_apos_gap_fallback() -> None:
     df = pd.DataFrame(
         {

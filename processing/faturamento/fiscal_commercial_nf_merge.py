@@ -7,9 +7,8 @@ Quando ainda assim não casa, o caso típico é **org_id** vazio no materializad
 no fiscal (ou o inverso): o merge estrito em (org_id, empresa, NF) falha. O fallback usa só
 (empresa, NF) nas linhas comerciais sem org_id.
 
-**Receita de frete (TP) na linha do painel:** mantém ``receita_frete_tp`` do comercial quando > 0; caso contrário
-usa ``Frete_Nota_Export`` do fiscal (frete na nota). **Tarifa de envio** (``tarifa_custo_envio`` = Custo de Frete
-do pedido) vem só do comercial — sem preenchimento fiscal.
+**Receita de frete (painel):** ``receita_frete_tp`` vem **somente** de ``Frete_Nota_Export`` (frete destacado na NF),
+não do comercial. **Tarifa de envio** (``tarifa_custo_envio`` = Custo de Frete do pedido) vem só do comercial.
 """
 
 from __future__ import annotations
@@ -224,11 +223,10 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
             merged["faturamento_nota_vinculada"].astype("boolean").fillna(False).astype(bool)
         )
 
-    _eps_f = 1e-9
     if "Frete_Nota_Export" in merged.columns:
-        f_nota = pd.to_numeric(merged["Frete_Nota_Export"], errors="coerce").fillna(0.0)
-        r_com = pd.to_numeric(merged["receita_frete_tp"], errors="coerce").fillna(0.0)
-        merged["receita_frete_tp"] = r_com.where(r_com > _eps_f, f_nota)
+        merged["receita_frete_tp"] = (
+            pd.to_numeric(merged["Frete_Nota_Export"], errors="coerce").fillna(0.0)
+        )
     else:
         merged["receita_frete_tp"] = pd.to_numeric(merged["receita_frete_tp"], errors="coerce").fillna(0.0)
     merged["tarifa_custo_envio"] = pd.to_numeric(merged["tarifa_custo_envio"], errors="coerce").fillna(0.0)

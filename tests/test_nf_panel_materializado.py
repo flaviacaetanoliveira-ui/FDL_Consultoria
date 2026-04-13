@@ -7,6 +7,7 @@ from datetime import date
 import pandas as pd
 
 from faturamento_dre_recorte_minimo import FaturamentoRecorteMinState, build_nf_grain_dataframe
+from processing.faturamento.fiscal_materializado import SCHEMA_VERSION_FISCAL
 from processing.faturamento.nf_materializado import NF_FIRST_CONTRACT_COLUMNS, build_nf_materializado_dataframe
 from processing.faturamento.nf_panel_materializado import (
     NF_PANEL_REQUIRED_COLUMNS,
@@ -37,6 +38,44 @@ def _line_one_nf() -> pd.DataFrame:
             "Status_Custo": ["CUSTO_OK"],
         }
     )
+
+
+def _fiscal_one_nf(*, frete_nota: float = 122.0) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "org_id": "o1",
+                "empresa": "A",
+                "Nota_Numero_Normalizado": "NF1",
+                "Nota_Data_Emissao": pd.Timestamp("2025-06-10"),
+                "Nota_Situacao": "Autorizada",
+                "Valor_Liquido_NF": 752.0,
+                "Frete_Nota_Export": frete_nota,
+                "Valor_Total_NF": 752.0,
+                "schema_version_fiscal": SCHEMA_VERSION_FISCAL,
+            }
+        ]
+    )
+
+
+def test_build_nf_panel_com_fiscal_receita_igual_frete_nota_export() -> None:
+    """Com fiscal, receita de frete não vem do gap comercial; resultado inclui ``Frete_Nota_Export``."""
+    line = _line_one_nf()
+    df_nf = build_nf_materializado_dataframe(line)
+    panel = build_nf_panel_materializado_dataframe(df_nf, _fiscal_one_nf(frete_nota=122.0))
+    assert nf_panel_materializado_dataframe_valid(panel)
+    assert abs(float(panel.iloc[0]["receita_frete_tp"]) - 122.0) < 1e-5
+    assert abs(float(panel.iloc[0]["resultado"]) - 107.95) < 1e-4
+
+
+def test_build_nf_panel_com_fiscal_nao_substitui_receita_pelo_gap_nf_lista() -> None:
+    """Gap NF×lista (122) não sobrescreve quando o fiscal traz outro ``Frete_Nota_Export``."""
+    line = _line_one_nf()
+    df_nf = build_nf_materializado_dataframe(line)
+    panel = build_nf_panel_materializado_dataframe(df_nf, _fiscal_one_nf(frete_nota=90.0))
+    assert abs(float(panel.iloc[0]["receita_frete_tp"]) - 90.0) < 1e-6
+    # 10 + 90 - (630*0.035 + 2) = 75,95
+    assert abs(float(panel.iloc[0]["resultado"]) - 75.95) < 1e-4
 
 
 def test_build_nf_panel_sem_fiscal_aplica_gap_e_resultado() -> None:

@@ -7552,8 +7552,8 @@ def _render_faturamento_dre_minimal(
     with st.container(border=True):
         st.subheader("Recorte da tabela (produto / resultado)")
         st.caption(
-            "Estes filtros aplicam-se à **tabela** e à **vista detalhada** abaixo. **Cards** e **DRE** comerciais permanecem "
-            "no universo **N_base** (empresa + emissão), como no bloco **Análise comercial (complemento)**."
+            "Estes filtros aplicam-se **só** à **tabela** e à **vista detalhada**. **Cards** e **DRE** já refletem empresa, "
+            "emissão, **situação NF** (se filtrada) e **plataforma** (se filtrada); aqui refina-se **produto** e **sinal**."
         )
         if _prod_opts:
             _multiselect_stable(
@@ -7561,8 +7561,8 @@ def _render_faturamento_dre_minimal(
                 "Produto (resumo na NF)",
                 _prod_opts,
                 help=(
-                    "**Vazio** = todos. Filtra a **tabela** (não altera o **topo Base fiscal** nem os **cards/DRE**). "
-                    "Corresponde à coluna «Produtos» (agregado por NF)."
+                    "**Vazio** = todos. Filtra apenas a **tabela** (não altera o **topo Base fiscal**). **Cards/DRE** já "
+                    "estão no recorte **sem** produto/sinal. Corresponde à coluna «Produtos» (agregado por NF)."
                 ),
             )
         else:
@@ -7604,7 +7604,7 @@ def _render_faturamento_dre_minimal(
             key=_k_sinais,
             help=(
                 "Pode selecionar **uma ou as duas** opções: união de NFs com lucro e/ou com prejuízo. "
-                "Filtra apenas a **tabela** (o **topo Base fiscal** e os **cards/DRE** usam todas as **N_base**). "
+                "Filtra apenas a **tabela**; **cards/DRE** ignoram este filtro (usam todas as NFs do recorte comercial já definido). "
                 "Usa o **resultado** já gravado no materializado (Parquet). "
                 "NFs sem resultado válido (NaN) não entram neste filtro da tabela."
             ),

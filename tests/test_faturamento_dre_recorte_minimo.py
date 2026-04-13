@@ -802,19 +802,20 @@ def test_apply_nf_panel_frete_repasse_e_plataforma_coerencia() -> None:
     assert abs(float(out.iloc[0]["custo_frete_plataforma"]) - 70.0) < 1e-9
 
 
-def test_apply_nf_panel_frete_repasse_coerencia_ignora_sem_tarifa() -> None:
-    """Sem «Custo de Frete» na NF (tarifa 0), não imputa repasse — mantém gap/receita só no resultado."""
+def test_apply_nf_panel_frete_repasse_coerencia_tarifa_zero_imputa_repasse_sem_colunas_vf() -> None:
+    """Tarifa ~0 e receita TP > 0: repasse = receita e custo plataforma = 0 (sem colunas vf/vv)."""
     df = pd.DataFrame(
         {
             "receita_frete_tp": [50.0],
             "repasse_frete_transportadora_propria": [0.0],
-            "custo_frete_plataforma": [0.0],
+            "custo_frete_plataforma": [30.0],
             "tarifa_custo_envio": [0.0],
             "comercial_incompleto": [False],
         }
     )
     out = apply_nf_panel_frete_repasse_e_plataforma_coerencia(df)
-    assert abs(float(out.iloc[0]["repasse_frete_transportadora_propria"])) < 1e-9
+    assert abs(float(out.iloc[0]["repasse_frete_transportadora_propria"]) - 50.0) < 1e-9
+    assert abs(float(out.iloc[0]["custo_frete_plataforma"])) < 1e-9
 
 
 def test_apply_nf_panel_frete_repasse_coerencia_tarifa_zero_frete_fiscal_nao_gap() -> None:
@@ -835,13 +836,13 @@ def test_apply_nf_panel_frete_repasse_coerencia_tarifa_zero_frete_fiscal_nao_gap
     assert abs(float(out.iloc[0]["repasse_frete_transportadora_propria"]) - 170.0) < 1e-9
 
 
-def test_apply_nf_panel_frete_repasse_coerencia_preserva_perfil_gap_nf_lista() -> None:
-    """Perfil gap (1 linha, receita ≈ vf − vv): não imputar repasse quando tarifa = 0."""
+def test_apply_nf_panel_frete_repasse_coerencia_gap_nf_lista_imputa_repasse() -> None:
+    """Perfil gap (1 linha, receita ≈ vf − vv) com tarifa 0: repasse = receita (TP não infla lucro)."""
     df = pd.DataFrame(
         {
             "receita_frete_tp": [122.01],
             "repasse_frete_transportadora_propria": [0.0],
-            "custo_frete_plataforma": [0.0],
+            "custo_frete_plataforma": [122.01],
             "tarifa_custo_envio": [0.0],
             "valor_faturado_nf": [752.01],
             "valor_venda": [630.0],
@@ -850,7 +851,8 @@ def test_apply_nf_panel_frete_repasse_coerencia_preserva_perfil_gap_nf_lista() -
         }
     )
     out = apply_nf_panel_frete_repasse_e_plataforma_coerencia(df)
-    assert abs(float(out.iloc[0]["repasse_frete_transportadora_propria"])) < 1e-9
+    assert abs(float(out.iloc[0]["repasse_frete_transportadora_propria"]) - 122.01) < 0.02
+    assert abs(float(out.iloc[0]["custo_frete_plataforma"])) < 1e-9
 
 
 def test_apply_nf_panel_frete_gap_fallback_um_pedido() -> None:

@@ -948,17 +948,19 @@ def apply_nf_panel_frete_gap_fallback(df: pd.DataFrame, *, eps: float = 1e-9) ->
 
 def apply_nf_panel_frete_repasse_e_plataforma_coerencia(df: pd.DataFrame, *, eps: float = 1e-9) -> pd.DataFrame:
     """
-    Dois casos de coerência (sem alterar comissão / preço lista / vínculos):
+    Coerência frete TP × plataforma (sem alterar comissão / preço lista / vínculos):
 
-    **A) Com tarifa de envio na NF (``tarifa_custo_envio`` > 0):** o split ME/TP pode mandar o CF todo para
-    plataforma (``repasse = 0``) enquanto a **NF** traz frete em ``Frete_Nota_Export``. Ajusta-se
-    ``repasse = min(receita, tarifa)`` e ``custo_frete_plataforma = tarifa − repasse``.
+    **A) Com ``tarifa_custo_envio`` > 0:** o split ME/TP pode mandar o CF todo para plataforma (``repasse = 0``)
+    enquanto a **NF** traz frete em ``Frete_Nota_Export``. Ajusta-se ``repasse = min(receita, tarifa)`` e
+    ``custo_frete_plataforma = tarifa − repasse``.
 
-    **B) Sem tarifa no grão (``tarifa_custo_envio`` ~ 0) mas com receita fiscal de frete TP:** o custo não veio
-    no agregado comercial; imputa-se ``repasse = receita`` para o pass-through na DRE e neutralidade em
-    ``resultado`` (``+ receita − repasse``), **exceto** quando o perfil coincide com o **gap NF×lista** de uma
-    linha (``n_linhas_pedido == 1``, ``valor_faturado_nf − valor_venda > 0`` e receita ≈ esse gap) — aí mantém-se
-    ``repasse = 0`` como no ``apply_nf_panel_frete_gap_fallback``.
+    **B) Com tarifa ~0 e ``receita_frete_tp`` > 0:** imputa ``repasse = receita`` (inclui perfil em que a receita
+    coincide com o gap NF×lista). O ajuste ``+ receita − repasse`` em ``apply_nf_panel_resultado_frete_nota_lista``
+    fica neutro no frete TP; a DRE mostra receita e repasse alinhados.
+
+    **C) Rubrica plataforma:** onde tarifa ~0 e há receita TP, força ``custo_frete_plataforma = 0`` para o KPI não
+    contaminar a logística da plataforma com valor que é frete na NF / TP (o agregado comercial às vezes replica
+    esse montante no campo de plataforma).
     """
     need = {
         "receita_frete_tp",
@@ -985,19 +987,14 @@ def apply_nf_panel_frete_repasse_e_plataforma_coerencia(df: pd.DataFrame, *, eps
 
     rep = pd.to_numeric(out["repasse_frete_transportadora_propria"], errors="coerce").fillna(0.0)
     m_zero = (rep <= eps) & (rec > eps) & (tar <= eps) & (~inc)
-    gap_cols = {"valor_faturado_nf", "valor_venda", "n_linhas_pedido"}
-    if m_zero.any() and gap_cols.issubset(out.columns):
-        vf = pd.to_numeric(out["valor_faturado_nf"], errors="coerce").fillna(0.0)
-        vv = pd.to_numeric(out["valor_venda"], errors="coerce").fillna(0.0)
-        nl = pd.to_numeric(out["n_linhas_pedido"], errors="coerce").fillna(0).astype(int)
-        gap = vf - vv
-        gap_like = (nl == 1) & (gap > eps) & ((rec - gap).abs() <= 0.02)
-        m_zero = m_zero & ~gap_like
-    elif m_zero.any():
-        m_zero = pd.Series(False, index=out.index)
-
     if m_zero.any():
         out.loc[m_zero, "repasse_frete_transportadora_propria"] = rec.loc[m_zero].astype(float)
+
+    tar_c = pd.to_numeric(out["tarifa_custo_envio"], errors="coerce").fillna(0.0)
+    rec_c = pd.to_numeric(out["receita_frete_tp"], errors="coerce").fillna(0.0)
+    m_clean = (tar_c <= eps) & (rec_c > eps) & (~inc)
+    if m_clean.any():
+        out.loc[m_clean, "custo_frete_plataforma"] = 0.0
     return out
 
 

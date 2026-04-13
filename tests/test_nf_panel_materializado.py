@@ -59,13 +59,15 @@ def _fiscal_one_nf(*, frete_nota: float = 122.0) -> pd.DataFrame:
 
 
 def test_build_nf_panel_com_fiscal_receita_igual_frete_nota_export() -> None:
-    """Com fiscal, receita de frete não vem do gap comercial; resultado inclui ``Frete_Nota_Export``."""
+    """Com fiscal, receita = ``Frete_Nota_Export``; repasse = receita (coincide com gap NF×lista) → frete neutro."""
     line = _line_one_nf()
     df_nf = build_nf_materializado_dataframe(line)
     panel = build_nf_panel_materializado_dataframe(df_nf, _fiscal_one_nf(frete_nota=122.0))
     assert nf_panel_materializado_dataframe_valid(panel)
     assert abs(float(panel.iloc[0]["receita_frete_tp"]) - 122.0) < 1e-5
-    assert abs(float(panel.iloc[0]["resultado"]) - 107.95) < 1e-4
+    assert abs(float(panel.iloc[0]["repasse_frete_transportadora_propria"]) - 122.0) < 1e-4
+    assert abs(float(panel.iloc[0]["custo_frete_plataforma"])) < 1e-4
+    assert abs(float(panel.iloc[0]["resultado"]) - (-14.05)) < 1e-4
 
 
 def test_build_nf_panel_com_fiscal_nao_substitui_receita_pelo_gap_nf_lista() -> None:
@@ -88,8 +90,10 @@ def test_build_nf_panel_sem_fiscal_aplica_gap_e_resultado() -> None:
     assert nf_panel_materializado_dataframe_valid(panel)
     assert abs(float(panel.iloc[0]["receita_frete_tp"]) - 122.0) < 1e-6
     assert abs(float(panel.iloc[0]["tarifa_custo_envio"])) < 1e-6
-    # Resultado após frete na nota = 132; ADS = 3,5%×630 + 2 = 24,05 → 107,95
-    assert abs(float(panel.iloc[0]["resultado"]) - 107.95) < 1e-5
+    assert abs(float(panel.iloc[0]["repasse_frete_transportadora_propria"]) - 122.0) < 1e-4
+    assert abs(float(panel.iloc[0]["custo_frete_plataforma"])) < 1e-6
+    # Resultado: base 10 + receita − repasse = 10; ADS = 3,5%×630 + 2 = 24,05 → −14,05
+    assert abs(float(panel.iloc[0]["resultado"]) - (-14.05)) < 1e-4
     assert abs(float(panel.iloc[0]["custo_ads_variavel"]) - 22.05) < 1e-5
     assert abs(float(panel.iloc[0]["custo_ads_fixo"]) - 2.0) < 1e-6
     assert abs(float(panel.iloc[0]["custo_ads"]) - 24.05) < 1e-5

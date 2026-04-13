@@ -7,8 +7,9 @@ Quando ainda assim não casa, o caso típico é **org_id** vazio no materializad
 no fiscal (ou o inverso): o merge estrito em (org_id, empresa, NF) falha. O fallback usa só
 (empresa, NF) nas linhas comerciais sem org_id.
 
-**Receita de frete (painel):** ``receita_frete_tp`` vem **somente** de ``Frete_Nota_Export`` (frete destacado na NF),
-não do comercial. **Tarifa de envio** (``tarifa_custo_envio`` = Custo de Frete do pedido) vem só do comercial.
+**Receita de frete (painel):** ``receita_frete_tp`` vem **somente** de ``Frete_Nota_Export`` (frete na NF).
+**Custo frete plataforma** e **repasse transportadora própria** vêm do comercial (split ``Frete_Plataforma`` / ME vs TP
+em ``Custo de Frete``). **tarifa_custo_envio** continua sendo a soma total do frete no pedido (CF ou ``Frete_Plataforma``).
 """
 
 from __future__ import annotations
@@ -48,6 +49,8 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         "comissao",
         "custo_produto",
         "receita_frete_tp",
+        "custo_frete_plataforma",
+        "repasse_frete_transportadora_propria",
         "tarifa_custo_envio",
         "imposto",
         "despesa_fixa",
@@ -79,6 +82,8 @@ def merge_fiscal_base_with_commercial_nf_dataframe(
         merged["comissao"] = 0.0
         merged["custo_produto"] = 0.0
         merged["receita_frete_tp"] = 0.0
+        merged["custo_frete_plataforma"] = 0.0
+        merged["repasse_frete_transportadora_propria"] = 0.0
         merged["tarifa_custo_envio"] = 0.0
         merged["imposto"] = 0.0
         merged["despesa_fixa"] = 0.0

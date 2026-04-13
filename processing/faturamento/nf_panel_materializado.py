@@ -38,6 +38,8 @@ NF_PANEL_REQUIRED_COLUMNS: frozenset[str] = frozenset(
         "comissao",
         "custo_produto",
         "receita_frete_tp",
+        "custo_frete_plataforma",
+        "repasse_frete_transportadora_propria",
         "tarifa_custo_envio",
         "imposto",
         "despesa_fixa",
@@ -107,7 +109,7 @@ def build_nf_panel_materializado_dataframe(
 
     if not used_fiscal_merge:
         base = apply_nf_panel_frete_gap_fallback(base)
-    base = apply_nf_panel_resultado_frete_nota_lista(base, receita_frete_da_nf_fiscal=used_fiscal_merge)
+    base = apply_nf_panel_resultado_frete_nota_lista(base)
     base = apply_nf_panel_custo_ads(base)
     if "plataforma" not in base.columns:
         base = base.copy()

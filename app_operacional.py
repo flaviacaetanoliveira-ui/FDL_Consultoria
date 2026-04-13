@@ -5244,17 +5244,25 @@ def _render_fdl_fat_dre_nf_kpi_cards(
                 title="Σ Custo_Produto_Total (ou «Custo do Produto») no recorte.",
             ),
             _card(
-                "Receita de frete (TP)",
+                "Receita frete NF (transp. própria)",
                 _fmt_brl_ptbr_celula(kp.get("receita_frete_tp", 0.0)) or "R$ 0,00",
                 tier="secondary",
-                title="Soma por NF: valor pago pelo cliente em **transportadora própria** (split do «Custo de Frete») "
-                "+ imputação NF×lista quando aplicável. Não confundir com tarifa de envio.",
+                title="Frete cobrado na **nota fiscal** (coluna Frete → ``Frete_Nota_Export`` no materializado fiscal), "
+                "por NF. Fluxo de caixa: entra como receita e sai o **repasse** à transportadora (card seguinte).",
             ),
             _card(
-                "Tarifa de envio",
-                _fmt_brl_ptbr_celula(kp.get("tarifa_custo_envio", 0.0)) or "R$ 0,00",
+                "Custo frete plataforma",
+                _fmt_brl_ptbr_celula(kp.get("custo_frete_plataforma", 0.0)) or "R$ 0,00",
                 tier="secondary",
-                title="Soma da coluna **Custo de Frete** do relatório de pedidos (Mercado Envios + demais), por NF.",
+                title="Logística da plataforma (Mercado Envios / «Coleta do Mercado»): soma **Frete_Plataforma** ou "
+                "parcela ME do «Custo de Frete», por NF. Já descontada no **Resultado** por linha de pedido.",
+            ),
+            _card(
+                "Repasse frete transp. própria",
+                _fmt_brl_ptbr_celula(kp.get("repasse_frete_transportadora_propria", 0.0)) or "R$ 0,00",
+                tier="secondary",
+                title="Valor repassado à **transportadora própria**: parcela TP do «Custo de Frete» (modalidade ≠ ME), "
+                "por NF. Abatido no **Resultado** do painel para não inflar lucro.",
             ),
             _card(
                 "Imposto",
@@ -5449,7 +5457,8 @@ def _render_fdl_fat_dre_nf_gerencial(
     enc_com = _fmt_brl_ptbr_encargo_dre(kp["comissao"])
     enc_custo = _fmt_brl_ptbr_encargo_dre(kp.get("custo_produto", 0.0))
     rec_frete_disp = _fmt_brl_ptbr_celula(float(kp.get("receita_frete_tp", 0.0))) or "R$ 0,00"
-    enc_tarifa = _fmt_brl_ptbr_encargo_dre(float(kp.get("tarifa_custo_envio", 0.0)))
+    enc_frete_plat = _fmt_brl_ptbr_encargo_dre(float(kp.get("custo_frete_plataforma", 0.0)))
+    enc_repasse_tp = _fmt_brl_ptbr_encargo_dre(float(kp.get("repasse_frete_transportadora_propria", 0.0)))
     enc_imp = _fmt_brl_ptbr_encargo_dre(kp["imposto"])
     enc_df = _fmt_brl_ptbr_encargo_dre(kp["despesa_fixa"])
     enc_ads_v = _fmt_brl_ptbr_encargo_dre(float(kp.get("custo_ads_variavel", 0.0)))
@@ -5512,13 +5521,13 @@ def _render_fdl_fat_dre_nf_gerencial(
             ),
         )
         + _dre_row(
-            "Receita de frete (transportadora própria)",
+            "Receita de frete na NF (transportadora própria)",
             rec_frete_disp,
             title=(
-                "Valor pago pelo cliente em **transportadora própria** (split do «Custo de Frete» nas linhas de pedido) "
-                "e imputação NF×lista quando aplicável. **Não** inclui tarifa Mercado Envios."
+                "Frete destacado na **nota fiscal** (``Frete_Nota_Export``). Cobrado do cliente; o repasse à transportadora "
+                "aparece como encargo abaixo."
                 if valor_faturado_from_fiscal_parquet
-                else "Parcela TP do frete + gap nota quando aplicável."
+                else "Frete na NF (materializado fiscal) quando disponível; senão imputação NF×lista no grão comercial."
             ),
         )
         + _dre_row(

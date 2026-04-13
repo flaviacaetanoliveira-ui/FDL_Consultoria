@@ -30,8 +30,6 @@ _NF_PANEL_ALIGN_REQUIRED: frozenset[str] = frozenset(
         "comissao",
         "custo_produto",
         "receita_frete_tp",
-        "custo_frete_plataforma",
-        "repasse_frete_transportadora_propria",
         "tarifa_custo_envio",
         "imposto",
         "despesa_fixa",

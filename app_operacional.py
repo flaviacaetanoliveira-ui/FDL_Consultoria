@@ -7115,11 +7115,22 @@ def _render_faturamento_dre_commercial_complement_banner(
     """
     st.subheader("Análise comercial (complemento)")
     if aligned_to_fiscal_base and fiscal_parquet_ok and ok_nf_dates:
+        _plat_kpi = (
+            " Com **Plataforma** selecionada, os KPIs abaixo são **subconjunto** por canal (o **topo fiscal** continua **sem** plataforma)."
+            if kpi_subset_by_platform
+            else ""
+        )
         st.caption(
-            "Usa o **mesmo período de emissão** e **empresa(s)** do topo **Base fiscal**. "
-            "Cada linha = uma NF do conjunto **N_base**; dados de venda, custos e resultado vêm do **enriquecimento comercial** "
-            "(painel materializado) e **podem faltar** em parte das notas — por isso os totais comerciais são interpretados "
-            "com cobertura parcial, sem retirar a NF do universo."
+            "Usa o **mesmo período de emissão**, **empresa(s)** e **situação NF** (se filtrada) do topo **Base fiscal**. "
+            "Cada linha dos KPIs = uma NF desse **N_base** fiscal"
+            + (" após o filtro de **Plataforma**, quando aplicável." if kpi_subset_by_platform else "; dados de venda, custos e resultado vêm do **enriquecimento comercial** ")
+            + (
+                ""
+                if kpi_subset_by_platform
+                else "(painel materializado) e **podem faltar** em parte das notas — por isso os totais comerciais são interpretados "
+                "com cobertura parcial, sem retirar a NF do universo."
+            )
+            + _plat_kpi
         )
     elif fiscal_parquet_ok and not ok_nf_dates:
         st.caption(

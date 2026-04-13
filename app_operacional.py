@@ -86,6 +86,7 @@ from faturamento_dre_recorte_minimo import (
     compute_commercial_coverage_stats,
     compute_nf_panel_kpis,
     faturamento_min_series_nf_emissao_bounds_dates,
+    faturamento_nf_situacao_select_options,
     faturamento_recorte_min_state_from_session,
     nf_grain_plataforma_label_for_ui,
     nf_grain_plataforma_match_key,
@@ -4982,6 +4983,20 @@ def _faturamento_nf_apply_minimal_recorte(
     return out
 
 
+def _faturamento_nf_filter_by_situacao(
+    df_nf: pd.DataFrame,
+    situacoes_sel: tuple[str, ...],
+) -> pd.DataFrame:
+    """Restringe por ``Nota_Situacao`` (case-insensitive), alinhado a ``build_faturamento_fiscal_base_slice``."""
+    if df_nf.empty or not situacoes_sel:
+        return df_nf
+    want = {str(x).strip().casefold() for x in situacoes_sel if str(x).strip()}
+    if not want or "Nota_Situacao" not in df_nf.columns:
+        return df_nf
+    s = df_nf["Nota_Situacao"].fillna("").astype(str).str.strip()
+    return df_nf.loc[s.str.casefold().isin(want)].copy()
+
+
 def _faturamento_fiscal_apply_minimal_recorte(
     df_fiscal: pd.DataFrame,
     *,
@@ -7025,8 +7040,9 @@ def _render_faturamento_dre_fiscal_base_top(
     nf_d_ini: date,
     nf_d_fim: date,
     fiscal_parquet_ok: bool,
+    situacoes_nf_sel: tuple[str, ...] = (),
 ) -> None:
-    """Topo do painel: conjunto base fiscal (empresa + emissão), comparável ao Bling — independente de filtros comerciais."""
+    """Topo do painel: conjunto base fiscal (empresa + emissão), comparável ao Bling — sem plataforma/produto comercial."""
     st.subheader("Base fiscal (emissão da NF)")
     _emp_lbl = (
         ", ".join(str(x).strip() for x in empresas_sel if str(x).strip())
@@ -7037,10 +7053,20 @@ def _render_faturamento_dre_fiscal_base_top(
         _per = f"{nf_d_ini.strftime('%d/%m/%Y')} — {nf_d_fim.strftime('%d/%m/%Y')}"
     else:
         _per = "período de emissão indisponível"
+    _sit_lbl = (
+        ", ".join(str(x).strip() for x in situacoes_nf_sel if str(x).strip())
+        if situacoes_nf_sel
+        else ""
+    )
+    _sit_seg = (
+        f" · **Situação NF (filtro):** {_sit_lbl}"
+        if _sit_lbl
+        else " · **Situação NF:** todas as situações válidas do materializado (exc. cancelada/denegada/inutilizada)"
+    )
     st.caption(
         f"**Empresa(s):** {_emp_lbl} · **Período emissão NF:** {_per} · "
-        f"**N_base:** **{stats.n_nf}** nota(s) válida(s) no recorte · "
-        "Totais abaixo **não** usam filtro de plataforma, produto nem resultado comercial."
+        f"**N_base:** **{stats.n_nf}** nota(s) no recorte{_sit_seg} · "
+        "Totais abaixo **não** usam filtro de **plataforma**, produto nem resultado comercial."
     )
     if not fiscal_parquet_ok:
         st.info(
@@ -7056,13 +7082,19 @@ def _render_faturamento_dre_fiscal_base_top(
         st.metric(
             label="Total faturado (fiscal)",
             value=_fmt_brl_ptbr_celula(stats.valor_liquido_fiscal_sum) or "R$ 0,00",
-            help="Soma de Valor_Liquido_NF (1× por NF) no Parquet fiscal, após empresa + emissão + situação válida.",
+            help=(
+                "Soma de Valor_Liquido_NF (1× por NF) no Parquet fiscal, após empresa + emissão + situação válida "
+                "(e filtro opcional de **Situação da NF** na barra de filtros)."
+            ),
         )
     with c2:
         st.metric(
             label="Nº de NFs emitidas (base fiscal)",
             value=_fmt_int_ptbr(stats.n_nf),
-            help="Contagem de notas distintas no mesmo conjunto base (comparável a relatório de notas emitidas).",
+            help=(
+                "Contagem de notas distintas no mesmo conjunto base (comparável a relatório de notas emitidas), "
+                "incluindo o filtro opcional de **Situação da NF**."
+            ),
         )
     _fdl_fat_min_vsp(size="sm")
     st.divider()
@@ -7075,6 +7107,7 @@ def _render_faturamento_dre_commercial_complement_banner(
     aligned_to_fiscal_base: bool,
     ok_nf_dates: bool,
     fiscal_parquet_ok: bool,
+    kpi_subset_by_platform: bool = False,
 ) -> None:
     """
     Bloco imediatamente abaixo do topo fiscal: deixa explícito que os KPIs/DRE comerciais são complemento
@@ -7106,8 +7139,9 @@ def _render_faturamento_dre_commercial_complement_banner(
                 label="Notas no universo dos KPIs",
                 value=_fmt_int_ptbr(coverage.n_total),
                 help=(
-                    "Número de linhas usadas em **cards** e **DRE** comerciais: igual a **N_base** quando o fiscal está ativo; "
-                    "caso contrário, NFs do painel após empresa + emissão."
+                    "Número de linhas usadas em **cards** e **DRE** comerciais: com fiscal ativo, coincide com **N_base** "
+                    "do topo quando **Plataforma** está vazia; com **Plataforma** selecionada, é o **subconjunto** comercial "
+                    "nesse canal (ainda alinhado ao fiscal por NF). Sem Parquet fiscal: NFs do painel após empresa + emissão."
                 ),
             )
         with _r1[1]:
@@ -7141,7 +7175,13 @@ def _render_faturamento_dre_commercial_complement_banner(
                 value=_fmt_int_ptbr(coverage.n_com_resultado_numerico),
                 help="Notas onde o resultado consolidado existe (pode ser 0).",
             )
-    if aligned_to_fiscal_base and ok_nf_dates and n_fiscal_base != coverage.n_total and _is_admin_mode():
+    if (
+        aligned_to_fiscal_base
+        and ok_nf_dates
+        and n_fiscal_base != coverage.n_total
+        and _is_admin_mode()
+        and not kpi_subset_by_platform
+    ):
         st.caption(
             f"**Admin:** N_base no topo = **{n_fiscal_base}** · linhas no frame alinhado = **{coverage.n_total}** — esperado igual; investigar chaves de merge."
         )
@@ -7191,12 +7231,15 @@ def _render_faturamento_dre_minimal(
         and isinstance(df_fiscal_pre, pd.DataFrame)
         and fiscal_contract_dataframe_valid(df_fiscal_pre)
     )
+    use_fiscal_kpi = bool(
+        use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame) and fiscal_contract_dataframe_valid(df_fiscal_pre)
+    )
 
     st.caption(
-        "Dados de **`dataset_faturamento_nf_panel.parquet`** (materializado). O **topo «Base fiscal»** permanece a referência "
-        "principal (**Parquet fiscal**, empresa, emissão, **N_base**). Abaixo, o bloco **Análise comercial (complemento)** e os "
-        "**cards/DRE** usam o **mesmo período e empresa** do topo, alinhados à **N_base** quando o fiscal está disponível; "
-        "a **tabela** pode ser um **subconjunto** após **plataforma**, produto e sinal de resultado."
+        "Dados de **`dataset_faturamento_nf_panel.parquet`** (materializado). O **topo «Base fiscal»** é a referência "
+        "principal (**Parquet fiscal**, empresa, emissão, **N_base**; filtro opcional **Situação da NF**). **Cards** e **DRE** "
+        "comerciais usam o **mesmo período, empresa e situação** do topo, **mais** o filtro **Plataforma** quando preenchido "
+        "(o topo **não** usa plataforma). A **tabela** aplica ainda **produto** e **sinal** de resultado."
     )
 
     if not use_nf_panel_baked_effective:
@@ -7308,6 +7351,12 @@ def _render_faturamento_dre_minimal(
     else:
         plats = []
 
+    _sit_opts: list[str] = []
+    if isinstance(df_nf_pre, pd.DataFrame) and not df_nf_pre.empty and "Nota_Situacao" in df_nf_pre.columns:
+        _sit_opts = faturamento_nf_situacao_select_options(df_nf_pre)
+    elif use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame) and "Nota_Situacao" in df_fiscal_pre.columns:
+        _sit_opts = faturamento_nf_situacao_select_options(df_fiscal_pre)
+
     _plat_expl = (
         "Filtra notas pela plataforma consolidada no grão NF (materializado)."
         if use_nf_materializado
@@ -7315,16 +7364,16 @@ def _render_faturamento_dre_minimal(
     )
     if use_fiscal_parquet:
         _plat_expl += (
-            " O **topo fiscal** acima **não** usa este filtro. Plataforma restringe a **tabela** e os filtros **produto/resultado** "
-            "(mesmo recorte empresa + emissão); **cards** e **DRE** comerciais usam **todas** as NFs do **N_base**."
+            " O **topo fiscal** **não** usa **Plataforma**. Com Parquet fiscal ativo, **Plataforma** restringe **cards**, **DRE** "
+            "e **tabela** (e as opções de produto/resultado), mantendo **valor faturado (NF)** por NF alinhado ao fiscal."
         )
     _plat_help = "Plataforma: " + _plat_expl
 
     with st.container(border=True):
         st.subheader("Filtros")
         st.caption(
-            "**Empresa** e **período de emissão** alinham ao **topo Base fiscal** e ao universo dos **cards/DRE** comerciais. "
-            "**Plataforma** refina sobretudo a **vista em tabela** (e as opções de produto/resultado), não o **N_base**."
+            "**Empresa**, **Situação da NF** (opcional) e **período de emissão** definem o **topo Base fiscal** e o núcleo dos "
+            "**cards/DRE**. **Plataforma** (opcional) **não** altera o topo; refina **cards/DRE** e **tabela** no mesmo período."
         )
         if emp_opts:
             if "fdl_fat_min_emp" not in st.session_state:
@@ -7343,6 +7392,20 @@ def _render_faturamento_dre_minimal(
                 placeholder="Todas",
             )
         _multiselect_stable("fdl_fat_min_plat", "Plataforma", plats, help=_plat_help)
+        if _sit_opts:
+            _multiselect_stable(
+                "fdl_fat_min_nf_sit",
+                "Situação da NF",
+                _sit_opts,
+                help=(
+                    "**Vazio** = todas as situações válidas já admitidas no materializado (exceto cancelada/denegada/inutilizada). "
+                    "Com valor selecionado, restringe o **topo fiscal**, **cards/DRE** e **tabela** às situações indicadas."
+                ),
+            )
+        else:
+            if "fdl_fat_min_nf_sit" not in st.session_state:
+                st.session_state["fdl_fat_min_nf_sit"] = []
+            st.caption("Situação da NF: sem valores distintos no recorte atual — filtro indisponível.")
         if ok_nf_dates:
             r_nf = st.columns((1, 1))
             with r_nf[0]:
@@ -7373,11 +7436,12 @@ def _render_faturamento_dre_minimal(
                 "Limpar filtros desta vista",
                 key="fdl_fat_min_reset",
                 use_container_width=True,
-                help="Repor empresa, plataforma, datas de emissão NF, produto e sinal do resultado ao padrão.",
+                help="Repor empresa, plataforma, situação NF, datas de emissão NF, produto e sinal do resultado ao padrão.",
             ):
                 for _k in (
                     "fdl_fat_min_emp",
                     "fdl_fat_min_plat",
+                    "fdl_fat_min_nf_sit",
                     "fdl_fat_min_nf_d_ini",
                     "fdl_fat_min_nf_d_fim",
                     "fdl_fat_min_nf_bounds_sig",
@@ -7409,6 +7473,7 @@ def _render_faturamento_dre_minimal(
         nf_d_ini=_nf_kpi_ini,
         nf_d_fim=_nf_kpi_fim,
         ok_nf_dates=ok_nf_dates,
+        situacoes_sel=_min_state.situacoes_nf,
     )
     _render_faturamento_dre_fiscal_base_top(
         stats=_fiscal_base_stats,
@@ -7418,6 +7483,7 @@ def _render_faturamento_dre_minimal(
         nf_d_ini=_nf_kpi_ini,
         nf_d_fim=_nf_kpi_fim,
         fiscal_parquet_ok=use_fiscal_parquet,
+        situacoes_nf_sel=_min_state.situacoes_nf,
     )
 
     df_nf_scope_emissao = _faturamento_nf_apply_minimal_recorte(
@@ -7428,11 +7494,16 @@ def _render_faturamento_dre_minimal(
         nf_d_fim=_nf_kpi_fim,
         ok_nf_dates=ok_nf_dates,
     )
+    df_nf_scope_emissao = _faturamento_nf_filter_by_situacao(df_nf_scope_emissao, _min_state.situacoes_nf)
     _commercial_kpi_aligned_fiscal = bool(not _df_fiscal_base.empty)
     if _commercial_kpi_aligned_fiscal:
         df_nf_commercial_kpi = build_nf_panel_aligned_to_fiscal_base(_df_fiscal_base, df_nf_scope_emissao)
     else:
         df_nf_commercial_kpi = df_nf_scope_emissao.copy()
+    if _min_state.plataformas:
+        df_nf_commercial_kpi = _nf_panel_filter_merged_fiscal_by_plataforma_resumo(
+            df_nf_commercial_kpi, _min_state.plataformas
+        )
     _commercial_coverage = compute_commercial_coverage_stats(df_nf_commercial_kpi)
     _render_faturamento_dre_commercial_complement_banner(
         coverage=_commercial_coverage,
@@ -7440,6 +7511,7 @@ def _render_faturamento_dre_minimal(
         aligned_to_fiscal_base=_commercial_kpi_aligned_fiscal,
         ok_nf_dates=ok_nf_dates,
         fiscal_parquet_ok=use_fiscal_parquet,
+        kpi_subset_by_platform=bool(_min_state.plataformas),
     )
 
     # Só chegamos aqui com painel materializado válido: recorte = filtrar linhas já agregadas (sem recomputar DRE).
@@ -7451,6 +7523,7 @@ def _render_faturamento_dre_minimal(
         nf_d_fim=_nf_kpi_fim,
         ok_nf_dates=ok_nf_dates,
     )
+    df_nf_lines = _faturamento_nf_filter_by_situacao(df_nf_lines, _min_state.situacoes_nf)
     df_nf_commercial = df_nf_lines.copy()
     if "plataforma_resumo" not in df_nf_commercial.columns:
         if "plataforma" in df_nf_commercial.columns:
@@ -7460,9 +7533,6 @@ def _render_faturamento_dre_minimal(
         else:
             df_nf_commercial["plataforma_resumo"] = "—"
 
-    use_fiscal_kpi = bool(
-        use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame) and fiscal_contract_dataframe_valid(df_fiscal_pre)
-    )
     df_nf = df_nf_commercial.copy()
     if use_fiscal_kpi and _min_state.plataformas:
         df_nf = _nf_panel_filter_merged_fiscal_by_plataforma_resumo(

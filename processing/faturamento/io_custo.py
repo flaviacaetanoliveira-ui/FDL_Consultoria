@@ -42,7 +42,13 @@ def _raw_custo_cell_as_str(v: object) -> str:
         return s0
     if isinstance(v, (int, np.integer)):
         return str(int(v))
-    return str(v).strip()
+    s = str(v).strip()
+    if not s or s.lower() in ("nan", "none", "nat"):
+        return ""
+    # ``read_excel(..., dtype=str)`` devolve «168.338» (ponto decimal); ``_parse_number_scalar`` trataria como milhar.
+    if "," not in s and "." in s and re.fullmatch(r"-?\d+\.\d+", s.replace(" ", "")):
+        return s.replace(".", ",")
+    return s
 
 
 def _detect_custo_header_row(raw: pd.DataFrame) -> tuple[int, int, int] | None:

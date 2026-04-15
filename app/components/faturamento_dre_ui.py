@@ -23,6 +23,7 @@ def fat_dre_premium_css() -> str:
     """CSS adicional (injeta após estilos base do painel NF-first)."""
     return """
 <style>
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 .fdl-fat-premium {
   --fdl-primary: #1a56db;
   --fdl-success: #059669;
@@ -30,7 +31,9 @@ def fat_dre_premium_css() -> str:
   --fdl-warning: #d97706;
   --fdl-neutral-100: #f8fafc;
   --fdl-neutral-200: #e2e8f0;
+  --fdl-neutral-500: #6b7280;
   --fdl-neutral-800: #1e293b;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 .fdl-fat-sec-rule {
   display: flex;
@@ -85,7 +88,6 @@ def fat_dre_premium_css() -> str:
 .fdl-fat-kpi-hero-card--margem.fdl-fat-kpi--mid::before { background: var(--fdl-warning); }
 .fdl-fat-kpi-hero-card--margem.fdl-fat-kpi--neg::before { background: var(--fdl-danger); }
 .fdl-fat-kpi-hero-label {
-  font-family: var(--font, "Source Sans Pro", sans-serif);
   font-size: 0.78rem;
   font-weight: 600;
   color: #64748b;
@@ -94,7 +96,6 @@ def fat_dre_premium_css() -> str:
   margin: 0 0 6px 0;
 }
 .fdl-fat-kpi-hero-value {
-  font-family: var(--font, "Source Sans Pro", sans-serif);
   font-size: 2.5rem;
   font-weight: 700;
   line-height: 1.08;
@@ -125,7 +126,6 @@ def fat_dre_premium_css() -> str:
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .fdl-fat-kpi-mid-label {
-  font-family: var(--font, "Source Sans Pro", sans-serif);
   font-size: 0.72rem;
   font-weight: 600;
   color: #64748b;
@@ -134,7 +134,6 @@ def fat_dre_premium_css() -> str:
   margin: 0 0 6px 0;
 }
 .fdl-fat-kpi-mid-value {
-  font-family: var(--font, "Source Sans Pro", sans-serif);
   font-size: 1.8rem;
   font-weight: 600;
   color: #0f172a;
@@ -149,7 +148,6 @@ def fat_dre_premium_css() -> str:
   margin: 4px 0 6px 0;
 }
 .fdl-fat-kpi-chip {
-  font-family: var(--font, "Source Sans Pro", sans-serif);
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
@@ -179,7 +177,6 @@ def fat_dre_premium_css() -> str:
   max-width: min(52rem, 100%);
   margin: 0;
   padding: 0;
-  font-family: var(--font, "Source Sans Pro", sans-serif);
 }
 .fdl-fat-dre-premium-card {
   border: 1px solid #e2e8f0;
@@ -233,8 +230,11 @@ def fat_dre_premium_css() -> str:
   font-size: 0.875rem;
   color: #1e293b;
 }
+.fdl-fat-premium .fdl-fat-dre-tree-glyph,
+.fdl-fat-premium .fdl-fat-dre-tree-val {
+  font-family: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+}
 .fdl-fat-dre-tree-glyph {
-  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "JetBrains Mono", monospace;
   font-size: 0.8rem;
   color: #94a3b8;
   margin-right: 6px;
@@ -242,7 +242,6 @@ def fat_dre_premium_css() -> str:
 }
 .fdl-fat-dre-tree-lab { min-width: 0; line-height: 1.35; }
 .fdl-fat-dre-tree-val {
-  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "JetBrains Mono", monospace;
   font-size: 1rem;
   font-weight: 500;
   text-align: right;
@@ -253,25 +252,48 @@ def fat_dre_premium_css() -> str:
 .fdl-fat-dre-tree-val--neg { color: var(--fdl-danger); }
 .fdl-fat-dre-tree-val--amber { color: var(--fdl-warning); font-weight: 600; }
 .fdl-fat-dre-tree-val--pos { color: var(--fdl-success); font-weight: 700; }
-.fdl-fat-dre-details {
+.fdl-fat-dre-section.fdl-fat-dre-deducoes {
   margin: 4px 12px 12px 12px;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   background: #fafbfc;
   padding: 0;
 }
-.fdl-fat-dre-details > summary {
+.fdl-fat-dre-deducoes summary.fdl-fat-dre-section-title {
   cursor: pointer;
   list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 10px 14px;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 800;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
   color: #475569;
 }
-.fdl-fat-dre-details > summary::-webkit-details-marker { display: none; }
-.fdl-fat-dre-details[open] > summary { border-bottom: 1px solid #e2e8f0; }
+.fdl-fat-dre-deducoes summary.fdl-fat-dre-section-title::-webkit-details-marker {
+  display: none;
+}
+.fdl-fat-dre-deducoes summary.fdl-fat-dre-section-title::marker {
+  content: "";
+}
+.fdl-fat-dre-deducoes[open] summary.fdl-fat-dre-section-title {
+  border-bottom: 1px solid #e2e8f0;
+}
+.fdl-fat-dre-toggle {
+  font-size: 0.75rem;
+  color: var(--fdl-neutral-500, #6b7280);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+  margin-left: 0.75rem;
+}
+.fdl-fat-dre-deducoes[open] .fdl-fat-dre-toggle {
+  transform: rotate(0deg);
+}
+.fdl-fat-dre-deducoes:not([open]) .fdl-fat-dre-toggle {
+  transform: rotate(-90deg);
+}
 .fdl-fat-dre-close-block {
   margin: 10px 14px 14px 14px;
   padding: 12px 14px;
@@ -462,8 +484,9 @@ def build_dre_gerencial_premium_html(
         + _tree_row("├─", "Receita frete (transp. própria)", rec_frete_fmt)
         + _tree_row("└─", "Diferença (lista − fiscal)", diferenca_fmt, val_class=dif_cls)
         + "</div>"
-        '<details class="fdl-fat-dre-details" open>'
-        "<summary>Deduções</summary>"
+        '<details class="fdl-fat-dre-section fdl-fat-dre-deducoes" open>'
+        '<summary class="fdl-fat-dre-section-title">DEDUÇÕES'
+        '<span class="fdl-fat-dre-toggle" aria-hidden="true">▼</span></summary>'
         f'<div class="fdl-fat-dre-tree" style="border-left:none;margin-left:8px">{enc_inner}</div>'
         "</details>"
         '<div class="fdl-fat-dre-close-block">'

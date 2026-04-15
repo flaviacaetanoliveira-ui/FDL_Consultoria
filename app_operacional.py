@@ -684,12 +684,12 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin-bottom: 0.48rem !important;
             }
             .fdl-sb-brand-shell {
-              margin: 0.06rem 0 0.12rem 0;
-              padding: 0.72rem 0.56rem 0.62rem;
+              margin: 0.06rem 0 0.35rem 0;
+              padding: 1rem 0.75rem 0.85rem;
               border-radius: 12px;
-              background: rgba(255, 255, 255, 0.92);
-              border: 1px solid rgba(203, 213, 225, 0.65);
-              box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+              background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 55%, #e8eef5 100%);
+              border: 1px solid #e2e8f0;
+              box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
             }
             .fdl-sb-brand {
               margin: 0;
@@ -697,25 +697,24 @@ def _fdl_sidebar_inject_layout_css() -> None:
             }
             .fdl-sb-wordmark {
               display: block;
-              margin: 0 auto 0.5rem auto;
+              margin: 0 auto 0.35rem auto;
               max-width: 100%;
               padding: 0 0.1rem;
               text-align: center;
-              font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-                "Helvetica Neue", Arial, sans-serif;
-              line-height: 1.16;
+              font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+              line-height: 1.2;
             }
             .fdl-sb-wordmark-fdl {
-              font-size: 1.2rem;
+              font-size: 1.28rem;
               font-weight: 800;
-              letter-spacing: -0.045em;
-              color: #070f18;
+              letter-spacing: -0.04em;
+              color: #1a56db;
             }
             .fdl-sb-wordmark-analytics {
               font-size: 1.05rem;
-              font-weight: 500;
-              letter-spacing: -0.028em;
-              color: #5c6a78;
+              font-weight: 600;
+              letter-spacing: -0.02em;
+              color: #334155;
             }
             .fdl-sb-tagline {
               font-size: 0.6875rem;
@@ -726,46 +725,61 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin: 0 0 0.65rem 0;
             }
             .fdl-sb-tagline--after-logo {
-              margin-top: 0.14rem;
-              margin-bottom: 0.55rem;
+              margin-top: 0.1rem;
+              margin-bottom: 0.5rem;
               padding: 0 0.45rem;
               text-align: center;
-              font-size: 0.59375rem;
+              font-size: 0.75rem;
               font-weight: 500;
-              letter-spacing: 0.048em;
-              color: #9ca8b5;
+              font-style: italic;
+              letter-spacing: 0.02em;
+              color: #64748b;
               line-height: 1.45;
             }
             .fdl-sb-client-row {
               margin: 0;
-              padding-top: 0.56rem;
-              border-top: 1px solid rgba(226, 232, 240, 0.6);
+              padding-top: 0.65rem;
+              border-top: 1px solid rgba(226, 232, 240, 0.85);
             }
             .fdl-sb-client-block {
               display: flex;
-              flex-direction: column;
+              flex-direction: row;
               align-items: center;
-              text-align: center;
-              gap: 0.36rem;
+              gap: 0.5rem;
+              padding: 0.55rem 0.45rem;
+              margin-top: 0.15rem;
+              background: #f1f5f9;
+              border-radius: 8px;
+              border: 1px solid rgba(226, 232, 240, 0.9);
             }
             .fdl-sb-brand-shell .fdl-sb-client-block {
-              align-items: stretch;
               text-align: left;
             }
+            .fdl-sb-client-icon {
+              font-size: 1.2rem;
+              line-height: 1;
+              flex-shrink: 0;
+            }
+            .fdl-sb-client-text {
+              display: flex;
+              flex-direction: column;
+              gap: 0.12rem;
+              min-width: 0;
+            }
             .fdl-sb-client-tag {
-              font-size: 0.46875rem;
-              font-weight: 500;
+              font-size: 0.5625rem;
+              font-weight: 600;
               text-transform: uppercase;
-              letter-spacing: 0.15em;
-              color: #c5ced8;
-              line-height: 1.3;
+              letter-spacing: 0.12em;
+              color: #94a3b8;
+              line-height: 1.2;
             }
             .fdl-sb-client-name {
-              font-size: 0.9375rem;
+              font-size: 0.9rem;
               font-weight: 600;
-              letter-spacing: -0.02em;
+              letter-spacing: -0.015em;
               color: #1e293b;
-              line-height: 1.45;
+              line-height: 1.35;
               word-break: break-word;
             }
             .fdl-sb-divider {
@@ -774,17 +788,17 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin: 0.62rem 0 0.12rem 0;
             }
             .fdl-sb-section-label {
-              font-size: 0.59375rem;
+              font-size: 0.65rem;
               font-weight: 700;
-              text-transform: none;
-              letter-spacing: 0.1em;
-              color: #64748b;
-              margin: 1.2rem 0 0.48rem 0;
-              padding: 0 0.12rem 0.42rem 0.12rem;
+              text-transform: uppercase;
+              letter-spacing: 0.14em;
+              color: #94a3b8;
+              margin: 1.05rem 0 0.42rem 0;
+              padding: 0 0.12rem 0.38rem 0.12rem;
               border-radius: 0;
               background: transparent;
               border: none;
-              border-bottom: 1px solid rgba(148, 163, 184, 0.45);
+              border-bottom: 1px solid rgba(226, 232, 240, 0.95);
               box-shadow: none;
               line-height: 1.35;
             }
@@ -805,25 +819,24 @@ def _fdl_sidebar_inject_layout_css() -> None:
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"] {
               font-weight: 600 !important;
               letter-spacing: -0.012em !important;
-              color: #0f172a !important;
-              background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
-              border: 1px solid rgba(226, 232, 240, 0.9) !important;
-              border-left: 2px solid #475569 !important;
+              color: #ffffff !important;
+              background: linear-gradient(180deg, #2563eb 0%, #1a56db 100%) !important;
+              border: 1px solid #1d4ed8 !important;
               border-radius: 10px !important;
               box-shadow:
-                0 1px 0 rgba(255, 255, 255, 0.9) inset,
-                0 1px 3px rgba(15, 23, 42, 0.035) !important;
+                0 1px 0 rgba(255, 255, 255, 0.2) inset,
+                0 2px 6px rgba(26, 86, 219, 0.25) !important;
               padding-top: 0.56rem !important;
               padding-bottom: 0.56rem !important;
               min-height: 2.65rem !important;
               transition: box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease !important;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"]:hover {
-              border-color: rgba(203, 213, 225, 0.95) !important;
-              border-left-color: #334155 !important;
+              border-color: #1e40af !important;
+              background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%) !important;
               box-shadow:
-                0 1px 0 rgba(255, 255, 255, 0.95) inset,
-                0 2px 8px rgba(15, 23, 42, 0.05) !important;
+                0 1px 0 rgba(255, 255, 255, 0.22) inset,
+                0 3px 10px rgba(26, 86, 219, 0.32) !important;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"] {
               font-weight: 500 !important;
@@ -846,6 +859,29 @@ def _fdl_sidebar_inject_layout_css() -> None:
                 0 1px 0 rgba(255, 255, 255, 0.85) inset,
                 0 2px 6px rgba(15, 23, 42, 0.04) !important;
             }
+            /* Sair: único botão tertiary na sidebar (não conflita com nav primary/secondary). */
+            [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="tertiary"] {
+              width: 100% !important;
+              font-weight: 600 !important;
+              letter-spacing: -0.01em !important;
+              color: #b91c1c !important;
+              border: 1px solid rgba(220, 38, 38, 0.42) !important;
+              border-radius: 10px !important;
+              background: linear-gradient(180deg, #ffffff 0%, #fff1f2 100%) !important;
+              padding-top: 0.52rem !important;
+              padding-bottom: 0.52rem !important;
+              min-height: 2.52rem !important;
+              box-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) inset !important;
+              transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease !important;
+            }
+            [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="tertiary"]:hover {
+              border-color: rgba(185, 28, 28, 0.72) !important;
+              background: linear-gradient(180deg, #fef2f2 0%, #fee2e2 100%) !important;
+              color: #991b1b !important;
+              box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.75) inset,
+                0 2px 6px rgba(185, 28, 28, 0.12) !important;
+            }
             .fdl-sb-footer-rule {
               height: 1px;
               margin: 0.78rem 0 0;
@@ -855,23 +891,56 @@ def _fdl_sidebar_inject_layout_css() -> None:
               margin: 0.48rem 0 0 0;
               padding: 0 0.2rem 0.12rem;
             }
+            .fdl-sb-footer-dados {
+              display: flex;
+              align-items: flex-start;
+              gap: 0.45rem;
+              margin: 0.15rem 0 0.35rem 0;
+              padding: 0.35rem 0.15rem 0;
+            }
+            .fdl-sb-footer-dados-icon {
+              font-size: 0.95rem;
+              line-height: 1.2;
+              flex-shrink: 0;
+              opacity: 0.85;
+            }
+            .fdl-sb-footer-dados-text {
+              display: flex;
+              flex-direction: column;
+              gap: 0.08rem;
+              min-width: 0;
+            }
             .fdl-sb-footer-label {
-              font-size: 0.53125rem;
+              font-size: 0.5625rem;
               font-weight: 600;
               text-transform: uppercase;
-              letter-spacing: 0.12em;
+              letter-spacing: 0.1em;
               color: #94a3b8;
-              margin: 0 0 0.26rem 0;
+              margin: 0;
               line-height: 1.25;
             }
             .fdl-sb-footer-ts {
               font-size: 0.8125rem;
               font-weight: 600;
               font-variant-numeric: tabular-nums;
-              color: #3d4d5c;
-              margin: 0 0 0.38rem 0;
-              line-height: 1.4;
-              letter-spacing: 0.015em;
+              font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+              color: #475569;
+              margin: 0;
+              line-height: 1.35;
+              letter-spacing: 0.02em;
+            }
+            .fdl-sb-footer-dados-line {
+              font-size: 0.8125rem;
+              font-weight: 500;
+              color: #64748b;
+              margin: 0;
+              line-height: 1.45;
+              letter-spacing: 0.01em;
+            }
+            .fdl-sb-footer-dados-line .fdl-sb-footer-ts {
+              font-size: inherit;
+              font-weight: 600;
+              color: #475569;
             }
             .fdl-sb-footer-admin {
               font-size: 0.65rem;
@@ -11235,9 +11304,11 @@ with st.sidebar:
         "</div>"
         f'<div class="fdl-sb-tagline fdl-sb-tagline--after-logo">{html.escape(_sb_tagline)}</div>'
         '<div class="fdl-sb-client-row"><div class="fdl-sb-client-block">'
-        '<span class="fdl-sb-client-tag">Conta</span>'
+        '<span class="fdl-sb-client-icon" aria-hidden="true">👤</span>'
+        '<div class="fdl-sb-client-text">'
+        '<span class="fdl-sb-client-tag">Cliente</span>'
         f'<span class="fdl-sb-client-name">{_cli_nome}</span>'
-        "</div></div>"
+        "</div></div></div>"
     )
     st.markdown(
         '<div class="fdl-sb-brand-shell">'
@@ -11269,10 +11340,10 @@ with st.sidebar:
             if _first_nav_section
             else "fdl-sb-section-label"
         )
-        st.markdown(f'<p class="{_sec_cls}">Gerencial</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="{_sec_cls}">GERENCIAL</p>', unsafe_allow_html=True)
         _first_nav_section = False
         st.button(
-            _lbl_fat_dre,
+            f"📊 {_lbl_fat_dre}",
             key="fdl_mod_faturamento_dre",
             use_container_width=True,
             type="primary" if _sb_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE else "secondary",
@@ -11283,7 +11354,7 @@ with st.sidebar:
             ),
         )
         st.button(
-            "Comercial & pedidos",
+            "🛒 Comercial & pedidos",
             key="fdl_mod_comercial_pedidos",
             use_container_width=True,
             type="primary" if _sb_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS else "secondary",
@@ -11300,7 +11371,7 @@ with st.sidebar:
             if _first_nav_section
             else "fdl-sb-section-label"
         )
-        st.markdown(f'<p class="{_sec_cls}">Operacional</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="{_sec_cls}">OPERACIONAL</p>', unsafe_allow_html=True)
         _first_nav_section = False
 
         if _sb_area == FDL_PRODUCT_AREA_FINANCEIRO and _nomes_nav:
@@ -11339,7 +11410,7 @@ with st.sidebar:
 
         if "repasse" in _enabled_modules:
             st.button(
-                _lbl_repasse,
+                f"💸 {_lbl_repasse}",
                 key="fdl_mod_repasse",
                 use_container_width=True,
                 type="primary"
@@ -11349,7 +11420,7 @@ with st.sidebar:
             )
         if "frete" in _enabled_modules:
             st.button(
-                _lbl_frete,
+                f"🚚 {_lbl_frete}",
                 key="fdl_mod_frete",
                 use_container_width=True,
                 type="primary"
@@ -11359,7 +11430,7 @@ with st.sidebar:
             )
         if "devolucoes" in _enabled_modules:
             st.button(
-                _lbl_devolucoes,
+                f"↩️ {_lbl_devolucoes}",
                 key="fdl_mod_devolucoes",
                 use_container_width=True,
                 type="primary"
@@ -11373,12 +11444,18 @@ with st.sidebar:
     _ts_parts = str(_sb_ts_display).strip().split(None, 1)
     _ts_d = _ts_parts[0] if _ts_parts else "—"
     _ts_t = _ts_parts[1] if len(_ts_parts) > 1 else ""
-    _ts_line = f"{_ts_d} • {_ts_t}" if _ts_t else _ts_d
+    _ts_d_esc = html.escape(_ts_d)
+    _ts_t_esc = html.escape(_ts_t) if _ts_t else ""
+    _dados_inner = f"Dados de <span class=\"fdl-sb-footer-ts\">{_ts_d_esc}</span>"
+    if _ts_t_esc:
+        _dados_inner += f' <span class="fdl-sb-footer-ts">às {_ts_t_esc}</span>'
     st.markdown(
         '<div class="fdl-sb-footer">'
-        '<p class="fdl-sb-footer-label">Atualizado em</p>'
-        f'<p class="fdl-sb-footer-ts">{html.escape(_ts_line)}</p>'
-        "</div>",
+        '<div class="fdl-sb-footer-dados">'
+        '<span class="fdl-sb-footer-dados-icon" aria-hidden="true">🕐</span>'
+        '<div class="fdl-sb-footer-dados-text">'
+        f'<p class="fdl-sb-footer-dados-line">{_dados_inner}</p>'
+        "</div></div></div>",
         unsafe_allow_html=True,
     )
     if _admin_mode:
@@ -11398,7 +11475,7 @@ with st.sidebar:
         use_container_width=True,
         help="Limpa caches e recarrega os dados a partir da fonte configurada.",
         key="fdl_sb_admin_refresh",
-        type="primary",
+        type="secondary",
     ):
         st.cache_data.clear()
         for _k in list(st.session_state.keys()):
@@ -11406,16 +11483,15 @@ with st.sidebar:
                 st.session_state.pop(_k, None)
         st.rerun()
 
-    _lo1, _lo2, _lo3 = st.columns([1, 2.2, 1])
-    with _lo2:
-        st.button(
-            "Sair",
-            use_container_width=True,
-            help="Encerra a sessão neste navegador.",
-            type="secondary",
-            key="fdl_sb_logout",
-            on_click=_sb_logout_click,
-        )
+    st.button(
+        "Sair",
+        icon="🚪",
+        use_container_width=True,
+        help="Encerra a sessão neste navegador.",
+        type="tertiary",
+        key="fdl_sb_logout",
+        on_click=_sb_logout_click,
+    )
 
 _fdl_global_trace("05: após sidebar — antes do hero / painel principal")
 

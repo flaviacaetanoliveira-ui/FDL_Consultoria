@@ -7431,8 +7431,11 @@ def _render_faturamento_dre_minimal(
     st.divider()
     _fdl_fat_min_vsp(size="md")
 
+    _FAT_NF_TABLE_STYLER_MAX_ROWS = 500
+
     _nf_table_cols_order = [
         "Emissão",
+        "Status",
         "Empresa",
         "Plataforma",
         "NF",
@@ -7443,7 +7446,6 @@ def _render_faturamento_dre_minimal(
         "Venda (lista)",
         "Faturado (NF)",
         "Diferença",
-        "Status",
         "Comissão",
         "Custo produto",
         "Receita frete NF",
@@ -7522,6 +7524,7 @@ def _render_faturamento_dre_minimal(
                 "Emissão": _series_nf_emissao_pt_br(
                     _df_get_series_column(_df_nf_table, "Nota_Data_Emissao")
                 ),
+                "Status": _res_line_nf.map(_nf_status_label_nf),
                 "Empresa": _series_empty_str_to_dash(_df_get_series_column(_df_nf_table, "empresa")),
                 "Plataforma": _plat_s,
                 "NF": _df_get_series_column(_df_nf_table, "Nota_Numero_Normalizado")
@@ -7536,7 +7539,6 @@ def _render_faturamento_dre_minimal(
                 "Venda (lista)": pd.to_numeric(_df_nf_table["valor_venda"], errors="coerce"),
                 "Faturado (NF)": pd.to_numeric(_df_nf_table["valor_faturado_nf"], errors="coerce"),
                 "Diferença": pd.to_numeric(_df_nf_table["diferenca"], errors="coerce"),
-                "Status": _res_line_nf.map(_nf_status_label_nf),
                 "Comissão": pd.to_numeric(_df_nf_table["comissao"], errors="coerce"),
                 "Custo produto": pd.to_numeric(_custo_s, errors="coerce").fillna(0.0),
                 "Receita frete NF": pd.to_numeric(
@@ -7640,6 +7642,7 @@ def _render_faturamento_dre_minimal(
     _cfg_nf: dict[str, NumberColumn | TextColumn] = {}
     _nf_col_help: dict[str, str | None] = {
         "Emissão": None,
+        "Status": "Lucro, prejuízo ou empate conforme o **resultado** consolidado da NF (materializado).",
         "Empresa": None,
         "Plataforma": None,
         "NF": None,
@@ -7663,7 +7666,6 @@ def _render_faturamento_dre_minimal(
             if use_fiscal_kpi
             else "Venda (lista) − Faturado (NF)."
         ),
-        "Status": "Lucro, prejuízo ou empate conforme o **resultado** consolidado da NF (materializado).",
         "Comissão": "Comercial: soma das comissões das linhas de pedido ligadas à NF." if use_fiscal_kpi else None,
         "Custo produto": (
             "Comercial: Σ **Custo_Produto_Total** (ou «Custo do Produto») das linhas de pedido ligadas à NF."
@@ -7715,6 +7717,7 @@ def _render_faturamento_dre_minimal(
     }
     _nf_col_width: dict[str, str] = {
         "Emissão": "small",
+        "Status": "small",
         "Empresa": "medium",
         "Plataforma": "small",
         "NF": "small",
@@ -7725,7 +7728,6 @@ def _render_faturamento_dre_minimal(
         "Venda (lista)": "medium",
         "Faturado (NF)": "medium",
         "Diferença": "small",
-        "Status": "small",
         "Comissão": "small",
         "Custo produto": "medium",
         "Receita frete NF": "small",
@@ -7821,30 +7823,51 @@ def _render_faturamento_dre_minimal(
         _slice_num = _disp_nf_full.iloc[_i0 : _i0 + _nf_page_sz].reset_index(drop=True)
         _slice_ui_r = _slice_ui.reset_index(drop=True)
 
+        def _nf_style_status_col(s: pd.Series) -> list[str]:
+            out: list[str] = []
+            for v in s.astype(object):
+                vs = str(v).strip()
+                if vs == "Lucro":
+                    out.append(
+                        "background-color: #dcfce7; color: #166534; font-weight: 500; font-size: 0.75rem"
+                    )
+                elif vs == "Prejuízo":
+                    out.append(
+                        "background-color: #fee2e2; color: #991b1b; font-weight: 500; font-size: 0.75rem"
+                    )
+                elif vs == "Empate":
+                    out.append(
+                        "background-color: #f3f4f6; color: #6b7280; font-weight: 500; font-size: 0.75rem"
+                    )
+                else:
+                    out.append("")
+            return out
+
         def _nf_row_highlight_fat(r: pd.Series) -> list[str]:
             ri = r.name
             try:
                 res = float(pd.to_numeric(_slice_num.loc[ri, "Resultado"], errors="coerce"))
             except Exception:
                 res = 0.0
-            try:
-                mg = float(pd.to_numeric(_slice_num.loc[ri, "Margem %"], errors="coerce"))
-            except Exception:
-                mg = float("nan")
-            c = ""
-            if res < 0:
-                c = "background-color: #fef2f2"
-            elif not math.isnan(mg) and mg < 0:
-                c = "background-color: #fffbeb"
+            c = "background-color: #fef2f2" if res < 0 else ""
             return [c] * len(r)
 
         _h_tbl = min(440, 132 + 34 * min(len(_slice_ui_r), 14))
         _df_arg: object = _slice_ui_r
-        if _FAT_DRE_UI_V2 and (not _fdl_safe_mode()) and int(_slice_ui_r.size) < 200_000:
+        _nf_styler_ok = (not _fdl_safe_mode()) and int(_slice_ui_r.size) < 200_000
+        if _nf_styler_ok:
             try:
-                _df_arg = _slice_ui_r.style.apply(_nf_row_highlight_fat, axis=1)
+                _st_obj = _slice_ui_r.style.apply(_nf_style_status_col, subset=["Status"], axis=0)
+                if _nf_total_rows <= _FAT_NF_TABLE_STYLER_MAX_ROWS:
+                    _st_obj = _st_obj.apply(_nf_row_highlight_fat, axis=1)
+                _df_arg = _st_obj
             except Exception:
                 _df_arg = _slice_ui_r
+        if _nf_total_rows > _FAT_NF_TABLE_STYLER_MAX_ROWS and _nf_styler_ok:
+            st.caption(
+                "Realce de **linha** para prejuízo só em recortes com até **500** notas; a coluna **Status** "
+                "continua destacada em todas as páginas."
+            )
         st.dataframe(
             _df_arg,
             use_container_width=True,

@@ -8,7 +8,15 @@ from typing import Any
 
 import pandas as pd
 
-from .config import CUSTO_COL_PRECO, CUSTO_SHEET_NAME, CUSTO_SKU_COL
+from .config import (
+    CUSTO_COL_PRECO,
+    CUSTO_COL_VALOR_EAP,
+    CUSTO_COL_VALOR_GENERIC,
+    CUSTO_COL_VALOR_MEGA,
+    CUSTO_COL_VALOR_STAR_GAMA,
+    CUSTO_SHEET_NAME,
+    CUSTO_SKU_COL,
+)
 
 
 def _header_token(cell: object) -> str:
@@ -47,6 +55,52 @@ def _detect_custo_header_row(raw: pd.DataFrame) -> tuple[int, int, int] | None:
     return None
 
 
+def _normalize_wide_custo_sheet_if_applicable(df0: pd.DataFrame) -> pd.DataFrame | None:
+    """
+    Planilha com cabeçalho na linha 0: ``Código``/``CÓDIGO`` + colunas de preço por empresa
+    (``VALOR DE COMPRA MEGA``, ``VALOR COMPRA EAP``, ``VALOR COMPRA STAR/GAMA``, ``VALOR DE COMPRA`` genérico).
+
+    Não altera o fluxo legado (só ``Código`` + ``PREÇO DE CUSTO com IPI`` em nomes canónicos): devolve ``None``.
+    """
+    code_src: str | None = None
+    price_src: dict[str, str] = {}
+    has_legacy_preco = False
+
+    for c in df0.columns:
+        t = _header_token(c)
+        if t in ("codigo", "codigo sku", "sku"):
+            if code_src is None:
+                code_src = str(c)
+        elif t == "valor de compra mega":
+            price_src[CUSTO_COL_VALOR_MEGA] = str(c)
+        elif t == "valor compra eap":
+            price_src[CUSTO_COL_VALOR_EAP] = str(c)
+        elif t in ("valor compra star/gama", "valor compra star gama"):
+            price_src[CUSTO_COL_VALOR_STAR_GAMA] = str(c)
+        elif t == "valor de compra":
+            price_src[CUSTO_COL_VALOR_GENERIC] = str(c)
+        elif t == "preco de custo com ipi":
+            has_legacy_preco = True
+            price_src[CUSTO_COL_PRECO] = str(c)
+
+    if code_src is None:
+        return None
+
+    multi_empresa = any(
+        k in price_src for k in (CUSTO_COL_VALOR_MEGA, CUSTO_COL_VALOR_EAP, CUSTO_COL_VALOR_STAR_GAMA)
+    )
+    if not multi_empresa and not (CUSTO_COL_VALOR_GENERIC in price_src):
+        return None
+    if not multi_empresa and has_legacy_preco and len(price_src) == 1:
+        return None
+
+    out = pd.DataFrame()
+    out[CUSTO_SKU_COL] = df0[code_src].astype(str)
+    for canon, src in sorted(price_src.items(), key=lambda x: x[0]):
+        out[canon] = df0[src].astype(str)
+    return out
+
+
 def _frame_from_detection(raw: pd.DataFrame, header_idx: int, sj: int, pj: int) -> pd.DataFrame:
     rows: list[tuple[str, str]] = []
     for ii in range(header_idx + 1, len(raw)):
@@ -68,6 +122,17 @@ def load_custo_xlsx(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
         raise FileNotFoundError(f"Tabela de custo não encontrada: {path}")
 
     df0 = pd.read_excel(path, sheet_name=CUSTO_SHEET_NAME, dtype=str).dropna(axis=1, how="all")
+
+    df_wide = _normalize_wide_custo_sheet_if_applicable(df0)
+    if df_wide is not None:
+        meta_w: dict[str, Any] = {
+            "path": str(path),
+            "sheet": CUSTO_SHEET_NAME,
+            "custo_reader": "wide_empresa_columns",
+            "custo_columns": [c for c in df_wide.columns if c != CUSTO_SKU_COL],
+        }
+        return df_wide, meta_w
+
     missing0 = [c for c in (CUSTO_SKU_COL, CUSTO_COL_PRECO) if c not in df0.columns]
     if not missing0:
         meta: dict[str, Any] = {"path": str(path), "sheet": CUSTO_SHEET_NAME, "custo_reader": "header_row_0"}

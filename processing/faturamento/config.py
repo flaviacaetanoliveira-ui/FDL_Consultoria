@@ -7,6 +7,12 @@ CUSTO_SHEET_NAME = "Planilha1"
 CUSTO_COL_PRECO = "PREÇO DE CUSTO com IPI"
 CUSTO_SKU_COL = "Código"
 
+# Custos.xlsx — colunas por empresa (Grupo Mega Fácil e afins). Nomes canónicos após ``load_custo_xlsx``.
+CUSTO_COL_VALOR_MEGA = "VALOR DE COMPRA MEGA"
+CUSTO_COL_VALOR_EAP = "VALOR COMPRA EAP"
+CUSTO_COL_VALOR_STAR_GAMA = "VALOR COMPRA STAR/GAMA"
+CUSTO_COL_VALOR_GENERIC = "VALOR DE COMPRA"
+
 # Preço unitário de custo vindo do XLSX; custo total na linha = Quantidade × Custo_Unitario
 CUSTO_UNITARIO_COL = "Custo_Unitario"
 

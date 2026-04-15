@@ -1,23 +1,14 @@
-"""Join pedidos ↔ custo por SKU (Código)."""
+"""Join pedidos ↔ custo por SKU (Código); coluna de preço conforme a empresa na planilha wide."""
 from __future__ import annotations
 
 import pandas as pd
 
-from .config import CUSTO_COL_PRECO, CUSTO_SKU_COL, CUSTO_UNITARIO_COL, SKU_NORMALIZADO_COL
-from .normalize import normalize_sku_key, to_numeric_br
+from .custo_por_empresa import join_custo_produto_por_empresa
 
 
-def join_custo_produto(df_pedidos: pd.DataFrame, df_custo: pd.DataFrame) -> pd.DataFrame:
-    p = df_pedidos.copy()
-    c = df_custo[[CUSTO_SKU_COL, CUSTO_COL_PRECO]].copy()
-    p["_sku_join"] = normalize_sku_key(p[CUSTO_SKU_COL])
-    p[SKU_NORMALIZADO_COL] = p["_sku_join"]
-    c["_sku_join"] = normalize_sku_key(c[CUSTO_SKU_COL])
-    c = c.drop_duplicates(subset=["_sku_join"], keep="first")
-    right = c.rename(columns={CUSTO_COL_PRECO: CUSTO_UNITARIO_COL})[
-        ["_sku_join", CUSTO_UNITARIO_COL]
-    ]
-    right[CUSTO_UNITARIO_COL] = to_numeric_br(right[CUSTO_UNITARIO_COL])
-    out = p.merge(right, on="_sku_join", how="left")
-    out = out.drop(columns=["_sku_join"])
-    return out
+def join_custo_produto(df_pedidos: pd.DataFrame, df_custo: pd.DataFrame, *, empresa: str | None = None) -> pd.DataFrame:
+    """
+    ``empresa``: rótulo da empresa (ex.: ``Gama Home``) para escolher a coluna de custo em ``Custos.xlsx`` wide.
+    ``None`` no build V1 ou quando a folha só tem uma coluna de preço.
+    """
+    return join_custo_produto_por_empresa(df_pedidos, df_custo, empresa)

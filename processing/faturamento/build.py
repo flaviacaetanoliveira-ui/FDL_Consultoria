@@ -160,7 +160,7 @@ def _build_faturamento_dataset_v1(params: FaturamentoParams, params_path: Path) 
     df_c, meta_custo = load_custo_xlsx(custo_path)
     assert_sku_unique_custo(df_c)
 
-    df = join_custo_produto(df_p, df_c)
+    df = join_custo_produto(df_p, df_c, empresa=None)
     assert_all_skus_have_custo(df)
     df = assign_custo_audit_columns(df, frozenset())
     df, meta_ml_fees_v1 = allocate_multiloja_order_level_fees(df)
@@ -221,7 +221,7 @@ def _build_faturamento_dataset_v2(
         if "pedidos_arquivo" not in df_p.columns:
             df_p["pedidos_arquivo"] = str(meta_ped.get("arquivo", ""))
 
-        df_j = join_custo_produto(df_p, df_c)
+        df_j = join_custo_produto(df_p, df_c, empresa=emp.empresa)
         df_j = assign_custo_audit_columns(df_j, dup_keys)
         df_j, meta_ml_fees = allocate_multiloja_order_level_fees(df_j)
 

@@ -12,7 +12,8 @@ from typing import Any
 
 import pandas as pd
 
-from .config import CUSTO_COL_PRECO, CUSTO_SKU_COL, CUSTO_UNITARIO_COL, STATUS_CUSTO_OK
+from .config import CUSTO_SKU_COL, CUSTO_UNITARIO_COL, STATUS_CUSTO_OK
+from .custo_por_empresa import build_custo_unitario_map_por_empresa
 from .io_notas_saida import filtrar_notas_canceladas, load_notas_saida_from_dir
 from .join_notas import _df_col_as_series, _filtrar_notas_por_empresa, _prep_notas_dataframe
 from .normalize import normalize_pedido_join_key, normalize_sku_key, to_numeric_br
@@ -38,12 +39,9 @@ def _detect_col_quantidade(columns: list) -> str:
     return ""
 
 
-def _custo_unitario_por_sku_normalizado(df_custo: pd.DataFrame) -> pd.Series:
-    c = df_custo[[CUSTO_SKU_COL, CUSTO_COL_PRECO]].copy()
-    c["_sku_join"] = normalize_sku_key(c[CUSTO_SKU_COL])
-    c = c.drop_duplicates(subset=["_sku_join"], keep="first")
-    c[CUSTO_COL_PRECO] = to_numeric_br(c[CUSTO_COL_PRECO])
-    return c.set_index("_sku_join")[CUSTO_COL_PRECO]
+def _custo_unitario_por_sku_normalizado(df_custo: pd.DataFrame, empresa: str | None) -> pd.Series:
+    s_map, _meta = build_custo_unitario_map_por_empresa(df_custo, empresa)
+    return s_map
 
 
 def compute_custo_total_por_nf_desde_itens_notas(
@@ -80,7 +78,7 @@ def compute_custo_total_por_nf_desde_itens_notas(
     if prep.empty:
         return pd.Series(dtype="float64"), meta
 
-    cu_map = _custo_unitario_por_sku_normalizado(df_custo)
+    cu_map = _custo_unitario_por_sku_normalizado(df_custo, empresa)
     cu = prep["_sku_item"].map(cu_map)
     line_cost = prep["_qtd_item"].astype(float) * pd.to_numeric(cu, errors="coerce").fillna(0.0)
     meta["custo_nf_itens_linhas_com_custo"] = int((cu.notna() & (cu > 0)).sum())

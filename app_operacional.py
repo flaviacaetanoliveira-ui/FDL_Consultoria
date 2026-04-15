@@ -92,6 +92,22 @@ from faturamento_dre_recorte_minimo import (
     nf_grain_plataforma_match_key,
     nf_grain_plataforma_ui_options,
 )
+
+try:
+    from app.components.faturamento_dre_ui import (
+        build_dre_gerencial_premium_html,
+        build_kpi_nf_premium_shell_html,
+        fat_dre_premium_css,
+        faturamento_section_rule_html,
+    )
+
+    _FAT_DRE_UI_V2 = True
+except ImportError:
+    _FAT_DRE_UI_V2 = False
+    build_dre_gerencial_premium_html = None  # type: ignore[misc,assignment]
+    build_kpi_nf_premium_shell_html = None  # type: ignore[misc,assignment]
+    fat_dre_premium_css = lambda: ""  # type: ignore[misc,assignment]
+    faturamento_section_rule_html = lambda _lbl: ""  # type: ignore[misc,assignment]
 from fdl_paths import resolve_pasta_vendas_ml
 from operacional_app_context import (
     SESSION_ACTIVE_ORG_KEY,
@@ -5098,6 +5114,7 @@ def _nf_row_margem_resultado_venda_ratio(valor_venda: pd.Series, resultado: pd.S
     return (rr / denom).where(vv.notna() & rr.notna())
 
 
+
 def _render_fdl_fat_dre_nf_kpi_cards(
     *,
     kp: dict[str, float | int],
@@ -5107,310 +5124,66 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     fat_dre_faturado_mode: str = "nf_first",
 ) -> None:
     """
-    Cards executivos NF-first (Faturamento & DRE): duas linhas, hierarquia visual.
-    Com ``valor_faturado_from_fiscal_parquet=True``, ``kp`` vem do frame alinhado ao **N_base** fiscal (empresa + emissão
-    + situação NF se filtrada), **com** filtro **Plataforma** quando selecionado; **sem** produto/sinal da tabela.
+    Cards executivos NF-first (Faturamento & DRE): hierarquia em 3 níveis (resultado/margem, venda/faturado, chips).
     """
+    if not _FAT_DRE_UI_V2 or build_kpi_nf_premium_shell_html is None:
+        c1, c2, c3, c4 = st.columns(4)
+        vf = _fmt_brl_ptbr_celula(kp["valor_faturado_nf"]) if ok_nf_dates else "—"
+        with c1:
+            st.metric("Valor da venda", _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00")
+        with c2:
+            st.metric("Faturado (NF)", vf or "—")
+        with c3:
+            st.metric("Resultado", _fmt_brl_ptbr_celula(kp["resultado"]) or "—")
+        with c4:
+            st.metric("Margem %", _margem_sobre_venda_str(float(kp["resultado"]), float(kp["valor_venda"])))
+        return
+
     vv = float(kp["valor_venda"])
     res = float(kp["resultado"])
-    vf_str = (
-        _fmt_brl_ptbr_celula(kp["valor_faturado_nf"]) if ok_nf_dates else "—"
-    )
+    dif_f = float(kp.get("diferenca", 0.0))
+    vf_str = _fmt_brl_ptbr_celula(kp["valor_faturado_nf"]) if ok_nf_dates else "—"
     dif_str = _fmt_brl_ptbr_celula(kp["diferenca"]) if ok_nf_dates else "—"
     margem_str = _margem_sobre_venda_str(res, vv)
+    venda_fmt = _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00"
+    res_fmt = _fmt_brl_ptbr_celula(kp["resultado"]) or "—"
 
-    _ht_vf = (
-        "Soma de **valor_faturado_nf** = **Valor_Liquido_NF** do Parquet fiscal por NF, no recorte dos cards: **N_base** "
-        "(empresa + emissão + situação NF se filtrada), **com** **Plataforma** quando selecionada — **sem** produto/sinal da tabela."
-        if valor_faturado_from_fiscal_parquet
-        else (
-            "Soma de Nota_Valor_Liquido_Total uma vez por NF no período de emissão da NF "
-            "(materializado NF-first / linhas ligadas)."
-        )
-    )
-    _ht_dif = (
-        "Σ **valor da venda (lista)** − Σ **faturado (NF)** no mesmo universo dos cards (N_base + situação + plataforma se filtrada). "
-        "NFs só fiscais contribuem com venda 0 na ponte; ver cobertura no bloco **Análise comercial (complemento)**."
-        if valor_faturado_from_fiscal_parquet
-        else "Valor da venda total menos valor faturado total (NF) no recorte."
-    )
-    _ht_df = (
-        "5% do Valor da venda (Σ Quantidade × Preço de lista) agregado à NF, por nota."
-    )
-    _ht_res = (
-        "Comercial: Σ resultado por NF **já líquido de ADS** (3,5% × venda lista + R$ 2 por NF com venda > 0), "
-        "no universo dos cards (N_base + situação + plataforma se filtrada). NFs sem resultado numérico (NaN) **não** entram na soma."
-        if valor_faturado_from_fiscal_parquet
-        else (
-            "Valores já consolidados no materializado NF-first (Resultado / Despesa fixa), no recorte atual dos filtros."
-            if use_nf_materializado
-            else (
-                "Soma do Resultado das linhas de pedido da NF; recompõe despesa fixa quando aplicável "
-                "para alinhar ao corte único por NF."
-            )
-        )
-    )
-    _ht_mg = (
-        "Σ Resultado ÷ Σ Valor da venda (lista) no universo dos cards (N_base + situação + plataforma se filtrada; sem produto/sinal)."
-        if valor_faturado_from_fiscal_parquet
-        else (
-            "Σ Resultado ÷ Σ Valor da venda no recorte. Valor da venda = Quantidade × Preço de lista. "
-            "Se Σ Valor da venda = 0, exibe traço."
-        )
-    )
+    ads_sum = float(kp.get("custo_ads_variavel", 0.0)) + float(kp.get("custo_ads_fixo", 0.0))
+    chips: list[tuple[str, str]] = [
+        ("Comissão", _fmt_brl_ptbr_celula(kp["comissao"]) or "R$ 0,00"),
+        ("Custo produto", _fmt_brl_ptbr_celula(kp.get("custo_produto", 0.0)) or "R$ 0,00"),
+        ("Frete plataforma", _fmt_brl_ptbr_celula(kp.get("custo_frete_plataforma", 0.0)) or "R$ 0,00"),
+        ("Repasse transp. própr.", _fmt_brl_ptbr_celula(kp.get("repasse_frete_transportadora_propria", 0.0)) or "R$ 0,00"),
+        ("Imposto", _fmt_brl_ptbr_celula(kp["imposto"]) or "R$ 0,00"),
+        ("Despesa fixa", _fmt_brl_ptbr_celula(kp["despesa_fixa"]) or "R$ 0,00"),
+        ("ADS (3,5% + fixo)", _fmt_brl_ptbr_celula(ads_sum) or "R$ 0,00"),
+    ]
 
-    def _card(
-        label: str,
-        value: str,
-        *,
-        tier: str,
-        accent: bool = False,
-        title: str | None = None,
-    ) -> str:
-        classes = f"fdl-fat-kpi-card fdl-fat-kpi-card--{tier}"
-        if accent:
-            classes += " fdl-fat-kpi-card--accent"
-        tattr = ""
-        if title:
-            tattr = f' title="{html.escape(title, quote=True)}"'
-        return (
-            f'<div class="{classes}"{tattr}>'
-            f'<div class="fdl-fat-kpi-label">{html.escape(label)}</div>'
-            f'<div class="fdl-fat-kpi-value">{html.escape(value)}</div>'
-            "</div>"
-        )
-
-    primary_inner = "".join(
-        [
-            _card(
-                "Valor da venda (lista)" if valor_faturado_from_fiscal_parquet else "Valor da venda",
-                _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00",
-                tier="primary",
-                title=(
-                    "Comercial: Σ Quantidade × Preço de lista por NF no universo dos cards (N_base + situação + plataforma se filtrada); "
-                    "sem produto/sinal da tabela."
-                    if valor_faturado_from_fiscal_parquet
-                    else "Σ Quantidade × Preço de lista no recorte (grão NF)."
-                ),
-            ),
-            _card(
-                (
-                    "Valor faturado (NF) · fiscal"
-                    if valor_faturado_from_fiscal_parquet
-                    else "Valor faturado (NF)"
-                ),
-                vf_str or "—",
-                tier="primary",
-                title=_ht_vf,
-            ),
-            _card(
-                "Resultado",
-                _fmt_brl_ptbr_celula(kp["resultado"]) or "—",
-                tier="primary",
-                accent=True,
-                title=_ht_res,
-            ),
-            _card(
-                "Margem % · comercial" if valor_faturado_from_fiscal_parquet else "Margem %",
-                margem_str,
-                tier="primary",
-                accent=True,
-                title=_ht_mg,
-            ),
-        ]
-    )
-
-    secondary_inner = "".join(
-        [
-            _card(
-                (
-                    "Diferença (venda lista − fiscal NF)"
-                    if valor_faturado_from_fiscal_parquet
-                    else "Diferença (venda − NF)"
-                ),
-                dif_str or "—",
-                tier="secondary",
-                title=_ht_dif,
-            ),
-            _card(
-                "Comissão",
-                _fmt_brl_ptbr_celula(kp["comissao"]) or "R$ 0,00",
-                tier="secondary",
-            ),
-            _card(
-                "Custo produto",
-                _fmt_brl_ptbr_celula(kp.get("custo_produto", 0.0)) or "R$ 0,00",
-                tier="secondary",
-                title="Σ Custo_Produto_Total (ou «Custo do Produto») no recorte.",
-            ),
-            _card(
-                "Receita frete NF (transp. própria)",
-                _fmt_brl_ptbr_celula(kp.get("receita_frete_tp", 0.0)) or "R$ 0,00",
-                tier="secondary",
-                title="Frete cobrado na **nota fiscal** (coluna Frete → ``Frete_Nota_Export`` no materializado fiscal), "
-                "por NF. Fluxo de caixa: entra como receita e sai o **repasse** à transportadora (card seguinte).",
-            ),
-            _card(
-                "Custo frete plataforma",
-                _fmt_brl_ptbr_celula(kp.get("custo_frete_plataforma", 0.0)) or "R$ 0,00",
-                tier="secondary",
-                title="Logística da plataforma (Mercado Envios / «Coleta do Mercado»): soma **Frete_Plataforma** ou "
-                "parcela ME do «Custo de Frete», por NF. Já descontada no **Resultado** por linha de pedido.",
-            ),
-            _card(
-                "Repasse frete transp. própria",
-                _fmt_brl_ptbr_celula(kp.get("repasse_frete_transportadora_propria", 0.0)) or "R$ 0,00",
-                tier="secondary",
-                title="Valor repassado à **transportadora própria**: parcela TP do «Custo de Frete» (modalidade ≠ ME), "
-                "por NF. Abatido no **Resultado** do painel para não inflar lucro.",
-            ),
-            _card(
-                "Imposto",
-                _fmt_brl_ptbr_celula(kp["imposto"]) or "R$ 0,00",
-                tier="secondary",
-            ),
-            _card(
-                "Despesa fixa",
-                _fmt_brl_ptbr_celula(kp["despesa_fixa"]) or "R$ 0,00",
-                tier="secondary",
-                title=_ht_df,
-            ),
-            _card(
-                "ADS 3,5% (lista)",
-                _fmt_brl_ptbr_celula(kp.get("custo_ads_variavel", 0.0)) or "R$ 0,00",
-                tier="secondary",
-                title=(
-                    "Σ 3,5% × venda (lista) por NF no universo dos **cards** (N_base + situação + plataforma se filtrada)."
-                    if valor_faturado_from_fiscal_parquet
-                    else "Σ 3,5% × valor da venda (lista) por NF no recorte (materializado)."
-                ),
-            ),
-            _card(
-                "ADS fixo (R$/NF)",
-                _fmt_brl_ptbr_celula(kp.get("custo_ads_fixo", 0.0)) or "R$ 0,00",
-                tier="secondary",
-                title=(
-                    "Σ R$ 2,00 por NF com venda (lista) > 0 no universo dos **cards** (N_base + situação + plataforma se filtrada)."
-                    if valor_faturado_from_fiscal_parquet
-                    else "Σ R$ 2,00 por NF com venda (lista) > 0 — mesma regra do painel materializado."
-                ),
-            ),
-        ]
-    )
-
-    st.markdown(
-        dedent(
-            """
-            <style>
-            .fdl-fat-kpi-shell {
-              font-family: var(--font, "Source Sans Pro", sans-serif);
-              margin: 0 0 20px 0;
-            }
-            .fdl-fat-kpi-row {
-              display: flex;
-              flex-wrap: wrap;
-              gap: 12px;
-              margin-bottom: 14px;
-            }
-            .fdl-fat-kpi-row--secondary {
-              gap: 10px;
-              margin-bottom: 0;
-            }
-            .fdl-fat-kpi-card {
-              flex: 1 1 0;
-              min-width: 148px;
-              background: #ffffff;
-              border: 1px solid #cbd5e1;
-              border-radius: 12px;
-              padding: 14px 16px;
-              box-sizing: border-box;
-              box-shadow: 0 2px 6px rgba(15, 23, 42, 0.055);
-            }
-            .fdl-fat-kpi-card--primary {
-              padding: 16px 18px;
-              min-width: 158px;
-            }
-            .fdl-fat-kpi-card--primary.fdl-fat-kpi-card--accent {
-              background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-              border-color: #94a3b8;
-              box-shadow: 0 2px 8px rgba(15, 23, 42, 0.07);
-            }
-            .fdl-fat-kpi-card--secondary {
-              padding: 11px 13px;
-              min-width: 118px;
-            }
-            .fdl-fat-kpi-label {
-              font-size: 0.68rem;
-              font-weight: 600;
-              color: #475569;
-              line-height: 1.3;
-              margin: 0 0 8px 0;
-              letter-spacing: 0.04em;
-              text-transform: uppercase;
-            }
-            .fdl-fat-kpi-card--secondary .fdl-fat-kpi-label {
-              font-size: 0.625rem;
-              margin-bottom: 7px;
-              letter-spacing: 0.035em;
-            }
-            .fdl-fat-kpi-value {
-              font-size: 1.48rem;
-              font-weight: 700;
-              color: #0f172a;
-              line-height: 1.12;
-              font-variant-numeric: tabular-nums;
-              letter-spacing: -0.03em;
-            }
-            .fdl-fat-kpi-card--primary .fdl-fat-kpi-value {
-              font-size: 1.62rem;
-              font-weight: 800;
-            }
-            .fdl-fat-kpi-card--primary.fdl-fat-kpi-card--accent .fdl-fat-kpi-value {
-              font-size: 1.75rem;
-            }
-            .fdl-fat-kpi-card--secondary .fdl-fat-kpi-value {
-              font-size: 1.12rem;
-              font-weight: 700;
-              color: #1e293b;
-            }
-            .fdl-fat-kpi-mode {
-              margin: 0 0 10px 0;
-              font-size: 0.7rem;
-              color: #64748b;
-              letter-spacing: 0.02em;
-            }
-            .fdl-fat-kpi-mode-pill {
-              display: inline-block;
-              padding: 3px 10px;
-              border-radius: 999px;
-              background: #f1f5f9;
-              border: 1px solid #e2e8f0;
-              color: #475569;
-              font-weight: 600;
-            }
-            .fdl-fat-kpi-mode-pill--fiscal {
-              background: #ecfdf5;
-              border-color: #a7f3d0;
-              color: #065f46;
-            }
-            </style>
-            """
-        )
-        + f'<div class="fdl-fat-kpi-shell">'
-        + (
+    if fat_dre_faturado_mode == "fiscal":
+        mode_pill = (
             '<div class="fdl-fat-kpi-mode"><span class="fdl-fat-kpi-mode-pill fdl-fat-kpi-mode-pill--fiscal">'
             "Faturado (NF): fiscal Parquet</span></div>"
-            if fat_dre_faturado_mode == "fiscal"
-            else (
-                '<div class="fdl-fat-kpi-mode"><span class="fdl-fat-kpi-mode-pill">'
-                "Faturado (NF): NF-first</span></div>"
-                if use_nf_materializado
-                else ""
-            )
         )
-        + f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--primary">{primary_inner}</div>'
-        f'<div class="fdl-fat-kpi-row fdl-fat-kpi-row--secondary">{secondary_inner}</div>'
-        f"</div>",
+    elif use_nf_materializado:
+        mode_pill = (
+            '<div class="fdl-fat-kpi-mode"><span class="fdl-fat-kpi-mode-pill">Faturado (NF): NF-first</span></div>'
+        )
+    else:
+        mode_pill = ""
+
+    st.markdown(
+        build_kpi_nf_premium_shell_html(
+            valor_venda_fmt=venda_fmt,
+            valor_faturado_fmt=vf_str or "—",
+            resultado_fmt=res_fmt,
+            margem_str=margem_str,
+            diferenca_fmt=dif_str or "—",
+            valor_venda=vv,
+            resultado=res,
+            diferenca=dif_f,
+            chips=chips,
+            mode_pill_html=mode_pill,
+        ),
         unsafe_allow_html=True,
     )
 
@@ -5431,27 +5204,32 @@ def _fmt_brl_ptbr_encargo_dre(v: object) -> str:
     return "−" + s
 
 
+
 def _render_fdl_fat_dre_nf_gerencial(
     *,
     kp: dict[str, float | int],
     ok_nf_dates: bool,
     valor_faturado_from_fiscal_parquet: bool = False,
+    periodo_label: str = "",
 ) -> None:
-    """
-    DRE gerencial a partir dos totais de ``compute_nf_panel_kpis`` (mesmo ``kp`` que os cards).
-    Com fiscal ativo, o recorte é **N_base** + situação NF (se filtrada) + plataforma (se filtrada); a tabela acrescenta produto/sinal.
-    """
+    """DRE gerencial (totais de ``compute_nf_panel_kpis``), layout demonstração financeira."""
+    if not _FAT_DRE_UI_V2 or build_dre_gerencial_premium_html is None:
+        st.subheader("DRE gerencial")
+        st.write(
+            {
+                "Venda": float(kp["valor_venda"]),
+                "Resultado": float(kp["resultado"]),
+                "Margem %": _margem_sobre_venda_str(float(kp["resultado"]), float(kp["valor_venda"])),
+            }
+        )
+        return
+
     vv = float(kp["valor_venda"])
     res = float(kp["resultado"])
+    dif = float(kp.get("diferenca", 0.0))
     rec_venda = _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00"
-    vf_disp = (
-        (_fmt_brl_ptbr_celula(kp["valor_faturado_nf"]) or "—")
-        if ok_nf_dates
-        else "—"
-    )
-    dif_disp = (
-        (_fmt_brl_ptbr_celula(kp["diferenca"]) or "—") if ok_nf_dates else "—"
-    )
+    vf_disp = (_fmt_brl_ptbr_celula(kp["valor_faturado_nf"]) or "—") if ok_nf_dates else "—"
+    dif_disp = (_fmt_brl_ptbr_celula(kp["diferenca"]) or "—") if ok_nf_dates else "—"
     margem_s = _margem_sobre_venda_str(res, vv)
     res_disp = _fmt_brl_ptbr_celula(kp["resultado"]) or "—"
     enc_com = _fmt_brl_ptbr_encargo_dre(kp["comissao"])
@@ -5461,231 +5239,42 @@ def _render_fdl_fat_dre_nf_gerencial(
     enc_repasse_tp = _fmt_brl_ptbr_encargo_dre(float(kp.get("repasse_frete_transportadora_propria", 0.0)))
     enc_imp = _fmt_brl_ptbr_encargo_dre(kp["imposto"])
     enc_df = _fmt_brl_ptbr_encargo_dre(kp["despesa_fixa"])
-    enc_ads_v = _fmt_brl_ptbr_encargo_dre(float(kp.get("custo_ads_variavel", 0.0)))
-    enc_ads_f = _fmt_brl_ptbr_encargo_dre(float(kp.get("custo_ads_fixo", 0.0)))
+    ads_sum = float(kp.get("custo_ads_variavel", 0.0)) + float(kp.get("custo_ads_fixo", 0.0))
+    enc_ads = _fmt_brl_ptbr_encargo_dre(ads_sum)
 
-    def _dre_row(
-        lab: str,
-        val: str,
-        *,
-        ref: bool = False,
-        lead: bool = False,
-        bridge: bool = False,
-        encargo: bool = False,
-        enc_last: bool = False,
-        title: str | tuple[str, ...] | None = None,
-    ) -> str:
-        cls = "fdl-fat-dre-row"
-        if lead:
-            cls += " fdl-fat-dre-row--lead"
-        elif ref:
-            cls += " fdl-fat-dre-row--ref"
-        elif bridge:
-            cls += " fdl-fat-dre-row--bridge"
-        elif encargo:
-            cls += " fdl-fat-dre-row--enc"
-            if enc_last:
-                cls += " fdl-fat-dre-row--enc-last"
-        _tt = title
-        if isinstance(_tt, tuple) and _tt:
-            _tt = _tt[0]
-        tattr = (
-            f' title="{html.escape(str(_tt), quote=True)}"' if (_tt is not None and str(_tt).strip() != "") else ""
-        )
-        vcls = "fdl-fat-dre-val" + (" fdl-fat-dre-val--out" if encargo else "")
-        return (
-            f'<div class="{cls}"{tattr}>'
-            f'<span class="fdl-fat-dre-lab">{html.escape(lab)}</span>'
-            f'<span class="{vcls}">{html.escape(val)}</span>'
-            "</div>"
-        )
+    enc_rows = [
+        ("Comissão", enc_com),
+        ("Custo produto", enc_custo),
+        ("Frete plataforma", enc_frete_plat),
+        ("Frete transp. própria", enc_repasse_tp),
+        ("Imposto", enc_imp),
+        ("Despesa fixa", enc_df),
+        ("ADS (3,5% + fixo)", enc_ads),
+    ]
 
-    _inner = (
-        '<div class="fdl-fat-dre-title">DRE gerencial</div>'
-        '<div class="fdl-fat-dre-sub">Totais do painel · leitura gerencial</div>'
-        '<div class="fdl-fat-dre-block-h fdl-fat-dre-block-h--a">Ponte comercial × fiscal</div>'
-        '<div class="fdl-fat-dre-a-shell">'
-        + _dre_row(
-            (
-                "Receita de venda (lista) · comercial"
-                if valor_faturado_from_fiscal_parquet
-                else "Receita de venda (lista)"
-            ),
-            rec_venda,
-            lead=True,
-            title=(
-                "Comercial: Σ Quantidade × Preço de lista no universo dos **cards** (N_base + situação + plataforma se filtrada); "
-                "sem produto/sinal da tabela."
-                if valor_faturado_from_fiscal_parquet
-                else "Σ Quantidade × Preço de lista no recorte."
-            ),
-        )
-        + _dre_row(
-            "Receita de frete na NF (transportadora própria)",
-            rec_frete_disp,
-            title=(
-                "Frete destacado na **nota fiscal** (``Frete_Nota_Export``). Cobrado do cliente; o repasse à transportadora "
-                "aparece como encargo abaixo."
-                if valor_faturado_from_fiscal_parquet
-                else "Frete na NF (materializado fiscal) quando disponível; senão imputação NF×lista no grão comercial."
-            ),
-        )
-        + _dre_row(
-            (
-                "Faturado NF · fiscal (Parquet)"
-                if valor_faturado_from_fiscal_parquet
-                else "Faturado NF (ref. fiscal)"
-            ),
-            vf_disp,
-            ref=True,
-            title=(
-                "Soma de **valor_faturado_nf** = **Valor_Liquido_NF** do Parquet por NF no universo dos **cards**; o **topo** "
-                "soma o **N_base** completo (sem plataforma). Com **Plataforma** filtrada, este total pode ser menor que o topo."
-                if valor_faturado_from_fiscal_parquet
-                else (
-                    "Nota_Valor_Liquido_Total 1× por NF. Contraste com a receita em lista; "
-                    "não somar como segunda receita."
-                )
-            ),
-        )
-        + _dre_row(
-            (
-                "Diferença (lista comercial − fiscal NF)"
-                if valor_faturado_from_fiscal_parquet
-                else "Diferença (venda − faturado NF)"
-            ),
-            dif_disp,
-            bridge=True,
-            title=(
-                "Ponte entre receita em lista (pedidos) e total fiscal (notas) no universo dos **cards** (N_base + situação + plataforma se filtrada). "
-                "Não é indicador de erro; interpretar à luz de descontos e vínculo pedido–NF."
-                if valor_faturado_from_fiscal_parquet
-                else "Receita lista − faturado NF (totais do recorte)."
-            ),
-        )
-        + (
-            '<p class="fdl-fat-dre-foot-a-note">'
-            + (
-                "Faturado NF nos cards segue o **Parquet** por NF; com **Plataforma** vazia coincide com o **topo**; não soma à receita de lista."
-                if valor_faturado_from_fiscal_parquet
-                else "Ref. fiscal 1× por NF — não soma à receita de lista."
-            )
-            + "</p></div>"
-            + '<div class="fdl-fat-dre-block-h fdl-fat-dre-block-h--enc">Encargos</div>'
-        )
-        + _dre_row(
-            "Comissão",
-            enc_com,
-            encargo=True,
-            title=(
-                "Σ comissão comercial (pedidos) no universo dos **cards** (N_base + situação + plataforma se filtrada)."
-                if valor_faturado_from_fiscal_parquet
-                else "Σ comissão no recorte."
-            ),
-        )
-        + _dre_row(
-            "Custo produto",
-            enc_custo,
-            encargo=True,
-            title=(
-                "Σ custo do produto (Custo_Produto_Total / «Custo do Produto») no universo dos **cards**."
-                if valor_faturado_from_fiscal_parquet
-                else "Σ custo do produto no recorte."
-            ),
-        )
-        + _dre_row(
-            "Custo de frete — logística da plataforma",
-            enc_frete_plat,
-            encargo=True,
-            title=(
-                "Mercado Envios / coleta ME: soma **Frete_Plataforma** ou parcela ME do «Custo de Frete». "
-                "Já está embutido no **Resultado** por linha (desconto ``Frete_Plataforma``); aqui só leitura gerencial."
-                if valor_faturado_from_fiscal_parquet
-                else "Custo de logística da plataforma por NF (mesma base do ``Frete_Plataforma`` no cálculo)."
-            ),
-        )
-        + _dre_row(
-            "Repasse / custo frete — transportadora própria",
-            enc_repasse_tp,
-            encargo=True,
-            title=(
-                "Parcela **transportadora própria** do «Custo de Frete». Repasse ao carrier; abatido no **Resultado** "
-                "do painel junto com a receita de frete da NF."
-                if valor_faturado_from_fiscal_parquet
-                else "Repasse à transportadora própria (split modalidade ≠ ME)."
-            ),
-        )
-        + _dre_row(
-            "Imposto",
-            enc_imp,
-            encargo=True,
-            title=(
-                "Σ imposto comercial (pedidos) no universo dos **cards** (N_base + situação + plataforma se filtrada)."
-                if valor_faturado_from_fiscal_parquet
-                else "Σ imposto no recorte."
-            ),
-        )
-        + _dre_row(
-            "Despesa fixa",
-            enc_df,
-            encargo=True,
-            title=(
-                "Σ despesa fixa (5% sobre venda lista por NF) no universo dos **cards** (N_base + situação + plataforma se filtrada)."
-                if valor_faturado_from_fiscal_parquet
-                else "Σ despesa fixa (5% sobre valor de venda por NF) no recorte."
-            ),
-        )
-        + _dre_row(
-            "ADS 3,5% (venda lista)",
-            enc_ads_v,
-            encargo=True,
-            title=(
-                "3,5% × venda (lista) por NF no universo dos **cards** (materializado)."
-                if valor_faturado_from_fiscal_parquet
-                else "Custo de mídia variável: 3,5% sobre o valor de venda (lista) por NF, já materializado no painel."
-            ),
-        )
-        + _dre_row(
-            "ADS fixo (por NF com venda)",
-            enc_ads_f,
-            encargo=True,
-            enc_last=True,
-            title=(
-                "R$ 2,00 por NF com venda (lista) > 0 no universo dos **cards**."
-                if valor_faturado_from_fiscal_parquet
-                else "R$ 2,00 por NF com valor de venda (lista) > 0 — materializado no painel."
-            ),
-        )
-        + (
-            '<div class="fdl-fat-dre-block-h">Fechamento</div>'
-            '<div class="fdl-fat-dre-close">'
-            '<div class="fdl-fat-dre-row--result">'
-            '<span class="fdl-fat-dre-lab">Resultado</span>'
-            f'<span class="fdl-fat-dre-val">{html.escape(res_disp)}</span>'
-            "</div>"
-            '<div class="fdl-fat-dre-row--margem">'
-            '<span class="fdl-fat-dre-lab">'
-            + (
-                "Margem sobre venda (comercial)"
-                if valor_faturado_from_fiscal_parquet
-                else "Margem sobre venda"
-            )
-            + "</span>"
-            f'<span class="fdl-fat-dre-val">{html.escape(margem_s)}</span>'
-            "</div></div>"
-            '<p class="fdl-fat-dre-foot fdl-fat-dre-foot--final">'
-            + (
-                "Resultado e margem já consideram **ADS** (3,5% lista + fixo por NF). "
-                "Margem = Σ resultado ÷ Σ receita de venda (lista) no **mesmo recorte** que cards e tabela. "
-                "Valor faturado fiscal não entra na margem. Sem CMV nesta fase."
-                if valor_faturado_from_fiscal_parquet
-                else "Margem = resultado ÷ receita de venda (lista). Sem CMV nesta fase."
-            )
-            + "</p>"
-        )
+    dif_highlight = bool(ok_nf_dates and vv > 0 and abs(dif) / vv >= 0.30)
+    foot = (
+        "Resultado e margem já consideram ADS (3,5% sobre venda lista + fixo por NF). "
+        "Margem = Σ resultado ÷ Σ receita de venda (lista) no mesmo recorte que os cards. "
+        "Valor faturado fiscal não entra na margem."
+        if valor_faturado_from_fiscal_parquet
+        else "Margem = resultado ÷ receita de venda (lista). Valores consolidados no materializado NF-first."
     )
+    per = (periodo_label or "").strip() or ("Emissão NF no filtro" if ok_nf_dates else "Período indisponível")
+
     st.markdown(
-        f'<div class="fdl-fat-dre-wrap">{_inner}</div>',
+        build_dre_gerencial_premium_html(
+            period_caption=per,
+            valor_venda_fmt=rec_venda,
+            rec_frete_fmt=rec_frete_disp,
+            diferenca_fmt=dif_disp,
+            enc_rows=enc_rows,
+            resultado_fmt=res_disp,
+            resultado_value=res,
+            margem_str=margem_s,
+            footnote_plain=foot,
+            dif_highlight=dif_highlight,
+        ),
         unsafe_allow_html=True,
     )
 
@@ -5993,9 +5582,19 @@ def _fdl_fat_min_inject_ui_styles() -> None:
             }
             </style>
             """
-        ),
+        )
+        + (fat_dre_premium_css() if _FAT_DRE_UI_V2 else ""),
         unsafe_allow_html=True,
     )
+
+
+def _fdl_fat_section_rule(label: str) -> None:
+    """Divisor com rótulo (Faturamento & DRE premium)."""
+    if _FAT_DRE_UI_V2:
+        st.markdown(faturamento_section_rule_html(label), unsafe_allow_html=True)
+    else:
+        st.divider()
+        st.caption(label)
 
 
 def _fdl_fat_min_vsp(*, size: str = "md") -> None:
@@ -7396,6 +6995,7 @@ def _render_faturamento_dre_minimal(
         )
     _plat_help = "Plataforma: " + _plat_expl
 
+    _fdl_fat_section_rule("Filtros")
     with st.container(border=True):
         st.subheader("Filtros")
         st.caption(
@@ -7502,6 +7102,7 @@ def _render_faturamento_dre_minimal(
         ok_nf_dates=ok_nf_dates,
         situacoes_sel=_min_state.situacoes_nf,
     )
+    _fdl_fat_section_rule("Base fiscal")
     _render_faturamento_dre_fiscal_base_top(
         stats=_fiscal_base_stats,
         ok_nf_dates=ok_nf_dates,
@@ -7532,6 +7133,7 @@ def _render_faturamento_dre_minimal(
             df_nf_commercial_kpi, _min_state.plataformas
         )
     _commercial_coverage = compute_commercial_coverage_stats(df_nf_commercial_kpi)
+    _fdl_fat_section_rule("Análise comercial")
     _render_faturamento_dre_commercial_complement_banner(
         coverage=_commercial_coverage,
         n_fiscal_base=int(_fiscal_base_stats.n_nf),
@@ -7802,6 +7404,7 @@ def _render_faturamento_dre_minimal(
     _fdl_ui_gap_tight()
     _fdl_fat_min_vsp(size="md")
 
+    _fdl_fat_section_rule("KPIs + DRE")
     _render_fdl_fat_dre_nf_kpi_cards(
         kp=_kp_cards,
         ok_nf_dates=ok_nf_dates,
@@ -7811,10 +7414,14 @@ def _render_faturamento_dre_minimal(
     )
 
     _fdl_fat_min_vsp(size="md")
+    _periodo_dre_lbl = ""
+    if ok_nf_dates:
+        _periodo_dre_lbl = f"{_nf_kpi_ini.strftime('%d/%m/%Y')} — {_nf_kpi_fim.strftime('%d/%m/%Y')}"
     _render_fdl_fat_dre_nf_gerencial(
         kp=_kp_cards,
         ok_nf_dates=ok_nf_dates,
         valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
+        periodo_label=_periodo_dre_lbl,
     )
 
     _fdl_fat_min_vsp(size="md")
@@ -7836,6 +7443,7 @@ def _render_faturamento_dre_minimal(
         "Venda (lista)",
         "Faturado (NF)",
         "Diferença",
+        "Status",
         "Comissão",
         "Custo produto",
         "Receita frete NF",
@@ -7894,6 +7502,21 @@ def _render_faturamento_dre_minimal(
             if "custo_ads_fixo" in _df_nf_table.columns
             else pd.Series(0.0, index=_df_nf_table.index, dtype=float)
         )
+        _res_line_nf = pd.to_numeric(_df_nf_table["resultado"], errors="coerce")
+
+        def _nf_status_label_nf(r: object) -> str:
+            try:
+                x = float(r)
+            except (TypeError, ValueError):
+                return "—"
+            if pd.isna(x):
+                return "—"
+            if x > 0:
+                return "Lucro"
+            if x < 0:
+                return "Prejuízo"
+            return "Empate"
+
         _disp_nf_full = pd.DataFrame(
             {
                 "Emissão": _series_nf_emissao_pt_br(
@@ -7913,6 +7536,7 @@ def _render_faturamento_dre_minimal(
                 "Venda (lista)": pd.to_numeric(_df_nf_table["valor_venda"], errors="coerce"),
                 "Faturado (NF)": pd.to_numeric(_df_nf_table["valor_faturado_nf"], errors="coerce"),
                 "Diferença": pd.to_numeric(_df_nf_table["diferenca"], errors="coerce"),
+                "Status": _res_line_nf.map(_nf_status_label_nf),
                 "Comissão": pd.to_numeric(_df_nf_table["comissao"], errors="coerce"),
                 "Custo produto": pd.to_numeric(_custo_s, errors="coerce").fillna(0.0),
                 "Receita frete NF": pd.to_numeric(
@@ -7939,7 +7563,7 @@ def _render_faturamento_dre_minimal(
                 "Desp. fixa": pd.to_numeric(_df_nf_table["despesa_fixa"], errors="coerce"),
                 "ADS 3,5%": _ads_v_s,
                 "ADS fixo": _ads_f_s,
-                "Resultado": pd.to_numeric(_df_nf_table["resultado"], errors="coerce"),
+                "Resultado": _res_line_nf,
                 "Info dados": _info_dados.astype(str),
                 "Margem %": (_marg_ratio * 100.0),
             }
@@ -8039,6 +7663,7 @@ def _render_faturamento_dre_minimal(
             if use_fiscal_kpi
             else "Venda (lista) − Faturado (NF)."
         ),
+        "Status": "Lucro, prejuízo ou empate conforme o **resultado** consolidado da NF (materializado).",
         "Comissão": "Comercial: soma das comissões das linhas de pedido ligadas à NF." if use_fiscal_kpi else None,
         "Custo produto": (
             "Comercial: Σ **Custo_Produto_Total** (ou «Custo do Produto») das linhas de pedido ligadas à NF."
@@ -8100,6 +7725,7 @@ def _render_faturamento_dre_minimal(
         "Venda (lista)": "medium",
         "Faturado (NF)": "medium",
         "Diferença": "small",
+        "Status": "small",
         "Comissão": "small",
         "Custo produto": "medium",
         "Receita frete NF": "small",
@@ -8124,6 +7750,7 @@ def _render_faturamento_dre_minimal(
         )
 
     _fdl_fat_min_vsp(size="sm")
+    _fdl_fat_section_rule("Tabela por NF")
     _nf_sub = (
         "Uma linha por <strong>NF fiscal</strong> no recorte; coluna «Faturado» = Bling/Parquet; "
         "venda, encargos e resultado = <strong>comercial</strong> (pedidos ligados)."
@@ -8163,14 +7790,66 @@ def _render_faturamento_dre_minimal(
             )
         )
     else:
+        _nf_page_sz = 25
+        _nf_total_rows = len(_disp_nf_ui)
+        _nf_pages = max(1, (_nf_total_rows + _nf_page_sz - 1) // _nf_page_sz)
+        _pg_sel = 1
+        if _nf_pages > 1:
+            _pg_a, _pg_b = st.columns((1, 2))
+            with _pg_a:
+                _pg_sel = int(
+                    st.number_input(
+                        "Página",
+                        min_value=1,
+                        max_value=int(_nf_pages),
+                        value=1,
+                        step=1,
+                        key="fdl_fat_min_nf_pg",
+                    )
+                )
+            with _pg_b:
+                _i0p = (int(_pg_sel) - 1) * _nf_page_sz
+                _i1p = min(_i0p + _nf_page_sz, _nf_total_rows)
+                st.caption(
+                    f"Mostrando **{_i0p + 1}**–**{_i1p}** de **{_nf_total_rows}** notas. "
+                    "Use o cabeçalho da tabela para ordenar a página atual."
+                )
+        else:
+            st.caption(f"**{_nf_total_rows}** nota(s) no recorte (ordenar pelo cabeçalho da coluna).")
+        _i0 = (int(_pg_sel) - 1) * _nf_page_sz
+        _slice_ui = _disp_nf_ui.iloc[_i0 : _i0 + _nf_page_sz].copy()
+        _slice_num = _disp_nf_full.iloc[_i0 : _i0 + _nf_page_sz].reset_index(drop=True)
+        _slice_ui_r = _slice_ui.reset_index(drop=True)
+
+        def _nf_row_highlight_fat(r: pd.Series) -> list[str]:
+            ri = r.name
+            try:
+                res = float(pd.to_numeric(_slice_num.loc[ri, "Resultado"], errors="coerce"))
+            except Exception:
+                res = 0.0
+            try:
+                mg = float(pd.to_numeric(_slice_num.loc[ri, "Margem %"], errors="coerce"))
+            except Exception:
+                mg = float("nan")
+            c = ""
+            if res < 0:
+                c = "background-color: #fef2f2"
+            elif not math.isnan(mg) and mg < 0:
+                c = "background-color: #fffbeb"
+            return [c] * len(r)
+
+        _h_tbl = min(440, 132 + 34 * min(len(_slice_ui_r), 14))
+        _df_arg: object = _slice_ui_r
+        if _FAT_DRE_UI_V2 and (not _fdl_safe_mode()) and int(_slice_ui_r.size) < 200_000:
+            try:
+                _df_arg = _slice_ui_r.style.apply(_nf_row_highlight_fat, axis=1)
+            except Exception:
+                _df_arg = _slice_ui_r
         st.dataframe(
-            _disp_nf_ui,
+            _df_arg,
             use_container_width=True,
             hide_index=True,
-            height=min(
-                420,
-                140 + 34 * min(len(_disp_nf_ui), 11),
-            ),
+            height=_h_tbl,
             column_config=_cfg_nf,
         )
 

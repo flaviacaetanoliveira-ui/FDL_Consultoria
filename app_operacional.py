@@ -745,9 +745,10 @@ def _fdl_sidebar_inject_layout_css() -> None:
               display: flex;
               flex-direction: row;
               align-items: center;
-              gap: 0.5rem;
-              padding: 0.55rem 0.45rem;
-              margin-top: 0.15rem;
+              gap: 0.45rem;
+              padding: 0.45rem 0.6rem;
+              margin-top: 0.12rem;
+              margin-bottom: 0.05rem;
               background: #f1f5f9;
               border-radius: 8px;
               border: 1px solid rgba(226, 232, 240, 0.9);
@@ -775,7 +776,7 @@ def _fdl_sidebar_inject_layout_css() -> None:
               line-height: 1.2;
             }
             .fdl-sb-client-name {
-              font-size: 0.9rem;
+              font-size: 0.85rem;
               font-weight: 600;
               letter-spacing: -0.015em;
               color: #1e293b;
@@ -784,8 +785,9 @@ def _fdl_sidebar_inject_layout_css() -> None:
             }
             .fdl-sb-divider {
               height: 1px;
-              background: linear-gradient(90deg, transparent, #e2e8f0 12%, #e2e8f0 88%, transparent);
+              background: linear-gradient(90deg, transparent, #e5e7eb 14%, #e5e7eb 86%, transparent);
               margin: 0.62rem 0 0.12rem 0;
+              opacity: 0.62;
             }
             .fdl-sb-section-label {
               font-size: 0.65rem;
@@ -885,7 +887,8 @@ def _fdl_sidebar_inject_layout_css() -> None:
             .fdl-sb-footer-rule {
               height: 1px;
               margin: 0.78rem 0 0;
-              background: linear-gradient(90deg, transparent, rgba(226, 232, 240, 0.55) 8%, rgba(226, 232, 240, 0.85) 50%, rgba(226, 232, 240, 0.55) 92%, transparent);
+              background: linear-gradient(90deg, transparent, rgba(229, 231, 235, 0.45) 10%, rgba(229, 231, 235, 0.72) 50%, rgba(229, 231, 235, 0.45) 90%, transparent);
+              opacity: 0.58;
             }
             .fdl-sb-footer {
               margin: 0.48rem 0 0 0;
@@ -5409,6 +5412,12 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               height: 1.35rem;
               min-height: 1.35rem;
             }
+            hr.fdl-divider-simple {
+              border: none;
+              border-top: 1px solid #e2e8f0;
+              margin: 1.65rem 0 1.15rem 0;
+              opacity: 0.82;
+            }
             .fdl-fat-dre-wrap {
               max-width: min(48rem, 100%);
               width: 100%;
@@ -5886,6 +5895,14 @@ def _fdl_fat_section_rule(label: str) -> None:
     else:
         st.divider()
         st.caption(label)
+
+
+def _fdl_fat_divider_simple() -> None:
+    """Linha divisória discreta (sem rótulo) entre blocos do painel NF-first."""
+    st.markdown(
+        '<hr class="fdl-divider-simple" aria-hidden="true">',
+        unsafe_allow_html=True,
+    )
 
 
 def _fdl_fat_min_vsp(*, size: str = "md") -> None:
@@ -7547,6 +7564,30 @@ def _render_faturamento_dre_minimal(
             df_nf_commercial_kpi, _min_state.plataformas
         )
     _commercial_coverage = compute_commercial_coverage_stats(df_nf_commercial_kpi)
+    _kp_cards = compute_nf_panel_kpis(df_nf_commercial_kpi)
+
+    _fdl_fat_min_vsp(size="md")
+    _fdl_fat_divider_simple()
+    _render_fdl_fat_dre_nf_kpi_cards(
+        kp=_kp_cards,
+        ok_nf_dates=ok_nf_dates,
+        use_nf_materializado=use_nf_materializado,
+        valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
+        fat_dre_faturado_mode=("fiscal" if use_fiscal_kpi else "nf_first"),
+    )
+
+    _fdl_fat_min_vsp(size="md")
+    _periodo_dre_lbl = ""
+    if ok_nf_dates:
+        _periodo_dre_lbl = f"{_nf_kpi_ini.strftime('%d/%m/%Y')} — {_nf_kpi_fim.strftime('%d/%m/%Y')}"
+    _render_fdl_fat_dre_nf_gerencial(
+        kp=_kp_cards,
+        ok_nf_dates=ok_nf_dates,
+        valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
+        periodo_label=_periodo_dre_lbl,
+    )
+
+    _fdl_fat_min_vsp(size="md")
     _fdl_fat_section_rule("Cobertura")
     _render_faturamento_dre_commercial_complement_banner(
         coverage=_commercial_coverage,
@@ -7556,6 +7597,11 @@ def _render_faturamento_dre_minimal(
         fiscal_parquet_ok=use_fiscal_parquet,
         kpi_subset_by_platform=bool(_min_state.plataformas),
     )
+
+    _fdl_fat_min_vsp(size="md")
+    _fdl_ui_gap_section()
+    _fdl_fat_min_vsp(size="lg")
+    _fdl_fat_min_vsp(size="sm")
 
     # Só chegamos aqui com painel materializado válido: recorte = filtrar linhas já agregadas (sem recomputar DRE).
     df_nf_lines = _faturamento_nf_apply_minimal_recorte(
@@ -7593,11 +7639,15 @@ def _render_faturamento_dre_minimal(
             }
         )
     with st.container(border=True):
-        st.subheader("Recorte da tabela (produto / resultado)")
+        st.markdown("**Recorte da tabela (produto / resultado)**")
         st.caption(
-            "Estes filtros aplicam-se **só** à **tabela** e à **vista detalhada**. **Cards** e **DRE** já refletem empresa, "
-            "emissão, **situação NF** (se filtrada) e **plataforma** (se filtrada); aqui refina-se **produto** e **sinal**."
+            "Refinam **só** a tabela e a vista detalhada; **cards** e **DRE** usam o recorte comercial acima."
         )
+        with st.expander("ℹ️ Como funcionam produto e resultado", expanded=False):
+            st.caption(
+                "**Cards** e **DRE** já refletem empresa, emissão, **situação NF** (se filtrada) e **plataforma** "
+                "(se filtrada); aqui aplica-se **produto** e **sinal** de resultado **apenas** à tabela."
+            )
         if _prod_opts:
             _multiselect_stable(
                 "fdl_fat_min_prod",
@@ -7670,7 +7720,6 @@ def _render_faturamento_dre_minimal(
         sinais_resultado=_sinais_tuple,
     )
     # Cards e DRE: N_base fiscal + situação + enriquecimento; plataforma opcional; tabela = + produto/sinal.
-    _kp_cards = compute_nf_panel_kpis(df_nf_commercial_kpi)
     _kp_table = compute_nf_panel_kpis(df_nf_panel)
     _df_fiscal_kpi_anchor: pd.DataFrame | None = (
         _df_fiscal_base.copy() if use_fiscal_kpi and not _df_fiscal_base.empty else None
@@ -7685,21 +7734,33 @@ def _render_faturamento_dre_minimal(
     _n_table = int(_kp_table["n_nf"])
     _n_kpi = int(_kp_cards["n_nf"])
     st.caption(
-        f"**Base fiscal (topo):** **{_fiscal_base_stats.n_nf}** nota(s) · total fiscal **{_fmt_brl_ptbr_celula(_fiscal_base_stats.valor_liquido_fiscal_sum) or 'R$ 0,00'}** "
-        f"(empresa + emissão + situação NF se filtrada). **Cards e DRE:** **{_n_kpi}** nota(s) "
-        f"({'**N_base** + plataforma (se filtrada)' if _commercial_kpi_aligned_fiscal else 'painel NF, empresa + emissão + situação + plataforma'}). "
-        f"**Tabela:** **{_n_table}** linha(s) após **produto** e **sinal** (já sobre o mesmo recorte de plataforma/situação). "
-        f"Linhas brutas no materializado NF: **{_base_n}**{_base_tail}."
+        f"Mostrando {_n_table:,} de {_n_kpi:,} notas na tabela após filtros de **produto** e **resultado** (por NF)."
     )
-    if _n_table == _n_kpi:
+    _fiscal_sum_txt = _fmt_brl_ptbr_celula(_fiscal_base_stats.valor_liquido_fiscal_sum) or "R$ 0,00"
+    _cards_scope_txt = (
+        "N_base + plataforma (se filtrada)"
+        if _commercial_kpi_aligned_fiscal
+        else "painel NF: empresa + emissão + situação + plataforma"
+    )
+    with st.expander("ℹ️ Detalhes do recorte", expanded=False):
         st.caption(
-            "Nenhuma NF foi excluída da tabela por **produto** ou **sinal** — ou todas passam nos filtros atuais."
+            f"**Base fiscal (topo):** {_fiscal_base_stats.n_nf:,} nota(s) · total fiscal {_fiscal_sum_txt} "
+            "(empresa + emissão + situação NF se filtrada)."
         )
-    else:
+        st.caption(f"**Cards e DRE:** {_n_kpi:,} nota(s) ({_cards_scope_txt}).")
         st.caption(
-            f"**{_n_kpi - _n_table}** nota(s) do universo dos **cards/DRE** **não aparecem** na tabela com os filtros atuais "
-            "(**produto** ou **sinal** de resultado)."
+            f"**Tabela:** {_n_table:,} linha(s) após produto e sinal (mesmo recorte de plataforma/situação). "
+            f"Linhas brutas no materializado NF: {_base_n:,}{_base_tail}."
         )
+        if _n_table == _n_kpi:
+            st.caption(
+                "Nenhuma NF foi excluída da tabela por **produto** ou **sinal** — ou todas passam nos filtros atuais."
+            )
+        else:
+            st.caption(
+                f"**{_n_kpi - _n_table:,}** nota(s) do universo dos **cards/DRE** **não aparecem** na tabela com os "
+                "filtros atuais de **produto** ou **sinal** de resultado."
+            )
 
     if _is_admin_mode():
         with st.expander("Diagnóstico materializado (admin)", expanded=False):
@@ -7817,31 +7878,6 @@ def _render_faturamento_dre_minimal(
 
     _fdl_ui_gap_tight()
     _fdl_fat_min_vsp(size="md")
-
-    _fdl_fat_section_rule("KPIs + DRE")
-    _render_fdl_fat_dre_nf_kpi_cards(
-        kp=_kp_cards,
-        ok_nf_dates=ok_nf_dates,
-        use_nf_materializado=use_nf_materializado,
-        valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
-        fat_dre_faturado_mode=("fiscal" if use_fiscal_kpi else "nf_first"),
-    )
-
-    _fdl_fat_min_vsp(size="md")
-    _periodo_dre_lbl = ""
-    if ok_nf_dates:
-        _periodo_dre_lbl = f"{_nf_kpi_ini.strftime('%d/%m/%Y')} — {_nf_kpi_fim.strftime('%d/%m/%Y')}"
-    _render_fdl_fat_dre_nf_gerencial(
-        kp=_kp_cards,
-        ok_nf_dates=ok_nf_dates,
-        valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
-        periodo_label=_periodo_dre_lbl,
-    )
-
-    _fdl_fat_min_vsp(size="md")
-    _fdl_ui_gap_section()
-    _fdl_fat_min_vsp(size="lg")
-    _fdl_fat_min_vsp(size="sm")
     st.divider()
     _fdl_fat_min_vsp(size="md")
 
@@ -8166,34 +8202,23 @@ def _render_faturamento_dre_minimal(
         )
 
     _fdl_fat_min_vsp(size="sm")
-    _fdl_fat_section_rule("Tabela por NF")
-    _nf_sub = (
-        "Uma linha por <strong>NF fiscal</strong> no recorte; coluna «Faturado» = Bling/Parquet; "
-        "venda, encargos e resultado = <strong>comercial</strong> (pedidos ligados)."
-        if use_fiscal_kpi
-        else "Detalhamento · drill-down"
-    )
-    st.markdown(
-        f'<h2 class="fdl-fat-min-nf-h">Tabela por NF</h2>'
-        f'<p class="fdl-fat-min-nf-sub">{_nf_sub}</p>',
-        unsafe_allow_html=True,
-    )
-    _fdl_fat_min_vsp(size="sm")
+    st.markdown("## Tabela por NF")
+    with st.expander("ℹ️ Sobre esta tabela", expanded=False):
+        if use_fiscal_kpi:
+            st.caption(
+                "Uma linha por NF fiscal no recorte. «Faturado (NF)» = Bling/Parquet; "
+                "venda, encargos e resultado = dados comerciais (pedidos ligados)."
+            )
+        else:
+            st.caption(
+                "Detalhamento por NF no recorte; valores conforme materializado (sem Parquet fiscal no topo)."
+            )
     if use_fiscal_kpi:
-        _tbl_cap_body = (
-            f"{len(_disp_nf_ui)} linha(s) — mesmo recorte de **plataforma** e **situação** que os **cards/DRE**, "
-            "mais **produto** e **sinal** quando aplicados. "
-            "«Faturado (NF)» = referência fiscal; colunas de venda/encargos/resultado = <strong>comercial</strong>. "
-            "Emissão em ordem decrescente; export CSV com texto completo."
+        st.caption(
+            f"{len(_disp_nf_ui):,} notas · emissão em ordem decrescente · export CSV com colunas completas."
         )
     else:
-        _tbl_cap_body = (
-            f"{len(_disp_nf_ui)} linha(s) · emissão decrescente · export CSV com texto completo."
-        )
-    st.markdown(
-        f'<div class="fdl-fat-min-table-cap">{_tbl_cap_body}</div>',
-        unsafe_allow_html=True,
-    )
+        st.caption(f"{len(_disp_nf_ui):,} notas · emissão decrescente · export CSV.")
     if _disp_nf_ui.empty:
         st.info(
             (
@@ -11305,10 +11330,8 @@ with st.sidebar:
         f'<div class="fdl-sb-tagline fdl-sb-tagline--after-logo">{html.escape(_sb_tagline)}</div>'
         '<div class="fdl-sb-client-row"><div class="fdl-sb-client-block">'
         '<span class="fdl-sb-client-icon" aria-hidden="true">👤</span>'
-        '<div class="fdl-sb-client-text">'
-        '<span class="fdl-sb-client-tag">Cliente</span>'
         f'<span class="fdl-sb-client-name">{_cli_nome}</span>'
-        "</div></div></div>"
+        "</div></div>"
     )
     st.markdown(
         '<div class="fdl-sb-brand-shell">'

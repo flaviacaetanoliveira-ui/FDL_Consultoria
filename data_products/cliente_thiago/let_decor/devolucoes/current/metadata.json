@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-12T11:55:12Z",
-  "source_signature": "4c7be7152da95518df574f9dd5f36d43",
+  "generated_at": "2026-04-15T17:09:02Z",
+  "source_signature": "61eeec40a3582ce323724241d7ceb2bd",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_thiago",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "let_decor",
   "cnpj": null,
-  "row_count": 725,
+  "row_count": 733,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -108,15 +108,15 @@
     "org_id": "let_decor",
     "dataset_empresa": "let_decor",
     "cliente_id": "cliente_thiago",
-    "row_count_pre_filtro_devolucao": 899,
-    "row_count_excluidas_cancel_comercial": 174,
-    "row_count_candidatas": 725,
-    "row_count_vendas_total": 11773,
-    "row_count_liberacoes": 19841,
-    "sales_from_lib_financial": 1453,
+    "row_count_pre_filtro_devolucao": 910,
+    "row_count_excluidas_cancel_comercial": 177,
+    "row_count_candidatas": 733,
+    "row_count_vendas_total": 11963,
+    "row_count_liberacoes": 20166,
+    "sales_from_lib_financial": 1463,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 11773,
-  "row_count_liberacoes": 19841,
-  "sales_from_lib_financial": 1453
+  "row_count_vendas_total": 11963,
+  "row_count_liberacoes": 20166,
+  "sales_from_lib_financial": 1463
 }

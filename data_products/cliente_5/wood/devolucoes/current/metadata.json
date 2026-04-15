@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-12T11:52:22Z",
-  "source_signature": "73f24eca010549dc1668aec148b12764",
+  "generated_at": "2026-04-15T17:06:55Z",
+  "source_signature": "7f9515f3aa3b380f2b49f36c548b779c",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_5",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "wood",
   "cnpj": null,
-  "row_count": 1990,
+  "row_count": 2016,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -45,7 +45,6 @@
     "Tipo de contribuinte",
     "Inscrição estadual",
     "Comprador",
-    "Negócio",
     "CPF",
     "Endereço.1",
     "Cidade",
@@ -75,6 +74,7 @@
     "Reclamação encerrada",
     "Em mediação",
     "arquivo_origem_venda",
+    "Negócio",
     "candidato_motivo",
     "status_ml_texto",
     "lib_n_eventos",
@@ -108,15 +108,15 @@
     "org_id": "wood",
     "dataset_empresa": "wood",
     "cliente_id": "cliente_5",
-    "row_count_pre_filtro_devolucao": 2261,
-    "row_count_excluidas_cancel_comercial": 271,
-    "row_count_candidatas": 1990,
-    "row_count_vendas_total": 15795,
-    "row_count_liberacoes": 28581,
-    "sales_from_lib_financial": 2736,
+    "row_count_pre_filtro_devolucao": 2290,
+    "row_count_excluidas_cancel_comercial": 274,
+    "row_count_candidatas": 2016,
+    "row_count_vendas_total": 16026,
+    "row_count_liberacoes": 28794,
+    "sales_from_lib_financial": 2754,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 15795,
-  "row_count_liberacoes": 28581,
-  "sales_from_lib_financial": 2736
+  "row_count_vendas_total": 16026,
+  "row_count_liberacoes": 28794,
+  "sales_from_lib_financial": 2754
 }

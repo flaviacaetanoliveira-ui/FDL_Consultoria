@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-12T11:48:48Z",
-  "source_signature": "4487aac1261e243b983d84f3d861954e",
+  "generated_at": "2026-04-15T17:04:40Z",
+  "source_signature": "6496ffec0768ffc7ff61df2f0bb4f493",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "moveis_eap",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "moveis_eap",
   "cnpj": null,
-  "row_count": 6250,
+  "row_count": 6327,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -41,7 +41,6 @@
     "Tipo de contribuinte",
     "Inscrição estadual",
     "Comprador",
-    "Negócio",
     "CPF",
     "Endereço.1",
     "Cidade",
@@ -71,6 +70,7 @@
     "Reclamação encerrada",
     "Em mediação",
     "Custo do envio (BRL)",
+    "Negócio",
     "Frete cobrado",
     "Qtd × preço unit. produto (ML)",
     "_data_venda_dt",
@@ -99,7 +99,7 @@
     "vendas_arquivo": "Moveis EAP - Vendas ML 2026.xlsx, Moveis EAP - Vendas ML 2025.xlsx",
     "frete_arquivo": "Moveis EAP - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 6250,
+    "linhas": 6327,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

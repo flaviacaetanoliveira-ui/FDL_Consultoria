@@ -50,9 +50,80 @@ def _detect_custo_header_row(raw: pd.DataFrame) -> tuple[int, int, int] | None:
                 or h == "valor de compra"
             ):
                 pj = j
+            # Colunas wide só por empresa (sem «VALOR DE COMPRA» genérico na folha).
+            elif h == "valor de compra mega" or h == "valor compra eap" or h in (
+                "valor compra star/gama",
+                "valor compra star gama",
+            ):
+                if pj is None:
+                    pj = j
         if sj is not None and pj is not None and sj != pj:
             return (i, sj, pj)
     return None
+
+
+def _price_column_indices_from_header_tokens(row_text: list[str]) -> dict[str, int]:
+    """
+    Mapeia cabeçalhos já normalizados (``_header_token``) → nome canónico de coluna de preço / índice.
+    Ordem: tokens mais específicos antes de «valor de compra» genérico.
+    """
+    out: dict[str, int] = {}
+    for j, h in enumerate(row_text):
+        if not h:
+            continue
+        if h == "valor de compra mega":
+            out[CUSTO_COL_VALOR_MEGA] = j
+        elif h == "valor compra eap":
+            out[CUSTO_COL_VALOR_EAP] = j
+        elif h in ("valor compra star/gama", "valor compra star gama"):
+            out[CUSTO_COL_VALOR_STAR_GAMA] = j
+        elif h == "valor de compra":
+            out[CUSTO_COL_VALOR_GENERIC] = j
+        elif h == "preco de custo com ipi":
+            out[CUSTO_COL_PRECO] = j
+    return out
+
+
+def _should_build_wide_from_price_indices(price_idx: dict[str, int]) -> bool:
+    """Espelha a elegibilidade de ``_normalize_wide_custo_sheet_if_applicable`` (sem cabeçalho na linha 0)."""
+    if not price_idx:
+        return False
+    multi = any(
+        k in price_idx
+        for k in (CUSTO_COL_VALOR_MEGA, CUSTO_COL_VALOR_EAP, CUSTO_COL_VALOR_STAR_GAMA)
+    )
+    if multi:
+        return True
+    if CUSTO_COL_VALOR_GENERIC in price_idx:
+        return True
+    if len(price_idx) == 1 and CUSTO_COL_PRECO in price_idx:
+        return False
+    return True
+
+
+def _wide_frame_from_raw(
+    raw: pd.DataFrame,
+    header_idx: int,
+    sku_col_idx: int,
+    price_idx: dict[str, int],
+) -> pd.DataFrame:
+    """Constrói DataFrame wide (``Código`` + colunas canónicas de preço) a partir da matriz bruta."""
+    rows: list[dict[str, str]] = []
+    keys_sorted = sorted(price_idx.keys())
+    for ii in range(header_idx + 1, len(raw)):
+        sku_c = raw.iat[ii, sku_col_idx]
+        if pd.isna(sku_c):
+            continue
+        sku_s = str(sku_c).strip()
+        if not sku_s:
+            continue
+        rec: dict[str, str] = {CUSTO_SKU_COL: sku_s}
+        for canon in keys_sorted:
+            j = price_idx[canon]
+            v = raw.iat[ii, j]
+            rec[canon] = "" if pd.isna(v) else str(v).strip()
+        rows.append(rec)
+    return pd.DataFrame(rows)
 
 
 def _normalize_wide_custo_sheet_if_applicable(df0: pd.DataFrame) -> pd.DataFrame | None:
@@ -147,6 +218,22 @@ def load_custo_xlsx(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
             f"Encontradas (linha 0): {list(df0.columns)}"
         )
     hi, sj, pj = det
+    ncols = int(raw.shape[1])
+    row_tokens = [_header_token(raw.iat[hi, j]) for j in range(ncols)]
+    price_idx = _price_column_indices_from_header_tokens(row_tokens)
+
+    if _should_build_wide_from_price_indices(price_idx):
+        df = _wide_frame_from_raw(raw, hi, sj, price_idx)
+        meta = {
+            "path": str(path),
+            "sheet": CUSTO_SHEET_NAME,
+            "custo_reader": "header_autodetect_wide",
+            "custo_header_row": hi,
+            "custo_col_sku_index": sj,
+            "custo_columns": [c for c in df.columns if c != CUSTO_SKU_COL],
+        }
+        return df, meta
+
     df = _frame_from_detection(raw, hi, sj, pj)
     meta = {
         "path": str(path),

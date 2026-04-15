@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-12T11:53:01Z",
-  "source_signature": "58e7684f00b7a9603e39ac2a0f6087b9",
+  "generated_at": "2026-04-15T17:07:25Z",
+  "source_signature": "f1f5c91a32720d106bc6b9f11e15b1d2",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_thiago",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "bp_ramiro",
   "cnpj": null,
-  "row_count": 208,
+  "row_count": 209,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -106,15 +106,15 @@
     "org_id": "bp_ramiro",
     "dataset_empresa": "bp_ramiro",
     "cliente_id": "cliente_thiago",
-    "row_count_pre_filtro_devolucao": 230,
+    "row_count_pre_filtro_devolucao": 231,
     "row_count_excluidas_cancel_comercial": 22,
-    "row_count_candidatas": 208,
-    "row_count_vendas_total": 4955,
-    "row_count_liberacoes": 3837,
-    "sales_from_lib_financial": 165,
+    "row_count_candidatas": 209,
+    "row_count_vendas_total": 5084,
+    "row_count_liberacoes": 3989,
+    "sales_from_lib_financial": 171,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 4955,
-  "row_count_liberacoes": 3837,
-  "sales_from_lib_financial": 165
+  "row_count_vendas_total": 5084,
+  "row_count_liberacoes": 3989,
+  "sales_from_lib_financial": 171
 }

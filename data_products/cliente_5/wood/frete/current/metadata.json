@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-12T11:51:43Z",
-  "source_signature": "e08f566c0cbfb681816c55b3051fd5e5",
+  "generated_at": "2026-04-15T17:06:34Z",
+  "source_signature": "9ca372237bb2521c453767c154095936",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_5",
   "empresa": "wood",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "wood",
   "cnpj": null,
-  "row_count": 15795,
+  "row_count": 16026,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -44,7 +44,6 @@
     "Tipo de contribuinte",
     "Inscrição estadual",
     "Comprador",
-    "Negócio",
     "CPF",
     "Endereço.1",
     "Cidade",
@@ -73,6 +72,7 @@
     "Reclamação aberta",
     "Reclamação encerrada",
     "Em mediação",
+    "Negócio",
     "Frete cobrado",
     "Qtd × preço unit. produto (ML)",
     "_data_venda_dt",
@@ -101,7 +101,7 @@
     "vendas_arquivo": "Wood - Vendas ML 2026.xlsx, Wood - Vendas ML 2025.xlsx",
     "frete_arquivo": "Wood - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 15795,
+    "linhas": 16026,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

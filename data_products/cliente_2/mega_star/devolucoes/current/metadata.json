@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-12T11:47:56Z",
-  "source_signature": "cec29374205a1efcf4f886c5ca221488",
+  "generated_at": "2026-04-15T17:04:01Z",
+  "source_signature": "a0c3abd55a778974c87f15b2bbc23950",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_2",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_star",
   "cnpj": null,
-  "row_count": 51,
+  "row_count": 52,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -42,7 +42,6 @@
     "Tipo de contribuinte",
     "Inscrição estadual",
     "Comprador",
-    "Negócio",
     "CPF",
     "Endereço.1",
     "Cidade",
@@ -105,15 +104,15 @@
     "org_id": "mega_star",
     "dataset_empresa": "mega_star",
     "cliente_id": "cliente_2",
-    "row_count_pre_filtro_devolucao": 78,
-    "row_count_excluidas_cancel_comercial": 27,
-    "row_count_candidatas": 51,
-    "row_count_vendas_total": 1157,
-    "row_count_liberacoes": 4001,
-    "sales_from_lib_financial": 202,
+    "row_count_pre_filtro_devolucao": 85,
+    "row_count_excluidas_cancel_comercial": 33,
+    "row_count_candidatas": 52,
+    "row_count_vendas_total": 1267,
+    "row_count_liberacoes": 4084,
+    "sales_from_lib_financial": 208,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 1157,
-  "row_count_liberacoes": 4001,
-  "sales_from_lib_financial": 202
+  "row_count_vendas_total": 1267,
+  "row_count_liberacoes": 4084,
+  "sales_from_lib_financial": 208
 }

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-12T11:49:00Z",
-  "source_signature": "26dee706fb200eb7d13f979363949bd2",
+  "generated_at": "2026-04-15T17:04:46Z",
+  "source_signature": "84d4f9841614c71e64b05ad99084ba22",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_2",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "moveis_eap",
   "cnpj": null,
-  "row_count": 236,
+  "row_count": 238,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -42,7 +42,6 @@
     "Tipo de contribuinte",
     "Inscrição estadual",
     "Comprador",
-    "Negócio",
     "CPF",
     "Endereço.1",
     "Cidade",
@@ -73,6 +72,7 @@
     "Em mediação",
     "arquivo_origem_venda",
     "Custo de envio com base nas medidas e peso declarados",
+    "Negócio",
     "candidato_motivo",
     "status_ml_texto",
     "lib_n_eventos",
@@ -106,15 +106,15 @@
     "org_id": "moveis_eap",
     "dataset_empresa": "moveis_eap",
     "cliente_id": "cliente_2",
-    "row_count_pre_filtro_devolucao": 265,
-    "row_count_excluidas_cancel_comercial": 29,
-    "row_count_candidatas": 236,
-    "row_count_vendas_total": 6250,
-    "row_count_liberacoes": 3637,
-    "sales_from_lib_financial": 141,
+    "row_count_pre_filtro_devolucao": 269,
+    "row_count_excluidas_cancel_comercial": 31,
+    "row_count_candidatas": 238,
+    "row_count_vendas_total": 6327,
+    "row_count_liberacoes": 3728,
+    "sales_from_lib_financial": 148,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 6250,
-  "row_count_liberacoes": 3637,
-  "sales_from_lib_financial": 141
+  "row_count_vendas_total": 6327,
+  "row_count_liberacoes": 3728,
+  "sales_from_lib_financial": 148
 }

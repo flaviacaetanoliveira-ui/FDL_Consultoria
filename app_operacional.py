@@ -2167,6 +2167,18 @@ def _load_faturamento_data(
                         info["faturamento_nf_panel_ads"] = _faturamento_nf_panel_ads_flag_from_disk(
                             panel_p.resolve()
                         )
+                    elif df_p0.empty:
+                        info["faturamento_nf_panel_error"] = (
+                            f"O ficheiro **{panel_p.name}** existe em `{panel_p.parent}` mas está **vazio** (0 linhas). "
+                            "O agregado NF-first não produziu notas — confirme pedidos com NF ligada, notas na pasta "
+                            "configurada e volte a **materializar faturamento**."
+                        )
+                    else:
+                        info["faturamento_nf_panel_error"] = (
+                            "O painel NF em disco tem colunas em falta para o contrato atual — "
+                            f"rematerialize o faturamento. Ficheiro: "
+                            f"`{html.escape(str(panel_p.name))}`."
+                        )
                 except Exception as ex_p:  # noqa: BLE001
                     info["faturamento_nf_panel_error"] = str(ex_p).strip() or ex_p.__class__.__name__
         else:

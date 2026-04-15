@@ -5749,6 +5749,45 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               color: var(--fdl-neutral-500, #64748b);
               line-height: 1.4;
             }
+            /* Cabeçalho da página — Faturamento & DRE (vista mínima) */
+            .fdl-page-header {
+              padding: 1.25rem 0 0.85rem 0;
+              margin-bottom: 0.35rem;
+              border-bottom: 1px solid var(--fdl-neutral-200, #e2e8f0);
+            }
+            .fdl-page-header-main {
+              margin-bottom: 0.65rem;
+            }
+            .fdl-page-title {
+              font-size: 1.85rem;
+              font-weight: 700;
+              color: var(--fdl-neutral-800, #1e293b);
+              margin: 0 0 0.35rem 0;
+              font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+              letter-spacing: -0.02em;
+              line-height: 1.15;
+            }
+            .fdl-page-subtitle {
+              font-size: 0.95rem;
+              color: var(--fdl-neutral-500, #64748b);
+              margin: 0;
+              font-weight: 400;
+              line-height: 1.45;
+              max-width: 48rem;
+            }
+            .fdl-page-header-meta {
+              display: flex;
+              justify-content: flex-start;
+              align-items: center;
+              flex-wrap: wrap;
+              gap: 0.35rem 1rem;
+            }
+            .fdl-page-updated {
+              font-size: 0.8rem;
+              color: var(--fdl-neutral-400, #94a3b8);
+              font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+              font-variant-numeric: tabular-nums;
+            }
             .fdl-badge {
               font-size: 0.75rem;
               padding: 2px 8px;
@@ -7068,6 +7107,38 @@ def _render_faturamento_dre_commercial_complement_banner(
     st.divider()
 
 
+def _fdl_fat_min_format_updated_at(ts_raw: str) -> str:
+    """Formata ``ts_proc`` (``%Y-%m-%d %H:%M:%S`` típico) para exibição pt-BR no cabeçalho."""
+    s = (ts_raw or "").strip()
+    if not s:
+        return "—"
+    for _fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            dt = datetime.strptime(s[: len(_fmt)], _fmt)
+            return dt.strftime("%d/%m/%Y às %H:%M")
+        except ValueError:
+            continue
+    return s
+
+
+def _build_faturamento_dre_page_header_html(*, updated_at: str) -> str:
+    """Cabeçalho premium do módulo Faturamento & DRE (HTML; ``updated_at`` já seguro para inserção)."""
+    esc = html.escape(updated_at)
+    return (
+        '<div class="fdl-page-header">'
+        '<div class="fdl-page-header-main">'
+        '<h1 class="fdl-page-title">📊 Faturamento &amp; DRE</h1>'
+        "<p class=\"fdl-page-subtitle\">"
+        "Visão consolidada de faturamento, custos e resultado por nota fiscal"
+        "</p>"
+        "</div>"
+        '<div class="fdl-page-header-meta">'
+        f'<span class="fdl-page-updated">Atualizado em: {esc}</span>'
+        "</div>"
+        "</div>"
+    )
+
+
 def _render_faturamento_dre_minimal(
     df: pd.DataFrame,
     load_info: dict[str, object],
@@ -7081,8 +7152,19 @@ def _render_faturamento_dre_minimal(
     **resultado** já calculados na materialização — **sem** grão, merge ou ajustes comerciais no Streamlit.
     """
     _fdl_fat_min_inject_ui_styles()
+    _upd_disp = _fdl_fat_min_format_updated_at(ts_proc)
+    st.html(_build_faturamento_dre_page_header_html(updated_at=_upd_disp))
+    with st.expander("ℹ️ Sobre os dados", expanded=False):
+        st.caption(
+            "Dados do **`dataset_faturamento_nf_panel.parquet`** (materializado). "
+            "O topo «Base fiscal» é a referência principal (Parquet fiscal, empresa, emissão, N_base; "
+            "filtro opcional **Situação da NF**). **Cards** e **DRE** comerciais usam o mesmo período, empresa e situação do topo, "
+            "**mais** o filtro **Plataforma** quando preenchido (o topo **não** usa plataforma). "
+            "A **tabela** aplica ainda **produto** e **sinal** de resultado."
+        )
+    _fdl_fat_min_vsp(size="sm")
     _oid = str(org_id)
-    _ = org_display_name, ts_proc, load_info
+    _ = org_display_name, load_info
     use_nf_panel_baked = bool(load_info.get("faturamento_nf_panel_baked"))
     _df_nf_panel = load_info.get("faturamento_nf_panel_df")
     _df_nf_contract = load_info.get("faturamento_nf_df")
@@ -7112,13 +7194,6 @@ def _render_faturamento_dre_minimal(
     )
     use_fiscal_kpi = bool(
         use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame) and fiscal_contract_dataframe_valid(df_fiscal_pre)
-    )
-
-    st.caption(
-        "Dados de **`dataset_faturamento_nf_panel.parquet`** (materializado). O **topo «Base fiscal»** é a referência "
-        "principal (**Parquet fiscal**, empresa, emissão, **N_base**; filtro opcional **Situação da NF**). **Cards** e **DRE** "
-        "comerciais usam o **mesmo período, empresa e situação** do topo, **mais** o filtro **Plataforma** quando preenchido "
-        "(o topo **não** usa plataforma). A **tabela** aplica ainda **produto** e **sinal** de resultado."
     )
 
     if not use_nf_panel_baked_effective:
@@ -11391,15 +11466,7 @@ if _fv == "repasse" and _fdl_product_area == FDL_PRODUCT_AREA_FINANCEIRO:
 else:
     tabela_operacional_base = pd.DataFrame()
 
-if _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in _enabled_modules:
-    _render_financeiro_header(
-        segment="Painel",
-        title="Faturamento & DRE",
-        subtitle="Indicadores, DRE gerencial e detalhamento por NF — um único recorte (export alinhado).",
-        kicker_area="Faturamento & DRE",
-        compact_spacing=True,
-    )
-elif _fdl_product_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS and "faturamento" in _enabled_modules:
+if _fdl_product_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS and "faturamento" in _enabled_modules:
     _render_financeiro_header(
         segment="Comercial",
         title="Comercial & pedidos",

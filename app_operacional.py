@@ -5656,6 +5656,22 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               font-size: 0.72rem;
               color: #64748b;
             }
+            .fdl-cobertura-legenda {
+              font-size: 0.8rem;
+              color: var(--fdl-neutral-600, #4b5563);
+              margin-bottom: 1rem;
+              line-height: 1.4;
+              max-width: 52rem;
+            }
+            .fdl-cobertura-cta {
+              font-size: 0.8rem;
+              color: var(--fdl-warning-700, #b45309);
+              background: var(--fdl-warning-50, #fffbeb);
+              padding: 0.5rem 0.75rem;
+              border-radius: 4px;
+              margin-top: 1rem;
+              max-width: 52rem;
+            }
             .fdl-badge {
               font-size: 0.75rem;
               padding: 2px 8px;
@@ -6841,11 +6857,11 @@ def _render_faturamento_dre_commercial_complement_banner(
         _badge_html = ""
     elif _pct_sem <= 10.0:
         _badge_html = (
-            f'<span class="fdl-badge fdl-badge-warning">{_pct_sem:.0f}% sem resultado</span>'
+            f'<span class="fdl-badge fdl-badge-warning">{_pct_sem:.0f}% sem custo</span>'
         )
     else:
         _badge_html = (
-            f'<span class="fdl-badge fdl-badge-danger">{_pct_sem:.0f}% sem resultado</span>'
+            f'<span class="fdl-badge fdl-badge-danger">{_pct_sem:.0f}% sem custo</span>'
         )
 
     if aligned_to_fiscal_base and fiscal_parquet_ok and ok_nf_dates:
@@ -6882,8 +6898,13 @@ def _render_faturamento_dre_commercial_complement_banner(
     _h_vinc = "Notas com faturamento_nota_vinculada no materializado (há pedido comercial ligado)."
     _h_so_fiscal = "Sem vínculo comercial ou com venda (lista) ~0 — totais comerciais podem ser neutros nessas linhas."
     _h_venda = "Notas com valor de venda em lista estritamente positivo no materializado."
-    _h_sem_res = "Resultado comercial não numérico nesta NF (não entra na soma de resultado)."
-    _h_com_res = "Notas onde o resultado consolidado existe (pode ser 0)."
+    _h_sem_res = (
+        "NF comercial incompleta: tipicamente SKUs sem custo mapeado (Status_Custo ≠ CUSTO_OK). "
+        "O resultado consolidado não é calculado e não entra na soma da DRE até o cadastro de custos ser corrigido."
+    )
+    _h_com_res = (
+        "NFs com custo e encargos comerciais suficientes para calcular o resultado consolidado (pode ser 0)."
+    )
 
     def _cell(lab: str, val: int, title: str) -> str:
         return (
@@ -6900,9 +6921,23 @@ def _render_faturamento_dre_commercial_complement_banner(
             + _cell("Com vínculo pedido–NF", coverage.n_com_vinculo_pedido_nf, _h_vinc)
             + _cell("Só fiscal / sem vínculo útil", coverage.n_sem_vinculo_ou_so_fiscal, _h_so_fiscal)
             + _cell("Com venda (lista) > 0", coverage.n_com_venda_lista, _h_venda)
-            + _cell("Sem resultado (NaN)", coverage.n_sem_resultado, _h_sem_res)
-            + _cell("Com resultado numérico", coverage.n_com_resultado_numerico, _h_com_res)
+            + _cell("Sem custo (SKU não mapeado)", coverage.n_sem_resultado, _h_sem_res)
+            + _cell("Com custo calculado", coverage.n_com_resultado_numerico, _h_com_res)
             + "</div>"
+        )
+
+    _legenda_html = (
+        '<p class="fdl-cobertura-legenda">'
+        "NFs marcadas como &quot;sem custo&quot; têm SKUs não encontrados na base de custo. "
+        "O resultado dessas notas não entra na DRE até que o cadastro seja corrigido."
+        "</p>"
+    )
+    _cta_html = ""
+    if _pct_sem > 10.0:
+        _cta_html = (
+            '<p class="fdl-cobertura-cta">'
+            "💡 Para reduzir esse percentual, revise o cadastro de custos dos SKUs pendentes."
+            "</p>"
         )
 
     _admin_html = ""
@@ -6923,14 +6958,17 @@ def _render_faturamento_dre_commercial_complement_banner(
         )
 
     _inner = (
-        f'<p class="fdl-fat-cobertura-caption">{_md_bold_to_html(_cap_txt)}</p>{_grid_html}{_admin_html}'
+        f'<p class="fdl-fat-cobertura-caption">{_md_bold_to_html(_cap_txt)}</p>'
+        f"{_legenda_html}{_grid_html}{_cta_html}{_admin_html}"
     )
-    st.markdown(
+    # ``st.markdown(..., unsafe_allow_html=True)`` passa pelo parser GFM e pode degradar/sanitizar
+    # ``<details>``/aninhamento; ``st.html`` envia o fragmento como HTML nativo (CSS já injetado em
+    # ``_fdl_fat_min_inject_ui_styles`` no início desta vista).
+    st.html(
         '<details class="fdl-fat-cobertura">'
         f'<summary>Cobertura comercial{" " if _badge_html else ""}{_badge_html}</summary>'
         f"<div>{_inner}</div>"
-        "</details>",
-        unsafe_allow_html=True,
+        "</details>"
     )
     _fdl_fat_min_vsp(size="sm")
     st.divider()

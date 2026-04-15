@@ -6,6 +6,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from .config import (
@@ -22,6 +23,26 @@ from .config import (
 def _header_token(cell: object) -> str:
     t = unicodedata.normalize("NFKD", str(cell).strip()).encode("ascii", "ignore").decode().casefold()
     return re.sub(r"\s+", " ", t).strip()
+
+
+def _raw_custo_cell_as_str(v: object) -> str:
+    """
+    Normaliza célula do XLSX para texto consumido por ``to_numeric_br``.
+
+    O Excel grava decimais com ponto; ``_parse_number_scalar`` pode tratar ``168.338`` como milhar.
+    Valores já numéricos passam a usar vírgula decimal BR.
+    """
+    if v is None or (isinstance(v, (float, np.floating)) and (pd.isna(v) or not np.isfinite(float(v)))):
+        return ""
+    if isinstance(v, (float, np.floating)):
+        x = float(v)
+        s0 = f"{x:.12f}".rstrip("0").rstrip(".")
+        if "." in s0:
+            return s0.replace(".", ",")
+        return s0
+    if isinstance(v, (int, np.integer)):
+        return str(int(v))
+    return str(v).strip()
 
 
 def _detect_custo_header_row(raw: pd.DataFrame) -> tuple[int, int, int] | None:
@@ -121,7 +142,7 @@ def _wide_frame_from_raw(
         for canon in keys_sorted:
             j = price_idx[canon]
             v = raw.iat[ii, j]
-            rec[canon] = "" if pd.isna(v) else str(v).strip()
+            rec[canon] = _raw_custo_cell_as_str(v)
         rows.append(rec)
     return pd.DataFrame(rows)
 
@@ -166,9 +187,9 @@ def _normalize_wide_custo_sheet_if_applicable(df0: pd.DataFrame) -> pd.DataFrame
         return None
 
     out = pd.DataFrame()
-    out[CUSTO_SKU_COL] = df0[code_src].astype(str)
+    out[CUSTO_SKU_COL] = df0[code_src].map(_raw_custo_cell_as_str)
     for canon, src in sorted(price_src.items(), key=lambda x: x[0]):
-        out[canon] = df0[src].astype(str)
+        out[canon] = df0[src].map(_raw_custo_cell_as_str)
     return out
 
 
@@ -180,7 +201,7 @@ def _frame_from_detection(raw: pd.DataFrame, header_idx: int, sj: int, pj: int) 
         if pd.isna(sku_c) and pd.isna(pr_c):
             continue
         sku_s = "" if pd.isna(sku_c) else str(sku_c).strip()
-        pr_s = "" if pd.isna(pr_c) else str(pr_c).strip()
+        pr_s = _raw_custo_cell_as_str(pr_c)
         if not sku_s:
             continue
         rows.append((sku_s, pr_s))

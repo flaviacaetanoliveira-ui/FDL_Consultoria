@@ -11474,28 +11474,28 @@ if _fdl_product_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS and "faturamento" in 
         kicker_area="Comercial & pedidos",
         compact_spacing=True,
     )
-elif _fv == "devolucoes":
+elif _fdl_product_area == FDL_PRODUCT_AREA_FINANCEIRO and _fv == "devolucoes":
     _render_financeiro_header(
         segment="Operacional",
         title="Controle de Devoluções",
         subtitle="Fila de candidatas · devolução, reembolso, mediação, reclamação e eventos nas liberações (não é o export completo de vendas).",
         compact_spacing=True,
     )
-elif _fv == "repasse":
+elif _fdl_product_area == FDL_PRODUCT_AREA_FINANCEIRO and _fv == "repasse":
     _render_financeiro_header(
         segment="Repasse",
         title="Conciliação de Repasse",
         subtitle="Fila de tratativa · repasses, NF e divergências no mesmo recorte.",
         compact_spacing=True,
     )
-elif _fv == "frete":
+elif _fdl_product_area == FDL_PRODUCT_AREA_FINANCEIRO and _fv == "frete":
     _render_financeiro_header(
         segment="Frete",
         title="Conciliação de Frete",
         subtitle="Frete cobrado vs esperado · anúncios e vendas no mesmo recorte.",
         compact_spacing=True,
     )
-else:
+elif _fdl_product_area == FDL_PRODUCT_AREA_FINANCEIRO:
     _render_financeiro_header(
         segment="Financeiro",
         title="Financeiro operacional",

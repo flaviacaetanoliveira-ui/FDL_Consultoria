@@ -5580,6 +5580,96 @@ def _fdl_fat_min_inject_ui_styles() -> None:
             section[data-testid="stMain"] [data-testid="stMultiSelect"] [data-baseweb="select"] > div {
               min-height: 38px !important;
             }
+            /* Cobertura comercial (painel NF-first): colapsável + badge de alerta */
+            .fdl-fat-cobertura {
+              margin: 1rem 0;
+              border: 1px solid var(--fdl-neutral-200, #e2e8f0);
+              border-radius: 8px;
+              background: var(--fdl-neutral-50, #f8fafc);
+            }
+            .fdl-fat-cobertura summary {
+              padding: 0.75rem 1rem;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              gap: 0.75rem;
+              flex-wrap: wrap;
+              font-weight: 500;
+              color: var(--fdl-neutral-700, #374151);
+              list-style: none;
+            }
+            .fdl-fat-cobertura summary::-webkit-details-marker {
+              display: none;
+            }
+            .fdl-fat-cobertura summary::marker {
+              content: "";
+            }
+            .fdl-fat-cobertura summary::before {
+              content: "▶";
+              font-size: 0.7rem;
+              transition: transform 0.2s ease;
+              flex-shrink: 0;
+            }
+            .fdl-fat-cobertura[open] summary::before {
+              transform: rotate(90deg);
+            }
+            .fdl-fat-cobertura > div {
+              padding: 1rem;
+              border-top: 1px solid var(--fdl-neutral-200, #e2e8f0);
+            }
+            .fdl-fat-cobertura-caption {
+              font-size: 0.75rem;
+              color: #64748b;
+              line-height: 1.45;
+              margin: 0 0 0.85rem 0;
+              max-width: 52rem;
+            }
+            .fdl-fat-cobertura-caption strong {
+              color: #334155;
+              font-weight: 600;
+            }
+            .fdl-fat-cobertura-grid {
+              display: grid;
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+              gap: 0.75rem 1rem;
+            }
+            .fdl-fat-cobertura-cell {
+              min-width: 0;
+            }
+            .fdl-fat-cobertura-lab {
+              font-size: 0.68rem;
+              font-weight: 600;
+              color: #64748b;
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+              margin-bottom: 0.25rem;
+              line-height: 1.25;
+            }
+            .fdl-fat-cobertura-val {
+              font-size: 1.05rem;
+              font-weight: 700;
+              font-variant-numeric: tabular-nums;
+              color: #0f172a;
+            }
+            .fdl-fat-cobertura-admin {
+              margin-top: 0.75rem;
+              font-size: 0.72rem;
+              color: #64748b;
+            }
+            .fdl-badge {
+              font-size: 0.75rem;
+              padding: 2px 8px;
+              border-radius: 4px;
+              font-weight: 500;
+            }
+            .fdl-badge-warning {
+              background: #fef3c7;
+              color: #92400e;
+            }
+            .fdl-badge-danger {
+              background: #fee2e2;
+              color: #991b1b;
+            }
             </style>
             """
         )
@@ -6730,77 +6820,92 @@ def _render_faturamento_dre_commercial_complement_banner(
 ) -> None:
     """
     Bloco imediatamente abaixo do topo fiscal: deixa explícito que os KPIs/DRE comerciais são complemento
-    sobre o mesmo período/empresa, com cobertura parcial possível.
+    sobre o mesmo período/empresa, com cobertura parcial possível. Colapsável (fechado por defeito) + badge de alerta.
     """
-    st.subheader("Análise comercial (complemento)")
+
+    def _md_bold_to_html(s: str) -> str:
+        parts = s.split("**")
+        if len(parts) == 1:
+            return html.escape(s)
+        chunks: list[str] = []
+        for i, part in enumerate(parts):
+            if i % 2 == 0:
+                chunks.append(html.escape(part))
+            else:
+                chunks.append(f"<strong>{html.escape(part)}</strong>")
+        return "".join(chunks)
+
+    _nt = max(int(coverage.n_total), 0)
+    _pct_sem = (100.0 * float(coverage.n_sem_resultado) / float(_nt)) if _nt else 0.0
+    if _pct_sem <= 5.0:
+        _badge_html = ""
+    elif _pct_sem <= 10.0:
+        _badge_html = (
+            f'<span class="fdl-badge fdl-badge-warning">{_pct_sem:.0f}% sem resultado</span>'
+        )
+    else:
+        _badge_html = (
+            f'<span class="fdl-badge fdl-badge-danger">{_pct_sem:.0f}% sem resultado</span>'
+        )
+
     if aligned_to_fiscal_base and fiscal_parquet_ok and ok_nf_dates:
         if kpi_subset_by_platform:
-            st.caption(
+            _cap_txt = (
                 "Usa o **mesmo período**, **empresa(s)** e **situação NF** (se filtrada) do topo **Base fiscal**. "
                 "Com **Plataforma** selecionada, os KPIs somam **só** NFs desse canal (o **topo fiscal** permanece **sem** plataforma). "
                 "Dados de venda, custos e resultado vêm do **enriquecimento comercial** e **podem faltar** em parte das notas."
             )
         else:
-            st.caption(
+            _cap_txt = (
                 "Usa o **mesmo período de emissão**, **empresa(s)** e **situação NF** (se filtrada) do topo **Base fiscal**. "
                 "Cada linha = uma NF do conjunto **N_base**; dados de venda, custos e resultado vêm do **enriquecimento comercial** "
                 "(painel materializado) e **podem faltar** em parte das notas — por isso os totais comerciais são interpretados "
                 "com cobertura parcial, sem retirar a NF do universo."
             )
     elif fiscal_parquet_ok and not ok_nf_dates:
-        st.caption(
+        _cap_txt = (
             "Período de emissão indisponível — indicadores comerciais seguem o recorte possível no painel NF "
             "(empresa), sem alinhamento ao topo fiscal."
         )
     else:
-        st.caption(
+        _cap_txt = (
             "Sem **Parquet fiscal** publicado: os indicadores comerciais abaixo referem-se às NFs do **painel** "
             "no recorte **empresa + emissão** (mesmas datas selecionadas quando aplicável), **não** ao conjunto "
             "**N_base** do Bling. Publique `dataset_faturamento_fiscal.parquet` para alinhar o universo ao topo."
         )
+
+    _h_univ = (
+        "Número de linhas usadas em cards e DRE comerciais: com fiscal ativo, coincide com N_base do topo quando "
+        "Plataforma está vazia; com Plataforma selecionada, é o subconjunto comercial nesse canal (ainda alinhado ao fiscal por NF). "
+        "Sem Parquet fiscal: NFs do painel após empresa + emissão."
+    )
+    _h_vinc = "Notas com faturamento_nota_vinculada no materializado (há pedido comercial ligado)."
+    _h_so_fiscal = "Sem vínculo comercial ou com venda (lista) ~0 — totais comerciais podem ser neutros nessas linhas."
+    _h_venda = "Notas com valor de venda em lista estritamente positivo no materializado."
+    _h_sem_res = "Resultado comercial não numérico nesta NF (não entra na soma de resultado)."
+    _h_com_res = "Notas onde o resultado consolidado existe (pode ser 0)."
+
+    def _cell(lab: str, val: int, title: str) -> str:
+        return (
+            f'<div class="fdl-fat-cobertura-cell" title="{html.escape(title, quote=True)}">'
+            f'<div class="fdl-fat-cobertura-lab">{html.escape(lab)}</div>'
+            f'<div class="fdl-fat-cobertura-val">{html.escape(_fmt_int_ptbr(val))}</div></div>'
+        )
+
+    _grid_html = ""
     if ok_nf_dates and (aligned_to_fiscal_base or not fiscal_parquet_ok):
-        _r1 = st.columns(3)
-        with _r1[0]:
-            st.metric(
-                label="Notas no universo dos KPIs",
-                value=_fmt_int_ptbr(coverage.n_total),
-                help=(
-                    "Número de linhas usadas em **cards** e **DRE** comerciais: com fiscal ativo, coincide com **N_base** "
-                    "do topo quando **Plataforma** está vazia; com **Plataforma** selecionada, é o **subconjunto** comercial "
-                    "nesse canal (ainda alinhado ao fiscal por NF). Sem Parquet fiscal: NFs do painel após empresa + emissão."
-                ),
-            )
-        with _r1[1]:
-            st.metric(
-                label="Com vínculo pedido–NF",
-                value=_fmt_int_ptbr(coverage.n_com_vinculo_pedido_nf),
-                help="Notas com `faturamento_nota_vinculada` no materializado (há pedido comercial ligado).",
-            )
-        with _r1[2]:
-            st.metric(
-                label="Só fiscal / sem vínculo útil",
-                value=_fmt_int_ptbr(coverage.n_sem_vinculo_ou_so_fiscal),
-                help="Sem vínculo comercial ou com venda (lista) ~0 — totais comerciais podem ser neutros nessas linhas.",
-            )
-        _r2 = st.columns(3)
-        with _r2[0]:
-            st.metric(
-                label="Com venda (lista) > 0",
-                value=_fmt_int_ptbr(coverage.n_com_venda_lista),
-                help="Notas com valor de venda em lista estritamente positivo no materializado.",
-            )
-        with _r2[1]:
-            st.metric(
-                label="Sem resultado (NaN)",
-                value=_fmt_int_ptbr(coverage.n_sem_resultado),
-                help="Resultado comercial não numérico nesta NF (não entra na soma de resultado).",
-            )
-        with _r2[2]:
-            st.metric(
-                label="Com resultado numérico",
-                value=_fmt_int_ptbr(coverage.n_com_resultado_numerico),
-                help="Notas onde o resultado consolidado existe (pode ser 0).",
-            )
+        _grid_html = (
+            '<div class="fdl-fat-cobertura-grid">'
+            + _cell("Notas no universo dos KPIs", coverage.n_total, _h_univ)
+            + _cell("Com vínculo pedido–NF", coverage.n_com_vinculo_pedido_nf, _h_vinc)
+            + _cell("Só fiscal / sem vínculo útil", coverage.n_sem_vinculo_ou_so_fiscal, _h_so_fiscal)
+            + _cell("Com venda (lista) > 0", coverage.n_com_venda_lista, _h_venda)
+            + _cell("Sem resultado (NaN)", coverage.n_sem_resultado, _h_sem_res)
+            + _cell("Com resultado numérico", coverage.n_com_resultado_numerico, _h_com_res)
+            + "</div>"
+        )
+
+    _admin_html = ""
     if (
         aligned_to_fiscal_base
         and ok_nf_dates
@@ -6808,9 +6913,25 @@ def _render_faturamento_dre_commercial_complement_banner(
         and _is_admin_mode()
         and not kpi_subset_by_platform
     ):
-        st.caption(
-            f"**Admin:** N_base no topo = **{n_fiscal_base}** · linhas no frame alinhado = **{coverage.n_total}** — esperado igual; investigar chaves de merge."
+        _admin_html = (
+            '<p class="fdl-fat-cobertura-admin">'
+            "<strong>Admin:</strong> "
+            f"N_base no topo = <strong>{html.escape(_fmt_int_ptbr(n_fiscal_base))}</strong> · "
+            f"linhas no frame alinhado = <strong>{html.escape(_fmt_int_ptbr(coverage.n_total))}</strong> — "
+            "esperado igual; investigar chaves de merge."
+            "</p>"
         )
+
+    _inner = (
+        f'<p class="fdl-fat-cobertura-caption">{_md_bold_to_html(_cap_txt)}</p>{_grid_html}{_admin_html}'
+    )
+    st.markdown(
+        '<details class="fdl-fat-cobertura">'
+        f'<summary>Cobertura comercial{" " if _badge_html else ""}{_badge_html}</summary>'
+        f"<div>{_inner}</div>"
+        "</details>",
+        unsafe_allow_html=True,
+    )
     _fdl_fat_min_vsp(size="sm")
     st.divider()
 
@@ -7133,7 +7254,7 @@ def _render_faturamento_dre_minimal(
             df_nf_commercial_kpi, _min_state.plataformas
         )
     _commercial_coverage = compute_commercial_coverage_stats(df_nf_commercial_kpi)
-    _fdl_fat_section_rule("Análise comercial")
+    _fdl_fat_section_rule("Cobertura")
     _render_faturamento_dre_commercial_complement_banner(
         coverage=_commercial_coverage,
         n_fiscal_base=int(_fiscal_base_stats.n_nf),

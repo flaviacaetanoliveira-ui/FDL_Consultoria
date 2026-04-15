@@ -4371,6 +4371,7 @@ def _multiselect_stable(
     *,
     compact_label: bool = False,
     help: str | None = None,
+    placeholder: str = "Escolher…",
 ) -> list[str]:
     """
     Evita `default=` com listas recém-ordenadas a cada rerun (perdia estado / ecrã em branco).
@@ -4396,11 +4397,11 @@ def _multiselect_stable(
             " ",
             opts,
             key=key,
-            placeholder="Todos",
+            placeholder=placeholder,
             label_visibility="collapsed",
             help=help,
         )
-    return st.multiselect(label, opts, key=key, placeholder="Escolher…", help=help)
+    return st.multiselect(label, opts, key=key, placeholder=placeholder, help=help)
 
 
 def _faturamento_divergencia_tol() -> float:
@@ -5672,6 +5673,82 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               margin-top: 1rem;
               max-width: 52rem;
             }
+            /* Filtros + Base fiscal — vista mínima Faturamento & DRE */
+            .fdl-fat-filtros-periodo-tit {
+              font-size: 0.72rem;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.06em;
+              color: #64748b;
+              margin: 0.5rem 0 0.35rem 0;
+            }
+            .fdl-base-fiscal-card {
+              border: 1px solid var(--fdl-neutral-200, #e2e8f0);
+              border-radius: 12px;
+              background: var(--fdl-neutral-50, #f8fafc);
+              overflow: hidden;
+              margin: 0.75rem 0 0.35rem 0;
+            }
+            .fdl-base-fiscal-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 0.75rem 1.25rem;
+              border-bottom: 1px solid var(--fdl-neutral-200, #e2e8f0);
+              background: #ffffff;
+              flex-wrap: wrap;
+              gap: 0.35rem 1rem;
+            }
+            .fdl-base-fiscal-title {
+              font-weight: 600;
+              font-size: 1rem;
+              color: var(--fdl-neutral-800, #1e293b);
+            }
+            .fdl-base-fiscal-periodo {
+              font-size: 0.875rem;
+              color: var(--fdl-neutral-500, #64748b);
+              font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+            }
+            .fdl-base-fiscal-body {
+              display: flex;
+              justify-content: space-around;
+              flex-wrap: wrap;
+              gap: 1rem 2rem;
+              padding: 1.35rem 1.25rem;
+              background: #ffffff;
+            }
+            .fdl-base-fiscal-kpi {
+              text-align: center;
+              min-width: 10rem;
+            }
+            .fdl-base-fiscal-valor {
+              display: block;
+              font-size: 1.85rem;
+              font-weight: 700;
+              color: var(--fdl-neutral-800, #1e293b);
+              font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+              font-variant-numeric: tabular-nums;
+              line-height: 1.15;
+            }
+            .fdl-base-fiscal-label {
+              display: block;
+              font-size: 0.72rem;
+              color: var(--fdl-neutral-500, #64748b);
+              margin-top: 0.35rem;
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+              font-weight: 600;
+            }
+            .fdl-base-fiscal-footer {
+              padding: 0.55rem 1.25rem;
+              border-top: 1px solid var(--fdl-neutral-200, #e2e8f0);
+              background: var(--fdl-neutral-50, #f8fafc);
+            }
+            .fdl-base-fiscal-contexto {
+              font-size: 0.75rem;
+              color: var(--fdl-neutral-500, #64748b);
+              line-height: 1.4;
+            }
             .fdl-badge {
               font-size: 0.75rem;
               padding: 2px 8px;
@@ -6756,6 +6833,43 @@ def _faturamento_dre_apply_produto_e_sinal_venda(
     return out.loc[mask].copy()
 
 
+def _fdl_fat_min_base_fiscal_card_html(
+    *,
+    total_faturado: str,
+    n_nfs: str,
+    periodo: str,
+    contexto: str,
+) -> str:
+    """Card HTML do topo fiscal (valores já formatados em pt-BR)."""
+    _tt_fat = html.escape(
+        "Soma de Valor_Liquido_NF (1× por NF) no Parquet fiscal, após empresa + emissão + situação válida."
+    )
+    _tt_nf = html.escape("Contagem de notas distintas no mesmo conjunto base fiscal.")
+    return (
+        '<div class="fdl-base-fiscal-card">'
+        '<div class="fdl-base-fiscal-header">'
+        '<span class="fdl-base-fiscal-title">📊 Base fiscal</span>'
+        f'<span class="fdl-base-fiscal-periodo">{html.escape(periodo)}</span>'
+        "</div>"
+        '<div class="fdl-base-fiscal-body">'
+        '<div class="fdl-base-fiscal-kpi">'
+        f'<span class="fdl-base-fiscal-valor" title="{_tt_fat}">'
+        f"{html.escape(total_faturado)}</span>"
+        '<span class="fdl-base-fiscal-label">Total faturado (fiscal)</span>'
+        "</div>"
+        '<div class="fdl-base-fiscal-kpi">'
+        f'<span class="fdl-base-fiscal-valor" title="{_tt_nf}">'
+        f"{html.escape(n_nfs)}</span>"
+        '<span class="fdl-base-fiscal-label">NFs emitidas</span>'
+        "</div>"
+        "</div>"
+        '<div class="fdl-base-fiscal-footer">'
+        f'<span class="fdl-base-fiscal-contexto">ℹ️ {html.escape(contexto)}</span>'
+        "</div>"
+        "</div>"
+    )
+
+
 def _render_faturamento_dre_fiscal_base_top(
     *,
     stats: FaturamentoFiscalBaseStats,
@@ -6768,31 +6882,21 @@ def _render_faturamento_dre_fiscal_base_top(
     situacoes_nf_sel: tuple[str, ...] = (),
 ) -> None:
     """Topo do painel: conjunto base fiscal (empresa + emissão), comparável ao Bling — sem plataforma/produto comercial."""
-    st.subheader("Base fiscal (emissão da NF)")
-    _emp_lbl = (
-        ", ".join(str(x).strip() for x in empresas_sel if str(x).strip())
-        if empresas_sel
-        else ("Todas as empresas do carregamento" if emp_opts else "—")
-    )
     if ok_nf_dates:
         _per = f"{nf_d_ini.strftime('%d/%m/%Y')} — {nf_d_fim.strftime('%d/%m/%Y')}"
     else:
-        _per = "período de emissão indisponível"
-    _sit_lbl = (
+        _per = "Período indisponível"
+    _emp_ctx = (
+        " · ".join(str(x).strip() for x in empresas_sel if str(x).strip())
+        if empresas_sel
+        else ("Todas as empresas" if emp_opts else "—")
+    )
+    _sit_ctx = (
         ", ".join(str(x).strip() for x in situacoes_nf_sel if str(x).strip())
         if situacoes_nf_sel
-        else ""
+        else "Situações válidas (exc. cancelada/denegada/inutilizada)"
     )
-    _sit_seg = (
-        f" · **Situação NF (filtro):** {_sit_lbl}"
-        if _sit_lbl
-        else " · **Situação NF:** todas as situações válidas do materializado (exc. cancelada/denegada/inutilizada)"
-    )
-    st.caption(
-        f"**Empresa(s):** {_emp_lbl} · **Período emissão NF:** {_per} · "
-        f"**N_base:** **{stats.n_nf}** nota(s) no recorte{_sit_seg} · "
-        "Totais abaixo **não** usam filtro de **plataforma**, produto nem resultado comercial."
-    )
+    _contexto_compacto = f"{_emp_ctx} · {_sit_ctx}"
     if not fiscal_parquet_ok:
         st.info(
             "Conjunto base fiscal indisponível: publique **`dataset_faturamento_fiscal.parquet`** junto do materializado "
@@ -6802,27 +6906,17 @@ def _render_faturamento_dre_fiscal_base_top(
     if not ok_nf_dates:
         st.warning("Datas de emissão da NF não utilizáveis — recorte fiscal vazio.")
         return
-    c1, c2 = st.columns(2)
-    with c1:
-        st.metric(
-            label="Total faturado (fiscal)",
-            value=_fmt_brl_ptbr_celula(stats.valor_liquido_fiscal_sum) or "R$ 0,00",
-            help=(
-                "Soma de Valor_Liquido_NF (1× por NF) no Parquet fiscal, após empresa + emissão + situação válida "
-                "(e filtro opcional de **Situação da NF** na barra de filtros)."
-            ),
+    _tot = _fmt_brl_ptbr_celula(stats.valor_liquido_fiscal_sum) or "R$ 0,00"
+    _nn = _fmt_int_ptbr(stats.n_nf)
+    st.html(
+        _fdl_fat_min_base_fiscal_card_html(
+            total_faturado=_tot,
+            n_nfs=_nn,
+            periodo=_per,
+            contexto=_contexto_compacto,
         )
-    with c2:
-        st.metric(
-            label="Nº de NFs emitidas (base fiscal)",
-            value=_fmt_int_ptbr(stats.n_nf),
-            help=(
-                "Contagem de notas distintas no mesmo conjunto base (comparável a relatório de notas emitidas), "
-                "incluindo o filtro opcional de **Situação da NF**."
-            ),
-        )
+    )
     _fdl_fat_min_vsp(size="sm")
-    st.divider()
 
 
 def _render_faturamento_dre_commercial_complement_banner(
@@ -7154,73 +7248,15 @@ def _render_faturamento_dre_minimal(
         )
     _plat_help = "Plataforma: " + _plat_expl
 
-    _fdl_fat_section_rule("Filtros")
     with st.container(border=True):
-        st.subheader("Filtros")
-        st.caption(
-            "**Empresa**, **Situação da NF** (opcional) e **período de emissão** definem o **topo Base fiscal** e o núcleo dos "
-            "**cards/DRE**. **Plataforma** (opcional) **não** altera o topo; refina **cards/DRE** e **tabela** no mesmo período."
-        )
-        if emp_opts:
-            if "fdl_fat_min_emp" not in st.session_state:
-                st.session_state["fdl_fat_min_emp"] = []
-            else:
-                prev_e = st.session_state["fdl_fat_min_emp"]
-                if isinstance(prev_e, list):
-                    st.session_state["fdl_fat_min_emp"] = [x for x in prev_e if x in emp_opts]
-                else:
-                    st.session_state["fdl_fat_min_emp"] = []
-            st.multiselect(
-                "Empresa",
-                emp_opts,
-                key="fdl_fat_min_emp",
-                help="**Vazio** = todas as empresas neste carregamento. Uma ou mais marcas para refinar.",
-                placeholder="Todas",
-            )
-        _multiselect_stable("fdl_fat_min_plat", "Plataforma", plats, help=_plat_help)
-        if _sit_opts:
-            _multiselect_stable(
-                "fdl_fat_min_nf_sit",
-                "Situação da NF",
-                _sit_opts,
-                help=(
-                    "**Vazio** = todas as situações válidas já admitidas no materializado (exceto cancelada/denegada/inutilizada). "
-                    "Com valor selecionado, restringe o **topo fiscal**, **cards/DRE** e **tabela** às situações indicadas."
-                ),
-            )
-        else:
-            if "fdl_fat_min_nf_sit" not in st.session_state:
-                st.session_state["fdl_fat_min_nf_sit"] = []
-            st.caption("Situação da NF: sem valores distintos no recorte atual — filtro indisponível.")
-        if ok_nf_dates:
-            r_nf = st.columns((1, 1))
-            with r_nf[0]:
-                st.date_input(
-                    "Período emissão NF — início",
-                    min_value=nf_cal_min,
-                    max_value=nf_cal_max,
-                    format="DD/MM/YYYY",
-                    key="fdl_fat_min_nf_d_ini",
-                    help=_FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN,
-                )
-            with r_nf[1]:
-                st.date_input(
-                    "Período emissão NF — fim",
-                    min_value=nf_cal_min,
-                    max_value=nf_cal_max,
-                    format="DD/MM/YYYY",
-                    key="fdl_fat_min_nf_d_fim",
-                    help=_FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN,
-                )
-        elif "Nota_Data_Emissao" in _df_bounds.columns:
-            st.caption("Período de emissão indisponível (datas não utilizáveis em Nota_Data_Emissao).")
-        else:
-            st.caption("Período de emissão indisponível (sem coluna Nota_Data_Emissao).")
-        _clr_sp, _clr_btn = st.columns((1.55, 1))
-        with _clr_btn:
+        _fh_t, _fh_b = st.columns((4, 1))
+        with _fh_t:
+            st.markdown("**Filtros**")
+        with _fh_b:
             if st.button(
-                "Limpar filtros desta vista",
+                "Limpar filtros",
                 key="fdl_fat_min_reset",
+                type="secondary",
                 use_container_width=True,
                 help="Repor empresa, plataforma, situação NF, datas de emissão NF, produto e sinal do resultado ao padrão.",
             ):
@@ -7238,6 +7274,82 @@ def _render_faturamento_dre_minimal(
                 ):
                     st.session_state.pop(_k, None)
                 st.rerun()
+        with st.expander("ℹ️ Como funcionam os filtros", expanded=False):
+            st.caption(
+                "**Empresa**, **Situação da NF** (opcional) e **período de emissão** definem o **topo Base fiscal** e o núcleo dos "
+                "**cards/DRE**. **Plataforma** (opcional) **não** altera o topo; refina **cards/DRE** e **tabela** no mesmo período."
+            )
+        _fc1, _fc2, _fc3 = st.columns(3)
+        with _fc1:
+            if emp_opts:
+                if "fdl_fat_min_emp" not in st.session_state:
+                    st.session_state["fdl_fat_min_emp"] = []
+                else:
+                    prev_e = st.session_state["fdl_fat_min_emp"]
+                    if isinstance(prev_e, list):
+                        st.session_state["fdl_fat_min_emp"] = [x for x in prev_e if x in emp_opts]
+                    else:
+                        st.session_state["fdl_fat_min_emp"] = []
+                st.multiselect(
+                    "Empresa",
+                    emp_opts,
+                    key="fdl_fat_min_emp",
+                    help="**Vazio** = todas as empresas neste carregamento. Uma ou mais marcas para refinar.",
+                    placeholder="Todas",
+                )
+            else:
+                st.caption("Empresa: sem opções distintas no recorte atual.")
+        with _fc2:
+            if plats:
+                _multiselect_stable(
+                    "fdl_fat_min_plat", "Plataforma", plats, help=_plat_help, placeholder="Todas"
+                )
+            else:
+                st.caption("Plataforma: sem opções no recorte.")
+        with _fc3:
+            if _sit_opts:
+                _multiselect_stable(
+                    "fdl_fat_min_nf_sit",
+                    "Situação da NF",
+                    _sit_opts,
+                    help=(
+                        "**Vazio** = todas as situações válidas já admitidas no materializado (exceto cancelada/denegada/inutilizada). "
+                        "Com valor selecionado, restringe o **topo fiscal**, **cards/DRE** e **tabela** às situações indicadas."
+                    ),
+                    placeholder="Todas",
+                )
+            else:
+                if "fdl_fat_min_nf_sit" not in st.session_state:
+                    st.session_state["fdl_fat_min_nf_sit"] = []
+                st.caption("Situação da NF: sem valores distintos no recorte — filtro indisponível.")
+        if ok_nf_dates:
+            st.markdown(
+                '<p class="fdl-fat-filtros-periodo-tit">Período de emissão</p>',
+                unsafe_allow_html=True,
+            )
+            r_nf = st.columns((1, 1))
+            with r_nf[0]:
+                st.date_input(
+                    "Início",
+                    min_value=nf_cal_min,
+                    max_value=nf_cal_max,
+                    format="DD/MM/YYYY",
+                    key="fdl_fat_min_nf_d_ini",
+                    help=_FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN,
+                )
+            with r_nf[1]:
+                st.date_input(
+                    "Fim",
+                    min_value=nf_cal_min,
+                    max_value=nf_cal_max,
+                    format="DD/MM/YYYY",
+                    key="fdl_fat_min_nf_d_fim",
+                    help=_FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN,
+                )
+        elif "Nota_Data_Emissao" in _df_bounds.columns:
+            st.caption("Período de emissão indisponível (datas não utilizáveis em Nota_Data_Emissao).")
+        else:
+            st.caption("Período de emissão indisponível (sem coluna Nota_Data_Emissao).")
 
     _fdl_ui_gap_section()
     _fdl_fat_min_vsp(size="md")
@@ -7261,7 +7373,6 @@ def _render_faturamento_dre_minimal(
         ok_nf_dates=ok_nf_dates,
         situacoes_sel=_min_state.situacoes_nf,
     )
-    _fdl_fat_section_rule("Base fiscal")
     _render_faturamento_dre_fiscal_base_top(
         stats=_fiscal_base_stats,
         ok_nf_dates=ok_nf_dates,

@@ -1,0 +1,121 @@
+# FDL Analytics — Regras do Agente Cursor
+# Arquivo lido automaticamente em toda conversa neste projeto.
+# NÃO altere sem validação de negócio.
+
+## IDENTIDADE DO PROJETO
+
+Você está trabalhando no FDL Analytics, uma plataforma analítica para e-commerce da FDL Consultoria.
+O sistema consolida dados do ERP Bling e marketplaces (Mercado Livre, Shopee, Amazon, Magalu, MadeiraMadeira, TikTok Shop).
+Este é um produto profissional com visão de SaaS — não uma gambiarra ou script pontual.
+
+## ARQUITETURA — REGRAS INEGOCIÁVEIS
+
+1. O Streamlit NUNCA processa dados. Ele apenas lê datasets materializados prontos.
+2. Todo processamento fica em `processing/` ou nos arquivos `etapa*.py` — fora da interface.
+3. A materialização é sempre orquestrada por `processing/materialize_financeiro.py`.
+4. O app lê dados via `processing/repasse_load.py` e equivalentes — nunca direto do CSV bruto.
+5. Caminhos de pastas sempre resolvidos via `fdl_paths.py` — nunca hardcoded.
+
+## QUALIDADE DE DADOS — SEMPRE
+
+- Campos monetários = sempre `float` (nunca string, nunca vírgula como decimal no código)
+- Datas = sempre `datetime` (nunca string, nunca formato BR no código)
+- SKU = sempre normalizado: minúsculo, sem espaços, sem caracteres especiais
+- Nunca use descrição textual como chave de relacionamento — apenas código do SKU
+- Campos nulos em colunas críticas (valor, status, chave de pedido) nunca podem ser ignorados
+
+## RASTREABILIDADE — OBRIGATÓRIO EM TODO DATASET
+
+Todo dataset materializado deve conter:
+- `_origem_arquivo` (str) — nome do arquivo de origem
+- `_data_processamento` (datetime) — quando o ETL rodou
+- `_versao_pipeline` (str) — versão do pipeline
+- `_status_conciliacao` (str) — conciliado / divergente / pendente
+- `cliente_slug` (str) — identificador do cliente
+- `empresa_cnpj` (str) — CNPJ formatado
+
+## REGRAS DE NEGÓCIO — NÃO ALTERAR SEM VALIDAÇÃO
+
+### Conciliação de Repasses
+- Venda só é `conciliada` quando: pedido + repasse recebido + valores dentro da tolerância (R$0,50 ou 0,5%)
+- Repasse sem pedido = `sem_venda` — NUNCA ignorar
+- Pedido sem repasse após prazo = `pendente_repasse` — gerar alerta
+- Valor recebido sem baixa no ERP = `recebido_nao_baixado` — ação urgente
+
+### Hierarquia de matching (sempre nesta ordem)
+1. `order_id` da plataforma
+2. `external_reference` / `pack_id`
+3. Número do pedido Bling
+4. Número da nota fiscal (fallback)
+
+### Faturamento
+- Receita base = Preço de Lista — NUNCA o valor líquido recebido
+- Devoluções reduzem receita do período da CONFIRMAÇÃO, não da venda
+- Pedidos cancelados antes da NF = não entram no faturamento
+- Pedidos com NF emitida e cancelados = entram como devolução
+
+### DRE Gerencial
+- Trabalha com competência, não com caixa
+- Despesas fixas rateadas por período (mensal) — nunca por pedido
+- Comissão = % sobre receita BRUTA (nunca sobre líquido)
+- Frete na DRE = custo real pago à plataforma
+
+## COMO RESPONDER
+
+Quando analisar ou implementar algo, sempre nesta ordem:
+1. Leitura técnica do cenário atual
+2. Riscos identificados
+3. Proposta de solução com lógica de negócio
+4. Cuidados para não quebrar o que já existe
+
+## O QUE NUNCA FAZER
+
+- Colocar lógica de ETL ou processamento dentro de arquivos Streamlit
+- Usar descrição de produto como chave de join
+- Ignorar nulos em colunas críticas
+- Sugerir solução que funcione só para um cliente específico
+- Alterar regras de conciliação ou DRE sem explicar o impacto fiscal
+- Hardcodar caminhos de pasta (sempre usar `fdl_paths.py`)
+- Criar novo arquivo sem verificar se já existe equivalente no projeto
+
+## ESTRUTURA DE PASTAS (referência)
+
+```
+V2/
+├── app_operacional.py          # Entry point Streamlit — só navegação
+├── fdl_paths.py                # Resolução de caminhos — sempre usar este
+├── fdl_streamlit_bootstrap.py  # Bootstrap comum do app
+├── etapa1_vendas.py            # Pipeline vendas ML
+├── etapa2_liberacoes.py        # Pipeline liberações
+├── etapa3_*.py                 # Conciliação vendas × liberações
+├── etapa4b_integracao_contas_receber.py  # Tabela operacional final
+├── faturamento_dre_recorte_minimo.py     # DRE e recortes
+├── operacional_frete.py        # Regras de negócio frete
+├── operacional_frete_ui.py     # UI frete no Streamlit
+├── operacional_app_context.py  # Contexto cliente/paths/flags
+├── processing/
+│   ├── materialize_financeiro.py   # Orquestra toda materialização
+│   ├── repasse_contract.py         # Contrato colunas repasse
+│   ├── repasse_load.py             # Leitura parquet repasse
+│   ├── simulacao_frete_logica.py   # Núcleo simulação frete
+│   ├── devolucoes_ml/build.py      # Pipeline devoluções
+│   └── faturamento/
+│       ├── build.py                # Orquestração pipeline faturamento
+│       ├── calc.py                 # Cálculos margens e DRE
+│       ├── normalize.py            # Normalização SKU/datas/valores
+│       ├── params.py               # Schema JSON V2 do cliente
+│       └── ...
+```
+
+## PRIORIDADE DE DECISÃO
+
+Quando houver dúvida de interpretação:
+1. Coerência contábil
+2. Coerência financeira
+3. Coerência fiscal
+4. Coerência operacional
+5. Rastreabilidade dos dados
+6. Escalabilidade multicliente
+
+---
+FDL Analytics · FDL Consultoria · v1.0 · 2025

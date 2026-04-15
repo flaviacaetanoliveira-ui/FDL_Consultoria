@@ -624,10 +624,12 @@ def _materialize_faturamento(
         build_nf_panel_materializado_dataframe,
     )
 
-    df_nf_panel = build_nf_panel_materializado_dataframe(df_nf, df_fiscal)
+    aplicar_ads = bool(loader_meta.get("nf_panel_ads", True))
+    df_nf_panel = build_nf_panel_materializado_dataframe(df_nf, df_fiscal, aplicar_ads=aplicar_ads)
     _write_parquet(_dataframe_safe_for_parquet(df_nf_panel), out_dir / NF_PANEL_PARQUET_FILENAME)
     meta["dataset_faturamento_nf_panel_parquet"] = NF_PANEL_PARQUET_FILENAME
     meta["nf_panel_row_count"] = int(len(df_nf_panel))
+    meta["nf_panel_ads"] = aplicar_ads
 
     _write_parquet(_dataframe_safe_for_parquet(df_fiscal), out_dir / "dataset_faturamento_fiscal.parquet")
     meta["dataset_faturamento_fiscal_parquet"] = "dataset_faturamento_fiscal.parquet"

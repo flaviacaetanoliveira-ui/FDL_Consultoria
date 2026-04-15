@@ -314,6 +314,7 @@ def _build_faturamento_dataset_v2(
         else None,
         "notas_saida_dir_default": params.notas_saida_dir,
         "notas_por_empresa": notas_meta_por_empresa,
+        "nf_panel_ads": bool(params.nf_panel_ads),
     }
     return df, meta
 

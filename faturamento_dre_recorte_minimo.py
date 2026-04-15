@@ -1038,17 +1038,31 @@ def apply_nf_panel_resultado_frete_nota_lista(
     return out
 
 
-def apply_nf_panel_custo_ads(df: pd.DataFrame, *, eps: float = 1e-9) -> pd.DataFrame:
+def apply_nf_panel_custo_ads(
+    df: pd.DataFrame,
+    *,
+    aplicar_ads: bool = True,
+    eps: float = 1e-9,
+) -> pd.DataFrame:
     """
     Custo de **ADS** por NF: ``NF_FIRST_PANEL_ADS_ALIQUOTA × valor_venda`` + fixo por venda com lista > 0.
 
     Grava ``custo_ads_variavel``, ``custo_ads_fixo`` e ``custo_ads`` (soma) e **subtrai** ``custo_ads`` de
     ``resultado`` (NaN permanece NaN). Sem ``valor_venda`` / ``resultado`` não altera.
+
+    Com ``aplicar_ads=False`` (cliente sem ADS no painel), grava as três colunas a **0** e **não** altera
+    ``resultado``.
     """
     need = {"valor_venda", "resultado"}
     if df.empty or not need.issubset(df.columns):
         return df
     out = df.copy()
+    if not aplicar_ads:
+        z = pd.Series(0.0, index=out.index, dtype=float)
+        out["custo_ads_variavel"] = z
+        out["custo_ads_fixo"] = z
+        out["custo_ads"] = z
+        return out
     vv = pd.to_numeric(out["valor_venda"], errors="coerce").fillna(0.0)
     m_sale = vv > eps
     ads_var = (vv * float(NF_FIRST_PANEL_ADS_ALIQUOTA)).astype(float)

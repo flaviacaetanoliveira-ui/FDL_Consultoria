@@ -86,6 +86,8 @@ def _commercial_nf_to_panel_shape(df_nf: pd.DataFrame) -> pd.DataFrame:
 def build_nf_panel_materializado_dataframe(
     df_nf: pd.DataFrame,
     df_fiscal: pd.DataFrame,
+    *,
+    aplicar_ads: bool = True,
 ) -> pd.DataFrame:
     """
     ``df_nf`` = saída de ``build_nf_materializado_dataframe`` (contrato NF-first).
@@ -112,7 +114,7 @@ def build_nf_panel_materializado_dataframe(
         base = apply_nf_panel_frete_gap_fallback(base)
     base = apply_nf_panel_frete_repasse_e_plataforma_coerencia(base)
     base = apply_nf_panel_resultado_frete_nota_lista(base)
-    base = apply_nf_panel_custo_ads(base)
+    base = apply_nf_panel_custo_ads(base, aplicar_ads=aplicar_ads)
     if "plataforma" not in base.columns:
         base = base.copy()
         base["plataforma"] = base["plataforma_resumo"].fillna("").astype(str)

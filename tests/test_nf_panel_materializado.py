@@ -100,6 +100,18 @@ def test_build_nf_panel_sem_fiscal_aplica_gap_e_resultado() -> None:
     assert bool(panel.iloc[0]["comercial_incompleto"]) is False
 
 
+def test_build_nf_panel_sem_ads_zera_colunas_e_preserva_resultado() -> None:
+    line = _line_one_nf()
+    df_nf = build_nf_materializado_dataframe(line)
+    panel_on = build_nf_panel_materializado_dataframe(df_nf, pd.DataFrame(), aplicar_ads=True)
+    panel_off = build_nf_panel_materializado_dataframe(df_nf, pd.DataFrame(), aplicar_ads=False)
+    assert (panel_off["custo_ads_variavel"].astype(float).abs() < 1e-9).all()
+    assert (panel_off["custo_ads_fixo"].astype(float).abs() < 1e-9).all()
+    assert (panel_off["custo_ads"].astype(float).abs() < 1e-9).all()
+    assert float(panel_off.iloc[0]["resultado"]) > float(panel_on.iloc[0]["resultado"]) + 1e-6
+    assert abs(float(panel_off.iloc[0]["resultado"]) - 10.0) < 1e-3
+
+
 def test_build_nf_panel_contract_columns_present() -> None:
     line = _line_one_nf()
     df_nf = build_nf_materializado_dataframe(line)

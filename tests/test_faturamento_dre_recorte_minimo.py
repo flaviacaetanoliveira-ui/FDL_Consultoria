@@ -910,3 +910,17 @@ def test_apply_nf_panel_custo_ads_subtracts_from_resultado() -> None:
     assert abs(float(out.iloc[1]["custo_ads_fixo"])) < 1e-9
     assert abs(float(out.iloc[1]["custo_ads_variavel"])) < 1e-9
     assert abs(float(out.iloc[1]["resultado"]) - 10.0) < 1e-9
+
+
+def test_apply_nf_panel_custo_ads_skips_when_aplicar_ads_false() -> None:
+    df = pd.DataFrame(
+        {
+            "valor_venda": [100.0],
+            "resultado": [50.0],
+        }
+    )
+    out = apply_nf_panel_custo_ads(df, aplicar_ads=False)
+    assert abs(float(out.iloc[0]["custo_ads_variavel"])) < 1e-9
+    assert abs(float(out.iloc[0]["custo_ads_fixo"])) < 1e-9
+    assert abs(float(out.iloc[0]["custo_ads"])) < 1e-9
+    assert abs(float(out.iloc[0]["resultado"]) - 50.0) < 1e-9

@@ -58,6 +58,8 @@ class FaturamentoParamsV2:
     coluna_base_imposto: tuple[str, ...]
     params_mensais_resolved: Path | None
     notas_saida_dir: str
+    # Quando True (padrão), o painel NF materializado aplica custo ADS (3,5% + fixo) e desconta do resultado.
+    nf_panel_ads: bool = True
 
 
 class FaturamentoParamsError(ValueError):
@@ -215,6 +217,8 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
 
     notas_saida_dir = str(raw.get("notas_saida_dir", "notas_saida") or "notas_saida").strip() or "notas_saida"
 
+    nf_panel_ads = _as_bool(raw.get("nf_panel_ads", True))
+
     root_digits = set(re.findall(r"\d+", cliente_root.name))
     slug_digits = set(re.findall(r"\d+", slug))
     if root_digits and slug_digits and root_digits.isdisjoint(slug_digits):
@@ -236,6 +240,7 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
         coluna_base_imposto=cands,
         params_mensais_resolved=params_mensais_resolved,
         notas_saida_dir=notas_saida_dir,
+        nf_panel_ads=nf_panel_ads,
     )
 
 

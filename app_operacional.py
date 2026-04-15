@@ -1925,6 +1925,25 @@ def _faturamento_nf_panel_parquet_path_from_materialized_path(path_s: str) -> Pa
     return cand if cand.is_file() else None
 
 
+def _faturamento_nf_panel_ads_flag_from_disk(panel_parquet: Path) -> bool:
+    """
+    Lê ``nf_panel_ads`` de ``metadata.json`` junto ao Parquet do painel NF.
+
+    ``True`` = materialização aplicou custo ADS (3,5% + fixo) e descontou do ``resultado``.
+    Omisso ou metadata em falta ⇒ ``True`` (retrocompatível com artefactos antigos).
+    """
+    meta_p = panel_parquet.parent / "metadata.json"
+    if not meta_p.is_file():
+        return True
+    try:
+        raw = json.loads(meta_p.read_text(encoding="utf-8"))
+        if isinstance(raw, dict) and "nf_panel_ads" in raw:
+            return bool(raw["nf_panel_ads"])
+    except Exception:
+        return True
+    return True
+
+
 def _faturamento_fiscal_parquet_path_from_materialized_path(path_s: str) -> Path | None:
     """``dataset_faturamento_fiscal.parquet`` no mesmo diretório que o materializado linha ou dentro da pasta apontada."""
     if not (path_s or "").strip():
@@ -2145,6 +2164,9 @@ def _load_faturamento_data(
                         info["faturamento_nf_panel_baked"] = True
                         info["faturamento_nf_panel_path"] = str(panel_p.resolve())
                         info["faturamento_nf_panel_row_count_loaded"] = int(len(df_p0))
+                        info["faturamento_nf_panel_ads"] = _faturamento_nf_panel_ads_flag_from_disk(
+                            panel_p.resolve()
+                        )
                 except Exception as ex_p:  # noqa: BLE001
                     info["faturamento_nf_panel_error"] = str(ex_p).strip() or ex_p.__class__.__name__
         else:
@@ -5195,6 +5217,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     use_nf_materializado: bool,
     valor_faturado_from_fiscal_parquet: bool = False,
     fat_dre_faturado_mode: str = "nf_first",
+    nf_panel_ads: bool = True,
 ) -> None:
     """
     Cards executivos NF-first (Faturamento & DRE): hierarquia em 3 níveis (resultado/margem, venda/faturado, chips).
@@ -5229,8 +5252,9 @@ def _render_fdl_fat_dre_nf_kpi_cards(
         ("Repasse transp. própr.", _fmt_brl_ptbr_celula(kp.get("repasse_frete_transportadora_propria", 0.0)) or "R$ 0,00"),
         ("Imposto", _fmt_brl_ptbr_celula(kp["imposto"]) or "R$ 0,00"),
         ("Despesa fixa", _fmt_brl_ptbr_celula(kp["despesa_fixa"]) or "R$ 0,00"),
-        ("ADS (3,5% + fixo)", _fmt_brl_ptbr_celula(ads_sum) or "R$ 0,00"),
     ]
+    if nf_panel_ads:
+        chips.append(("ADS (3,5% + fixo)", _fmt_brl_ptbr_celula(ads_sum) or "R$ 0,00"))
 
     if fat_dre_faturado_mode == "fiscal":
         mode_pill = (
@@ -5284,6 +5308,7 @@ def _render_fdl_fat_dre_nf_gerencial(
     ok_nf_dates: bool,
     valor_faturado_from_fiscal_parquet: bool = False,
     periodo_label: str = "",
+    nf_panel_ads: bool = True,
 ) -> None:
     """DRE gerencial (totais de ``compute_nf_panel_kpis``), layout demonstração financeira."""
     if not _FAT_DRE_UI_V2 or build_dre_gerencial_premium_html is None:
@@ -5322,17 +5347,31 @@ def _render_fdl_fat_dre_nf_gerencial(
         ("Frete transp. própria", enc_repasse_tp),
         ("Imposto", enc_imp),
         ("Despesa fixa", enc_df),
-        ("ADS (3,5% + fixo)", enc_ads),
     ]
+    if nf_panel_ads:
+        enc_rows.append(("ADS (3,5% + fixo)", enc_ads))
 
     dif_highlight = bool(ok_nf_dates and vv > 0 and abs(dif) / vv >= 0.30)
-    foot = (
-        "Resultado e margem já consideram ADS (3,5% sobre venda lista + fixo por NF). "
-        "Margem = Σ resultado ÷ Σ receita de venda (lista) no mesmo recorte que os cards. "
-        "Valor faturado fiscal não entra na margem."
-        if valor_faturado_from_fiscal_parquet
-        else "Margem = resultado ÷ receita de venda (lista). Valores consolidados no materializado NF-first."
-    )
+    if valor_faturado_from_fiscal_parquet:
+        if nf_panel_ads:
+            foot = (
+                "Resultado e margem já consideram ADS (3,5% sobre venda lista + fixo por NF). "
+                "Margem = Σ resultado ÷ Σ receita de venda (lista) no mesmo recorte que os cards. "
+                "Valor faturado fiscal não entra na margem."
+            )
+        else:
+            foot = (
+                "Margem = Σ resultado ÷ Σ receita de venda (lista) no mesmo recorte que os cards. "
+                "Valor faturado fiscal não entra na margem. **Sem** custo de ADS neste cliente."
+            )
+    else:
+        foot = (
+            "Margem = resultado ÷ receita de venda (lista). Valores consolidados no materializado NF-first "
+            "(inclui ADS 3,5% + fixo por NF)."
+            if nf_panel_ads
+            else "Margem = resultado ÷ receita de venda (lista). Valores consolidados no materializado NF-first "
+            "(**sem** custo de ADS neste cliente)."
+        )
     per = (periodo_label or "").strip() or ("Emissão NF no filtro" if ok_nf_dates else "Período indisponível")
 
     st.markdown(
@@ -7272,6 +7311,8 @@ def _render_faturamento_dre_minimal(
     if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame) and df_nf_pre.empty and not df.empty:
         use_nf_materializado = False
 
+    _nf_panel_ads_ui = bool(load_info.get("faturamento_nf_panel_ads", True))
+
     df_fiscal_pre = load_info.get("faturamento_fiscal_df")
     use_fiscal_parquet = (
         bool(load_info.get("faturamento_fiscal_first"))
@@ -7574,6 +7615,7 @@ def _render_faturamento_dre_minimal(
         use_nf_materializado=use_nf_materializado,
         valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
         fat_dre_faturado_mode=("fiscal" if use_fiscal_kpi else "nf_first"),
+        nf_panel_ads=_nf_panel_ads_ui,
     )
 
     _fdl_fat_min_vsp(size="md")
@@ -7585,6 +7627,7 @@ def _render_faturamento_dre_minimal(
         ok_nf_dates=ok_nf_dates,
         valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
         periodo_label=_periodo_dre_lbl,
+        nf_panel_ads=_nf_panel_ads_ui,
     )
 
     _fdl_fat_min_vsp(size="md")
@@ -7910,6 +7953,11 @@ def _render_faturamento_dre_minimal(
         "Info dados",
         "Margem %",
     ]
+    _nf_table_cols_order_ui: list[str] = (
+        [c for c in _nf_table_cols_order if c not in ("ADS 3,5%", "ADS fixo")]
+        if not _nf_panel_ads_ui
+        else list(_nf_table_cols_order)
+    )
 
     _df_nf_table = df_nf_panel
     if not df_nf_panel.empty and "Nota_Data_Emissao" in df_nf_panel.columns:
@@ -8020,7 +8068,7 @@ def _render_faturamento_dre_minimal(
                 "Margem %": (_marg_ratio * 100.0),
             }
         )
-        _disp_nf_full = _disp_nf_full[_nf_table_cols_order]
+        _disp_nf_full = _disp_nf_full[_nf_table_cols_order_ui]
         _disp_nf_ui = _disp_nf_full.copy()
 
         def _fat_min_trunc_text_cell(v: object, max_len: int = 72) -> str:
@@ -8192,7 +8240,7 @@ def _render_faturamento_dre_minimal(
         "Info dados": "medium",
         "Margem %": "small",
     }
-    for _cn in _nf_table_cols_order:
+    for _cn in _nf_table_cols_order_ui:
         if _cn not in _disp_nf_ui.columns:
             continue
         _w = _nf_col_width.get(_cn, "medium")

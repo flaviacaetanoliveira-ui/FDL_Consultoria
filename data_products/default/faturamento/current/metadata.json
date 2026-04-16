@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-08T16:13:22Z",
+  "generated_at": "2026-04-16T00:04:48Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "default",
   "empresa": "_multi",
@@ -7,7 +7,7 @@
   "cliente_id": "default",
   "empresa_id": "_multi",
   "cnpj": null,
-  "row_count": 1128,
+  "row_count": 1208,
   "columns": [
     "Data",
     "Data do faturamento",
@@ -79,7 +79,7 @@
     "empresa_id",
     "cnpj"
   ],
-  "params_path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\V2\\ops\\_faturamento_params_antomoveis_runtime.json",
+  "params_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\V2\\ops\\faturamento_params_antomoveis.json",
   "aliquota_imposto_usada": 0.12,
   "aliquota_despesas_fixas_usada": 0.05,
   "permite_faturamento_sem_nf": false,
@@ -87,7 +87,7 @@
     {
       "org_id": "antomoveis",
       "empresa": "Antomóveis",
-      "pedidos_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos",
+      "pedidos_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos",
       "arquivos": [
         "Anto Moveis - Pedidos Dez 2025.csv",
         "Anto Moveis - Pedidos Abr 2026.csv",
@@ -98,50 +98,50 @@
       "ficheiros_detalhe": [
         {
           "arquivo": "Anto Moveis - Pedidos Dez 2025.csv",
-          "path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2025\\Anto Moveis - Pedidos Dez 2025.csv",
-          "mtime_iso": "2026-04-06T23:03:05Z"
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2025\\Anto Moveis - Pedidos Dez 2025.csv",
+          "mtime_iso": "2026-04-13T09:12:42Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Abr 2026.csv",
-          "path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-08T09:34:14Z"
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Abr 2026.csv",
+          "mtime_iso": "2026-04-15T09:27:18Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Fev 2026.csv",
-          "path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Fev 2026.csv",
-          "mtime_iso": "2026-04-06T23:03:57Z"
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Fev 2026.csv",
+          "mtime_iso": "2026-04-13T09:13:30Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Jan 2026.csv",
-          "path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Jan 2026.csv",
-          "mtime_iso": "2026-04-06T23:03:33Z"
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Jan 2026.csv",
+          "mtime_iso": "2026-04-13T09:12:52Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Mar 2026.csv",
-          "path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Mar 2026.csv",
-          "mtime_iso": "2026-04-06T23:04:17Z"
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Mar 2026.csv",
+          "mtime_iso": "2026-04-13T09:13:38Z"
         }
       ],
       "arquivo": "5 ficheiros CSV",
-      "path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos",
-      "mtime_iso": "2026-04-06T23:04:17Z",
+      "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos",
+      "mtime_iso": "2026-04-13T09:13:38Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 1133,
-      "pedidos_linhas_depois": 1128,
+      "pedidos_linhas_antes": 1213,
+      "pedidos_linhas_depois": 1208,
       "pedidos_linhas_removidas": 5
     }
   ],
   "custo_fonte": {
-    "path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Custo.xlsx",
+    "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Custo.xlsx",
     "sheet": "Planilha1",
     "custo_reader": "header_row_0"
   },
-  "data_processamento": "2026-04-08T16:13:22Z",
+  "data_processamento": "2026-04-16T00:04:48Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,
   "cliente_slug": "default",
-  "cliente_root": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
+  "cliente_root": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
   "coluna_base_imposto_resolvida": "Valor total",
   "coluna_base_imposto_candidatas": [
     "Base fiscal item",
@@ -151,7 +151,7 @@
     {
       "org_id": "antomoveis",
       "empresa": "Antomóveis",
-      "pedidos_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos",
+      "pedidos_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos",
       "arquivos": [
         "Anto Moveis - Pedidos Dez 2025.csv",
         "Anto Moveis - Pedidos Abr 2026.csv",
@@ -162,74 +162,76 @@
       "ficheiros_detalhe": [
         {
           "arquivo": "Anto Moveis - Pedidos Dez 2025.csv",
-          "path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2025\\Anto Moveis - Pedidos Dez 2025.csv",
-          "mtime_iso": "2026-04-06T23:03:05Z"
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2025\\Anto Moveis - Pedidos Dez 2025.csv",
+          "mtime_iso": "2026-04-13T09:12:42Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Abr 2026.csv",
-          "path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-08T09:34:14Z"
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Abr 2026.csv",
+          "mtime_iso": "2026-04-15T09:27:18Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Fev 2026.csv",
-          "path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Fev 2026.csv",
-          "mtime_iso": "2026-04-06T23:03:57Z"
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Fev 2026.csv",
+          "mtime_iso": "2026-04-13T09:13:30Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Jan 2026.csv",
-          "path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Jan 2026.csv",
-          "mtime_iso": "2026-04-06T23:03:33Z"
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Jan 2026.csv",
+          "mtime_iso": "2026-04-13T09:12:52Z"
         },
         {
           "arquivo": "Anto Moveis - Pedidos Mar 2026.csv",
-          "path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Mar 2026.csv",
-          "mtime_iso": "2026-04-06T23:04:17Z"
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos\\2026\\Anto Moveis - Pedidos Mar 2026.csv",
+          "mtime_iso": "2026-04-13T09:13:38Z"
         }
       ],
       "arquivo": "5 ficheiros CSV",
-      "path": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos",
-      "mtime_iso": "2026-04-06T23:04:17Z",
+      "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\Pedidos",
+      "mtime_iso": "2026-04-13T09:13:38Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 1133,
-      "pedidos_linhas_depois": 1128,
+      "pedidos_linhas_antes": 1213,
+      "pedidos_linhas_depois": 1208,
       "pedidos_linhas_removidas": 5
     }
   ],
   "status_custo_counts": {
-    "CUSTO_OK": 1099,
-    "SKU_SEM_CORRESPONDENCIA": 29
+    "CUSTO_OK": 1158,
+    "SKU_SEM_CORRESPONDENCIA": 50
   },
   "params_mensais_path": null,
   "notas_saida_dir_default": "notas_saida",
   "notas_por_empresa": [
     {
       "org_id": "antomoveis",
-      "notas_saida_dir": "C:\\Users\\flavia.oliveira\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\notas_saida",
-      "notas_linhas_apos_filtro": 1460,
-      "notas_arquivos_linhas_brutas": 1532,
+      "notas_saida_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1\\notas_saida",
+      "notas_linhas_apos_filtro": 1525,
+      "notas_arquivos_linhas_brutas": 1598,
       "notas_vazio": false,
-      "notas_frete_fallback_grupos_nf": 111,
-      "notas_nf_distintas": 680,
+      "notas_fallback_numero_coluna_linhas": 71,
+      "notas_frete_fallback_grupos_nf": 137,
+      "notas_nf_distintas": 804,
       "custo_nf_enriquecido_linhas_pedido": 0,
       "custo_nf_itens_col_codigo": "Código",
       "custo_nf_itens_col_quantidade": "Quantidade",
-      "custo_nf_itens_linhas_com_custo": 1260,
-      "custo_nf_itens_nf_com_total_positivo": 1259,
+      "custo_nf_itens_linhas_com_custo": 1305,
+      "custo_nf_itens_nf_com_total_positivo": 1304,
       "ml_fee_rateio_grupos_comissao": 1,
       "ml_fee_rateio_grupos_frete": 0,
       "ml_fee_rateio_linhas_tocadas": 2,
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 1133,
-      "pedidos_linhas_depois": 1128,
+      "pedidos_linhas_antes": 1213,
+      "pedidos_linhas_depois": 1208,
       "pedidos_linhas_removidas": 5
     }
   ],
   "dataset_faturamento_nf_parquet": "dataset_faturamento_nf.parquet",
-  "nf_first_row_count": 680,
-  "schema_version_nf_first": 2,
+  "nf_first_row_count": 803,
+  "schema_version_nf_first": 4,
   "dataset_faturamento_nf_panel_parquet": "dataset_faturamento_nf_panel.parquet",
-  "nf_panel_row_count": 1457,
+  "nf_panel_row_count": 1522,
+  "nf_panel_ads": true,
   "dataset_faturamento_fiscal_parquet": "dataset_faturamento_fiscal.parquet",
   "schema_version_fiscal": 1,
-  "fiscal_row_count": 1457
+  "fiscal_row_count": 1522
 }

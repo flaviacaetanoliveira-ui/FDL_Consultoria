@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-12T11:56:54Z",
-  "source_signature": "cf349fc3967c5c54367876bb0c719e1d",
+  "generated_at": "2026-04-16T00:14:56Z",
+  "source_signature": "84525a986d5222d6f89d3755d2e1cf0f",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "default",
@@ -9,7 +9,7 @@
   "cliente_id": "default",
   "empresa_id": "antomoveis",
   "cnpj": null,
-  "row_count": 486,
+  "row_count": 487,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -99,23 +99,23 @@
   "source_mode": "local_folder",
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
   "org_id": "antomoveis",
-  "dataset_empresa": "antomoveis",
+  "dataset_empresa": "Antomóveis",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
     "org_id": "antomoveis",
-    "dataset_empresa": "antomoveis",
+    "dataset_empresa": "Antomóveis",
     "cliente_id": "default",
-    "row_count_pre_filtro_devolucao": 495,
-    "row_count_excluidas_cancel_comercial": 9,
-    "row_count_candidatas": 486,
-    "row_count_vendas_total": 5041,
-    "row_count_liberacoes": 3666,
-    "sales_from_lib_financial": 160,
+    "row_count_pre_filtro_devolucao": 497,
+    "row_count_excluidas_cancel_comercial": 10,
+    "row_count_candidatas": 487,
+    "row_count_vendas_total": 5085,
+    "row_count_liberacoes": 3741,
+    "sales_from_lib_financial": 163,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 5041,
-  "row_count_liberacoes": 3666,
-  "sales_from_lib_financial": 160
+  "row_count_vendas_total": 5085,
+  "row_count_liberacoes": 3741,
+  "sales_from_lib_financial": 163
 }

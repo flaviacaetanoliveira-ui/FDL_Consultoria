@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-16T00:04:48Z",
+  "generated_at": "2026-04-16T00:15:00Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "default",
   "empresa": "_multi",
@@ -79,7 +79,7 @@
     "empresa_id",
     "cnpj"
   ],
-  "params_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\V2\\ops\\faturamento_params_antomoveis.json",
+  "params_path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\V2\\ops\\_faturamento_params_antomoveis_runtime.json",
   "aliquota_imposto_usada": 0.12,
   "aliquota_despesas_fixas_usada": 0.05,
   "permite_faturamento_sem_nf": false,
@@ -136,7 +136,7 @@
     "sheet": "Planilha1",
     "custo_reader": "header_row_0"
   },
-  "data_processamento": "2026-04-16T00:04:48Z",
+  "data_processamento": "2026-04-16T00:15:00Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,

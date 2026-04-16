@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-12T11:56:45Z",
-  "source_signature": "2ec76921c9e77d76da8bca2dda6a1455",
+  "generated_at": "2026-04-16T00:14:48Z",
+  "source_signature": "5f74f0b2e83fccfa16699a6fdad249ed",
   "pipeline_revision": "phase1-v1",
   "cliente": "default",
   "empresa": "antomoveis",
@@ -8,7 +8,7 @@
   "cliente_id": "default",
   "empresa_id": "antomoveis",
   "cnpj": null,
-  "row_count": 5041,
+  "row_count": 5085,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -100,7 +100,7 @@
     "vendas_arquivo": "Anto Móveis - Vendas ML 2026.xlsx, Anto Móveis - Vendas ML 2025.xlsx",
     "frete_arquivo": "Anto Móveis - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 5041,
+    "linhas": 5085,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

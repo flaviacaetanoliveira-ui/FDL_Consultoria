@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-15T17:00:31Z",
+  "generated_at": "2026-04-16T00:15:44Z",
   "source_signature": "9f978622df638115845fc437f773add0",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
@@ -97,13 +97,13 @@
   "source_mode": "local_folder",
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home",
   "org_id": "gama_home",
-  "dataset_empresa": "gama_home",
+  "dataset_empresa": "Gama Home",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home",
     "org_id": "gama_home",
-    "dataset_empresa": "gama_home",
+    "dataset_empresa": "Gama Home",
     "cliente_id": "cliente_2",
     "row_count_pre_filtro_devolucao": 24,
     "row_count_excluidas_cancel_comercial": 1,

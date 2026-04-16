@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-12T11:56:39Z",
-  "source_signature": "237937d8fa006be8ac863473cdaa160a",
+  "generated_at": "2026-04-16T00:14:42Z",
+  "source_signature": "e24936885afa4ce66dc67c5539bf47a4",
   "pipeline_revision": "phase1-v1",
   "cliente": "default",
   "empresa": "antomoveis",
@@ -9,7 +9,7 @@
   "empresa_id": "antomoveis",
   "cnpj": null,
   "repasse_empresa_label": "Antomóveis",
-  "row_count": 1058,
+  "row_count": 1077,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -35,7 +35,7 @@
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Anto Moveis\\cliente_1",
-    "linhas": 1058,
+    "linhas": 1077,
     "arquivos_contas_lidos": 4,
     "col_situacao": "Situação",
     "col_numero": "Número"

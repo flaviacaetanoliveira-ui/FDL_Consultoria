@@ -144,7 +144,6 @@ def build_fiscal_notas_from_directory(
         agg = agg.loc[~_nk_ex.isin(excluir_nf_keys)].copy()
         if agg.empty:
             return _empty_fiscal_frame()
-        sit_by_nf = _situacao_por_nf_agregada(prep.loc[prep["nf_key"].isin(agg["Nota_Numero_Normalizado"])])
     agg["Nota_Situacao"] = agg["Nota_Numero_Normalizado"].map(sit_by_nf).fillna("").astype(str)
     agg["org_id"] = str(org_id).strip()
     agg["empresa"] = str(empresa).strip()
@@ -179,10 +178,12 @@ def build_fiscal_materializado_dataframe(params_path: Path) -> pd.DataFrame:
     for emp in params_union.empresas:
         rel_notas = (emp.notas_saida_dir or params_union.notas_saida_dir).strip() or params_union.notas_saida_dir
         notas_dir = (params_union.cliente_root / rel_notas).resolve()
+        excl = frozenset(emp.excluir_notas_fiscal) if emp.excluir_notas_fiscal else frozenset()
         df_e = build_fiscal_notas_from_directory(
             notas_dir,
             org_id=emp.org_id,
             empresa=emp.empresa,
+            excluir_nf_keys=excl if len(excl) else None,
         )
         if not df_e.empty:
             parts.append(df_e)

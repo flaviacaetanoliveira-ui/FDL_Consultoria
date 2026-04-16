@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-16T22:35:51Z",
+  "generated_at": "2026-04-16T23:29:31Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "cliente_2",
   "empresa": "_multi",
@@ -342,7 +342,7 @@
       "VALOR DE COMPRA MEGA"
     ]
   },
-  "data_processamento": "2026-04-16T22:35:46Z",
+  "data_processamento": "2026-04-16T23:29:23Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,
@@ -699,9 +699,9 @@
   "nf_first_row_count": 26539,
   "schema_version_nf_first": 4,
   "dataset_faturamento_nf_panel_parquet": "dataset_faturamento_nf_panel.parquet",
-  "nf_panel_row_count": 56731,
+  "nf_panel_row_count": 56730,
   "nf_panel_ads": true,
   "dataset_faturamento_fiscal_parquet": "dataset_faturamento_fiscal.parquet",
   "schema_version_fiscal": 1,
-  "fiscal_row_count": 56731
+  "fiscal_row_count": 56730
 }

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-15T17:07:56Z",
-  "source_signature": "a4fe2bb925835d1adb908ea331bfebad",
+  "generated_at": "2026-04-16T22:03:26Z",
+  "source_signature": "763122ea729ffb6ee52a780e8744b2ca",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "fmg",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "fmg",
   "cnpj": null,
-  "row_count": 8717,
+  "row_count": 8789,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -101,7 +101,7 @@
     "vendas_arquivo": "FMG - Vendas ML 2026.xlsx, FMG - Vendas ML 2025.xlsx",
     "frete_arquivo": "FMG - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 8717,
+    "linhas": 8789,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

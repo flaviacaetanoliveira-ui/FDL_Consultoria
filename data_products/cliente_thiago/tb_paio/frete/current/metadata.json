@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-15T17:09:42Z",
-  "source_signature": "0afdb3c1e6ea5ead6f5ac271a1110655",
+  "generated_at": "2026-04-16T22:18:26Z",
+  "source_signature": "03f450233cc735928fa3076f0b7dc8b4",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "tb_paio",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "tb_paio",
   "cnpj": null,
-  "row_count": 13689,
+  "row_count": 13734,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -101,7 +101,7 @@
     "vendas_arquivo": "TB Paio - Vendas ML 2026.xlsx, TB Paio - Vendas ML 2025.xlsx",
     "frete_arquivo": "TB Paio - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 13689,
+    "linhas": 13734,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

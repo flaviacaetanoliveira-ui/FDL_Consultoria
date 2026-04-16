@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-15T17:08:08Z",
-  "source_signature": "5df67db70834e9a08d5024f89b5e1d68",
+  "generated_at": "2026-04-16T22:06:15Z",
+  "source_signature": "364340497dd33022899b2fb0923296a9",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_thiago",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "fmg",
   "cnpj": null,
-  "row_count": 551,
+  "row_count": 553,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -100,23 +100,23 @@
   "source_mode": "local_folder",
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
   "org_id": "fmg",
-  "dataset_empresa": "fmg",
+  "dataset_empresa": "FMG",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
     "org_id": "fmg",
-    "dataset_empresa": "fmg",
+    "dataset_empresa": "FMG",
     "cliente_id": "cliente_thiago",
-    "row_count_pre_filtro_devolucao": 655,
+    "row_count_pre_filtro_devolucao": 657,
     "row_count_excluidas_cancel_comercial": 104,
-    "row_count_candidatas": 551,
-    "row_count_vendas_total": 8717,
-    "row_count_liberacoes": 14044,
-    "sales_from_lib_financial": 855,
+    "row_count_candidatas": 553,
+    "row_count_vendas_total": 8789,
+    "row_count_liberacoes": 14174,
+    "sales_from_lib_financial": 859,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 8717,
-  "row_count_liberacoes": 14044,
-  "sales_from_lib_financial": 855
+  "row_count_vendas_total": 8789,
+  "row_count_liberacoes": 14174,
+  "sales_from_lib_financial": 859
 }

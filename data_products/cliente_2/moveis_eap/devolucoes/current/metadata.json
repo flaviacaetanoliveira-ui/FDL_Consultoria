@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-15T17:04:46Z",
+  "generated_at": "2026-04-16T21:37:35Z",
   "source_signature": "84d4f9841614c71e64b05ad99084ba22",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
@@ -98,13 +98,13 @@
   "source_mode": "local_folder",
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP",
   "org_id": "moveis_eap",
-  "dataset_empresa": "moveis_eap",
+  "dataset_empresa": "Móveis EAP",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP",
     "org_id": "moveis_eap",
-    "dataset_empresa": "moveis_eap",
+    "dataset_empresa": "Móveis EAP",
     "cliente_id": "cliente_2",
     "row_count_pre_filtro_devolucao": 269,
     "row_count_excluidas_cancel_comercial": 31,

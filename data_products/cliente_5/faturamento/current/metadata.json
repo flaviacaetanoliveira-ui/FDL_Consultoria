@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-15T23:55:00Z",
+  "generated_at": "2026-04-16T22:53:11Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "cliente_5",
   "empresa": "_multi",
@@ -7,7 +7,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "_multi",
   "cnpj": null,
-  "row_count": 9822,
+  "row_count": 9978,
   "columns": [
     "Data",
     "Data do faturamento",
@@ -97,7 +97,7 @@
         {
           "arquivo": "Esquilo - Pedidos Abr 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Pedidos\\2026\\Esquilo - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-15T09:49:14Z"
+          "mtime_iso": "2026-04-16T09:34:54Z"
         },
         {
           "arquivo": "Esquilo - Pedidos Fev 2026.csv",
@@ -119,8 +119,8 @@
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Pedidos\\2026",
       "mtime_iso": "2026-04-13T09:16:47Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 5688,
-      "pedidos_linhas_depois": 5643,
+      "pedidos_linhas_antes": 5779,
+      "pedidos_linhas_depois": 5734,
       "pedidos_linhas_removidas": 45
     },
     {
@@ -137,7 +137,7 @@
         {
           "arquivo": "Wood - Pedidos Abr 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Pedidos\\2026\\Wood - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-15T10:09:48Z"
+          "mtime_iso": "2026-04-16T09:37:42Z"
         },
         {
           "arquivo": "Wood - Pedidos Fev 2026.csv",
@@ -159,9 +159,9 @@
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Pedidos\\2026",
       "mtime_iso": "2026-04-13T09:20:05Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 4190,
-      "pedidos_linhas_depois": 4179,
-      "pedidos_linhas_removidas": 11
+      "pedidos_linhas_antes": 4257,
+      "pedidos_linhas_depois": 4244,
+      "pedidos_linhas_removidas": 13
     }
   ],
   "custo_fonte": {
@@ -172,7 +172,7 @@
     "custo_col_sku_index": 3,
     "custo_col_preco_index": 4
   },
-  "data_processamento": "2026-04-15T23:54:59Z",
+  "data_processamento": "2026-04-16T22:53:10Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,
@@ -198,7 +198,7 @@
         {
           "arquivo": "Esquilo - Pedidos Abr 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Pedidos\\2026\\Esquilo - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-15T09:49:14Z"
+          "mtime_iso": "2026-04-16T09:34:54Z"
         },
         {
           "arquivo": "Esquilo - Pedidos Fev 2026.csv",
@@ -220,8 +220,8 @@
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\Pedidos\\2026",
       "mtime_iso": "2026-04-13T09:16:47Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 5688,
-      "pedidos_linhas_depois": 5643,
+      "pedidos_linhas_antes": 5779,
+      "pedidos_linhas_depois": 5734,
       "pedidos_linhas_removidas": 45
     },
     {
@@ -238,7 +238,7 @@
         {
           "arquivo": "Wood - Pedidos Abr 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Pedidos\\2026\\Wood - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-15T10:09:48Z"
+          "mtime_iso": "2026-04-16T09:37:42Z"
         },
         {
           "arquivo": "Wood - Pedidos Fev 2026.csv",
@@ -260,13 +260,13 @@
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\Pedidos\\2026",
       "mtime_iso": "2026-04-13T09:20:05Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 4190,
-      "pedidos_linhas_depois": 4179,
-      "pedidos_linhas_removidas": 11
+      "pedidos_linhas_antes": 4257,
+      "pedidos_linhas_depois": 4244,
+      "pedidos_linhas_removidas": 13
     }
   ],
   "status_custo_counts": {
-    "CUSTO_OK": 9631,
+    "CUSTO_OK": 9787,
     "SKU_SEM_CORRESPONDENCIA": 191
   },
   "params_mensais_path": null,
@@ -275,55 +275,55 @@
     {
       "org_id": "esquilo",
       "notas_saida_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo\\notas_saida",
-      "notas_linhas_apos_filtro": 11086,
-      "notas_arquivos_linhas_brutas": 11445,
+      "notas_linhas_apos_filtro": 11167,
+      "notas_arquivos_linhas_brutas": 11526,
       "notas_vazio": false,
-      "notas_fallback_numero_coluna_linhas": 934,
-      "notas_frete_fallback_grupos_nf": 124,
-      "notas_nf_distintas": 4580,
-      "custo_nf_enriquecido_linhas_pedido": 110,
+      "notas_fallback_numero_coluna_linhas": 1017,
+      "notas_frete_fallback_grupos_nf": 127,
+      "notas_nf_distintas": 4692,
+      "custo_nf_enriquecido_linhas_pedido": 112,
       "custo_nf_itens_col_codigo": "Código",
       "custo_nf_itens_col_quantidade": "Quantidade",
-      "custo_nf_itens_linhas_com_custo": 5286,
-      "custo_nf_itens_nf_com_total_positivo": 5141,
-      "ml_fee_rateio_grupos_comissao": 90,
-      "ml_fee_rateio_grupos_frete": 86,
-      "ml_fee_rateio_linhas_tocadas": 186,
+      "custo_nf_itens_linhas_com_custo": 5366,
+      "custo_nf_itens_nf_com_total_positivo": 5212,
+      "ml_fee_rateio_grupos_comissao": 94,
+      "ml_fee_rateio_grupos_frete": 89,
+      "ml_fee_rateio_linhas_tocadas": 194,
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 5688,
-      "pedidos_linhas_depois": 5643,
+      "pedidos_linhas_antes": 5779,
+      "pedidos_linhas_depois": 5734,
       "pedidos_linhas_removidas": 45
     },
     {
       "org_id": "wood",
       "notas_saida_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Wood\\notas_saida",
-      "notas_linhas_apos_filtro": 28054,
-      "notas_arquivos_linhas_brutas": 28288,
+      "notas_linhas_apos_filtro": 28098,
+      "notas_arquivos_linhas_brutas": 28333,
       "notas_vazio": false,
-      "notas_fallback_numero_coluna_linhas": 601,
+      "notas_fallback_numero_coluna_linhas": 661,
       "notas_frete_fallback_grupos_nf": 85,
-      "notas_nf_distintas": 3510,
+      "notas_nf_distintas": 3582,
       "custo_nf_enriquecido_linhas_pedido": 20,
       "custo_nf_itens_col_codigo": "Código",
       "custo_nf_itens_col_quantidade": "Quantidade",
-      "custo_nf_itens_linhas_com_custo": 10082,
-      "custo_nf_itens_nf_com_total_positivo": 9982,
-      "ml_fee_rateio_grupos_comissao": 52,
-      "ml_fee_rateio_grupos_frete": 50,
-      "ml_fee_rateio_linhas_tocadas": 108,
+      "custo_nf_itens_linhas_com_custo": 10123,
+      "custo_nf_itens_nf_com_total_positivo": 10023,
+      "ml_fee_rateio_grupos_comissao": 54,
+      "ml_fee_rateio_grupos_frete": 52,
+      "ml_fee_rateio_linhas_tocadas": 112,
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 4190,
-      "pedidos_linhas_depois": 4179,
-      "pedidos_linhas_removidas": 11
+      "pedidos_linhas_antes": 4257,
+      "pedidos_linhas_depois": 4244,
+      "pedidos_linhas_removidas": 13
     }
   ],
   "dataset_faturamento_nf_parquet": "dataset_faturamento_nf.parquet",
-  "nf_first_row_count": 8090,
+  "nf_first_row_count": 8274,
   "schema_version_nf_first": 4,
   "dataset_faturamento_nf_panel_parquet": "dataset_faturamento_nf_panel.parquet",
-  "nf_panel_row_count": 34007,
+  "nf_panel_row_count": 34123,
   "nf_panel_ads": true,
   "dataset_faturamento_fiscal_parquet": "dataset_faturamento_fiscal.parquet",
   "schema_version_fiscal": 1,
-  "fiscal_row_count": 34007
+  "fiscal_row_count": 34123
 }

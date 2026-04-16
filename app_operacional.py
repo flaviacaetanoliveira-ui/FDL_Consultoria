@@ -6974,6 +6974,38 @@ def _render_comercial_pedidos_analise(
                 )
 
 
+def _faturamento_nf_quantidade_itens_por_nf(df_line: pd.DataFrame, df_nf: pd.DataFrame) -> pd.Series:
+    """Soma ``Quantidade`` (unidades) no grão linha por (org_id, NF normalizada), alinhada a ``df_nf``."""
+    if df_nf.empty:
+        return pd.Series(dtype=float)
+    if df_line is None or df_line.empty or "Quantidade" not in df_line.columns:
+        return pd.Series(0.0, index=df_nf.index, dtype=float)
+    from processing.faturamento.normalize import normalize_nf_fiscal_commercial_join_key_scalar as _nk_nf
+
+    d = df_line.copy()
+    d["_q"] = pd.to_numeric(d["Quantidade"], errors="coerce").fillna(0.0)
+    oid = (
+        d["org_id"].fillna("").astype(str).str.strip()
+        if "org_id" in d.columns
+        else pd.Series("", index=d.index, dtype=str)
+    )
+    nn = d["Nota_Numero_Normalizado"] if "Nota_Numero_Normalizado" in d.columns else pd.Series("", index=d.index)
+    d["_kk"] = oid + "|" + nn.astype(str).map(_nk_nf)
+    sums = d.groupby("_kk", sort=False)["_q"].sum()
+
+    if "org_id" in df_nf.columns:
+        o2 = df_nf["org_id"].fillna("").astype(str).str.strip()
+    else:
+        o2 = pd.Series("", index=df_nf.index, dtype=str)
+    n2 = (
+        df_nf["Nota_Numero_Normalizado"]
+        if "Nota_Numero_Normalizado" in df_nf.columns
+        else pd.Series("", index=df_nf.index, dtype=str)
+    )
+    kk = o2 + "|" + n2.astype(str).map(_nk_nf)
+    return kk.map(lambda k: float(sums.get(k, 0.0))).astype(float)
+
+
 def _faturamento_dre_apply_produto_e_sinal_venda(
     df_nf: pd.DataFrame,
     *,
@@ -6984,7 +7016,9 @@ def _faturamento_dre_apply_produto_e_sinal_venda(
     Refina o quadro NF por ``produto_resumo`` e pelo **sinal do resultado comercial** (lucro e/ou prejuízo).
 
     ``sinais_resultado`` pode incluir ``lucro``, ``prejuizo`` ou ambos (união). Vazio ou inválido = ambos.
-    Ignora NFs sem ``resultado`` numérico (ex. NaN). Valores vêm do materializado — sem recalcular DRE.
+    Com **lucro** e **prejuízo** ativos (recorte padrão), **não** se filtra por sinal — a tabela alinha-se aos
+    cards (inclui empate ~0, NaN e linhas só fiscais). Com **só um** sinal, mantém o critério estrito (>0 ou <0).
+    Valores vêm do materializado — sem recalcular DRE.
     """
     if df_nf.empty:
         return df_nf
@@ -6998,6 +7032,8 @@ def _faturamento_dre_apply_produto_e_sinal_venda(
     if not sel:
         sel = {"lucro", "prejuizo"}
     if "resultado" not in out.columns:
+        return out
+    if sel == {"lucro", "prejuizo"}:
         return out
     res = pd.to_numeric(out["resultado"], errors="coerce")
     _eps = 1e-9
@@ -7751,10 +7787,10 @@ def _render_faturamento_dre_minimal(
             }[x],
             key=_k_sinais,
             help=(
-                "Pode selecionar **uma ou as duas** opções: união de NFs com lucro e/ou com prejuízo. "
-                "Filtra apenas a **tabela**; **cards/DRE** ignoram este filtro (usam todas as NFs do recorte comercial já definido). "
-                "Usa o **resultado** já gravado no materializado (Parquet). "
-                "NFs sem resultado válido (NaN) não entram neste filtro da tabela."
+                "Com **as duas** opções ativas (padrão), a **tabela** mostra **todas** as NFs do recorte dos cards "
+                "(empate ~0, dados incompletos e só fiscal incluídos). "
+                "Se deixar **apenas uma** opção, a tabela restringe a lucro **ou** a prejuízo (resultado > 0 ou < 0). "
+                "**Cards/DRE** ignoram sempre este filtro."
             ),
         )
 
@@ -7938,6 +7974,11 @@ def _render_faturamento_dre_minimal(
 
     _FAT_NF_TABLE_STYLER_MAX_ROWS = 500
 
+    _show_col_diferenca = st.checkbox(
+        "Mostrar coluna «Diferença» (receita lista − faturado fiscal)",
+        value=False,
+        key="fdl_fat_nf_show_diferenca",
+    )
     _nf_table_cols_order = [
         "Emissão",
         "Status",
@@ -7948,12 +7989,13 @@ def _render_faturamento_dre_minimal(
         "Pedido",
         "Produtos",
         "Linhas",
-        "Venda (lista)",
+        "Quantidade",
+        "Receita de Venda",
         "Faturado (NF)",
-        "Diferença",
+        *([] if not _show_col_diferenca else ["Diferença"]),
         "Comissão",
         "Custo produto",
-        "Receita frete NF",
+        "Receita de Frete",
         "Frete plataforma",
         "Repasse transp. própr.",
         "Frete pedido (Σ)",
@@ -8015,6 +8057,7 @@ def _render_faturamento_dre_minimal(
             else pd.Series(0.0, index=_df_nf_table.index, dtype=float)
         )
         _res_line_nf = pd.to_numeric(_df_nf_table["resultado"], errors="coerce")
+        _qtd_itens = _faturamento_nf_quantidade_itens_por_nf(df, _df_nf_table)
 
         def _nf_status_label_nf(r: object) -> str:
             try:
@@ -8046,12 +8089,17 @@ def _render_faturamento_dre_minimal(
                 "Pedido": _faturamento_disp_texto_sem_none(_df_nf_table["pedido_resumo"]),
                 "Produtos": _faturamento_disp_texto_sem_none(_df_nf_table["produto_resumo"]),
                 "Linhas": _df_nf_table["n_linhas_pedido"].astype(int),
-                "Venda (lista)": pd.to_numeric(_df_nf_table["valor_venda"], errors="coerce"),
+                "Quantidade": _qtd_itens,
+                "Receita de Venda": pd.to_numeric(_df_nf_table["valor_venda"], errors="coerce"),
                 "Faturado (NF)": pd.to_numeric(_df_nf_table["valor_faturado_nf"], errors="coerce"),
-                "Diferença": pd.to_numeric(_df_nf_table["diferenca"], errors="coerce"),
+                **(
+                    {"Diferença": pd.to_numeric(_df_nf_table["diferenca"], errors="coerce")}
+                    if _show_col_diferenca
+                    else {}
+                ),
                 "Comissão": pd.to_numeric(_df_nf_table["comissao"], errors="coerce"),
                 "Custo produto": pd.to_numeric(_custo_s, errors="coerce").fillna(0.0),
-                "Receita frete NF": pd.to_numeric(
+                "Receita de Frete": pd.to_numeric(
                     _df_nf_table["receita_frete_tp"], errors="coerce"
                 )
                 if "receita_frete_tp" in _df_nf_table.columns
@@ -8128,12 +8176,12 @@ def _render_faturamento_dre_minimal(
             return _fmt_pct_ptbr_ratio(pct / 100.0, decimals=1)
 
         for _money_col in (
-            "Venda (lista)",
+            "Receita de Venda",
             "Faturado (NF)",
             "Diferença",
             "Comissão",
             "Custo produto",
-            "Receita frete NF",
+            "Receita de Frete",
             "Frete plataforma",
             "Repasse transp. própr.",
             "Frete pedido (Σ)",
@@ -8143,8 +8191,11 @@ def _render_faturamento_dre_minimal(
             "ADS fixo",
             "Resultado",
         ):
-            _disp_nf_ui[_money_col] = _disp_nf_ui[_money_col].map(_nf_tbl_money_str)
+            if _money_col in _disp_nf_ui.columns:
+                _disp_nf_ui[_money_col] = _disp_nf_ui[_money_col].map(_nf_tbl_money_str)
         _disp_nf_ui["Linhas"] = _disp_nf_ui["Linhas"].map(_nf_tbl_linhas_str)
+        if "Quantidade" in _disp_nf_ui.columns:
+            _disp_nf_ui["Quantidade"] = _disp_nf_ui["Quantidade"].map(_nf_tbl_linhas_str)
         _disp_nf_ui["Margem %"] = _disp_nf_full["Margem %"].map(_nf_tbl_margem_str)
         _disp_nf_ui["Pedido"] = _disp_nf_ui["Pedido"].map(lambda x: _fat_min_trunc_text_cell(x, 72))
         _disp_nf_ui["Produtos"] = _disp_nf_ui["Produtos"].map(lambda x: _fat_min_trunc_text_cell(x, 72))
@@ -8160,7 +8211,8 @@ def _render_faturamento_dre_minimal(
         "Pedido": "Resumo do pedido / multiloja (texto completo no CSV).",
         "Produtos": "Resumo de itens (texto completo no CSV).",
         "Linhas": "Quantidade de linhas de pedido agregadas nesta NF (comercial).",
-        "Venda (lista)": (
+        "Quantidade": "Soma de **Quantidade** (unidades) nas linhas de pedido ligadas a esta NF (materializado linha).",
+        "Receita de Venda": (
             "Comercial: Σ Quantidade × Preço de lista dos pedidos ligados a esta NF (0 se não houver vínculo)."
             if use_fiscal_kpi
             else "Σ Quantidade × Preço de lista (pedidos ligados à NF)."
@@ -8171,10 +8223,10 @@ def _render_faturamento_dre_minimal(
             else "Valor líquido da NF (uma vez por nota), grão NF-first / materializado."
         ),
         "Diferença": (
-            "Comercial − fiscal nesta linha: Venda (lista) − Faturado (NF). "
+            "Comercial − fiscal nesta linha: Receita de Venda − Faturado (NF). "
             "Interpretar como ponte lista↔nota, não como erro automático."
             if use_fiscal_kpi
-            else "Venda (lista) − Faturado (NF)."
+            else "Receita de Venda − Faturado (NF)."
         ),
         "Comissão": "Comercial: soma das comissões das linhas de pedido ligadas à NF." if use_fiscal_kpi else None,
         "Custo produto": (
@@ -8182,7 +8234,7 @@ def _render_faturamento_dre_minimal(
             if use_fiscal_kpi
             else "Σ custo do produto nas linhas de pedido desta NF."
         ),
-        "Receita frete NF": (
+        "Receita de Frete": (
             "Frete destacado na **nota fiscal** (``Frete_Nota_Export`` no merge fiscal), por NF."
             if use_fiscal_kpi
             else "Receita de frete na NF / gap comercial quando sem fiscal."
@@ -8209,17 +8261,17 @@ def _render_faturamento_dre_minimal(
             if use_fiscal_kpi
             else "5% sobre valor da venda agregado à NF."
         ),
-        "ADS 3,5%": "3,5% × venda (lista) nesta NF — custo de mídia (materializado).",
-        "ADS fixo": "R$ 2,00 quando a venda (lista) > 0 nesta NF (materializado).",
+        "ADS 3,5%": "3,5% × receita de venda (lista) nesta NF — custo de mídia (materializado).",
+        "ADS fixo": "R$ 2,00 quando a receita de venda (lista) > 0 nesta NF (materializado).",
         "Resultado": (
             "Comercial: resultado consolidado por NF **já líquido de ADS** (materializado)."
             if use_fiscal_kpi
             else "Resultado consolidado por NF **já líquido de ADS** (materializado)."
         ),
         "Margem %": (
-            "Comercial: Resultado ÷ Venda (lista) nesta NF; não usa valor faturado fiscal."
+            "Comercial: Resultado ÷ Receita de Venda nesta NF; não usa valor faturado fiscal."
             if use_fiscal_kpi
-            else "Resultado ÷ Venda (lista); alinhado ao KPI «Margem %» do painel."
+            else "Resultado ÷ Receita de Venda; alinhado ao KPI «Margem %» do painel."
         ),
         "Info dados": (
             "Materializado: **comercial_incompleto** — custo ou resultado incompletos nas linhas desta NF; rever base de custo / SKUs."
@@ -8235,12 +8287,13 @@ def _render_faturamento_dre_minimal(
         "Pedido": "large",
         "Produtos": "large",
         "Linhas": "small",
-        "Venda (lista)": "medium",
+        "Quantidade": "small",
+        "Receita de Venda": "medium",
         "Faturado (NF)": "medium",
         "Diferença": "small",
         "Comissão": "small",
         "Custo produto": "medium",
-        "Receita frete NF": "small",
+        "Receita de Frete": "small",
         "Frete plataforma": "small",
         "Repasse transp. própr.": "small",
         "Frete pedido (Σ)": "small",

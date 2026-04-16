@@ -26,6 +26,8 @@ def _apply_produto_e_sinal_resultado(
         sel = {"lucro", "prejuizo"}
     if "resultado" not in out.columns:
         return out
+    if sel == {"lucro", "prejuizo"}:
+        return out
     res = pd.to_numeric(out["resultado"], errors="coerce")
     _eps = 1e-9
     mask = pd.Series(False, index=out.index)
@@ -45,7 +47,7 @@ class TestSinalResultadoNf(unittest.TestCase):
             }
         )
         both = _apply_produto_e_sinal_resultado(df, sinais_resultado=("lucro", "prejuizo"))
-        self.assertEqual(set(both["Nota_Numero_Normalizado"]), {"A", "B"})
+        self.assertEqual(set(both["Nota_Numero_Normalizado"]), {"A", "B", "C", "D", "E"})
         luc = _apply_produto_e_sinal_resultado(df, sinais_resultado=("lucro",))
         self.assertEqual(set(luc["Nota_Numero_Normalizado"]), {"A"})
         prej = _apply_produto_e_sinal_resultado(df, sinais_resultado=("prejuizo",))

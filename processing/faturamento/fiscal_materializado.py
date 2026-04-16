@@ -22,6 +22,7 @@ from .join_notas import (
     _prep_notas_dataframe,
     _situacao_por_nf_agregada,
 )
+from .normalize import normalize_nf_fiscal_commercial_join_key_scalar
 from .params import FaturamentoParams, FaturamentoParamsV2, load_faturamento_params
 from .validate import FaturamentoValidationError
 
@@ -89,6 +90,7 @@ def build_fiscal_notas_from_directory(
     *,
     org_id: str,
     empresa: str,
+    excluir_nf_keys: frozenset[str] | None = None,
 ) -> pd.DataFrame:
     """
     Lê todos os CSV/XLSX em ``notas_dir``, aplica o mesmo filtro canceladas + prep + filtro empresa
@@ -137,6 +139,12 @@ def build_fiscal_notas_from_directory(
     ).reset_index()
 
     agg = agg.rename(columns={"nf_key": "Nota_Numero_Normalizado"})
+    if excluir_nf_keys:
+        _nk_ex = agg["Nota_Numero_Normalizado"].map(normalize_nf_fiscal_commercial_join_key_scalar)
+        agg = agg.loc[~_nk_ex.isin(excluir_nf_keys)].copy()
+        if agg.empty:
+            return _empty_fiscal_frame()
+        sit_by_nf = _situacao_por_nf_agregada(prep.loc[prep["nf_key"].isin(agg["Nota_Numero_Normalizado"])])
     agg["Nota_Situacao"] = agg["Nota_Numero_Normalizado"].map(sit_by_nf).fillna("").astype(str)
     agg["org_id"] = str(org_id).strip()
     agg["empresa"] = str(empresa).strip()

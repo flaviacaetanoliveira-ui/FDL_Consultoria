@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from processing.faturamento.normalize import normalize_nf_fiscal_commercial_join_key_scalar
+
 
 @dataclass(frozen=True)
 class FaturamentoParams:
@@ -44,6 +46,7 @@ class EmpresaFaturamentoEntry:
     notas_saida_dir: str | None = None
     aliquota_imposto: float | None = None
     aliquota_despesas_fixas: float | None = None
+    excluir_notas_fiscal: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -193,6 +196,16 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
         ns_emp_s = str(ns_emp).strip() if ns_emp is not None and str(ns_emp).strip() else None
         ai_e = _optional_float(f"empresas[{i}].aliquota_imposto", e.get("aliquota_imposto"))
         ad_e = _optional_float(f"empresas[{i}].aliquota_despesas_fixas", e.get("aliquota_despesas_fixas"))
+        excl_raw = e.get("excluir_notas_fiscal")
+        excl_tuple: tuple[str, ...] = ()
+        if isinstance(excl_raw, list):
+            excl_tuple = tuple(
+                normalize_nf_fiscal_commercial_join_key_scalar(str(x))
+                for x in excl_raw
+                if str(x).strip()
+            )
+        elif excl_raw is not None and str(excl_raw).strip():
+            raise FaturamentoParamsError(f"empresas[{i}].excluir_notas_fiscal deve ser lista de números/NF (strings).")
         entries.append(
             EmpresaFaturamentoEntry(
                 org_id=_sanitize_slug_segment(oid),
@@ -202,6 +215,7 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
                 notas_saida_dir=ns_emp_s,
                 aliquota_imposto=ai_e,
                 aliquota_despesas_fixas=ad_e,
+                excluir_notas_fiscal=excl_tuple,
             )
         )
 

@@ -15,7 +15,8 @@
       "pedidos_dir": "Gama Home/Pedidos",
       "notas_saida_dir": "Gama Home/notas_saida",
       "aliquota_imposto": 0.09,
-      "aliquota_despesas_fixas": 0.05
+      "aliquota_despesas_fixas": 0.05,
+      "excluir_notas_fiscal": ["10032", "010032"]
     },
     {
       "org_id": "mega_star",

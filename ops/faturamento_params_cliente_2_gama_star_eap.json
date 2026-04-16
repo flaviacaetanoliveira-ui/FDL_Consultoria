@@ -2,7 +2,7 @@
   "schema_version": 2,
   "cliente_root": "C:/Users/diieg/OneDrive - FDL Consultoria/Cursor/Pedro/Cliente_2",
   "cliente_slug": "cliente_2",
-  "custo_xlsx": "Custo.xlsx",
+  "custo_xlsx": "Custos.xlsx",
   "aliquota_imposto": 0.11,
   "aliquota_despesas_fixas": 0.05,
   "permite_faturamento_sem_nf": false,

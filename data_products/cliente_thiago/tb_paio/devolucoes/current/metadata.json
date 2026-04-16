@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-15T17:09:59Z",
-  "source_signature": "73ce379987798155af94819a1e2ffa55",
+  "generated_at": "2026-04-16T22:19:25Z",
+  "source_signature": "b646e850e21afc56ada2e263616c3792",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_thiago",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "tb_paio",
   "cnpj": null,
-  "row_count": 597,
+  "row_count": 599,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -100,23 +100,23 @@
   "source_mode": "local_folder",
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
   "org_id": "tb_paio",
-  "dataset_empresa": "tb_paio",
+  "dataset_empresa": "TB Paio",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
     "org_id": "tb_paio",
-    "dataset_empresa": "tb_paio",
+    "dataset_empresa": "TB Paio",
     "cliente_id": "cliente_thiago",
-    "row_count_pre_filtro_devolucao": 743,
+    "row_count_pre_filtro_devolucao": 745,
     "row_count_excluidas_cancel_comercial": 146,
-    "row_count_candidatas": 597,
-    "row_count_vendas_total": 13689,
-    "row_count_liberacoes": 22409,
-    "sales_from_lib_financial": 1277,
+    "row_count_candidatas": 599,
+    "row_count_vendas_total": 13734,
+    "row_count_liberacoes": 22447,
+    "sales_from_lib_financial": 1283,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 13689,
-  "row_count_liberacoes": 22409,
-  "sales_from_lib_financial": 1277
+  "row_count_vendas_total": 13734,
+  "row_count_liberacoes": 22447,
+  "sales_from_lib_financial": 1283
 }

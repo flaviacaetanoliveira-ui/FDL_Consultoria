@@ -1,5 +1,8 @@
 """
 Painel Streamlit: saude financeira (score + diagnosticos + SKUs em risco).
+
+Nota: evitar HTML dentro de ``st.markdown`` — o motor Markdown trata ``>`` como
+blockquote e quebra as tags. Usamos ``st.html``, ``st.metric`` e callouts nativos.
 """
 
 from __future__ import annotations
@@ -11,9 +14,9 @@ import pandas as pd
 import streamlit as st
 
 from app.components.health_score import (
+    AlertLevel,
     Diagnostico,
     SKURisco,
-    alert_level_meta,
     calcular_health_score,
     health_level_meta,
     inferir_org_id_alvo,
@@ -37,85 +40,75 @@ def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> 
     lbl, color, mark = health_level_meta(health.level)
     esc_tit = html.escape(f"Saude financeira - {health.periodo}")
     esc_sub = html.escape(str(health.empresa).replace("_", " ").title())
-    st.markdown(
+    esc_lbl = html.escape(f"{mark} {lbl}")
+    st.html(
         f"""
-<div style="
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 24px;
-">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
-        <div>
-            <h2 style="margin: 0; color: #f8fafc; font-size: 1.5rem;">{esc_tit}</h2>
-            <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 0.9rem;">{esc_sub}</p>
-        </div>
-        <div style="text-align: center;">
-            <div style="
-                width: 80px;
-                height: 80px;
-                border-radius: 50%;
-                background: {color}22;
-                border: 4px solid {color};
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin: 0 auto;
-            ">
-                <span style="font-size: 1.8rem; font-weight: 700; color: {color};">
-                    {int(health.score)}
-                </span>
-            </div>
-            <p style="margin: 8px 0 0 0; color: {color}; font-weight: 600;">
-                {html.escape(mark)} {html.escape(lbl)}
-            </p>
-        </div>
+<section style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:12px;padding:24px;margin-bottom:16px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
+    <div>
+      <h2 style="margin:0;color:#f8fafc;font-size:1.45rem;font-weight:700;">{esc_tit}</h2>
+      <p style="margin:6px 0 0 0;color:#94a3b8;font-size:0.92rem;">{esc_sub}</p>
     </div>
-</div>
-""",
-        unsafe_allow_html=True,
+    <div style="text-align:center;min-width:96px;">
+      <div style="width:80px;height:80px;border-radius:50%;background:{color}22;border:4px solid {color};display:flex;align-items:center;justify-content:center;margin:0 auto;">
+        <span style="font-size:1.75rem;font-weight:700;color:{color};">{int(health.score)}</span>
+      </div>
+      <p style="margin:8px 0 0 0;color:{color};font-weight:600;font-size:0.95rem;">{esc_lbl}</p>
+    </div>
+  </div>
+</section>
+"""
     )
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        _render_kpi_card(
-            titulo="Margem",
-            valor=f"{health.margem_pct:.1f}%",
-            subtitulo="sobre receita",
-            variacao=health.tendencia_pp,
-            variacao_label="vs mes ant.",
-            cor_positivo=health.margem_pct >= 0,
+        d = health.tendencia_pp
+        st.metric(
+            "Margem",
+            f"{health.margem_pct:.1f}%",
+            delta=(f"{d:+.1f} pp vs mes ant." if d is not None else None),
+            delta_color=(
+                "inverse"
+                if d is not None and d < 0
+                else "normal"
+                if d is not None and d > 0
+                else "off"
+            ),
+            help="Margem = resultado / receita (Vl_Venda) no recorte.",
         )
     with col2:
-        _render_kpi_card(
-            titulo="Resultado",
-            valor=_fmt_brl0(health.resultado),
-            subtitulo=health.periodo,
-            variacao=None,
-            cor_positivo=health.resultado >= 0,
+        st.metric(
+            "Resultado",
+            _fmt_brl0(health.resultado),
+            delta=None,
+            delta_color="normal",
+            help=health.periodo,
         )
     with col3:
-        _render_kpi_card(
-            titulo="Custo / Receita",
-            valor=f"{health.custo_pct:.1f}%",
-            subtitulo="benchmark 50%",
-            variacao=None,
-            cor_positivo=health.custo_pct <= 50,
+        st.metric(
+            "Custo / Receita",
+            f"{health.custo_pct:.1f}%",
+            delta=None,
+            delta_color="inverse" if health.custo_pct > 50 else "normal",
+            help="Custo produto / receita. Benchmark referencia 50%.",
         )
     with col4:
         vg = health.vs_grupo_pp
-        sub4 = ""
-        if health.margem_grupo is not None:
-            sub4 = f"media outras: {health.margem_grupo:.1f}%"
-        _render_kpi_card(
-            titulo="vs Grupo",
-            valor=(f"{vg:+.1f} pp" if vg is not None else "N/A"),
-            subtitulo=sub4,
-            variacao=vg,
-            cor_positivo=(vg >= 0) if vg is not None else True,
+        mg = health.margem_grupo
+        h = (
+            f"Media de margem das outras orgs no mesmo mes civil: {mg:.1f}%."
+            if mg is not None
+            else "Sem benchmark (recorte consolidado ou uma unica org)."
+        )
+        st.metric(
+            "vs Grupo",
+            (f"{vg:+.1f} pp" if vg is not None else "N/A"),
+            delta=None,
+            delta_color="inverse" if (vg is not None and vg < 0) else "normal",
+            help=h,
         )
 
-    st.markdown("<div style='height: 16px'></div>", unsafe_allow_html=True)
+    st.divider()
 
     if health.diagnosticos:
         st.markdown("#### Diagnostico automatico")
@@ -127,86 +120,20 @@ def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> 
             _render_skus_risco(health.skus_risco)
 
 
-def _render_kpi_card(
-    titulo: str,
-    valor: str,
-    subtitulo: str = "",
-    variacao: float | None = None,
-    variacao_label: str = "",
-    cor_positivo: bool = True,
-) -> None:
-    cor_valor = "#22c55e" if cor_positivo else "#ef4444"
-    variacao_html = ""
-    if variacao is not None:
-        cor_var = "#22c55e" if variacao >= 0 else "#ef4444"
-        seta = "^" if variacao >= 0 else "v"
-        variacao_html = f"""
-        <div style="margin-top: 4px;">
-            <span style="color: {cor_var}; font-size: 0.85rem; font-weight: 600;">
-                {seta} {abs(variacao):.1f} pp
-            </span>
-            <span style="color: #64748b; font-size: 0.75rem;"> {html.escape(variacao_label)}</span>
-        </div>
-        """
-    st.markdown(
-        f"""
-<div style="
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 16px;
-    text-align: center;
-">
-    <p style="margin: 0; color: #64748b; font-size: 0.8rem; text-transform: uppercase;">
-        {html.escape(titulo)}
-    </p>
-    <p style="margin: 8px 0 4px 0; color: {cor_valor}; font-size: 1.5rem; font-weight: 700;">
-        {html.escape(valor)}
-    </p>
-    <p style="margin: 0; color: #94a3b8; font-size: 0.75rem;">
-        {html.escape(subtitulo)}
-    </p>
-    {variacao_html}
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-
 def _render_diagnostico(diag: Diagnostico) -> None:
-    key, cor_borda, sym = alert_level_meta(diag.nivel)
-    cores_bg = {
-        "info": ("#eff6ff", "#1e40af"),
-        "medio": ("#fefce8", "#a16207"),
-        "alto": ("#fff7ed", "#c2410c"),
-        "critico": ("#fef2f2", "#b91c1c"),
-    }
-    cor_bg, cor_texto = cores_bg.get(key, ("#eff6ff", "#1e40af"))
-    acao_html = ""
+    parts: list[str] = [f"**{diag.titulo}**", diag.detalhe]
     if diag.acao:
-        acao_html = f"""
-        <div style="margin-top: 8px; padding: 8px 12px; background: #f1f5f9; border-radius: 4px; font-size: 0.85rem; color: #475569;">
-            <strong>Acao sugerida:</strong> {html.escape(diag.acao)}
-        </div>
-        """
-    st.markdown(
-        f"""
-<div style="background: {cor_bg}; border-left: 4px solid {cor_borda}; border-radius: 0 8px 8px 0; padding: 16px; margin-bottom: 12px;">
-    <div style="display: flex; align-items: center; gap: 8px;">
-        <span style="font-weight: 700; color: {cor_texto};">{html.escape(sym)}</span>
-        <strong style="color: {cor_texto};">{html.escape(diag.titulo)}</strong>
-    </div>
-    <p style="margin: 8px 0 0 24px; color: #475569; font-size: 0.9rem;">{html.escape(diag.detalhe)}</p>
-    {acao_html}
-</div>
-""",
-        unsafe_allow_html=True,
-    )
+        parts.append(f"**Acao sugerida:** {diag.acao}")
+    body = "\n\n".join(parts)
+    if diag.nivel == AlertLevel.CRITICAL:
+        st.error(body)
+    elif diag.nivel in (AlertLevel.HIGH, AlertLevel.MEDIUM):
+        st.warning(body)
+    else:
+        st.info(body)
 
 
 def _render_skus_risco(skus: list[SKURisco]) -> None:
-    import pandas as pd
-
     rows = []
     for sku in skus:
         rows.append(
@@ -288,17 +215,17 @@ def render_faturamento_health_panel_if_enabled(
 
 def render_health_mini(health: "HealthScore") -> None:
     lbl, color, mark = health_level_meta(health.level)
-    st.markdown(
+    esc = html.escape(f"{mark} {lbl}")
+    st.html(
         f"""
-<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#f8fafc;border-radius:8px;border-left:4px solid {color};">
+<div style="display:flex;align-items:center;gap:12px;padding:12px;background:#f8fafc;border-radius:8px;border-left:4px solid {color};max-width:28rem;">
   <div style="min-width:48px;height:48px;border-radius:50%;background:{color}22;display:flex;align-items:center;justify-content:center;">
     <span style="font-size:1.1rem;font-weight:700;color:{color};">{int(health.score)}</span>
   </div>
   <div>
-    <p style="margin:0;font-weight:600;color:#1e293b;">{html.escape(mark)} {html.escape(lbl)}</p>
+    <p style="margin:0;font-weight:600;color:#1e293b;">{esc}</p>
     <p style="margin:2px 0 0 0;font-size:0.8rem;color:#64748b;">Margem: {health.margem_pct:.1f}%</p>
   </div>
 </div>
-""",
-        unsafe_allow_html=True,
+"""
     )

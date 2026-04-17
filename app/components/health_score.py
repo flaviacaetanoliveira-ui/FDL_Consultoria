@@ -259,7 +259,14 @@ def calcular_health_score(
             )
         )
 
-    if margem_pct >= 10:
+    tendencia_forte_queda = tendencia_pp is not None and tendencia_pp < float(cfg["threshold_tendencia_alerta"])
+    abaixo_grupo = vs_grupo_pp is not None and vs_grupo_pp < -5
+    if (
+        margem_pct >= 10
+        and resultado >= 0
+        and not tendencia_forte_queda
+        and not abaixo_grupo
+    ):
         diagnosticos.append(
             Diagnostico(
                 tipo="POSITIVO",

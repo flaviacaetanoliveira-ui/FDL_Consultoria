@@ -10,6 +10,37 @@ import pandas as pd
 # Sufixo colado ``01``–``09`` só para códigos numéricos longos (evita ``031601`` → ``0316``).
 _MIN_NUMERIC_LEN_FOR_GLUED_0X_SUFFIX = 7
 
+# Conjuntos/kits na planilha costumam vir sem sufixo variante numérico colado (ex.: ``CONJBANP`` vs pedido ``CONJBANP2``).
+_CONJUNTO_KIT_PREFIXES: tuple[str, ...] = ("conj", "kit", "coz", "comb")
+_BARE_CONJUNTO_KIT_PREFIXES = frozenset(_CONJUNTO_KIT_PREFIXES)
+
+
+def _strip_conjunto_kit_trailing_digits(s: str) -> str:
+    """
+    Remove blocos numéricos finais em códigos que começam com prefixos de conjunto/kit.
+
+    * Não remove sufixo ``0[0-9]`` com dois ou mais dígitos (ex.: ``KIT05``).
+    * Não reduz o código a só o prefixo (ex.: ``KIT5`` / ``KIT50`` → ``kit``), para não quebrar SKUs reais curtos.
+    """
+    sl = s.casefold()
+    if not any(sl.startswith(p) for p in _CONJUNTO_KIT_PREFIXES):
+        return s
+    out = s
+    while True:
+        m = re.search(r"(\d+)$", out)
+        if not m:
+            break
+        suf = m.group(1)
+        if len(suf) >= 2 and suf[0] == "0":
+            break
+        cand = out[: -len(suf)]
+        if cand.casefold() in _BARE_CONJUNTO_KIT_PREFIXES:
+            break
+        if not cand:
+            break
+        out = cand
+    return out
+
 
 def _strip_sku_variant_suffixes_join(s: str) -> str:
     """
@@ -52,8 +83,11 @@ def normalize_sku_join_key_scalar(raw: object) -> str:
     1. texto; 2. trim; 3. remover sufixo ``.0`` típico de export Excel/float;
     4. remover sufixos de variante (``-1``, ``_2``, ``.3``; em códigos só numéricos, ``01``–``09`` colados
        só se o corpo tiver ≥ 7 dígitos, p.ex. ``17055501`` → ``170555``);
-    5. remover zeros à esquerda em cadeias só numéricas (``03160`` → ``3160``);
-    6. identificadores alfanuméricos: ``casefold()`` (ex.: ``BELA4P1`` vs ``Bela4P1``).
+    5. em códigos alfanuméricos que começam com ``conj`` / ``kit`` / ``coz`` / ``comb``, remover sufixos
+       numéricos finais (ex.: ``CONJBANP2`` → ``conjbanp``, ``KITJL3`` → ``kitjl``), sem alterar ``KIT05`` nem
+       reduzir a só o prefixo (ex.: ``KIT50`` permanece ``kit50``);
+    6. remover zeros à esquerda em cadeias só numéricas (``03160`` → ``3160``);
+    7. identificadores alfanuméricos: ``casefold()`` (ex.: ``BELA4P1`` vs ``Bela4P1``).
     """
     if raw is None:
         return ""
@@ -77,6 +111,9 @@ def normalize_sku_join_key_scalar(raw: object) -> str:
     s = _strip_sku_variant_suffixes_join(s)
     if not s:
         return ""
+    s = _strip_conjunto_kit_trailing_digits(s)
+    if not s:
+        return ""
     # Apenas dígitos (com sinal opcional): zeros à esquerda
     if re.fullmatch(r"-?\d+", s):
         neg = s.startswith("-")
@@ -90,6 +127,33 @@ def normalize_sku_join_key_scalar(raw: object) -> str:
 def normalize_sku_key(series: pd.Series) -> pd.Series:
     """Série de chaves SKU para join e flags (mesma regra que :func:`normalize_sku_join_key_scalar`)."""
     return series.map(normalize_sku_join_key_scalar)
+
+
+_SKU_ASSISTENCIA_KEY_RES: tuple[re.Pattern[str], ...] = (
+    re.compile(r"^ai\d+p\d+$"),
+    re.compile(r"^int\d+$"),
+    re.compile(r"^b\d+p\d+$"),
+    re.compile(r"^bi\d+p\d+$"),
+    re.compile(r"^w\d+$"),
+    re.compile(r"^ptk\d+$"),
+    re.compile(r"^bmc\d+$"),
+    re.compile(r"^anp\d+p\d+$"),
+    re.compile(r"^pdi\d+$"),
+    re.compile(r"^rb\d+$"),
+    re.compile(r"^a\dpe\d+$"),
+)
+
+
+def is_sku_assistencia(sku_join_key: object) -> bool:
+    """
+    Indica se a chave já normalizada (mesma de :func:`normalize_sku_join_key_scalar`) é de assistência/peça.
+
+    Usado para excluir linhas de pedido que não devem entrar no join de custo/receita.
+    """
+    k = str(sku_join_key).strip().casefold()
+    if not k:
+        return False
+    return any(p.fullmatch(k) for p in _SKU_ASSISTENCIA_KEY_RES)
 
 
 def normalize_pedido_join_key_scalar(raw: object) -> str:

@@ -5,7 +5,11 @@ import unittest
 
 import pandas as pd
 
-from processing.faturamento.normalize import normalize_sku_join_key_scalar, normalize_sku_key
+from processing.faturamento.normalize import (
+    is_sku_assistencia,
+    normalize_sku_join_key_scalar,
+    normalize_sku_key,
+)
 
 
 class TestSkuJoinNormalize(unittest.TestCase):
@@ -43,6 +47,32 @@ class TestSkuJoinNormalize(unittest.TestCase):
     def test_variant_suffix_does_not_strip_alphanumeric_glued(self) -> None:
         # KIT05: últimos dois caracteres são "05" mas não é par 0[1-9] com corpo só dígitos
         self.assertEqual(normalize_sku_join_key_scalar("KIT05"), "kit05")
+
+    def test_conjunto_kit_trailing_digits(self) -> None:
+        self.assertEqual(normalize_sku_join_key_scalar("CONJBANP2"), "conjbanp")
+        self.assertEqual(normalize_sku_join_key_scalar("conjbanp1"), "conjbanp")
+        self.assertEqual(normalize_sku_join_key_scalar("KITJL3"), "kitjl")
+        self.assertEqual(normalize_sku_join_key_scalar("COZBERGAMOS2"), "cozbergamos")
+        self.assertEqual(normalize_sku_join_key_scalar("CONJKATE1"), "conjkate")
+        self.assertEqual(normalize_sku_join_key_scalar("CONJRB2"), "conjrb")
+        # Não reduzir a só o prefixo (evita kit50 → kit)
+        self.assertEqual(normalize_sku_join_key_scalar("KIT50"), "kit50")
+        self.assertEqual(normalize_sku_join_key_scalar("CONJ1"), "conj1")
+        # Numéricos e outros alfanuméricos
+        self.assertEqual(normalize_sku_join_key_scalar("170555"), "170555")
+        self.assertEqual(normalize_sku_join_key_scalar("BELA4P1"), "bela4p1")
+
+    def test_is_sku_assistencia(self) -> None:
+        self.assertTrue(is_sku_assistencia("ai3p1"))
+        self.assertTrue(is_sku_assistencia("INT7"))
+        self.assertTrue(is_sku_assistencia("b3p4"))
+        self.assertTrue(is_sku_assistencia("w8"))
+        self.assertTrue(is_sku_assistencia("ptk11"))
+        self.assertTrue(is_sku_assistencia("a3pe01"))
+        self.assertFalse(is_sku_assistencia("170555"))
+        self.assertFalse(is_sku_assistencia("CONJBANP"))
+        self.assertFalse(is_sku_assistencia("BELA4P1"))
+        self.assertFalse(is_sku_assistencia(""))
 
     def test_series(self) -> None:
         s = pd.Series(["03160", "3160", "SKU-A"])

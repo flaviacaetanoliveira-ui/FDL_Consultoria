@@ -6,6 +6,7 @@ schema_version 1: uma pasta de pedidos + custo — **deprecado (legado)**; sem n
 """
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,14 +14,18 @@ from pathlib import Path
 import pandas as pd
 
 from .calc import compute_financial_columns, compute_financial_columns_regras_fechadas, resolve_coluna_base_imposto
-from .config import PIPELINE_REVISION_FATURAMENTO
+from .config import CUSTO_SKU_COL, PIPELINE_REVISION_FATURAMENTO
 from .flags import apply_faturamento_flags
 from .io_custo import load_custo_xlsx
 from .io_pedidos import dedupe_pedidos_multiloja_codigo, load_all_pedidos_csv_concatenated, load_latest_pedidos_csv
 from .join_custo import join_custo_produto
 from .join_custo_notas_itens import enrich_custo_from_notas_itens
 from .join_notas import enrich_pedidos_com_notas
-from .normalize import normalize_nf_fiscal_commercial_join_key_scalar
+from .normalize import (
+    is_sku_assistencia,
+    normalize_nf_fiscal_commercial_join_key_scalar,
+    normalize_sku_key,
+)
 from .ml_order_fees import allocate_multiloja_order_level_fees
 from .params import (
     FaturamentoParams,
@@ -216,6 +221,16 @@ def _build_faturamento_dataset_v2(
         df_p = _normalize_pedidos_export(df_p)
         assert_required_columns_pedido(df_p)
         df_p = df_p.copy()
+        sku_key = normalize_sku_key(df_p[CUSTO_SKU_COL])
+        mask_assist = sku_key.map(is_sku_assistencia)
+        n_assist = int(mask_assist.sum())
+        if n_assist:
+            logging.getLogger(__name__).info(
+                "Pedidos org_id=%s: removendo %s linhas com SKU de assistência (ai*, int*, b*p*, w*, …)",
+                emp.org_id,
+                n_assist,
+            )
+            df_p = df_p.loc[~mask_assist].copy()
         df_p["empresa"] = emp.empresa
         df_p["org_id"] = emp.org_id
         df_p["cliente_slug"] = params.cliente_slug
@@ -262,6 +277,7 @@ def _build_faturamento_dataset_v2(
                 "org_id": emp.org_id,
                 "empresa": emp.empresa,
                 "pedidos_dir": str(ped_dir),
+                "pedidos_linhas_excluidas_assistencia": n_assist,
                 **meta_ped,
                 **meta_dedupe,
             }

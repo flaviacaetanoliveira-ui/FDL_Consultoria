@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-17T11:39:05Z",
+  "generated_at": "2026-04-17T12:56:45Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "cliente_2",
   "empresa": "_multi",
@@ -342,7 +342,7 @@
       "VALOR DE COMPRA MEGA"
     ]
   },
-  "data_processamento": "2026-04-17T11:39:00Z",
+  "data_processamento": "2026-04-17T12:56:44Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,
@@ -600,8 +600,9 @@
     }
   ],
   "status_custo_counts": {
-    "CUSTO_OK": 34782,
-    "SKU_SEM_CORRESPONDENCIA": 563
+    "CUSTO_OK": 31544,
+    "SKU_DUPLICADO_NA_TABELA_CUSTO": 3246,
+    "SKU_SEM_CORRESPONDENCIA": 555
   },
   "params_mensais_path": null,
   "notas_saida_dir_default": "notas_saida",
@@ -684,8 +685,8 @@
       "custo_nf_enriquecido_linhas_pedido": 1,
       "custo_nf_itens_col_codigo": "Código",
       "custo_nf_itens_col_quantidade": "Quantidade",
-      "custo_nf_itens_linhas_com_custo": 33477,
-      "custo_nf_itens_nf_com_total_positivo": 31548,
+      "custo_nf_itens_linhas_com_custo": 33487,
+      "custo_nf_itens_nf_com_total_positivo": 31558,
       "ml_fee_rateio_grupos_comissao": 314,
       "ml_fee_rateio_grupos_frete": 87,
       "ml_fee_rateio_linhas_tocadas": 704,

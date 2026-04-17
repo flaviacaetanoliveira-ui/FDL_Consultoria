@@ -1,0 +1,216 @@
+﻿org_id,SKU_Normalizado,Empresa,Código_pedido,Qtd_Total,Preco_Lista_Medio,NFs_distintas,Primeira_emissao_NF,Ultima_emissao_NF,Receita_Vl_Venda
+moveis_eap,182929,Móveis EAP,18292901,12.0,229.7816666666666,8,2026-02-27 06:50:48,2026-04-16 06:38:27,2757.379999999999
+moveis_eap,18293071,Móveis EAP,18293071,11.0,189.99000000000004,11,2026-04-06 10:51:57,2026-04-16 08:30:19,2089.8900000000003
+gama_home,6513,Gama Home,6513,9.0,183.85888888888888,8,2025-11-02 18:56:28,2026-01-19 07:34:58,1654.73
+mega_facil,conjbanp2,Mega Fácil,CONJBANP2,2.0,729.59,0,,,1459.18
+mega_facil,cozbergamos2,Mega Fácil,COZBERGAMOS2,1.0,1299.99,0,,,1299.99
+mega_facil,conjkate1,Mega Fácil,CONJKATE1,1.0,929.99,0,,,929.99
+moveis_eap,18292,Móveis EAP,1829201,4.0,189.99,4,2026-03-09 10:59:11,2026-04-13 10:19:58,759.96
+mega_facil,conjbanp1,Mega Fácil,CONJBANP1,1.0,729.59,0,,,729.59
+mega_facil,conjrb1,Mega Fácil,CONJRB1,2.0,329.99,0,,,659.98
+gama_home,2555,Gama Home,2555,3.0,209.99,2,2025-12-15 09:44:40,2025-12-17 09:01:26,629.97
+mega_facil,kitrp2mvd2,Mega Fácil,KITRP2MVD2,1.0,599.99,0,,,599.99
+mega_facil,kitjl3,Mega Fácil,KITJL3,1.0,579.99,0,,,579.99
+mega_facil,ai3p1,Mega Fácil,AI3P1,51.0,10.0,0,,,510.0
+gama_home,1642,Gama Home,1642,7.0,57.9,4,2025-12-10 09:27:34,2026-04-16 07:17:31,405.29999999999995
+mega_facil,conjrb2,Mega Fácil,CONJRB2,1.0,329.99,0,,,329.99
+mega_facil,b3p4,Mega Fácil,B3P4,32.0,10.0,0,,,320.0
+mega_facil,int2,Mega Fácil,INT2,24.0,10.0,20,2026-01-08 15:26:41,2026-04-01 13:34:24,240.0
+mega_facil,ai3p2,Mega Fácil,AI3P2,18.0,10.0,0,,,180.0
+mega_facil,int7,Mega Fácil,INT7,15.0,10.0,3,2026-01-23 09:24:30,2026-03-06 10:11:55,150.0
+mega_facil,pdi8,Mega Fácil,PDI8,13.0,10.0,0,,,130.0
+mega_facil,ai2p1,Mega Fácil,AI2P1,11.0,10.0,0,,,110.0
+mega_facil,int9,Mega Fácil,INT9,11.0,10.0,2,2026-01-23 09:24:30,2026-03-06 10:12:34,110.0
+mega_facil,b3p9,Mega Fácil,B3P9,10.0,10.0,0,,,100.0
+mega_facil,int5,Mega Fácil,INT5,10.0,10.0,9,2025-12-18 07:10:43,2026-04-13 12:14:35,100.0
+mega_facil,ai3p3,Mega Fácil,AI3P3,9.0,10.0,5,2026-01-30 14:04:14,2026-04-09 10:26:47,90.0
+mega_facil,b3p6,Mega Fácil,B3P6,9.0,10.0,0,,,90.0
+mega_facil,ptk11,Mega Fácil,PTK11,9.0,10.0,3,2025-11-21 14:40:15,2026-04-01 09:11:42,90.0
+mega_facil,b3p1,Mega Fácil,B3P1,6.0,10.0,0,,,60.0
+mega_facil,ai3p11,Mega Fácil,AI3P11,6.0,10.0,0,,,60.0
+mega_facil,w8,Mega Fácil,W8,6.0,10.0,5,2026-02-13 08:36:08,2026-04-01 09:10:47,60.0
+mega_facil,b4p6,Mega Fácil,B4P6,6.0,10.0,2,2026-01-29 15:25:34,2026-02-05 07:32:33,60.0
+mega_facil,ptk23,Mega Fácil,PTK23,6.0,10.0,1,2026-03-13 09:44:26,2026-03-13 09:44:26,60.0
+mega_facil,int8,Mega Fácil,INT8,6.0,10.0,2,2026-03-06 10:11:55,2026-03-06 10:12:30,60.0
+mega_facil,int6,Mega Fácil,INT6,6.0,10.0,5,2025-12-18 07:10:43,2026-03-06 10:12:26,60.0
+mega_facil,b3p3,Mega Fácil,B3P3,6.0,10.0,0,,,60.0
+mega_facil,bmc12,Mega Fácil,BMC12,6.0,10.0,1,2025-12-18 10:55:38,2025-12-18 10:55:38,60.0
+mega_facil,bmc13,Mega Fácil,BMC13,5.0,10.0,1,2025-12-18 10:55:38,2025-12-18 10:55:38,50.0
+mega_facil,ptk24,Mega Fácil,PTK24,5.0,10.0,1,2026-03-13 09:44:26,2026-03-13 09:44:26,50.0
+mega_facil,bi2p10,Mega Fácil,BI2P10,5.0,10.0,0,,,50.0
+mega_facil,anp2p4,Mega Fácil,ANP2P4,5.0,10.0,0,,,50.0
+mega_facil,int11,Mega Fácil,INT11,5.0,10.0,0,,,50.0
+mega_facil,b3p5,Mega Fácil,B3P5,4.0,10.0,0,,,40.0
+mega_facil,b4p1,Mega Fácil,B4P1,4.0,10.0,1,2026-02-13 08:36:12,2026-02-13 08:36:12,40.0
+mega_facil,ptk9,Mega Fácil,PTK9,4.0,10.0,4,2025-12-26 09:00:16,2026-04-01 09:11:46,40.0
+mega_facil,b3p13,Mega Fácil,B3P13,4.0,10.0,0,,,40.0
+mega_facil,anp2p5,Mega Fácil,ANP2P5.1,4.0,10.0,0,,,40.0
+mega_facil,rb18,Mega Fácil,RB18,4.0,10.0,0,,,40.0
+mega_facil,int17,Mega Fácil,INT17,4.0,10.0,1,2026-03-06 10:12:34,2026-03-06 10:12:34,40.0
+mega_facil,b3p7,Mega Fácil,B3P7,4.0,10.0,0,,,40.0
+mega_facil,int4,Mega Fácil,INT4,4.0,10.0,2,2026-03-06 10:12:22,2026-04-01 09:10:58,40.0
+mega_facil,a3pe01,Mega Fácil,A3PE01,4.0,10.0,2,2025-12-02 14:32:12,2025-12-26 09:01:31,40.0
+mega_facil,b4p4,Mega Fácil,B4P4,4.0,10.0,0,,,40.0
+mega_facil,b4p9,Mega Fácil,B4P9,4.0,10.0,2,2026-02-05 07:32:33,2026-02-13 08:36:12,40.0
+mega_facil,ai3p4,Mega Fácil,AI3P4,4.0,10.0,3,2026-01-23 09:24:26,2026-04-09 10:26:47,40.0
+mega_facil,ptk7,Mega Fácil,PTK7,4.0,10.0,2,2025-12-26 09:00:16,2026-04-01 09:11:46,40.0
+mega_facil,w1,Mega Fácil,W1,4.0,10.0,3,2025-11-19 13:45:11,2026-02-13 08:36:08,40.0
+mega_facil,w5,Mega Fácil,W5,4.0,10.0,4,2025-11-19 13:45:11,2026-04-01 09:11:13,40.0
+mega_facil,ai3p7,Mega Fácil,AI3P7,3.0,10.0,0,,,30.0
+mega_facil,b4p8,Mega Fácil,B4P8,3.0,10.0,1,2026-02-05 07:32:33,2026-02-05 07:32:33,30.0
+mega_facil,aipb1,Mega Fácil,AIPB1,3.0,10.0,0,,,30.0
+mega_facil,b3p2,Mega Fácil,B3P2,3.0,10.0,0,,,30.0
+mega_facil,ptk12,Mega Fácil,PTK12,3.0,10.0,1,2026-02-06 13:08:26,2026-02-06 13:08:26,30.0
+mega_facil,w6,Mega Fácil,W6,3.0,10.0,1,2025-12-09 07:46:43,2025-12-09 07:46:43,30.0
+mega_facil,int1,Mega Fácil,INT1,3.0,10.0,3,2026-03-06 10:11:55,2026-04-01 09:11:31,30.0
+mega_facil,ai3p8,Mega Fácil,AI3P8,3.0,10.0,0,,,30.0
+mega_facil,a3pe03,Mega Fácil,A3PE03,3.0,10.0,3,2025-12-02 14:32:12,2026-01-07 13:38:00,30.0
+mega_facil,ptk21,Mega Fácil,PTK21,3.0,10.0,0,,,30.0
+mega_facil,pdi7,Mega Fácil,PDI7,3.0,10.0,2,2026-04-01 09:11:23,2026-04-01 09:11:50,30.0
+mega_facil,int10,Mega Fácil,INT10,3.0,10.0,2,2026-02-19 07:22:10,2026-04-01 09:10:58,30.0
+mega_facil,pdi5,Mega Fácil,PDI5,3.0,10.0,2,2026-04-01 09:11:23,2026-04-01 09:11:50,30.0
+mega_facil,bi2p4,Mega Fácil,BI2P4,3.0,10.0,0,,,30.0
+mega_facil,bmc7,Mega Fácil,BMC7,3.0,10.0,3,2025-11-19 13:45:08,2026-04-09 08:57:06,30.0
+mega_facil,brs11,Mega Fácil,BRS11,3.0,10.0,0,,,30.0
+mega_facil,ra04,Mega Fácil,RA04,3.0,10.0,0,,,30.0
+mega_star,w21,Mega Star,W21,2.0,10.0,1,2026-03-17 13:56:05,2026-03-17 13:56:05,20.0
+mega_facil,a3pe04,Mega Fácil,A3PE04,2.0,10.0,2,2025-12-02 14:32:12,2025-12-26 09:01:31,20.0
+mega_facil,w11,Mega Fácil,W11,2.0,10.0,1,2025-12-09 07:46:43,2025-12-09 07:46:43,20.0
+mega_facil,rb8,Mega Fácil,RB8,2.0,10.0,2,2025-12-09 07:46:39,2025-12-15 15:52:50,20.0
+mega_facil,w9,Mega Fácil,W9,2.0,10.0,1,2026-03-10 14:34:20,2026-03-10 14:34:20,20.0
+mega_facil,ptk8,Mega Fácil,PTK8,2.0,10.0,2,2025-12-26 09:00:16,2026-02-06 13:08:26,20.0
+mega_facil,ai3p6,Mega Fácil,AI3P6,2.0,10.0,0,,,20.0
+moveis_eap,ln7,Móveis EAP,LN7,2.0,10.0,0,,,20.0
+mega_star,w19,Mega Star,W19,2.0,10.0,1,2026-03-17 13:56:05,2026-03-17 13:56:05,20.0
+gama_home,b2p4,Gama Home,B2P4,2.0,10.0,0,,,20.0
+mega_star,w20,Mega Star,W20,2.0,10.0,1,2026-03-17 13:56:05,2026-03-17 13:56:05,20.0
+mega_star,bu13,Mega Star,BU13,2.0,10.0,0,,,20.0
+mega_star,bu14,Mega Star,BU14,2.0,10.0,0,,,20.0
+mega_facil,bnp13,Mega Fácil,BNP13.1,2.0,10.0,0,,,20.0
+mega_facil,ai2p4,Mega Fácil,AI2P4,2.0,10.0,0,,,20.0
+mega_facil,bmc16,Mega Fácil,BMC16,2.0,10.0,0,,,20.0
+mega_facil,int16,Mega Fácil,INT16,2.0,10.0,0,,,20.0
+mega_facil,ra10,Mega Fácil,RA10,2.0,10.0,0,,,20.0
+mega_facil,pnp8,Mega Fácil,PNP8.1,2.0,10.0,0,,,20.0
+mega_facil,int15,Mega Fácil,INT15,2.0,10.0,2,2026-02-19 07:22:10,2026-04-01 09:11:31,20.0
+mega_facil,pnp9,Mega Fácil,PNP9.1,2.0,10.0,0,,,20.0
+mega_facil,b4p7,Mega Fácil,B4P7,2.0,10.0,1,2026-02-05 07:32:33,2026-02-05 07:32:33,20.0
+mega_facil,pdi15,Mega Fácil,PDI15,2.0,10.0,1,2026-04-01 09:11:50,2026-04-01 09:11:50,20.0
+mega_facil,ptk4,Mega Fácil,PTK4,2.0,10.0,0,,,20.0
+mega_facil,bmc1,Mega Fácil,BMC1,2.0,10.0,2,2025-12-18 10:55:38,2026-04-09 08:57:06,20.0
+moveis_eap,ln1,Móveis EAP,LN1,1.0,10.0,1,2026-03-10 14:40:36,2026-03-10 14:40:36,10.0
+moveis_eap,bmc7,Móveis EAP,BMC7,1.0,10.0,1,2026-03-31 10:25:57,2026-03-31 10:25:57,10.0
+moveis_eap,bmc6,Móveis EAP,BMC6,1.0,10.0,0,,,10.0
+moveis_eap,bmc2,Móveis EAP,BMC2,1.0,10.0,1,2026-03-31 10:25:57,2026-03-31 10:25:57,10.0
+mega_star,p3,Mega Star,P3,1.0,10.0,1,2025-12-01 10:02:52,2025-12-01 10:02:52,10.0
+mega_star,p1,Mega Star,P1,1.0,10.0,1,2025-12-01 10:02:52,2025-12-01 10:02:52,10.0
+mega_star,ln9,Mega Star,LN9,1.0,10.0,0,,,10.0
+mega_star,p7,Mega Star,P7,1.0,10.0,1,2025-11-19 13:55:24,2025-11-19 13:55:24,10.0
+mega_star,rb8,Mega Star,RB8,1.0,10.0,1,2025-11-19 14:00:05,2025-11-19 14:00:05,10.0
+mega_star,ra12,Mega Star,RA12,1.0,10.0,0,,,10.0
+mega_star,w18,Mega Star,W18,1.0,10.0,1,2026-03-17 13:56:05,2026-03-17 13:56:05,10.0
+mega_star,ra10,Mega Star,RA10,1.0,10.0,0,,,10.0
+mega_star,w17,Mega Star,W17,1.0,10.0,1,2026-03-17 13:56:05,2026-03-17 13:56:05,10.0
+moveis_eap,b3p1,Móveis EAP,B3P1,1.0,10.0,0,,,10.0
+moveis_eap,b3p4,Móveis EAP,B3P4,1.0,10.0,0,,,10.0
+moveis_eap,b3p8,Móveis EAP,B3P8,1.0,10.0,0,,,10.0
+moveis_eap,bmc1,Móveis EAP,BMC1,1.0,10.0,0,,,10.0
+moveis_eap,ln4,Móveis EAP,LN4,1.0,10.0,1,2026-03-10 14:40:33,2026-03-10 14:40:33,10.0
+mega_star,ln1,Mega Star,LN1,1.0,10.0,1,2026-03-06 10:17:56,2026-03-06 10:17:56,10.0
+mega_star,ln2,Mega Star,LN2,1.0,10.0,0,,,10.0
+mega_star,bcs2,Mega Star,BCS2,1.0,10.0,0,,,10.0
+mega_star,bcs15,Mega Star,BCS15,1.0,10.0,0,,,10.0
+mega_star,bmc13,Mega Star,BMC13,1.0,10.0,1,2026-02-05 07:14:51,2026-02-05 07:14:51,10.0
+mega_star,ln7,Mega Star,LN7,1.0,10.0,1,2025-12-09 07:49:03,2025-12-09 07:49:03,10.0
+mega_star,ln6,Mega Star,LN6,1.0,10.0,0,,,10.0
+mega_star,ln5,Mega Star,LN5,1.0,10.0,0,,,10.0
+mega_star,ln4,Mega Star,LN4,1.0,10.0,1,2026-03-06 10:17:56,2026-03-06 10:17:56,10.0
+mega_star,ln3,Mega Star,LN3,1.0,10.0,0,,,10.0
+mega_star,bmc7,Mega Star,BMC7,1.0,10.0,1,2026-02-05 07:14:51,2026-02-05 07:14:51,10.0
+mega_star,b3p3,Mega Star,B3P3,1.0,10.0,0,,,10.0
+mega_star,b3p4,Mega Star,B3P4,1.0,10.0,0,,,10.0
+mega_star,b3p5,Mega Star,B3P5,1.0,10.0,0,,,10.0
+mega_star,b3p6,Mega Star,B3P6,1.0,10.0,0,,,10.0
+gama_home,b3p2,Gama Home,B3P2,1.0,10.0,0,,,10.0
+gama_home,b3p1,Gama Home,B3P1,1.0,10.0,0,,,10.0
+gama_home,b3p13,Gama Home,B3P13,1.0,10.0,0,,,10.0
+gama_home,ln3,Gama Home,LN3,1.0,10.0,0,,,10.0
+gama_home,b4p4,Gama Home,B4P4,1.0,10.0,0,,,10.0
+gama_home,b3p4,Gama Home,B3P4,1.0,10.0,0,,,10.0
+gama_home,ln5,Gama Home,LN5,1.0,10.0,0,,,10.0
+gama_home,rb8,Gama Home,RB8,1.0,10.0,1,2025-12-15 15:54:56,2025-12-15 15:54:56,10.0
+gama_home,rb1,Gama Home,RB1,1.0,10.0,0,,,10.0
+gama_home,ra10,Gama Home,RA10,1.0,10.0,0,,,10.0
+gama_home,w9,Gama Home,W9,1.0,10.0,1,2026-01-29 15:27:14,2026-01-29 15:27:14,10.0
+mega_star,b3p13,Mega Star,B3P13,1.0,10.0,0,,,10.0
+mega_star,b3p7,Mega Star,B3P7,1.0,10.0,0,,,10.0
+mega_star,b3p9,Mega Star,B3P9,1.0,10.0,0,,,10.0
+mega_star,bcs13,Mega Star,BCS13,1.0,10.0,0,,,10.0
+moveis_eap,b3p9,Móveis EAP,B3P9,1.0,10.0,0,,,10.0
+moveis_eap,b4p1,Móveis EAP,B4P1,1.0,10.0,1,2025-12-22 12:35:44,2025-12-22 12:35:44,10.0
+moveis_eap,b4p2,Móveis EAP,B4P2,1.0,10.0,1,2026-02-23 07:27:53,2026-02-23 07:27:53,10.0
+moveis_eap,b4p4,Móveis EAP,B4P4,1.0,10.0,0,,,10.0
+mega_facil,anp2p1,Mega Fácil,ANP2P1,1.0,10.0,0,,,10.0
+mega_facil,bmc14,Mega Fácil,BMC14,1.0,10.0,0,,,10.0
+mega_facil,bu8,Mega Fácil,BU8,1.0,10.0,1,2025-11-12 07:52:48,2025-11-12 07:52:48,10.0
+mega_facil,pnp1,Mega Fácil,PNP1,1.0,10.0,1,2025-11-21 14:40:31,2025-11-21 14:40:31,10.0
+mega_facil,bmc15,Mega Fácil,BMC15,1.0,10.0,0,,,10.0
+moveis_eap,bcs1,Móveis EAP,BCS1,1.0,10.0,0,,,10.0
+moveis_eap,b4p9,Móveis EAP,B4P9,1.0,10.0,1,2025-12-22 12:35:44,2025-12-22 12:35:44,10.0
+moveis_eap,b4p6,Móveis EAP,B4P6,1.0,10.0,1,2026-02-23 07:27:53,2026-02-23 07:27:53,10.0
+mega_facil,ptk3,Mega Fácil,PTK3,1.0,10.0,0,,,10.0
+mega_facil,bcp3,Mega Fácil,BCP3,1.0,10.0,0,,,10.0
+mega_facil,b4p5,Mega Fácil,B4P5,1.0,10.0,0,,,10.0
+mega_facil,p3,Mega Fácil,P3,1.0,10.0,1,2025-12-09 07:46:22,2025-12-09 07:46:22,10.0
+mega_facil,rb1,Mega Fácil,RB1,1.0,10.0,0,,,10.0
+mega_facil,bcs5,Mega Fácil,BCS5,1.0,10.0,0,,,10.0
+mega_facil,p1,Mega Fácil,P1,1.0,10.0,1,2025-12-09 07:46:22,2025-12-09 07:46:22,10.0
+mega_facil,w23,Mega Fácil,W23,1.0,10.0,0,,,10.0
+mega_facil,w10,Mega Fácil,W10,1.0,10.0,0,,,10.0
+mega_facil,aipb7,Mega Fácil,AIPB7,1.0,10.0,0,,,10.0
+mega_facil,bmc6,Mega Fácil,BMC6,1.0,10.0,0,,,10.0
+mega_facil,ptk25,Mega Fácil,PTK25,1.0,10.0,0,,,10.0
+mega_facil,b4p3,Mega Fácil,B4P3,1.0,10.0,1,2026-02-05 07:32:33,2026-02-05 07:32:33,10.0
+mega_facil,a3pe07,Mega Fácil,A3PE07,1.0,10.0,1,2026-01-07 13:38:00,2026-01-07 13:38:00,10.0
+mega_facil,ptk17,Mega Fácil,PTK17,1.0,10.0,0,,,10.0
+mega_facil,bmc8,Mega Fácil,BMC8,1.0,10.0,0,,,10.0
+mega_facil,ptk26,Mega Fácil,PTK26,1.0,10.0,0,,,10.0
+mega_facil,ptk5,Mega Fácil,PTK5,1.0,10.0,1,2025-12-26 09:00:16,2025-12-26 09:00:16,10.0
+mega_facil,bmc2,Mega Fácil,BMC2,1.0,10.0,0,,,10.0
+mega_facil,ln2p8,Mega Fácil,LN2P8,1.0,10.0,0,,,10.0
+mega_facil,pnp11,Mega Fácil,PNP11.1,1.0,10.0,0,,,10.0
+mega_facil,ra08,Mega Fácil,RA08,1.0,10.0,0,,,10.0
+mega_facil,ra03,Mega Fácil,RA03,1.0,10.0,0,,,10.0
+mega_facil,pnp10,Mega Fácil,PNP10.1,1.0,10.0,0,,,10.0
+mega_facil,bi2p6,Mega Fácil,BI2P6,1.0,10.0,0,,,10.0
+mega_facil,brs15,Mega Fácil,BRS15,1.0,10.0,1,2026-03-06 10:12:08,2026-03-06 10:12:08,10.0
+mega_facil,bi2p8,Mega Fácil,BI2P8,1.0,10.0,0,,,10.0
+mega_facil,pc1,Mega Fácil,PC1,1.0,10.0,1,2026-02-13 08:36:08,2026-02-13 08:36:08,10.0
+mega_facil,int3,Mega Fácil,INT3,1.0,10.0,1,2026-04-01 09:10:58,2026-04-01 09:10:58,10.0
+mega_facil,bcp9,Mega Fácil,BCP9,1.0,10.0,1,2026-03-06 10:11:43,2026-03-06 10:11:43,10.0
+mega_facil,rcc4p28,Mega Fácil,RCC4P28,1.0,10.0,0,,,10.0
+mega_facil,bcp1,Mega Fácil,BCP1,1.0,10.0,1,2026-03-06 10:11:43,2026-03-06 10:11:43,10.0
+mega_facil,crs18,Mega Fácil,CRS18,1.0,10.0,0,,,10.0
+mega_facil,crs19,Mega Fácil,CRS19,1.0,10.0,0,,,10.0
+mega_facil,ln9,Mega Fácil,LN9,1.0,10.0,0,,,10.0
+mega_facil,ln4,Mega Fácil,LN4,1.0,10.0,0,,,10.0
+mega_facil,rb9,Mega Fácil,RB9,1.0,10.0,0,,,10.0
+mega_facil,bnp3,Mega Fácil,BNP3,1.0,10.0,0,,,10.0
+mega_facil,bnp4,Mega Fácil,BNP4,1.0,10.0,0,,,10.0
+mega_facil,bcp13,Mega Fácil,BCP13,1.0,10.0,1,2026-03-06 10:11:43,2026-03-06 10:11:43,10.0
+mega_facil,ai2p5,Mega Fácil,AI2P5,1.0,10.0,0,,,10.0
+mega_facil,bnp12,Mega Fácil,BNP12.1,1.0,10.0,0,,,10.0
+mega_facil,w7,Mega Fácil,W7,1.0,10.0,0,,,10.0
+mega_facil,w4,Mega Fácil,W4,1.0,10.0,0,,,10.0
+mega_facil,pdi3,Mega Fácil,PDI3,1.0,10.0,0,,,10.0
+mega_facil,ptk6,Mega Fácil,PTK6,1.0,10.0,0,,,10.0
+mega_facil,pdi11,Mega Fácil,PDI11,1.0,10.0,0,,,10.0
+mega_facil,pc3,Mega Fácil,PC3,1.0,10.0,0,,,10.0
+mega_facil,pdi9,Mega Fácil,PDI9,1.0,10.0,0,,,10.0
+mega_facil,anp3p7,Mega Fácil,ANP3P7.1,1.0,10.0,0,,,10.0
+mega_facil,b4p2,Mega Fácil,B4P2,1.0,10.0,0,,,10.0
+mega_facil,bmc3,Mega Fácil,BMC3,1.0,10.0,1,2026-04-09 08:57:06,2026-04-09 08:57:06,10.0
+mega_facil,b3p8,Mega Fácil,B3P8,1.0,10.0,0,,,10.0
+mega_facil,bmc11,Mega Fácil,BMC11,1.0,10.0,0,,,10.0
+mega_facil,bmc9,Mega Fácil,BMC9,1.0,10.0,0,,,10.0
+mega_facil,ln5,Mega Fácil,LN5,1.0,10.0,0,,,10.0

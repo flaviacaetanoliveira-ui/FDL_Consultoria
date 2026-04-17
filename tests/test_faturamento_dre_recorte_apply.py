@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import date
 
 import pandas as pd
-import pytest
 
 from faturamento_dre_recorte import (
     FaturamentoRecorteState,
@@ -126,8 +125,7 @@ def test_apply_data_venda_invertida_emite_warning_e_corrige() -> None:
     assert len(res.df) >= 0
 
 
-@pytest.mark.parametrize("pres", ["Todos", "Sem NF vinculada"])
-def test_apply_empty_input(pres: str) -> None:
+def _assert_apply_empty_input(pres: str) -> None:
     res = apply_recorte_modulo(
         pd.DataFrame(),
         FaturamentoRecorteState(
@@ -144,3 +142,27 @@ def test_apply_empty_input(pres: str) -> None:
         ),
     )
     assert res.df.empty
+
+
+def test_apply_empty_input_todos() -> None:
+    _assert_apply_empty_input("Todos")
+
+
+def test_apply_empty_input_sem_nf_vinculada() -> None:
+    _assert_apply_empty_input("Sem NF vinculada")
+
+
+def load_tests(loader, tests, pattern):
+    """Expõe funções ``test_*`` ao ``unittest discover`` (sem dependência de pytest)."""
+    import unittest
+
+    names = (
+        "test_apply_preserves_all_rows_with_default_like_state",
+        "test_apply_situacao_pedido",
+        "test_apply_nf_vinculada",
+        "test_apply_situacao_nf_sem_coluna_gera_admin_message",
+        "test_apply_data_venda_invertida_emite_warning_e_corrige",
+        "test_apply_empty_input_todos",
+        "test_apply_empty_input_sem_nf_vinculada",
+    )
+    return unittest.TestSuite(unittest.FunctionTestCase(globals()[n]) for n in names)

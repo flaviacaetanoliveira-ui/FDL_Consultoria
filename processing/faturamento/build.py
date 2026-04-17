@@ -20,6 +20,7 @@ from .io_pedidos import dedupe_pedidos_multiloja_codigo, load_all_pedidos_csv_co
 from .join_custo import join_custo_produto
 from .join_custo_notas_itens import enrich_custo_from_notas_itens
 from .join_notas import enrich_pedidos_com_notas
+from .normalize import normalize_nf_fiscal_commercial_join_key_scalar
 from .ml_order_fees import allocate_multiloja_order_level_fees
 from .params import (
     FaturamentoParams,
@@ -246,6 +247,11 @@ def _build_faturamento_dataset_v2(
             empresa=emp.empresa,
         )
         df_j, meta_dedupe = dedupe_pedidos_multiloja_codigo(df_j)
+        excl_nf = frozenset(emp.excluir_notas_fiscal) if emp.excluir_notas_fiscal else frozenset()
+        if excl_nf and "Nota_Numero_Normalizado" in df_j.columns:
+            nk = df_j["Nota_Numero_Normalizado"].fillna("").astype(str).str.strip()
+            nk_ex = nk.map(normalize_nf_fiscal_commercial_join_key_scalar)
+            df_j = df_j.loc[~nk_ex.isin(excl_nf)].copy()
         notas_meta_por_empresa.append(
             {"org_id": emp.org_id, **meta_notas, **meta_custo_nf, **meta_ml_fees, **meta_dedupe}
         )

@@ -80,11 +80,11 @@ class TestBuildNfPanelAlignedToFiscalBase(unittest.TestCase):
         )
         scope = _panel_scope_empresa_emissao_gama_mar2026(panel)
         aligned = build_nf_panel_aligned_to_fiscal_base(base, scope)
-        self.assertEqual(len(aligned), 438)
-        self.assertEqual(st.n_nf, 438)
+        self.assertEqual(len(aligned), 437)
+        self.assertEqual(st.n_nf, 437)
         kp = compute_nf_panel_kpis(aligned)
-        self.assertAlmostEqual(float(kp["valor_faturado_nf"]), 82347.10, places=2)
-        self.assertEqual(int(kp["n_nf"]), 438)
+        self.assertAlmostEqual(float(kp["valor_faturado_nf"]), 82337.10, places=2)
+        self.assertEqual(int(kp["n_nf"]), 437)
 
     @unittest.skipUnless(
         _CLIENTE2_PARQUETS_OK,
@@ -107,12 +107,12 @@ class TestBuildNfPanelAlignedToFiscalBase(unittest.TestCase):
         self.assertEqual(
             cov,
             CommercialCoverageStats(
-                n_total=438,
-                n_com_vinculo_pedido_nf=438,
+                n_total=437,
+                n_com_vinculo_pedido_nf=437,
                 n_sem_vinculo_ou_so_fiscal=0,
-                n_com_venda_lista=438,
-                n_sem_resultado=86,
-                n_com_resultado_numerico=352,
+                n_com_venda_lista=437,
+                n_sem_resultado=77,
+                n_com_resultado_numerico=360,
             ),
         )
 

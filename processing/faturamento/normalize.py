@@ -13,7 +13,7 @@ def normalize_sku_join_key_scalar(raw: object) -> str:
 
     1. texto; 2. trim; 3. remover sufixo ``.0`` típico de export Excel/float;
     4. remover zeros à esquerda em cadeias só numéricas (``03160`` → ``3160``).
-    Identificadores alfanuméricos (ex.: ``SKU-A``) mantêm-se após trim / ``.0``.
+    5. identificadores alfanuméricos: ``casefold()`` para alinhar custo (XLSX) e pedidos (ex.: ``BELA4P1`` vs ``Bela4P1``).
     """
     if raw is None:
         return ""
@@ -40,7 +40,8 @@ def normalize_sku_join_key_scalar(raw: object) -> str:
         body = s[1:] if neg else s
         body = body.lstrip("0") or "0"
         return f"-{body}" if neg else body
-    return s
+    # Case-insensitive: planilha de custo costuma vir em MAIÚSCULAS e pedidos em TitleCase (ex.: BELA4P1 vs Bela4P1).
+    return s.casefold()
 
 
 def normalize_sku_key(series: pd.Series) -> pd.Series:

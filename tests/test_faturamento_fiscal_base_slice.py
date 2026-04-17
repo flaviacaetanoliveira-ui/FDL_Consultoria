@@ -134,8 +134,8 @@ class TestBuildFaturamentoFiscalBaseSlice(unittest.TestCase):
             nf_d_fim=date(2026, 3, 31),
             ok_nf_dates=True,
         )
-        self.assertEqual(st.n_nf, 438)
-        self.assertAlmostEqual(st.valor_liquido_fiscal_sum, 82347.10, places=2)
+        self.assertEqual(st.n_nf, 437)
+        self.assertAlmostEqual(st.valor_liquido_fiscal_sum, 82337.10, places=2)
 
 
 if __name__ == "__main__":

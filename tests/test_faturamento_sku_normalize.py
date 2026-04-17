@@ -52,7 +52,10 @@ class TestSkuJoinNormalize(unittest.TestCase):
         self.assertEqual(normalize_sku_join_key_scalar("CONJBANP2"), "conjbanp")
         self.assertEqual(normalize_sku_join_key_scalar("conjbanp1"), "conjbanp")
         self.assertEqual(normalize_sku_join_key_scalar("KITJL3"), "kitjl")
-        self.assertEqual(normalize_sku_join_key_scalar("COZBERGAMOS2"), "cozbergamos")
+        self.assertEqual(normalize_sku_join_key_scalar("COZBERGAMOS2"), "cozbergamo")
+        self.assertEqual(normalize_sku_join_key_scalar("COZBERGAMO2"), "cozbergamo")
+        self.assertEqual(normalize_sku_join_key_scalar("cozbergamos1"), "cozbergamo")
+        self.assertEqual(normalize_sku_join_key_scalar("COZMADEIRA2"), "cozmadeira")
         self.assertEqual(normalize_sku_join_key_scalar("CONJKATE1"), "conjkate")
         self.assertEqual(normalize_sku_join_key_scalar("CONJRB2"), "conjrb")
         # Não reduzir a só o prefixo (evita kit50 → kit)
@@ -61,6 +64,12 @@ class TestSkuJoinNormalize(unittest.TestCase):
         # Numéricos e outros alfanuméricos
         self.assertEqual(normalize_sku_join_key_scalar("170555"), "170555")
         self.assertEqual(normalize_sku_join_key_scalar("BELA4P1"), "bela4p1")
+
+    def test_prefix_f_sku_normalize(self) -> None:
+        self.assertEqual(normalize_sku_join_key_scalar("6513"), "6513")
+        self.assertEqual(normalize_sku_join_key_scalar("F6513"), "f6513")
+        self.assertEqual(normalize_sku_join_key_scalar("1642"), "1642")
+        self.assertEqual(normalize_sku_join_key_scalar("f1642"), "f1642")
 
     def test_is_sku_assistencia(self) -> None:
         self.assertTrue(is_sku_assistencia("ai3p1"))

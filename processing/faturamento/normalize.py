@@ -21,11 +21,17 @@ def _strip_conjunto_kit_trailing_digits(s: str) -> str:
 
     * Não remove sufixo ``0[0-9]`` com dois ou mais dígitos (ex.: ``KIT05``).
     * Não reduz o código a só o prefixo (ex.: ``KIT5`` / ``KIT50`` → ``kit``), para não quebrar SKUs reais curtos.
+    * ``COZBERGAMOS`` + dígitos (pedido) vs ``COZBERGAMO`` + dígitos (planilha): normaliza removendo o ``S``
+      extra antes dos dígitos finais (só esta família ``cozbergamo*``, para não afetar outros ``coz*``).
     """
     sl = s.casefold()
     if not any(sl.startswith(p) for p in _CONJUNTO_KIT_PREFIXES):
         return s
     out = s
+    # Planilha COZBERGAMO2 / pedido COZBERGAMOS2 — alinhar a «cozbergamo» + dígitos antes do strip de dígitos.
+    if sl.startswith("cozbergamos") and re.fullmatch(r"cozbergamos\d+", sl):
+        out = re.sub(r"(?i)cozbergamos(\d+)$", r"cozbergamo\1", out)
+        sl = out.casefold()
     while True:
         m = re.search(r"(\d+)$", out)
         if not m:
@@ -83,9 +89,10 @@ def normalize_sku_join_key_scalar(raw: object) -> str:
     1. texto; 2. trim; 3. remover sufixo ``.0`` típico de export Excel/float;
     4. remover sufixos de variante (``-1``, ``_2``, ``.3``; em códigos só numéricos, ``01``–``09`` colados
        só se o corpo tiver ≥ 7 dígitos, p.ex. ``17055501`` → ``170555``);
-    5. em códigos alfanuméricos que começam com ``conj`` / ``kit`` / ``coz`` / ``comb``, remover sufixos
-       numéricos finais (ex.: ``CONJBANP2`` → ``conjbanp``, ``KITJL3`` → ``kitjl``), sem alterar ``KIT05`` nem
-       reduzir a só o prefixo (ex.: ``KIT50`` permanece ``kit50``);
+    5. em códigos alfanuméricos que começam com ``conj`` / ``kit`` / ``coz`` / ``comb``, alinhar variantes
+       (ex.: ``COZBERGAMOS2`` → ``cozbergamo`` com a planilha ``COZBERGAMO2``) e remover sufixos numéricos finais
+       (ex.: ``CONJBANP2`` → ``conjbanp``, ``KITJL3`` → ``kitjl``), sem alterar ``KIT05`` nem reduzir a só o
+       prefixo (ex.: ``KIT50`` permanece ``kit50``);
     6. remover zeros à esquerda em cadeias só numéricas (``03160`` → ``3160``);
     7. identificadores alfanuméricos: ``casefold()`` (ex.: ``BELA4P1`` vs ``Bela4P1``).
     """

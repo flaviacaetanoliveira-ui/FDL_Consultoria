@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-17T14:35:57Z",
+  "generated_at": "2026-04-17T15:16:24Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "cliente_2",
   "empresa": "_multi",
@@ -347,7 +347,7 @@
     ],
     "custo_dedupe_by_normalized_sku_dropped_rows": 143
   },
-  "data_processamento": "2026-04-17T14:35:56Z",
+  "data_processamento": "2026-04-17T15:16:23Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,
@@ -609,8 +609,8 @@
     }
   ],
   "status_custo_counts": {
-    "CUSTO_OK": 34798,
-    "SKU_SEM_CORRESPONDENCIA": 45
+    "CUSTO_OK": 34813,
+    "SKU_SEM_CORRESPONDENCIA": 30
   },
   "params_mensais_path": null,
   "notas_saida_dir_default": "notas_saida",
@@ -662,17 +662,17 @@
     {
       "org_id": "moveis_eap",
       "notas_saida_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\notas_saida",
-      "notas_linhas_apos_filtro": 17747,
-      "notas_arquivos_linhas_brutas": 17792,
+      "notas_linhas_apos_filtro": 17808,
+      "notas_arquivos_linhas_brutas": 17853,
       "notas_vazio": false,
       "notas_fallback_numero_coluna_linhas": 227,
-      "notas_frete_fallback_grupos_nf": 93,
-      "notas_nf_distintas": 6117,
+      "notas_frete_fallback_grupos_nf": 94,
+      "notas_nf_distintas": 6157,
       "custo_nf_enriquecido_linhas_pedido": 0,
       "custo_nf_itens_col_codigo": "Código",
       "custo_nf_itens_col_quantidade": "Quantidade",
-      "custo_nf_itens_linhas_com_custo": 17592,
-      "custo_nf_itens_nf_com_total_positivo": 17515,
+      "custo_nf_itens_linhas_com_custo": 17653,
+      "custo_nf_itens_nf_com_total_positivo": 17575,
       "ml_fee_rateio_grupos_comissao": 8,
       "ml_fee_rateio_grupos_frete": 2,
       "ml_fee_rateio_linhas_tocadas": 16,
@@ -684,8 +684,8 @@
     {
       "org_id": "mega_facil",
       "notas_saida_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\notas_saida",
-      "notas_linhas_apos_filtro": 33919,
-      "notas_arquivos_linhas_brutas": 34120,
+      "notas_linhas_apos_filtro": 34018,
+      "notas_arquivos_linhas_brutas": 34219,
       "notas_vazio": false,
       "notas_fallback_numero_coluna_linhas": 14009,
       "notas_frete_fallback_grupos_nf": 635,
@@ -693,8 +693,8 @@
       "custo_nf_enriquecido_linhas_pedido": 1,
       "custo_nf_itens_col_codigo": "Código",
       "custo_nf_itens_col_quantidade": "Quantidade",
-      "custo_nf_itens_linhas_com_custo": 33487,
-      "custo_nf_itens_nf_com_total_positivo": 31558,
+      "custo_nf_itens_linhas_com_custo": 33586,
+      "custo_nf_itens_nf_com_total_positivo": 31656,
       "ml_fee_rateio_grupos_comissao": 314,
       "ml_fee_rateio_grupos_frete": 87,
       "ml_fee_rateio_linhas_tocadas": 704,
@@ -705,12 +705,12 @@
     }
   ],
   "dataset_faturamento_nf_parquet": "dataset_faturamento_nf.parquet",
-  "nf_first_row_count": 26570,
+  "nf_first_row_count": 26610,
   "schema_version_nf_first": 4,
   "dataset_faturamento_nf_panel_parquet": "dataset_faturamento_nf_panel.parquet",
-  "nf_panel_row_count": 56730,
+  "nf_panel_row_count": 56893,
   "nf_panel_ads": true,
   "dataset_faturamento_fiscal_parquet": "dataset_faturamento_fiscal.parquet",
   "schema_version_fiscal": 1,
-  "fiscal_row_count": 56730
+  "fiscal_row_count": 56893
 }

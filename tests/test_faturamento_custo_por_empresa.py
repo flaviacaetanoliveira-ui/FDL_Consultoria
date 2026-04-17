@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import unittest
+
 import pandas as pd
 
 from processing.faturamento.config import (
@@ -11,6 +13,7 @@ from processing.faturamento.config import (
     CUSTO_COL_VALOR_STAR_GAMA,
     CUSTO_SKU_COL,
     CUSTO_UNITARIO_COL,
+    SKU_NORMALIZADO_COL,
 )
 from processing.faturamento.custo_por_empresa import join_custo_produto_por_empresa, resolve_custo_coluna_preco_nome
 from processing.faturamento.join_custo import join_custo_produto
@@ -69,6 +72,22 @@ def test_join_custo_produto_por_empresa_alias() -> None:
         "Móveis EAP",
     )
     assert abs(float(out.iloc[0][CUSTO_UNITARIO_COL]) - 20.0) < 1e-6
+
+
+class TestJoinFallbackF(unittest.TestCase):
+    def test_join_custo_fallback_prefix_f_numeric(self) -> None:
+        """Pedido só numérico casa com planilha ``F`` + dígitos (Gama Home / frigideiras)."""
+        df_c = pd.DataFrame(
+            {
+                CUSTO_SKU_COL: ["F6513", "F1642"],
+                CUSTO_COL_VALOR_STAR_GAMA: ["11,00", "22,00"],
+            }
+        )
+        df_p = pd.DataFrame({CUSTO_SKU_COL: ["6513", "1642"], "Quantidade": [1.0, 1.0]})
+        out = join_custo_produto_por_empresa(df_p, df_c, "Gama Home")
+        self.assertEqual(out[SKU_NORMALIZADO_COL].tolist(), ["f6513", "f1642"])
+        self.assertAlmostEqual(float(out.iloc[0][CUSTO_UNITARIO_COL]), 11.0, places=6)
+        self.assertAlmostEqual(float(out.iloc[1][CUSTO_UNITARIO_COL]), 22.0, places=6)
 
 
 def test_fallback_na_celula_vazia_usa_valor_de_compra_generico() -> None:

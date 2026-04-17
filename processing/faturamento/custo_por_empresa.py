@@ -106,12 +106,32 @@ def build_custo_unitario_map_por_empresa(df_custo: pd.DataFrame, empresa: str | 
     return out, meta
 
 
+def _resolve_sku_join_key_com_fallback_f(
+    sku_key: str, *, keys_present: frozenset[str]
+) -> str:
+    """
+    Se a planilha tiver código ``F`` + só dígitos (ex.: ``F6513`` → chave ``f6513``) e o pedido vier só
+    numérico (``6513``), usa a chave com prefixo ``f`` para o mapa de custo.
+    """
+    k = str(sku_key).strip()
+    if not k:
+        return k
+    if k in keys_present:
+        return k
+    if k.isdigit() and ("f" + k) in keys_present:
+        return "f" + k
+    return k
+
+
 def join_custo_produto_por_empresa(df_pedidos: pd.DataFrame, df_custo: pd.DataFrame, empresa: str | None) -> pd.DataFrame:
     """Merge pedidos ↔ custo por ``Código`` normalizado, coluna de preço conforme ``empresa``."""
     p = df_pedidos.copy()
     cu_map, _meta = build_custo_unitario_map_por_empresa(df_custo, empresa)
-    p["_sku_join"] = normalize_sku_key(p[CUSTO_SKU_COL])
-    p[SKU_NORMALIZADO_COL] = p["_sku_join"]
-    p[CUSTO_UNITARIO_COL] = p["_sku_join"].map(cu_map)
+    keys_present = frozenset(str(x) for x in cu_map.index.astype(str) if str(x).strip())
+    raw_join = normalize_sku_key(p[CUSTO_SKU_COL]).astype(str)
+    resolved = raw_join.map(lambda j: _resolve_sku_join_key_com_fallback_f(j, keys_present=keys_present))
+    p["_sku_join"] = resolved
+    p[SKU_NORMALIZADO_COL] = resolved
+    p[CUSTO_UNITARIO_COL] = resolved.map(cu_map)
     p = p.drop(columns=["_sku_join"])
     return p

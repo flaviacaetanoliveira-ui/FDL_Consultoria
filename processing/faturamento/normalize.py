@@ -141,6 +141,21 @@ _SKU_ASSISTENCIA_KEY_RES: tuple[re.Pattern[str], ...] = (
     re.compile(r"^pdi\d+$"),
     re.compile(r"^rb\d+$"),
     re.compile(r"^a\dpe\d+$"),
+    # Peças / assistência (lista operacional cliente_2 — p.ex. ra*, brs*, ln*p*, pnp*, bnp*, p\d+).
+    re.compile(r"^ra\d+$"),
+    re.compile(r"^brs\d+$"),
+    re.compile(r"^aipb\d+$"),
+    re.compile(r"^pnp\d+$"),
+    re.compile(r"^bu\d+$"),
+    re.compile(r"^bnp\d+$"),
+    re.compile(r"^ln\d+p\d+$"),
+    re.compile(r"^ln\d+$"),
+    re.compile(r"^crs\d+$"),
+    re.compile(r"^bcp\d+$"),
+    re.compile(r"^bcs\d+$"),
+    re.compile(r"^pc\d+$"),
+    re.compile(r"^p\d+$"),
+    re.compile(r"^rcc\d+p\d+$"),
 )
 
 
@@ -148,7 +163,8 @@ def is_sku_assistencia(sku_join_key: object) -> bool:
     """
     Indica se a chave já normalizada (mesma de :func:`normalize_sku_join_key_scalar`) é de assistência/peça.
 
-    Usado para excluir linhas de pedido que não devem entrar no join de custo/receita.
+    Usado para excluir linhas de pedido que não devem entrar no join de custo/receita
+    (inclui códigos curtos de assistência tipo ``ra04``, ``bnp13``, ``ln2p8``, ``p3``, ``rcc4p28``).
     """
     k = str(sku_join_key).strip().casefold()
     if not k:

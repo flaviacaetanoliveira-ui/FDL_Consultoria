@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-16T23:29:31Z",
+  "generated_at": "2026-04-16T23:55:46Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "cliente_2",
   "empresa": "_multi",
@@ -342,7 +342,7 @@
       "VALOR DE COMPRA MEGA"
     ]
   },
-  "data_processamento": "2026-04-16T23:29:23Z",
+  "data_processamento": "2026-04-16T23:55:40Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,

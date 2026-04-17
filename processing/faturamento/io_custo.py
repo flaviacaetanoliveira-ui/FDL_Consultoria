@@ -18,6 +18,7 @@ from .config import (
     CUSTO_SHEET_NAME,
     CUSTO_SKU_COL,
 )
+from .normalize import normalize_sku_key
 
 
 def _header_token(cell: object) -> str:
@@ -199,6 +200,32 @@ def _normalize_wide_custo_sheet_if_applicable(df0: pd.DataFrame) -> pd.DataFrame
     return out
 
 
+def dedupe_custo_dataframe_by_normalized_sku(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """
+    Mantém **uma** linha por chave de join SKU (mesma regra que pedidos: ``normalize_sku_key`` em ``Código``).
+
+    Evita colisão após normalização de variantes (ex.: ``170555`` e ``170555-1`` na planilha → mesma chave),
+    que gerava ``SKU_DUPLICADO_NA_TABELA_CUSTO`` em todas as linhas de pedido com esse SKU. Usa a **primeira**
+    ocorrência na ordem das linhas do XLSX.
+    """
+    if df.empty or CUSTO_SKU_COL not in df.columns:
+        return df, 0
+    n0 = int(len(df))
+    work = df.copy()
+    work["_sku_dedupe_key"] = normalize_sku_key(work[CUSTO_SKU_COL]).astype(str)
+    work = work.drop_duplicates(subset=["_sku_dedupe_key"], keep="first")
+    out = work.drop(columns=["_sku_dedupe_key"])
+    return out, n0 - int(len(out))
+
+
+def _attach_custo_dedupe_meta(meta: dict[str, Any], dropped: int) -> dict[str, Any]:
+    if dropped <= 0:
+        return meta
+    out = dict(meta)
+    out["custo_dedupe_by_normalized_sku_dropped_rows"] = dropped
+    return out
+
+
 def _frame_from_detection(raw: pd.DataFrame, header_idx: int, sj: int, pj: int) -> pd.DataFrame:
     rows: list[tuple[str, str]] = []
     for ii in range(header_idx + 1, len(raw)):
@@ -229,12 +256,14 @@ def load_custo_xlsx(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
             "custo_reader": "wide_empresa_columns",
             "custo_columns": [c for c in df_wide.columns if c != CUSTO_SKU_COL],
         }
-        return df_wide, meta_w
+        df_d, drop_n = dedupe_custo_dataframe_by_normalized_sku(df_wide)
+        return df_d, _attach_custo_dedupe_meta(meta_w, drop_n)
 
     missing0 = [c for c in (CUSTO_SKU_COL, CUSTO_COL_PRECO) if c not in df0.columns]
     if not missing0:
         meta: dict[str, Any] = {"path": str(path), "sheet": CUSTO_SHEET_NAME, "custo_reader": "header_row_0"}
-        return df0, meta
+        df_d, drop_n = dedupe_custo_dataframe_by_normalized_sku(df0)
+        return df_d, _attach_custo_dedupe_meta(meta, drop_n)
 
     raw = pd.read_excel(path, sheet_name=CUSTO_SHEET_NAME, header=None, dtype=str)
     det = _detect_custo_header_row(raw)
@@ -259,7 +288,8 @@ def load_custo_xlsx(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
             "custo_col_sku_index": sj,
             "custo_columns": [c for c in df.columns if c != CUSTO_SKU_COL],
         }
-        return df, meta
+        df_d, drop_n = dedupe_custo_dataframe_by_normalized_sku(df)
+        return df_d, _attach_custo_dedupe_meta(meta, drop_n)
 
     df = _frame_from_detection(raw, hi, sj, pj)
     meta = {
@@ -270,4 +300,5 @@ def load_custo_xlsx(path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
         "custo_col_sku_index": sj,
         "custo_col_preco_index": pj,
     }
-    return df, meta
+    df_d, drop_n = dedupe_custo_dataframe_by_normalized_sku(df)
+    return df_d, _attach_custo_dedupe_meta(meta, drop_n)

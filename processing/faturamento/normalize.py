@@ -7,13 +7,53 @@ import numpy as np
 import pandas as pd
 
 
+# Sufixo colado ``01``–``09`` só para códigos numéricos longos (evita ``031601`` → ``0316``).
+_MIN_NUMERIC_LEN_FOR_GLUED_0X_SUFFIX = 7
+
+
+def _strip_sku_variant_suffixes_join(s: str) -> str:
+    """
+    Remove sufixos de variante antes do join pedidos ↔ custo.
+
+    * ``-N``, ``_N``, ``.N`` no fim (N dígitos), ex.: ``170555-1``, ``170555_2``, ``170555.3``.
+    * Só em cadeias **estritamente numéricas** (opcional ``-`` inicial): par ``01``–``09`` colado no fim,
+      repetido enquanto couber, **apenas** se o corpo tiver pelo menos
+      ``_MIN_NUMERIC_LEN_FOR_GLUED_0X_SUFFIX`` dígitos (ex.: ``17055501`` → ``170555``).
+      Códigos mais curtos (ex.: ``031601``) não são alterados por esta regra — seguem só o lstrip de zeros
+      canónico. Não aplica a códigos alfanuméricos (ex.: ``KIT05``, ``BELA4P1``).
+    """
+    out = s
+    while out:
+        prev = out
+        out = re.sub(r"[-_.]\d+$", "", out)
+        if out != prev:
+            continue
+        m = re.fullmatch(r"(-?)(\d+)", out)
+        if not m:
+            break
+        neg, body = m.group(1), m.group(2)
+        if (
+            len(body) >= _MIN_NUMERIC_LEN_FOR_GLUED_0X_SUFFIX
+            and len(body) >= 3
+            and body[-2] == "0"
+            and body[-1] in "123456789"
+        ):
+            body = body[:-2]
+            out = f"{neg}{body}"
+            continue
+        break
+    return out
+
+
 def normalize_sku_join_key_scalar(raw: object) -> str:
     """
     Chave canónica para join pedidos ↔ custo e auditoria.
 
     1. texto; 2. trim; 3. remover sufixo ``.0`` típico de export Excel/float;
-    4. remover zeros à esquerda em cadeias só numéricas (``03160`` → ``3160``).
-    5. identificadores alfanuméricos: ``casefold()`` para alinhar custo (XLSX) e pedidos (ex.: ``BELA4P1`` vs ``Bela4P1``).
+    4. remover sufixos de variante (``-1``, ``_2``, ``.3``; em códigos só numéricos, ``01``–``09`` colados
+       só se o corpo tiver ≥ 7 dígitos, p.ex. ``17055501`` → ``170555``);
+    5. remover zeros à esquerda em cadeias só numéricas (``03160`` → ``3160``);
+    6. identificadores alfanuméricos: ``casefold()`` (ex.: ``BELA4P1`` vs ``Bela4P1``).
     """
     if raw is None:
         return ""
@@ -32,6 +72,9 @@ def normalize_sku_join_key_scalar(raw: object) -> str:
     # Excel: "3160.0", "03160.0"
     if re.fullmatch(r"-?\d+\.0", s):
         s = s[:-2]
+    if not s:
+        return ""
+    s = _strip_sku_variant_suffixes_join(s)
     if not s:
         return ""
     # Apenas dígitos (com sinal opcional): zeros à esquerda

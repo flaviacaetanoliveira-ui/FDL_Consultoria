@@ -28,6 +28,22 @@ class TestSkuJoinNormalize(unittest.TestCase):
         self.assertEqual(normalize_sku_join_key_scalar("Bela4P1"), "bela4p1")
         self.assertEqual(normalize_sku_join_key_scalar("BELA4P1"), "bela4p1")
 
+    def test_variant_suffix_separators(self) -> None:
+        self.assertEqual(normalize_sku_join_key_scalar("170555-1"), "170555")
+        self.assertEqual(normalize_sku_join_key_scalar("170555_2"), "170555")
+        self.assertEqual(normalize_sku_join_key_scalar("170555.3"), "170555")
+        self.assertEqual(normalize_sku_join_key_scalar("ANP2P4.1"), "anp2p4")
+
+    def test_variant_suffix_glued_numeric_only(self) -> None:
+        self.assertEqual(normalize_sku_join_key_scalar("17055501"), "170555")
+        self.assertEqual(normalize_sku_join_key_scalar("1705550102"), "170555")
+        # Código curto: não remove par 01 colado (evita 031601 → 0316); só lstrip de zeros
+        self.assertEqual(normalize_sku_join_key_scalar("031601"), "31601")
+
+    def test_variant_suffix_does_not_strip_alphanumeric_glued(self) -> None:
+        # KIT05: últimos dois caracteres são "05" mas não é par 0[1-9] com corpo só dígitos
+        self.assertEqual(normalize_sku_join_key_scalar("KIT05"), "kit05")
+
     def test_series(self) -> None:
         s = pd.Series(["03160", "3160", "SKU-A"])
         out = normalize_sku_key(s)

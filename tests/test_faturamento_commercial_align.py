@@ -111,8 +111,8 @@ class TestBuildNfPanelAlignedToFiscalBase(unittest.TestCase):
                 n_com_vinculo_pedido_nf=437,
                 n_sem_vinculo_ou_so_fiscal=0,
                 n_com_venda_lista=437,
-                n_sem_resultado=77,
-                n_com_resultado_numerico=360,
+                n_sem_resultado=0,
+                n_com_resultado_numerico=437,
             ),
         )
 

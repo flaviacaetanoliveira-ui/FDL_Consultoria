@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-17T12:56:45Z",
+  "generated_at": "2026-04-17T13:17:43Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "cliente_2",
   "empresa": "_multi",
@@ -340,9 +340,10 @@
       "VALOR COMPRA STAR/GAMA",
       "VALOR DE COMPRA",
       "VALOR DE COMPRA MEGA"
-    ]
+    ],
+    "custo_dedupe_by_normalized_sku_dropped_rows": 123
   },
-  "data_processamento": "2026-04-17T12:56:44Z",
+  "data_processamento": "2026-04-17T13:17:39Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,
@@ -600,8 +601,7 @@
     }
   ],
   "status_custo_counts": {
-    "CUSTO_OK": 31544,
-    "SKU_DUPLICADO_NA_TABELA_CUSTO": 3246,
+    "CUSTO_OK": 34790,
     "SKU_SEM_CORRESPONDENCIA": 555
   },
   "params_mensais_path": null,

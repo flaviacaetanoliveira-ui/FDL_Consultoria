@@ -7670,6 +7670,20 @@ def _render_faturamento_dre_minimal(
     _periodo_dre_lbl = ""
     if ok_nf_dates:
         _periodo_dre_lbl = f"{_nf_kpi_ini.strftime('%d/%m/%Y')} — {_nf_kpi_fim.strftime('%d/%m/%Y')}"
+    try:
+        from app.components.health_panel_ui import render_faturamento_health_panel_if_enabled
+
+        render_faturamento_health_panel_if_enabled(
+            df,
+            nf_d_ini=_nf_kpi_ini,
+            nf_d_fim=_nf_kpi_fim,
+            empresas_sel=tuple(_min_state.empresas),
+            org_sidebar=_oid,
+        )
+    except Exception as _exc_hp:
+        if _is_admin_mode():
+            st.caption(f"Painel de saude financeira indisponivel: `{_exc_hp}`")
+    _fdl_fat_min_vsp(size="sm")
     _render_fdl_fat_dre_nf_gerencial(
         kp=_kp_cards,
         ok_nf_dates=ok_nf_dates,

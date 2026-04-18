@@ -4,7 +4,7 @@ Cadastro local de usuários do app operacional.
 Controle de acesso por cliente (rótulo exibido na UI) e lista de empresas permitidas.
 
 Opcional por utilizador: ``perfil_acesso`` — ``"completo"`` (padrão): Gerencial + Operacional na sidebar;
-``"operacional"``: só **Repasse** e **Frete** (sem Faturamento & DRE e sem Comercial & pedidos).
+``"operacional"``: só **Repasse** e **Frete** (sem Resultado Gerencial e sem Comercial & pedidos).
 
 Senhas: pode usar texto em `senha` (legado / dev) ou `senha_pbkdf2` (salt + hash, sem plain no repo).
 Opcional: defina `FDL_GAMA_HOME_LOGIN_PASSWORD` em variável de ambiente ou em st.secrets

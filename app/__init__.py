@@ -1,1 +1,1 @@
-"""Pacote de UI auxiliar (Faturamento & DRE, etc.)."""
+"""Pacote de UI auxiliar (Resultado Gerencial, etc.)."""

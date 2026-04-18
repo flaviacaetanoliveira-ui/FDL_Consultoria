@@ -9,7 +9,7 @@ import streamlit as st
 
 
 def _build_apuracao_fiscal_page_header_html(*, updated_at: str) -> str:
-    """Cabeçalho alinhado ao módulo Faturamento & DRE (classes ``fdl-page-*``)."""
+    """Cabeçalho da página (classes ``fdl-page-*``, mesmo sistema visual que Resultado Gerencial)."""
     esc = html.escape(updated_at)
     return (
         '<div class="fdl-page-header">'

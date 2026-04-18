@@ -213,7 +213,7 @@ def render_apuracao_fiscal_panel(
                 key="fdl_apu_reset",
                 type="secondary",
                 use_container_width=True,
-                help="Repor empresa, datas de emissão NF e filtros da tabela ao padrão (independentes do Faturamento & DRE).",
+                help="Repor empresa, datas de emissão NF e filtros da tabela ao padrão (independentes do Resultado Gerencial).",
             ):
                 for _k in _FDL_APURACAO_RESET_KEYS:
                     st.session_state.pop(_k, None)
@@ -233,7 +233,7 @@ def render_apuracao_fiscal_panel(
                     "Empresa",
                     emp_opts,
                     key="fdl_apu_emp",
-                    help="**Vazio** = todas as empresas neste carregamento. Estado **independente** do módulo Faturamento & DRE.",
+                    help="**Vazio** = todas as empresas neste carregamento. Estado **independente** do módulo Resultado Gerencial.",
                     placeholder="Todas",
                 )
             else:
@@ -241,7 +241,7 @@ def render_apuracao_fiscal_panel(
         with _fc2:
             st.caption(
                 "Período de emissão abaixo aplica-se ao **recorte fiscal** e à **tabela**. "
-                "Filtros deste módulo não alteram o Faturamento & DRE."
+                "Filtros deste módulo não alteram o Resultado Gerencial."
             )
         if ok_nf_dates:
             st.markdown(

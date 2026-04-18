@@ -6003,7 +6003,15 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               color: var(--fdl-neutral-500, #64748b);
               line-height: 1.4;
             }
-            /* Cabeçalho da página — Faturamento & DRE (vista mínima) */
+            /* Cabeçalho da página — Resultado Gerencial (vista mínima) */
+            .fdl-page-breadcrumb {
+              font-size: 0.75rem;
+              font-weight: 600;
+              letter-spacing: 0.06em;
+              text-transform: uppercase;
+              color: var(--fdl-neutral-400, #94a3b8);
+              margin: 0 0 0.35rem 0;
+            }
             .fdl-page-header {
               padding: 1.25rem 0 0.85rem 0;
               margin-bottom: 0.35rem;
@@ -6788,7 +6796,7 @@ def _render_comercial_pedidos_analise(
                 "Empresa",
                 emp_opts,
                 key="fdl_cp_emp",
-                help="**Vazio** = todas. Recorte por marca (mesma coluna que Faturamento & DRE).",
+                help="**Vazio** = todas. Recorte por marca (mesma coluna que Resultado Gerencial).",
                 placeholder="Todas",
             )
         _multiselect_stable("fdl_cp_plat", "Plataforma", plats)
@@ -7491,14 +7499,15 @@ def _fdl_fat_min_format_updated_at(ts_raw: str) -> str:
 
 
 def _build_faturamento_dre_page_header_html(*, updated_at: str) -> str:
-    """Cabeçalho premium do módulo Faturamento & DRE (HTML; ``updated_at`` já seguro para inserção)."""
+    """Cabeçalho premium do módulo Resultado Gerencial (HTML; ``updated_at`` já seguro para inserção)."""
     esc = html.escape(updated_at)
     return (
         '<div class="fdl-page-header">'
         '<div class="fdl-page-header-main">'
-        '<h1 class="fdl-page-title">📊 Faturamento &amp; DRE</h1>'
+        '<p class="fdl-page-breadcrumb">Gerencial &gt; Resultado Gerencial</p>'
+        '<h1 class="fdl-page-title">📊 Resultado Gerencial</h1>'
         "<p class=\"fdl-page-subtitle\">"
-        "Visão consolidada de faturamento, custos e resultado por nota fiscal"
+        "DRE, margem e desempenho da operação"
         "</p>"
         "</div>"
         '<div class="fdl-page-header-meta">'
@@ -11597,7 +11606,7 @@ elif (
 ):
     _allowed_org_key = ",".join(sorted(o.org_id for o in _app_ctx.organizations))
     _fdl_global_trace("faturamento_dre: a carregar _load_faturamento_dataframe_cached")
-    with st.spinner("A carregar dados de Faturamento…"):
+    with st.spinner("A carregar dados de Resultado Gerencial…"):
         faturamento_df, faturamento_info, ts_proc = _load_faturamento_dataframe_cached(
             _faturamento_load_cache_signature(
                 FAT_DRE_CACHE_ACTIVE_ORG_PLACEHOLDER,
@@ -11681,7 +11690,7 @@ elif (
         else:
             st.warning("Dados de faturamento não disponíveis. Contacte o administrador.")
     elif fc == "error":
-        st.warning("Não foi possível carregar os dados de **Faturamento**.")
+        st.warning("Não foi possível carregar os dados de **Resultado Gerencial**.")
         if _admin_mode:
             st.caption(str(faturamento_info.get("faturamento_materialized_error", "")))
             st.caption(f"Alvo: `{faturamento_info.get('faturamento_materialized_target', '')}`")
@@ -11861,7 +11870,7 @@ with st.sidebar:
     _lbl_repasse = "Conciliação de Repasse"
     _lbl_frete = "Conciliação de Frete"
     _lbl_devolucoes = "Controle de Devoluções"
-    _lbl_fat_dre = "Faturamento & DRE"
+    _lbl_fat_dre = "Resultado Gerencial"
 
     if _has_gerencial:
         _sec_cls = (
@@ -11890,7 +11899,7 @@ with st.sidebar:
             on_click=_sb_nav_set_comercial_pedidos,
             help=(
                 "Análise comercial sobre pedidos atendidos; receita por linha = **Vl_Venda** da tabela materializada "
-                "(fallback lista×qtd). Sem NF. Filtros no painel; base consolidada como Faturamento & DRE."
+                "(fallback lista×qtd). Sem NF. Filtros no painel; base consolidada como Resultado Gerencial."
             ),
         )
 
@@ -11949,7 +11958,7 @@ with st.sidebar:
                 label_visibility="visible",
                 help=(
                     "Define qual organização carregar para Repasse, Frete e Devoluções. "
-                    "Em Faturamento e Comercial, o recorte por marca fica no filtro Empresa do painel."
+                    "Em Resultado Gerencial e Comercial, o recorte por marca fica no filtro Empresa do painel."
                 ),
             )
             _chosen_org = organizacao_por_nome_cadastrado(_sel_nome)
@@ -12170,7 +12179,7 @@ elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in 
         _fdl_global_trace("faturamento_dre: painel concluído")
     except Exception as exc:
         _fdl_global_trace(f"faturamento_dre: ERRO no painel — {exc.__class__.__name__}")
-        st.error("Erro ao renderizar **Faturamento & DRE**.")
+        st.error("Erro ao renderizar **Resultado Gerencial**.")
         st.exception(exc)
 elif _fdl_product_area == FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS and "faturamento" in _enabled_modules:
     try:

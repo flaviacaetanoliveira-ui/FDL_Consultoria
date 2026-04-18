@@ -1,5 +1,5 @@
 """
-UI premium Faturamento & DRE (HTML + CSS) — usado por ``app_operacional``.
+UI premium Resultado Gerencial / DRE (HTML + CSS) — usado por ``app_operacional``.
 
 Sem dependência de Streamlit: apenas strings e lógica pura para testes e reutilização.
 """

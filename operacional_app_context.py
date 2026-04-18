@@ -297,8 +297,14 @@ _LOGIN_PAGE_STYLES = """
    * Centro na viewport em [data-testid="stMain"] (Streamlit ≥1.55: sem .main entre stMain e .block-container).
    * Largura: [data-testid="stMainBlockContainer"] — em layout wide o tema usa max-width: initial.
    */
+  html body:has(.fdl-login-brand),
+  body:has(.fdl-login-brand) {
+    min-height: 100vh !important;
+    background: linear-gradient(135deg, #f0f4ff 0%, #f8fafc 60%, #f0fdf4 100%) !important;
+  }
   body:has(.fdl-login-brand) .stApp {
-    background: #f9fafb !important;
+    background: linear-gradient(135deg, #f0f4ff 0%, #f8fafc 60%, #f0fdf4 100%) !important;
+    min-height: 100vh !important;
   }
   body:has(.fdl-login-brand) [data-testid="stSidebar"],
   body:has(.fdl-login-brand) [data-testid="collapsedControl"] {
@@ -352,12 +358,12 @@ _LOGIN_PAGE_STYLES = """
   /* .login-card — card branco; ocupa a largura do block-container (já ≤420px) */
   body:has(.fdl-login-brand) div[data-testid="stVerticalBlockBorderWrapper"] {
     background: #ffffff !important;
-    border-radius: 12px !important;
-    border: 1px solid #e5e7eb !important;
+    border-radius: 16px !important;
+    border: 1px solid rgba(255, 255, 255, 0.8) !important;
     box-shadow:
-      0 1px 3px rgba(15, 23, 42, 0.06),
-      0 12px 40px rgba(15, 23, 42, 0.08) !important;
-    padding: 1.15rem 1.35rem 1.05rem 1.35rem !important;
+      0 4px 6px rgba(0, 0, 0, 0.04),
+      0 12px 32px rgba(0, 0, 0, 0.08) !important;
+    padding: 2.5rem 2.25rem !important;
     margin-left: auto !important;
     margin-right: auto !important;
     width: 100% !important;
@@ -387,9 +393,10 @@ _LOGIN_PAGE_STYLES = """
   }
   .fdl-login-logo-wrap {
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
-    margin: 0 auto 0.2rem auto;
+    margin: 0 auto 1.75rem auto;
     width: 100%;
     max-width: 100%;
   }
@@ -401,25 +408,35 @@ _LOGIN_PAGE_STYLES = """
     text-align: center;
   }
   .fdl-login-wordmark-fdl {
-    font-size: 1.48rem;
+    font-size: 1.35rem;
     font-weight: 800;
-    letter-spacing: -0.04em;
-    color: #0a1628;
+    letter-spacing: -0.03125rem;
+    color: #1e40af;
   }
   .fdl-login-wordmark-analytics {
-    font-size: 1.3rem;
+    font-size: 1.35rem;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: #475569;
+  }
+  .fdl-login-tagline {
+    font-size: 0.7rem;
     font-weight: 500;
-    letter-spacing: -0.03em;
-    color: #6b7785;
+    color: #94a3b8;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin: 2px 0 0 0;
+    line-height: 1.35;
+    text-align: center;
   }
   .fdl-login-title {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-size: clamp(1.5rem, 4.5vw, 1.875rem);
+    font-size: 1.65rem;
     font-weight: 700;
-    letter-spacing: -0.035em;
-    color: #111827;
-    margin: 0 0 0.2rem 0;
-    line-height: 1.15;
+    letter-spacing: -0.025em;
+    color: #0f172a;
+    margin: 0 0 6px 0;
+    line-height: 1.2;
     text-align: center;
     max-width: 100%;
     white-space: nowrap;
@@ -431,12 +448,20 @@ _LOGIN_PAGE_STYLES = """
     }
   }
   .fdl-login-sub {
-    font-size: 0.875rem;
+    font-size: 0.9rem;
     font-weight: 400;
-    color: #6b7280 !important;
-    margin: 0 0 0.65rem 0;
-    line-height: 1.35;
+    color: #64748b !important;
+    margin: 0 0 1.75rem 0;
+    line-height: 1.45;
     text-align: center;
+  }
+  .fdl-login-footer {
+    text-align: center;
+    margin-top: 24px;
+    margin-bottom: 0;
+    font-size: 0.72rem;
+    color: #94a3b8;
+    line-height: 1.4;
   }
 
   body:has(.fdl-login-brand) div[data-testid="stVerticalBlockBorderWrapper"] .stMarkdown {
@@ -478,21 +503,22 @@ _LOGIN_PAGE_STYLES = """
     margin-bottom: 0 !important;
   }
   body:has(.fdl-login-brand) form[data-testid="stForm"] label p {
-    font-size: 0.8125rem !important;
+    font-size: 0.82rem !important;
     font-weight: 600 !important;
     color: #374151 !important;
-    margin-bottom: 0.35rem !important;
+    margin-bottom: 6px !important;
   }
   body:has(.fdl-login-brand) form[data-testid="stForm"] [data-baseweb="input"] > div {
     border-radius: 10px !important;
-    border: 1px solid #e5e7eb !important;
+    border: 1.5px solid #e2e8f0 !important;
     min-height: 44px !important;
-    background: #fafafa !important;
+    background: #f8fafc !important;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease !important;
   }
   body:has(.fdl-login-brand) form[data-testid="stForm"] [data-baseweb="input"] input {
-    padding: 0.55rem 0.9rem !important;
-    font-size: 0.9375rem !important;
+    padding: 12px 14px !important;
+    font-size: 0.95rem !important;
+    color: #1e293b !important;
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box !important;
@@ -502,8 +528,8 @@ _LOGIN_PAGE_STYLES = """
   }
   body:has(.fdl-login-brand) form[data-testid="stForm"] [data-baseweb="input"]:focus-within > div {
     background: #ffffff !important;
-    border-color: #2563eb !important;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
   }
 
   body:has(.fdl-login-brand) form[data-testid="stForm"] .stFormSubmitButton,
@@ -519,35 +545,33 @@ _LOGIN_PAGE_STYLES = """
     width: 100% !important;
     margin-top: 0.6rem !important;
     border-radius: 10px !important;
-    padding: 0.8rem 1.15rem !important;
+    padding: 14px !important;
     font-weight: 600 !important;
-    font-size: 0.9375rem !important;
+    font-size: 0.95rem !important;
     letter-spacing: 0.02em !important;
-    background: #2563eb !important;
+    background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%) !important;
     background-color: #2563eb !important;
-    background-image: none !important;
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
-    border: 1px solid #1d4ed8 !important;
-    border-color: #1d4ed8 !important;
+    border: none !important;
+    border-color: transparent !important;
     cursor: pointer !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
-    transition: background 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, filter 0.2s ease !important;
   }
   body:has(.fdl-login-brand) form[data-testid="stForm"] button:hover,
   body:has(.fdl-login-brand) form[data-testid="stForm"] .stButton > button:hover,
   body:has(.fdl-login-brand) form[data-testid="stForm"] [data-testid="baseButton-primary"]:hover,
   body:has(.fdl-login-brand) form[data-testid="stForm"] [data-testid="baseButton-secondary"]:hover {
-    background: #1d4ed8 !important;
-    background-color: #1d4ed8 !important;
-    background-image: none !important;
-    border-color: #1e40af !important;
-    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.32) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4) !important;
+    filter: brightness(1.03) !important;
   }
   body:has(.fdl-login-brand) form[data-testid="stForm"] button:active,
   body:has(.fdl-login-brand) form[data-testid="stForm"] .stButton > button:active {
-    background: #1e40af !important;
-    background-color: #1e40af !important;
+    transform: translateY(0) !important;
+    filter: brightness(0.98) !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28) !important;
   }
   body:has(.fdl-login-brand) form[data-testid="stForm"] button:focus-visible,
   body:has(.fdl-login-brand) form[data-testid="stForm"] .stButton > button:focus-visible {
@@ -594,7 +618,9 @@ def _login_brand_logo_html() -> str:
         '<p class="fdl-login-wordmark-line" role="img" aria-label="FDL Analytics">'
         '<span class="fdl-login-wordmark-fdl">FDL</span>'
         '<span class="fdl-login-wordmark-analytics"> Analytics</span>'
-        "</p></div>"
+        "</p>"
+        '<div class="fdl-login-tagline">Da operação ao insight</div>'
+        "</div>"
     )
 
 
@@ -656,6 +682,10 @@ def require_app_user() -> AppUserContext:
                 help="Preferência local neste navegador (sem alterar a segurança do servidor).",
             )
             st.caption("Problemas para entrar? Procure o administrador do sistema.")
+            st.markdown(
+                '<p class="fdl-login-footer">FDL Analytics · FDL Consultoria · v1.0</p>',
+                unsafe_allow_html=True,
+            )
         st.stop()
 
     try:

@@ -5386,26 +5386,36 @@ def _render_fdl_fat_dre_nf_gerencial(
         enc_rows.append(("ADS (3,5% + fixo)", enc_ads))
 
     dif_highlight = bool(ok_nf_dates and vv > 0 and abs(dif) / vv >= 0.30)
+    _marg_base = (
+        "Margem = soma do resultado ÷ soma da receita de venda (lista). "
+        "O valor faturado fiscal não entra neste cálculo."
+    )
+    _marg_simple = "Margem = resultado ÷ receita de venda (lista)."
     if valor_faturado_from_fiscal_parquet:
         if nf_panel_ads:
-            foot = (
-                "Resultado e margem já consideram ADS (3,5% sobre venda lista + fixo por NF). "
-                "Margem = Σ resultado ÷ Σ receita de venda (lista) no mesmo recorte que os cards. "
-                "Valor faturado fiscal não entra na margem."
+            tt_res = (
+                "Total consolidado por NF no mesmo recorte dos cards. "
+                "Inclui ADS (3,5% sobre receita lista + valor fixo por NF)."
             )
+            tt_marg = _marg_base
         else:
-            foot = (
-                "Margem = Σ resultado ÷ Σ receita de venda (lista) no mesmo recorte que os cards. "
-                "Valor faturado fiscal não entra na margem. **Sem** custo de ADS neste cliente."
+            tt_res = (
+                "Total consolidado por NF no mesmo recorte dos cards. "
+                "Neste cliente não há linha de ADS neste quadro."
             )
-    else:
-        foot = (
-            "Margem = resultado ÷ receita de venda (lista). Valores consolidados no materializado NF-first "
-            "(inclui ADS 3,5% + fixo por NF)."
-            if nf_panel_ads
-            else "Margem = resultado ÷ receita de venda (lista). Valores consolidados no materializado NF-first "
-            "(**sem** custo de ADS neste cliente)."
+            tt_marg = _marg_base
+    elif nf_panel_ads:
+        tt_res = (
+            "Total consolidado por NF no mesmo recorte dos cards. "
+            "Inclui ADS (3,5% + fixo por NF)."
         )
+        tt_marg = _marg_simple
+    else:
+        tt_res = (
+            "Total consolidado por NF no mesmo recorte dos cards. "
+            "Sem custo de ADS neste cliente."
+        )
+        tt_marg = _marg_simple
     per = (periodo_label or "").strip() or ("Emissão NF no filtro" if ok_nf_dates else "Período indisponível")
 
     st.markdown(
@@ -5418,7 +5428,8 @@ def _render_fdl_fat_dre_nf_gerencial(
             resultado_fmt=res_disp,
             resultado_value=res,
             margem_str=margem_s,
-            footnote_plain=foot,
+            resultado_tooltip=tt_res,
+            margem_tooltip=tt_marg,
             dif_highlight=dif_highlight,
         ),
         unsafe_allow_html=True,

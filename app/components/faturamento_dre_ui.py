@@ -308,6 +308,7 @@ def fat_dre_premium_css() -> str:
   column-gap: 1rem;
 }
 .fdl-fat-dre-close-row + .fdl-fat-dre-close-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
+.fdl-fat-dre-hint-label { cursor: help; }
 .fdl-fat-dre-foot-note {
   margin: 10px 18px 14px 18px;
   font-size: 0.65rem;
@@ -450,7 +451,9 @@ def build_dre_gerencial_premium_html(
     resultado_fmt: str,
     resultado_value: float,
     margem_str: str,
-    footnote_plain: str,
+    resultado_tooltip: str,
+    margem_tooltip: str,
+    footnote_plain: str = "",
     dif_highlight: bool,
 ) -> str:
     dif_cls = "fdl-fat-dre-tree-val--amber" if dif_highlight else ""
@@ -473,6 +476,11 @@ def build_dre_gerencial_premium_html(
         res_cls = "fdl-fat-dre-tree-val--neg"
     else:
         res_cls = ""
+    _rt = html.escape(resultado_tooltip.strip(), quote=True)
+    _mt = html.escape(margem_tooltip.strip(), quote=True)
+    _foot_html = ""
+    if footnote_plain.strip():
+        _foot_html = f'<p class="fdl-fat-dre-foot-note">{html.escape(footnote_plain.strip())}</p>'
     return (
         '<div class="fdl-fat-premium fdl-fat-dre-premium-wrap">'
         '<div class="fdl-fat-dre-premium-card">'
@@ -493,13 +501,15 @@ def build_dre_gerencial_premium_html(
         "</details>"
         '<div class="fdl-fat-dre-close-block">'
         '<div class="fdl-fat-dre-close-row">'
-        '<div style="font-weight:800;font-size:0.95rem;color:#0f172a">Resultado</div>'
+        f'<div class="fdl-fat-dre-hint-label" style="font-weight:800;font-size:0.95rem;color:#0f172a" '
+        f'title="{_rt}">Resultado</div>'
         f'<div class="fdl-fat-dre-tree-val {res_cls}">{html.escape(resultado_fmt)}</div></div>'
         '<div class="fdl-fat-dre-close-row">'
-        '<div style="font-weight:600;font-size:0.85rem;color:#64748b">Margem sobre venda</div>'
+        f'<div class="fdl-fat-dre-hint-label" style="font-weight:600;font-size:0.85rem;color:#64748b" '
+        f'title="{_mt}">Margem sobre venda</div>'
         f'<div class="fdl-fat-dre-tree-val">{html.escape(margem_str)}</div></div>'
-        '</div>'
-        f'<p class="fdl-fat-dre-foot-note">{html.escape(footnote_plain)}</p>'
+        "</div>"
+        f"{_foot_html}"
         "</div></div></div>"
     )
 

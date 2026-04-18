@@ -134,6 +134,7 @@ SESSION_FDL_PRODUCT_AREA_KEY = "fdl_product_area"
 FDL_PRODUCT_AREA_FINANCEIRO = "financeiro"
 FDL_PRODUCT_AREA_FATURAMENTO_DRE = "faturamento_dre"
 FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS = "comercial_pedidos"
+FDL_PRODUCT_AREA_APURACAO_FISCAL = "apuracao_fiscal"
 
 # Filtros globais / escopo de carga (MVP)
 FAT_DRE_ESCOPO_EMPRESA = "empresa_ativa"
@@ -451,12 +452,14 @@ if st.session_state["op_financeiro_view"] not in _enabled_modules:
 if "faturamento" not in _enabled_modules and st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY) in (
     FDL_PRODUCT_AREA_FATURAMENTO_DRE,
     FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS,
+    FDL_PRODUCT_AREA_APURACAO_FISCAL,
 ):
     st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FINANCEIRO
 
 if _user_perfil_acesso_operacional_only() and st.session_state.get(SESSION_FDL_PRODUCT_AREA_KEY) in (
     FDL_PRODUCT_AREA_FATURAMENTO_DRE,
     FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS,
+    FDL_PRODUCT_AREA_APURACAO_FISCAL,
 ):
     st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FINANCEIRO
 
@@ -670,6 +673,10 @@ def _sb_nav_set_devolucoes() -> None:
 
 def _sb_nav_set_faturamento_dre() -> None:
     st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_FATURAMENTO_DRE
+
+
+def _sb_nav_set_apuracao_fiscal() -> None:
+    st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = FDL_PRODUCT_AREA_APURACAO_FISCAL
 
 
 def _sb_nav_set_comercial_pedidos() -> None:
@@ -11452,6 +11459,7 @@ if _fdl_product_area not in (
     FDL_PRODUCT_AREA_FINANCEIRO,
     FDL_PRODUCT_AREA_FATURAMENTO_DRE,
     FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS,
+    FDL_PRODUCT_AREA_APURACAO_FISCAL,
 ):
     _fdl_product_area = FDL_PRODUCT_AREA_FINANCEIRO
     st.session_state[SESSION_FDL_PRODUCT_AREA_KEY] = _fdl_product_area
@@ -11529,6 +11537,16 @@ elif _fv == "devolucoes" and "devolucoes" in _enabled_modules:
     tabela_geral = pd.DataFrame()
     info = devolucoes_info
     _fdl_global_trace("devolucoes: dados carregados")
+elif (
+    _fdl_product_area == FDL_PRODUCT_AREA_APURACAO_FISCAL
+    and "faturamento" in _enabled_modules
+    and not _user_perfil_acesso_operacional_only()
+):
+    # Etapa 1: página placeholder — sem carga de datasets nesta rota.
+    ts_proc = ""
+    tabela_geral = pd.DataFrame()
+    info = {}
+    _fdl_global_trace("apuracao_fiscal: placeholder (sem carga de dados)")
 elif (
     _fdl_product_area
     in (
@@ -11744,7 +11762,11 @@ if _bootstrap_debug_enabled() and _admin_mode:
                 len(faturamento_df)
                 if _fdl_product_area
                 in (FDL_PRODUCT_AREA_FATURAMENTO_DRE, FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS)
-                else "— (vista frete)"
+                else (
+                    "— (apuracao fiscal)"
+                    if _fdl_product_area == FDL_PRODUCT_AREA_APURACAO_FISCAL
+                    else "— (vista frete)"
+                )
             )
         )
         st.write("**Linhas tabela_geral (repasse) / faturamento_df:**", _n_linhas_dbg)
@@ -11831,6 +11853,26 @@ with st.sidebar:
                 "Análise comercial sobre pedidos atendidos; receita por linha = **Vl_Venda** da tabela materializada "
                 "(fallback lista×qtd). Sem NF. Filtros no painel; base consolidada como Faturamento & DRE."
             ),
+        )
+
+    _has_fiscal_apuracao = (
+        "faturamento" in _enabled_modules and not _user_perfil_acesso_operacional_only()
+    )
+    if _has_fiscal_apuracao:
+        _sec_cls = (
+            "fdl-sb-section-label fdl-sb-section-label--first"
+            if _first_nav_section
+            else "fdl-sb-section-label"
+        )
+        st.markdown(f'<p class="{_sec_cls}">FISCAL</p>', unsafe_allow_html=True)
+        _first_nav_section = False
+        st.button(
+            "🧾 Apuração Fiscal",
+            key="fdl_mod_apuracao_fiscal",
+            use_container_width=True,
+            type="primary" if _sb_area == FDL_PRODUCT_AREA_APURACAO_FISCAL else "secondary",
+            on_click=_sb_nav_set_apuracao_fiscal,
+            help="Notas, base tributável e imposto — módulo em construção.",
         )
 
     if _has_operacional:
@@ -12058,6 +12100,19 @@ if _fv == "repasse" and _fdl_product_area == FDL_PRODUCT_AREA_FINANCEIRO:
     except Exception as exc:
         _fdl_global_trace(f"repasse: ERRO no painel — {exc.__class__.__name__}")
         st.error("Erro ao renderizar a **Conciliação de Repasse** (filtros ou tabela).")
+        st.exception(exc)
+elif _fdl_product_area == FDL_PRODUCT_AREA_APURACAO_FISCAL and "faturamento" in _enabled_modules:
+    try:
+        _fdl_global_trace("apuracao_fiscal: placeholder UI")
+        _fdl_fat_min_inject_ui_styles()
+        _upd_disp = _fdl_fat_min_format_updated_at(str(ts_proc))
+        from app.pages.apuracao_fiscal import render_apuracao_fiscal_placeholder
+
+        render_apuracao_fiscal_placeholder(updated_at_display=_upd_disp)
+        _fdl_global_trace("apuracao_fiscal: placeholder concluído")
+    except Exception as exc:
+        _fdl_global_trace(f"apuracao_fiscal: ERRO — {exc.__class__.__name__}")
+        st.error("Erro ao renderizar **Apuração Fiscal**.")
         st.exception(exc)
 elif _fdl_product_area == FDL_PRODUCT_AREA_FATURAMENTO_DRE and "faturamento" in _enabled_modules:
     try:

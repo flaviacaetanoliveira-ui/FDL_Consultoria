@@ -13,6 +13,7 @@ from faturamento_dre_recorte_minimo import (
     build_faturamento_fiscal_base_slice,
     build_nf_panel_aligned_to_fiscal_base,
     compute_nf_panel_kpis,
+    dre_imposto_para_linha_dre_gerencial,
     faturamento_min_series_nf_emissao_bounds_dates,
     faturamento_recorte_min_state_from_session,
     _min_cal_limits,
@@ -337,7 +338,12 @@ def render_apuracao_fiscal_panel(
     _nf_emi = ao._fmt_int_ptbr(_fiscal_base_stats.n_nf)
     _nf_dev_n = ao._fmt_int_ptbr(_fiscal_base_stats.nfs_devolucao)
     _nf_dev_v = ao._fmt_brl_ptbr_celula(_fiscal_base_stats.total_devolvido) or "R$ 0,00"
-    _imp_p = ao._fmt_brl_ptbr_celula(_kp_cards.get("imposto", 0.0)) if ok_nf_dates else "—"
+    _imp_num = dre_imposto_para_linha_dre_gerencial(
+        _kp_cards,
+        fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
+        aplicar_ponte_base_liquida=bool(use_fiscal_kpi),
+    )
+    _imp_p = ao._fmt_brl_ptbr_celula(_imp_num) if ok_nf_dates else "—"
     with _c1:
         st.metric("Base Fiscal Líquida", _base_disp)
     with _c2:

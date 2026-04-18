@@ -324,6 +324,11 @@ def build_faturamento_fiscal_base_slice(
     Usa ``dataset_faturamento_fiscal.parquet`` (contrato fiscal). **Não** aplica plataforma, produto nem resultado.
 
     ``situacoes_sel``: quando não vazio, restringe às situações cujo texto (case-insensitive) está na lista.
+
+    Fonte única dos totais fiscais (``FaturamentoFiscalBaseStats``): o mesmo recorte alimenta a **UI da Apuração Fiscal**
+    (painel base fiscal) e o **Resultado Gerencial**, que **consome** ``base_fiscal_liquida`` e ``valor_liquido_fiscal_sum``
+    apenas através da ponte documentada em ``dre_imposto_para_linha_dre_gerencial`` — não duplicar outro cálculo de imposto.
+    Devoluções no período entram via ``_slice_devolucoes_fiscal_recorte``.
     """
     empty_stats = FaturamentoFiscalBaseStats(0, 0.0)
     if df_fiscal.empty or not ok_nf_dates or nf_d_fim < nf_d_ini:
@@ -1254,6 +1259,41 @@ def compute_nf_panel_kpis(df_nf: pd.DataFrame) -> dict[str, float | int]:
         "resultado": float(pd.to_numeric(df_nf["resultado"], errors="coerce").sum()),
         "n_nf": int(len(df_nf)),
     }
+
+
+def dre_imposto_para_linha_dre_gerencial(
+    kp: Mapping[str, float | int],
+    *,
+    fiscal_base_stats: FaturamentoFiscalBaseStats | None,
+    aplicar_ponte_base_liquida: bool,
+) -> float:
+    """
+    Valor numérico da linha **Imposto** na DRE gerencial (Resultado Gerencial).
+
+    Ponte entre módulos:
+
+    O imposto exibido na DRE é derivado da soma comercial ``kp["imposto"]`` (materializado por NF no mesmo recorte),
+    reprojetada pela **taxa efetiva** ``kp["imposto"] / valor_liquido_fiscal_sum`` quando o Parquet fiscal está ativo,
+    aplicada sobre ``base_fiscal_liquida`` (emitidas − devoluções no recorte). A construção de ``base_fiscal_liquida``
+    e ``valor_liquido_fiscal_sum`` pertence ao fluxo fiscal (``build_faturamento_fiscal_base_slice`` e
+    ``_slice_devolucoes_fiscal_recorte``).
+
+    O Resultado Gerencial **consome** esse valor através de ``fiscal_base_stats``; não recalcula alíquota isolada.
+    A Apuração Fiscal mostra o **mesmo** valor na métrica «Imposto do período» quando os mesmos ``kp`` e stats se aplicam.
+    Qualquer alteração na fórmula deve concentrar-se no fluxo fiscal e nesta função, para evitar duplicação.
+
+    Parâmetro ``aplicar_ponte_base_liquida``: mesmo critério que ``valor_faturado_from_fiscal_parquet`` / ``use_fiscal_kpi``
+    na UI (Parquet fiscal válido no recorte).
+    """
+    imp_raw = float(kp["imposto"])
+    if fiscal_base_stats is None or not aplicar_ponte_base_liquida:
+        return imp_raw
+    vfscal = float(fiscal_base_stats.valor_liquido_fiscal_sum)
+    bliq = float(fiscal_base_stats.base_fiscal_liquida)
+    if vfscal <= 1e-12:
+        return imp_raw
+    rate = imp_raw / vfscal
+    return max(0.0, bliq * rate)
 
 
 def compute_vl_nota_fiscal_fiscal_kpi(

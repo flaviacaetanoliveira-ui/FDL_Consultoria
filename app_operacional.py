@@ -97,6 +97,7 @@ from faturamento_dre_recorte_minimo import (
     build_nf_panel_aligned_to_fiscal_base,
     compute_commercial_coverage_stats,
     compute_nf_panel_kpis,
+    dre_imposto_para_linha_dre_gerencial,
     faturamento_min_series_nf_emissao_bounds_dates,
     faturamento_nf_situacao_select_options,
     faturamento_recorte_min_state_from_session,
@@ -5380,7 +5381,10 @@ def _render_fdl_fat_dre_nf_gerencial(
     nf_panel_ads: bool = True,
     fiscal_base_stats: FaturamentoFiscalBaseStats | None = None,
 ) -> None:
-    """DRE gerencial (totais de ``compute_nf_panel_kpis``), layout demonstração financeira."""
+    """DRE gerencial (totais de ``compute_nf_panel_kpis``), layout demonstração financeira.
+
+    Linha Imposto: ver ``dre_imposto_para_linha_dre_gerencial`` (ponte fiscal única).
+    """
     if not _FAT_DRE_UI_V2 or build_dre_gerencial_premium_html is None:
         st.subheader("DRE gerencial")
         st.write(
@@ -5395,15 +5399,15 @@ def _render_fdl_fat_dre_nf_gerencial(
     vv = float(kp["valor_venda"])
     res = float(kp["resultado"])
     imp_raw = float(kp["imposto"])
-    imp_nf = imp_raw
-    res_nf = res
-    if fiscal_base_stats is not None and valor_faturado_from_fiscal_parquet:
-        vfscal = float(fiscal_base_stats.valor_liquido_fiscal_sum)
-        bliq = float(fiscal_base_stats.base_fiscal_liquida)
-        if vfscal > 1e-12:
-            rate = imp_raw / vfscal
-            imp_nf = max(0.0, bliq * rate)
-            res_nf = res_nf + (imp_raw - imp_nf)
+    # Ponte entre módulos: ver ``dre_imposto_para_linha_dre_gerencial`` em ``faturamento_dre_recorte_minimo``.
+    imp_nf = dre_imposto_para_linha_dre_gerencial(
+        kp,
+        fiscal_base_stats=fiscal_base_stats,
+        aplicar_ponte_base_liquida=(
+            fiscal_base_stats is not None and valor_faturado_from_fiscal_parquet
+        ),
+    )
+    res_nf = res + (imp_raw - imp_nf)
     dif = float(kp.get("diferenca", 0.0))
     rec_frete_num = float(kp.get("receita_frete_tp", 0.0))
     rec_venda = _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00"

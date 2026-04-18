@@ -5381,9 +5381,8 @@ def _render_resultado_gerencial_kpi_cards(
     res = float(kp_rg["resultado"])
     n_ped = int(kp_rg["pedidos"])
     _RG_KPI_RESULTADO_TITLE = (
-        "Resultado no período por data da venda (coluna Data), com deduções comerciais no grão linha "
-        "e imposto injetado pela ponte fiscal (base de emissão NF). Pode diferir da DRE abaixo até a migração "
-        "completa do bloco DRE."
+        "Resultado gerencial das vendas no período filtrado (por data da venda). Considera receita, comissão, custo, "
+        "frete, imposto (via Apuração Fiscal / ponte fiscal), despesas fixas e ADS quando presentes nas linhas."
     )
     if not _FAT_DRE_UI_V2 or build_kpi_nf_premium_shell_html is None:
         tm_s = "—"
@@ -9196,6 +9195,8 @@ def _render_faturamento_dre_minimal(
             nf_d_fim=_nf_kpi_fim,
             empresas_sel=tuple(_min_state.empresas),
             org_sidebar=_oid,
+            plataformas_sel=tuple(_min_state.plataformas),
+            coluna_temporal="Data",
         )
     except Exception as _exc_hp:
         if _is_admin_mode():

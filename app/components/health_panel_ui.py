@@ -556,27 +556,48 @@ def render_faturamento_health_panel_if_enabled(
     nf_d_fim: Any,
     empresas_sel: tuple[str, ...],
     org_sidebar: str,
+    plataformas_sel: tuple[str, ...] = (),
+    coluna_temporal: str = "Nota_Data_Emissao",
 ) -> None:
     """
-    Filtro: emissao NF + CUSTO_OK + empresas (rotulos), alinhado ao painel NF minimo.
-    Score e benchmark usam o mesmo mes civil do inicio do intervalo (tendencia = mes anterior).
+    Recorte no eixo ``coluna_temporal`` (``Data`` = venda, alinhado ao Resultado Gerencial; ``Nota_Data_Emissao`` = legado).
+
+    CUSTO_OK + empresas + plataformas opcionais. Benchmarks (mês anterior / grupo) usam o mesmo eixo temporal.
     Checkbox «Exibir diagnóstico» no topo do painel (``fdl_fat_min_health_panel_show``, padrão ``True``).
     """
     if df_faturamento is None or df_faturamento.empty:
         return
-    req = {"Nota_Data_Emissao", "Vl_Venda", "Resultado", "Custo_Produto_Total", "org_id", "Status_Custo"}
-    if not req.issubset(set(df_faturamento.columns)):
+    req_base = {"Resultado", "Custo_Produto_Total", "org_id", "Status_Custo"}
+    if not req_base.issubset(set(df_faturamento.columns)):
+        return
+    if coluna_temporal not in df_faturamento.columns:
+        return
+    if "Vl_Venda" not in df_faturamento.columns and "Valor total" not in df_faturamento.columns:
         return
 
-    sl = slice_linhas_nf_periodo(df_faturamento, d_ini=nf_d_ini, d_fim=nf_d_fim, empresas_sel=empresas_sel)
+    df_w = df_faturamento.copy()
+    if "Vl_Venda" not in df_w.columns:
+        df_w["Vl_Venda"] = pd.to_numeric(df_w["Valor total"], errors="coerce").fillna(0.0)
+
+    sl = slice_linhas_nf_periodo(
+        df_w,
+        d_ini=nf_d_ini,
+        d_fim=nf_d_fim,
+        empresas_sel=empresas_sel,
+        coluna_temporal=coluna_temporal,
+        plataformas_sel=plataformas_sel,
+    )
     if sl.empty:
-        st.caption("Painel de saúde: sem linhas com custo válido no intervalo de emissão NF selecionado.")
+        _eixo = "data da venda" if coluna_temporal == "Data" else "emissão NF"
+        st.caption(f"Painel de saúde: sem linhas com custo válido no intervalo ({_eixo}) selecionado.")
         return
 
     ano, mes, periodo_lbl = periodo_mes_de_datas(nf_d_ini, nf_d_fim)
     org_alvo = inferir_org_id_alvo(sl, org_sidebar)
-    df_ant = obter_dados_periodo_anterior(df_faturamento, org_alvo, ano, mes)
-    df_grupo = obter_dados_grupo(df_faturamento, ano, mes)
+    df_ant = obter_dados_periodo_anterior(
+        df_w, org_alvo, ano, mes, coluna_temporal=coluna_temporal
+    )
+    df_grupo = obter_dados_grupo(df_w, ano, mes, coluna_temporal=coluna_temporal)
 
     health = calcular_health_score(
         sl,

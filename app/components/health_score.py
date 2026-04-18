@@ -11,6 +11,8 @@ from typing import Any, Optional
 
 import pandas as pd
 
+from faturamento_dre_recorte_minimo import nf_grain_plataforma_match_key
+
 from processing.faturamento.config import STATUS_CUSTO_OK
 
 
@@ -372,23 +374,47 @@ def _nf_ts_br(s: pd.Series) -> pd.Series:
     return t.dt.tz_convert(br)
 
 
+def _series_ano_mes(df: pd.DataFrame, coluna_temporal: str) -> tuple[pd.Series, pd.Series]:
+    """Ano e mês civis por linha (mesmo critério que ``build_resultado_gerencial_slice`` para ``Data``)."""
+    if coluna_temporal not in df.columns:
+        return pd.Series(dtype=int), pd.Series(dtype=int)
+    if coluna_temporal == "Data":
+        ts = pd.to_datetime(df[coluna_temporal], errors="coerce", dayfirst=True)
+        return ts.dt.year, ts.dt.month
+    ts = _nf_ts_br(df[coluna_temporal])
+    return ts.dt.year, ts.dt.month
+
+
+def _series_dia_civil_intervalo(df: pd.DataFrame, coluna_temporal: str) -> pd.Series:
+    """Datas civis para filtro inclusivo [d_ini, d_fim]."""
+    if coluna_temporal not in df.columns:
+        return pd.Series(pd.NaT, index=df.index)
+    if coluna_temporal == "Data":
+        ts = pd.to_datetime(df[coluna_temporal], errors="coerce", dayfirst=True)
+        return ts.dt.normalize().dt.date
+    ts = _nf_ts_br(df[coluna_temporal])
+    return ts.dt.date
+
+
 def obter_dados_periodo_anterior(
     df_full: pd.DataFrame,
     org_id: str,
     ano: int,
     mes: int,
+    *,
+    coluna_temporal: str = "Nota_Data_Emissao",
 ) -> Optional[pd.DataFrame]:
     if mes == 1:
         mes_ant, ano_ant = 12, ano - 1
     else:
         mes_ant, ano_ant = mes - 1, ano
-    if df_full.empty or "Nota_Data_Emissao" not in df_full.columns:
+    if df_full.empty or coluna_temporal not in df_full.columns:
         return None
-    ts = _nf_ts_br(df_full["Nota_Data_Emissao"])
+    y, mo = _series_ano_mes(df_full, coluna_temporal)
     m = (
         (df_full["org_id"].astype(str).str.strip() == str(org_id).strip())
-        & (ts.dt.year == ano_ant)
-        & (ts.dt.month == mes_ant)
+        & (y == ano_ant)
+        & (mo == mes_ant)
     )
     if "Status_Custo" in df_full.columns:
         m &= df_full["Status_Custo"].astype(str).str.strip().eq(STATUS_CUSTO_OK)
@@ -396,11 +422,17 @@ def obter_dados_periodo_anterior(
     return df_ant if len(df_ant) > 0 else None
 
 
-def obter_dados_grupo(df_full: pd.DataFrame, ano: int, mes: int) -> Optional[pd.DataFrame]:
-    if df_full.empty or "Nota_Data_Emissao" not in df_full.columns:
+def obter_dados_grupo(
+    df_full: pd.DataFrame,
+    ano: int,
+    mes: int,
+    *,
+    coluna_temporal: str = "Nota_Data_Emissao",
+) -> Optional[pd.DataFrame]:
+    if df_full.empty or coluna_temporal not in df_full.columns:
         return None
-    ts = _nf_ts_br(df_full["Nota_Data_Emissao"])
-    m = (ts.dt.year == ano) & (ts.dt.month == mes)
+    y, mo = _series_ano_mes(df_full, coluna_temporal)
+    m = (y == ano) & (mo == mes)
     if "Status_Custo" in df_full.columns:
         m &= df_full["Status_Custo"].astype(str).str.strip().eq(STATUS_CUSTO_OK)
     df_g = df_full.loc[m].copy()
@@ -413,15 +445,21 @@ def slice_linhas_nf_periodo(
     d_ini: Any,
     d_fim: Any,
     empresas_sel: tuple[str, ...],
+    coluna_temporal: str = "Nota_Data_Emissao",
+    plataformas_sel: tuple[str, ...] = (),
 ) -> pd.DataFrame:
-    """Recorte comercial: emissao NF no intervalo [d_ini, d_fim] + CUSTO_OK + empresas (rotulos)."""
-    if df_full.empty or "Nota_Data_Emissao" not in df_full.columns:
+    """Recorte comercial: intervalo [d_ini, d_fim] na coluna temporal + CUSTO_OK + filtros opcionais.
+
+    ``coluna_temporal``: ``Nota_Data_Emissao`` (legado, emissão NF) ou ``Data`` (data da venda),
+    alinhado ao Resultado Gerencial.
+    """
+    if df_full.empty or coluna_temporal not in df_full.columns:
         return pd.DataFrame()
     out = df_full.copy()
-    ts = _nf_ts_br(out["Nota_Data_Emissao"])
+    dc = _series_dia_civil_intervalo(out, coluna_temporal)
     di = pd.Timestamp(d_ini).date() if hasattr(d_ini, "date") else d_ini
-    df_ = pd.Timestamp(d_fim).date() if hasattr(d_fim, "date") else d_fim
-    m = (ts.dt.date >= di) & (ts.dt.date <= df_)
+    df_end = pd.Timestamp(d_fim).date() if hasattr(d_fim, "date") else d_fim
+    m = dc.notna() & (dc >= di) & (dc <= df_end)
     out = out.loc[m].copy()
     if "Status_Custo" in out.columns:
         out = out.loc[out["Status_Custo"].astype(str).str.strip().eq(STATUS_CUSTO_OK)]
@@ -430,6 +468,11 @@ def slice_linhas_nf_periodo(
         cf = {x.casefold() for x in sel}
         em = out["empresa"].fillna("").astype(str).str.strip().str.casefold()
         out = out.loc[em.isin(cf)].copy()
+    if plataformas_sel and "Nome da plataforma" in out.columns:
+        want = {nf_grain_plataforma_match_key(x) for x in plataformas_sel}
+        want.discard("")
+        got = out["Nome da plataforma"].map(nf_grain_plataforma_match_key)
+        out = out.loc[got.isin(want)].copy()
     return out
 
 

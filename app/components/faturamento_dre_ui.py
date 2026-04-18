@@ -388,8 +388,8 @@ def build_kpi_nf_premium_shell_html(
         f"{mode_pill_html}"
         '<div class="fdl-fat-kpi-hero-row">'
         f'<div class="fdl-fat-kpi-hero-card fdl-fat-kpi-hero-card--result {html.escape(t_res.css_modifier)}" '
-        'title="Soma do resultado por NF no período selecionado (empresa e plataforma quando aplicável). '
-        'Já líquido de ADS no materializado — base diferente da soma por linha do painel de saúde.">'
+        'title="Soma do resultado por nota fiscal no recorte selecionado (empresa, período, situação, plataforma). '
+        'Base consolidada por NF — pode diferir do Painel de Saúde que usa grão de linha de pedido.">'
         '<div class="fdl-fat-kpi-hero-label">Resultado</div>'
         f'<div class="fdl-fat-kpi-hero-value">{html.escape(resultado_fmt)}</div>'
         f'<div class="fdl-fat-kpi-hero-meta {html.escape(_meta_class(t_res.css_modifier))}">'

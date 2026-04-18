@@ -5260,8 +5260,10 @@ def _render_fdl_fat_dre_nf_kpi_cards(
             st.metric(
                 "Resultado",
                 _fmt_brl_ptbr_celula(kp["resultado"]) or "—",
-                help="Soma do resultado por NF no período selecionado (recorte empresa / plataforma no painel). "
-                "O painel de saúde usa granularidade por linha com custo válido — os totais podem diferir.",
+                help=(
+                    "Resultado consolidado por NF no recorte selecionado (empresa, período, situação, plataforma). "
+                    "Pode diferir do Painel de Saúde, que usa grão de linha de pedido e não aplica filtro de plataforma."
+                ),
             )
         with c4:
             st.metric("Margem %", _margem_sobre_venda_str(float(kp["resultado"]), float(kp["valor_venda"])))

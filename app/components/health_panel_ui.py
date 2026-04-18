@@ -96,8 +96,9 @@ def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> 
             delta=None,
             delta_color="normal",
             help=(
-                "Soma do resultado no recorte por **linha de nota** (apenas custo válido). "
-                "Os **cards principais** acima somam por **NF agregada** no painel — podem diferir quando há filtros ou granularidade diferente."
+                "Soma do resultado em linhas de pedido com custo válido no período. "
+                "Usa receita de venda (lista) para cálculo de margem. "
+                "Não aplica filtro de plataforma — por isso pode diferir do Resultado dos KPIs."
             ),
         )
     with col3:

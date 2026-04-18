@@ -4480,6 +4480,7 @@ def _multiselect_stable(
     compact_label: bool = False,
     help: str | None = None,
     placeholder: str = "Escolher…",
+    label_visibility: str | None = None,
 ) -> list[str]:
     """
     Evita `default=` com listas recém-ordenadas a cada rerun (perdia estado / ecrã em branco).
@@ -4509,7 +4510,10 @@ def _multiselect_stable(
             label_visibility="collapsed",
             help=help,
         )
-    return st.multiselect(label, opts, key=key, placeholder=placeholder, help=help)
+    _ms_kw: dict[str, Any] = {"key": key, "placeholder": placeholder, "help": help}
+    if label_visibility is not None:
+        _ms_kw["label_visibility"] = label_visibility
+    return st.multiselect(label, opts, **_ms_kw)
 
 
 def _faturamento_divergencia_tol() -> float:
@@ -7850,8 +7854,9 @@ def _render_faturamento_dre_minimal(
                 "fdl_fat_min_prod",
                 "Produto",
                 _prod_opts,
-                compact_label=True,
+                compact_label=False,
                 placeholder="Filtrar por produto…",
+                label_visibility="collapsed",
                 help=(
                     "Vazio = todos. Filtra pela coluna «Produtos» (resumo na NF). "
                     "Não altera o topo fiscal nem os cards/DRE."

@@ -8309,13 +8309,20 @@ def _render_faturamento_dre_minimal(
         ):
             if _money_col in _disp_nf_ui.columns:
                 _disp_nf_ui[_money_col] = _disp_nf_ui[_money_col].map(_nf_tbl_money_str)
-        _disp_nf_ui["Linhas"] = _disp_nf_ui["Linhas"].map(_nf_tbl_linhas_str)
+        if "Linhas" in _disp_nf_ui.columns:
+            _disp_nf_ui["Linhas"] = _disp_nf_ui["Linhas"].map(_nf_tbl_linhas_str)
         if "Quantidade" in _disp_nf_ui.columns:
             _disp_nf_ui["Quantidade"] = _disp_nf_ui["Quantidade"].map(_nf_tbl_linhas_str)
         if "Margem %" in _disp_nf_ui.columns:
             _disp_nf_ui["Margem %"] = _disp_nf_full["Margem %"].map(_nf_tbl_margem_str)
-        _disp_nf_ui["Pedido"] = _disp_nf_ui["Pedido"].map(lambda x: _fat_min_trunc_text_cell(x, 72))
-        _disp_nf_ui["Produtos"] = _disp_nf_ui["Produtos"].map(lambda x: _fat_min_trunc_text_cell(x, 72))
+        if "Pedido" in _disp_nf_ui.columns:
+            _disp_nf_ui["Pedido"] = _disp_nf_ui["Pedido"].map(
+                lambda x: _fat_min_trunc_text_cell(x, 72)
+            )
+        if "Produtos" in _disp_nf_ui.columns:
+            _disp_nf_ui["Produtos"] = _disp_nf_ui["Produtos"].map(
+                lambda x: _fat_min_trunc_text_cell(x, 72)
+            )
 
         _plat_filt = st.session_state.get("fdl_fat_nf_tbl_plataforma") or []
         if not isinstance(_plat_filt, list):

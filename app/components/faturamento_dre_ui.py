@@ -120,16 +120,25 @@ def fat_dre_premium_css() -> str:
 .fdl-fat-kpi-hero-meta--neg { color: var(--fdl-danger); }
 .fdl-fat-kpi-mid-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 12px;
+  align-items: stretch;
+}
+@media (max-width: 720px) {
+  .fdl-fat-kpi-mid-row {
+    grid-template-columns: 1fr;
+  }
 }
 .fdl-fat-kpi-mid-card {
+  display: flex;
+  flex-direction: column;
   border-radius: 12px;
   padding: 14px 16px;
   border: 1px solid #e2e8f0;
   background: var(--fdl-neutral-100);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  min-height: 0;
 }
 .fdl-fat-kpi-mid-label {
   font-size: 0.72rem;
@@ -140,11 +149,25 @@ def fat_dre_premium_css() -> str:
   margin: 0 0 6px 0;
 }
 .fdl-fat-kpi-mid-value {
-  font-size: 1.8rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 700;
   color: #0f172a;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+}
+.fdl-fat-kpi-mid-card--diferenca .fdl-fat-kpi-mid-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.fdl-fat-kpi-mid-meta {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+}
+.fdl-fat-kpi-mid-diferenca-alerta {
+  font-size: 0.8rem;
+  color: #dc2626;
 }
 .fdl-fat-kpi-chip-row {
   display: flex;
@@ -517,6 +540,22 @@ def build_kpi_nf_premium_shell_html(
         for lab, val in chips
     )
 
+    _df_mc = _meta_class(t_df.css_modifier)
+    if t_df.css_modifier == "fdl-fat-kpi--warn":
+        _df_meta_html = (
+            f'<div class="fdl-fat-kpi-mid-meta {html.escape(_df_mc)}">'
+            f"{html.escape(t_df.arrow)} "
+            '<span class="fdl-fat-kpi-mid-diferenca-alerta">'
+            f'{html.escape("alerta (>30% da venda)")}</span></div>'
+        )
+    else:
+        _df_meta_html = (
+            f'<div class="fdl-fat-kpi-mid-meta {html.escape(_df_mc)}">'
+            f"{html.escape(t_df.arrow)} em faixa</div>"
+        )
+
+    _chip_row = f'<div class="fdl-fat-kpi-chip-row">{chips_html}</div>' if chips else ""
+
     return (
         '<div class="fdl-fat-premium fdl-fat-kpi-shell">'
         f"{mode_pill_html}"
@@ -541,14 +580,14 @@ def build_kpi_nf_premium_shell_html(
         '<div class="fdl-fat-kpi-mid-card">'
         '<div class="fdl-fat-kpi-mid-label">Valor faturado (NF)</div>'
         f'<div class="fdl-fat-kpi-mid-value">{html.escape(valor_faturado_fmt)}</div></div>'
+        '<div class="fdl-fat-kpi-mid-card fdl-fat-kpi-mid-card--diferenca">'
+        '<div class="fdl-fat-kpi-mid-label">Diferença (lista − NF)</div>'
+        f'<div class="fdl-fat-kpi-mid-value">{html.escape(diferenca_fmt)}</div>'
+        f"{_df_meta_html}"
         "</div>"
-        '<div class="fdl-fat-kpi-chip-row">'
-        f'<div class="fdl-fat-kpi-chip"><span class="fdl-fat-kpi-chip-lab">Diferença (lista − NF)</span>'
-        f'<span class="fdl-fat-kpi-chip-val">{html.escape(diferenca_fmt)}</span>'
-        f'<span class="fdl-fat-kpi-hero-meta {html.escape(_meta_class(t_df.css_modifier))}" style="margin-top:4px">'
-        f'{html.escape(t_df.arrow)} '
-        f'{"alerta (>30% da venda)" if t_df.css_modifier == "fdl-fat-kpi--warn" else "em faixa"}</span></div>'
-        f"{chips_html}</div></div>"
+        "</div>"
+        f"{_chip_row}"
+        "</div>"
     )
 
 

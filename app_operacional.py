@@ -7774,15 +7774,6 @@ def _render_faturamento_dre_minimal(
         nf_panel_ads=_nf_panel_ads_ui,
     )
 
-    _fdl_fat_min_vsp(size="sm")
-    _, _kpi_chk_col = st.columns([4, 1])
-    with _kpi_chk_col:
-        st.checkbox(
-            "Mostrar painel de saúde financeira",
-            value=True,
-            key="fdl_fat_min_health_panel_show",
-        )
-
     _fdl_fat_min_vsp(size="md")
     _periodo_dre_lbl = ""
     if ok_nf_dates:

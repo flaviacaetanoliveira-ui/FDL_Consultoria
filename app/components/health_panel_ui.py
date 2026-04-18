@@ -498,7 +498,7 @@ def render_faturamento_health_panel_if_enabled(
     """
     Filtro: emissao NF + CUSTO_OK + empresas (rotulos), alinhado ao painel NF minimo.
     Score e benchmark usam o mesmo mes civil do inicio do intervalo (tendencia = mes anterior).
-    Visibilidade: ``st.session_state["fdl_fat_min_health_panel_show"]`` (checkbox no fluxo Faturamento & DRE).
+    Visibilidade: ``st.session_state["fdl_fat_min_health_panel_show"]`` (padrão ``True`` se ausente).
     """
     if df_faturamento is None or df_faturamento.empty:
         return

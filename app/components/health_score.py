@@ -22,10 +22,10 @@ class HealthLevel(str, Enum):
 
 
 _HEALTH_LEVEL_META: dict[HealthLevel, tuple[str, str, str]] = {
-    HealthLevel.SAUDAVEL: ("Saudavel", "#22c55e", "[+]"),
-    HealthLevel.ATENCAO: ("Atencao", "#eab308", "[!]"),
+    HealthLevel.SAUDAVEL: ("Saudável", "#22c55e", "[+]"),
+    HealthLevel.ATENCAO: ("Atenção", "#eab308", "[!]"),
     HealthLevel.RISCO: ("Risco", "#f97316", "[!!]"),
-    HealthLevel.CRITICO: ("Critico", "#ef4444", "[X]"),
+    HealthLevel.CRITICO: ("Crítico", "#ef4444", "[X]"),
 }
 
 
@@ -211,9 +211,9 @@ def calcular_health_score(
             Diagnostico(
                 tipo="ALERTA",
                 nivel=AlertLevel.CRITICAL,
-                titulo="Resultado negativo no periodo",
-                detalhe=f"Prejuizo de R$ {abs(resultado):,.2f} (margem {margem_pct:.1f}%)",
-                acao="Analisar composicao de custos e precificacao",
+                titulo="Resultado negativo no período",
+                detalhe=f"Prejuízo de R$ {abs(resultado):,.2f} (margem {margem_pct:.1f}%)",
+                acao="Analisar composição de custos e precificação",
                 valor=resultado,
             )
         )
@@ -226,7 +226,7 @@ def calcular_health_score(
                 nivel=AlertLevel.HIGH if custo_pct > 60 else AlertLevel.MEDIUM,
                 titulo=f"Custo do produto elevado ({custo_pct:.1f}%)",
                 detalhe=f"{excesso:.1f}pp acima do benchmark ({cfg['benchmark_custo_pct']:.0f}%)",
-                acao="Rever precificacao ou renegociar fornecedores",
+                acao="Rever precificação ou renegociar fornecedores",
                 valor=custo_pct,
                 variacao=excesso,
             )
@@ -240,8 +240,8 @@ def calcular_health_score(
                 titulo=f"Margem em queda ({tendencia_pp:+.1f}pp)",
                 detalhe=f"Margem passou de {margem_anterior:.1f}% para {margem_pct:.1f}%"
                 if margem_anterior is not None
-                else f"Variacao de margem {tendencia_pp:+.1f}pp vs periodo anterior",
-                acao="Investigar causas da deterioracao",
+                else f"Variação de margem {tendencia_pp:+.1f} pp vs período anterior",
+                acao="Investigar causas da deterioração",
                 valor=margem_pct,
                 variacao=tendencia_pp,
             )
@@ -252,9 +252,9 @@ def calcular_health_score(
             Diagnostico(
                 tipo="BENCHMARK",
                 nivel=AlertLevel.MEDIUM,
-                titulo=f"Abaixo da media do grupo ({vs_grupo_pp:+.1f}pp)",
+                titulo=f"Abaixo da média do grupo ({vs_grupo_pp:+.1f} pp)",
                 detalhe=f"Margem do grupo (outras orgs): {margem_grupo:.1f}%; recorte atual: {margem_pct:.1f}%",
-                acao="Analisar praticas das empresas com melhor resultado",
+                acao="Analisar práticas das empresas com melhor resultado",
                 valor=vs_grupo_pp,
             )
         )
@@ -271,8 +271,8 @@ def calcular_health_score(
             Diagnostico(
                 tipo="POSITIVO",
                 nivel=AlertLevel.INFO,
-                titulo=f"Margem saudavel ({margem_pct:.1f}%)",
-                detalhe="Operacao com boa rentabilidade no recorte",
+                titulo=f"Margem saudável ({margem_pct:.1f}%)",
+                detalhe="Operação com boa rentabilidade no recorte",
                 valor=margem_pct,
             )
         )
@@ -333,8 +333,8 @@ def calcular_health_score(
                     tipo="CAUSA",
                     nivel=AlertLevel.HIGH if n_skus_negativos > 10 else AlertLevel.MEDIUM,
                     titulo=f"{n_skus_negativos} SKUs com margem negativa",
-                    detalhe=f"Prejuizo total desses SKUs: R$ {abs(prejuizo_skus):,.2f}",
-                    acao="Rever precificacao ou descontinuar produtos",
+                    detalhe=f"Prejuízo total desses SKUs: R$ {abs(prejuizo_skus):,.2f}",
+                    acao="Rever precificação ou descontinuar produtos",
                     valor=float(n_skus_negativos),
                 )
             )

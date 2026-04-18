@@ -5248,7 +5248,12 @@ def _render_fdl_fat_dre_nf_kpi_cards(
         with c2:
             st.metric("Faturado (NF)", vf or "—")
         with c3:
-            st.metric("Resultado", _fmt_brl_ptbr_celula(kp["resultado"]) or "—")
+            st.metric(
+                "Resultado",
+                _fmt_brl_ptbr_celula(kp["resultado"]) or "—",
+                help="Soma do resultado por NF no período selecionado (recorte empresa / plataforma no painel). "
+                "O painel de saúde usa granularidade por linha com custo válido — os totais podem diferir.",
+            )
         with c4:
             st.metric("Margem %", _margem_sobre_venda_str(float(kp["resultado"]), float(kp["valor_venda"])))
         return
@@ -5267,7 +5272,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
         ("Comissão", _fmt_brl_ptbr_celula(kp["comissao"]) or "R$ 0,00"),
         ("Custo produto", _fmt_brl_ptbr_celula(kp.get("custo_produto", 0.0)) or "R$ 0,00"),
         ("Frete plataforma", _fmt_brl_ptbr_celula(kp.get("custo_frete_plataforma", 0.0)) or "R$ 0,00"),
-        ("Repasse transp. própr.", _fmt_brl_ptbr_celula(kp.get("repasse_frete_transportadora_propria", 0.0)) or "R$ 0,00"),
+        ("Repasse transp.", _fmt_brl_ptbr_celula(kp.get("repasse_frete_transportadora_propria", 0.0)) or "R$ 0,00"),
         ("Imposto", _fmt_brl_ptbr_celula(kp["imposto"]) or "R$ 0,00"),
         ("Despesa fixa", _fmt_brl_ptbr_celula(kp["despesa_fixa"]) or "R$ 0,00"),
     ]
@@ -5277,11 +5282,11 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     if fat_dre_faturado_mode == "fiscal":
         mode_pill = (
             '<div class="fdl-fat-kpi-mode"><span class="fdl-fat-kpi-mode-pill fdl-fat-kpi-mode-pill--fiscal">'
-            "Faturado (NF): fiscal Parquet</span></div>"
+            "Valor faturado — referência fiscal</span></div>"
         )
     elif use_nf_materializado:
         mode_pill = (
-            '<div class="fdl-fat-kpi-mode"><span class="fdl-fat-kpi-mode-pill">Faturado (NF): NF-first</span></div>'
+            '<div class="fdl-fat-kpi-mode"><span class="fdl-fat-kpi-mode-pill">Valor faturado — pedidos ligados</span></div>'
         )
     else:
         mode_pill = ""
@@ -7290,14 +7295,15 @@ def _render_faturamento_dre_commercial_complement_banner(
 
 
 def _fdl_fat_min_format_updated_at(ts_raw: str) -> str:
-    """Formata ``ts_proc`` (``%Y-%m-%d %H:%M:%S`` típico) para exibição pt-BR no cabeçalho."""
+    """Formata ``ts_proc`` para «Última atualização: DD/mmm às HH:MM»."""
     s = (ts_raw or "").strip()
     if not s:
         return "—"
+    _meses = ("jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez")
     for _fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
         try:
             dt = datetime.strptime(s[: len(_fmt)], _fmt)
-            return dt.strftime("%d/%m/%Y às %H:%M")
+            return f"Última atualização: {dt.day}/{_meses[dt.month - 1]} às {dt.strftime('%H:%M')}"
         except ValueError:
             continue
     return s
@@ -7315,7 +7321,7 @@ def _build_faturamento_dre_page_header_html(*, updated_at: str) -> str:
         "</p>"
         "</div>"
         '<div class="fdl-page-header-meta">'
-        f'<span class="fdl-page-updated">Atualizado em: {esc}</span>'
+        f'<span class="fdl-page-updated">{esc}</span>'
         "</div>"
         "</div>"
     )
@@ -7336,13 +7342,12 @@ def _render_faturamento_dre_minimal(
     _fdl_fat_min_inject_ui_styles()
     _upd_disp = _fdl_fat_min_format_updated_at(ts_proc)
     st.html(_build_faturamento_dre_page_header_html(updated_at=_upd_disp))
-    with st.expander("ℹ️ Sobre os dados", expanded=False):
+    with st.expander("ℹ️ Sobre este módulo", expanded=False):
         st.caption(
-            "Dados do **`dataset_faturamento_nf_panel.parquet`** (materializado). "
-            "O topo «Base fiscal» é a referência principal (Parquet fiscal, empresa, emissão, N_base; "
-            "filtro opcional **Situação da NF**). **Cards** e **DRE** comerciais usam o mesmo período, empresa e situação do topo, "
-            "**mais** o filtro **Plataforma** quando preenchido (o topo **não** usa plataforma). "
-            "A **tabela** aplica ainda **produto** e **sinal** de resultado."
+            "Valores vêm do materializado publicado para a sua organização. O **topo fiscal** segue empresa e emissão; "
+            "**cards** e **DRE** acrescentam o filtro **Plataforma** quando usado. A **tabela por NF** pode ainda filtrar por "
+            "**produto** e **status de resultado**. Linhas com «—» ou valores em R$ 0,00 podem ser NF só fiscal ou sem pedido "
+            "comercial ligado — veja a coluna **Alertas**."
         )
     _fdl_fat_min_vsp(size="sm")
     _oid = str(org_id)
@@ -7530,14 +7535,25 @@ def _render_faturamento_dre_minimal(
                     "fdl_fat_min_venda_sinal",
                     "fdl_fat_min_sinal_resultado",
                     "fdl_fat_min_sinais_resultado",
+                    "fdl_fat_nf_show_diferenca",
+                    "fdl_fat_nf_opt_plat",
+                    "fdl_fat_nf_opt_sit",
+                    "fdl_fat_nf_opt_ped",
+                    "fdl_fat_nf_opt_linhas",
+                    "fdl_fat_nf_opt_qtd",
+                    "fdl_fat_nf_opt_vf",
+                    "fdl_fat_nf_opt_com",
+                    "fdl_fat_nf_opt_rf",
+                    "fdl_fat_nf_opt_fp",
+                    "fdl_fat_nf_opt_rp",
+                    "fdl_fat_nf_opt_tar",
+                    "fdl_fat_nf_opt_imp",
+                    "fdl_fat_nf_opt_df",
+                    "fdl_fat_nf_opt_ads",
+                    "fdl_fat_nf_opt_alert",
                 ):
                     st.session_state.pop(_k, None)
                 st.rerun()
-        with st.expander("ℹ️ Como funcionam os filtros", expanded=False):
-            st.caption(
-                "**Empresa**, **Situação da NF** (opcional) e **período de emissão** definem o **topo Base fiscal** e o núcleo dos "
-                "**cards/DRE**. **Plataforma** (opcional) **não** altera o topo; refina **cards/DRE** e **tabela** no mesmo período."
-            )
         _fc1, _fc2, _fc3 = st.columns(3)
         with _fc1:
             if emp_opts:
@@ -7691,7 +7707,7 @@ def _render_faturamento_dre_minimal(
         )
     except Exception as _exc_hp:
         if _is_admin_mode():
-            st.caption(f"Painel de saude financeira indisponivel: `{_exc_hp}`")
+            st.caption(f"Painel de saúde financeira indisponível: `{_exc_hp}`")
     _fdl_fat_min_vsp(size="sm")
     _render_fdl_fat_dre_nf_gerencial(
         kp=_kp_cards,
@@ -7801,31 +7817,32 @@ def _render_faturamento_dre_minimal(
         _col_cfg, _col_csv = st.columns(2)
         with _col_cfg:
             with st.popover("⚙️"):
-                st.markdown("**Colunas visíveis**")
+                st.caption(
+                    "Por defeito mostram-se só as colunas essenciais. Marque abaixo para acrescentar ao quadro e ao CSV."
+                )
                 st.checkbox(
                     "Diferença (lista − fiscal)",
                     value=False,
                     key="fdl_fat_nf_show_diferenca",
-                    help="Exibe coluna com diferença entre receita lista e faturado fiscal.",
+                    help="Receita de venda (lista) menos valor faturado na NF.",
                 )
-                st.checkbox(
-                    "Margem %",
-                    value=True,
-                    key="fdl_fat_nf_show_margem",
-                )
-                st.markdown("---")
-                st.caption(
-                    "**Cards** e **DRE** seguem o recorte comercial (empresa, emissão, situação, plataforma); "
-                    "**produto**, **resultado** e filtros abaixo refinam **só** esta tabela."
-                )
-                if use_fiscal_kpi:
-                    st.caption(
-                        "Uma linha por NF no recorte. «Faturado (NF)» = fiscal (Bling/Parquet); demais valores = comercial."
-                    )
-                else:
-                    st.caption(
-                        "Detalhamento por NF; valores conforme materializado quando o fiscal do topo não está publicado."
-                    )
+                st.markdown("**Mais colunas**")
+                st.checkbox("Plataforma", key="fdl_fat_nf_opt_plat", value=False)
+                st.checkbox("Situação da NF", key="fdl_fat_nf_opt_sit", value=False)
+                st.checkbox("Pedido", key="fdl_fat_nf_opt_ped", value=False)
+                st.checkbox("Linhas", key="fdl_fat_nf_opt_linhas", value=False)
+                st.checkbox("Quantidade", key="fdl_fat_nf_opt_qtd", value=False)
+                st.checkbox("Faturado (NF)", key="fdl_fat_nf_opt_vf", value=False)
+                st.checkbox("Comissão", key="fdl_fat_nf_opt_com", value=False)
+                st.checkbox("Receita de Frete", key="fdl_fat_nf_opt_rf", value=False)
+                st.checkbox("Frete plataforma", key="fdl_fat_nf_opt_fp", value=False)
+                st.checkbox("Repasse transp.", key="fdl_fat_nf_opt_rp", value=False)
+                st.checkbox("Frete pedido (Σ)", key="fdl_fat_nf_opt_tar", value=False)
+                st.checkbox("Imposto", key="fdl_fat_nf_opt_imp", value=False)
+                st.checkbox("Despesa fixa", key="fdl_fat_nf_opt_df", value=False)
+                if _nf_panel_ads_ui:
+                    st.checkbox("ADS (3,5% + fixo)", key="fdl_fat_nf_opt_ads", value=False)
+                st.checkbox("Alertas", key="fdl_fat_nf_opt_alert", value=False)
         with _col_csv:
             _nf_dl_hdr_slot = st.empty()
 
@@ -7837,15 +7854,14 @@ def _render_faturamento_dre_minimal(
             format_func=lambda x: {
                 "lucro": "Lucro",
                 "prejuizo": "Prejuízo",
-                "empate": "Empate",
+                "empate": "Neutro",
             }[x],
             key=_k_sinais,
             placeholder="Status…",
             label_visibility="collapsed",
             help=(
-                "**Vazio** = todas as NFs (sem filtro por resultado). «Empate» = resultado ~0. "
-                "Com **Lucro** e **Prejuízo** juntos na seleção, não se filtra por sinal. "
-                "Noutros casos aplica-se a união das opções escolhidas."
+                "**Vazio** = todas as NFs. «Neutro» = resultado ~0. "
+                "**Lucro** e **Prejuízo** juntos ⇒ sem filtro por sinal; caso contrário união das faixas escolhidas."
             ),
         )
     with _f2:
@@ -7897,10 +7913,6 @@ def _render_faturamento_dre_minimal(
             placeholder="🔍 Buscar NF ou Pedido…",
             label_visibility="collapsed",
         )
-
-    st.caption(
-        "«—» em Plataforma / Pedido / Produtos → NF sem pedido ligado ou campo ausente no materializado (esperado quando só há lado fiscal)."
-    )
 
     _prod_sel = tuple(
         str(x).strip()
@@ -8041,40 +8053,45 @@ def _render_faturamento_dre_minimal(
     _FAT_NF_TABLE_STYLER_MAX_ROWS = 500
 
     _show_col_diferenca = bool(st.session_state.get("fdl_fat_nf_show_diferenca", False))
-    _show_margem = bool(st.session_state.get("fdl_fat_nf_show_margem", True))
-    _nf_table_cols_order = [
+    _nf_vis: list[str] = [
         "Emissão",
         "Status",
         "Empresa",
-        "Plataforma",
         "NF",
-        "Situação",
-        "Pedido",
         "Produtos",
-        "Linhas",
-        "Quantidade",
         "Receita de Venda",
-        "Faturado (NF)",
-        *([] if not _show_col_diferenca else ["Diferença"]),
-        "Comissão",
-        "Custo produto",
-        "Receita de Frete",
-        "Frete plataforma",
-        "Repasse transp. própr.",
-        "Frete pedido (Σ)",
-        "Imposto",
-        "Desp. fixa",
-        "ADS 3,5%",
-        "ADS fixo",
-        "Resultado",
-        "Info dados",
-        *([] if not _show_margem else ["Margem %"]),
     ]
-    _nf_table_cols_order_ui: list[str] = (
-        [c for c in _nf_table_cols_order if c not in ("ADS 3,5%", "ADS fixo")]
-        if not _nf_panel_ads_ui
-        else list(_nf_table_cols_order)
-    )
+    if _show_col_diferenca:
+        _nf_vis.append("Diferença")
+    _nf_vis += ["Custo produto", "Resultado", "Margem %"]
+    _nf_opt_cols: list[tuple[str, str]] = [
+        ("fdl_fat_nf_opt_plat", "Plataforma"),
+        ("fdl_fat_nf_opt_sit", "Situação"),
+        ("fdl_fat_nf_opt_ped", "Pedido"),
+        ("fdl_fat_nf_opt_linhas", "Linhas"),
+        ("fdl_fat_nf_opt_qtd", "Quantidade"),
+        ("fdl_fat_nf_opt_vf", "Faturado (NF)"),
+        ("fdl_fat_nf_opt_com", "Comissão"),
+        ("fdl_fat_nf_opt_rf", "Receita de Frete"),
+        ("fdl_fat_nf_opt_fp", "Frete plataforma"),
+        ("fdl_fat_nf_opt_rp", "Repasse transp."),
+        ("fdl_fat_nf_opt_tar", "Frete pedido (Σ)"),
+        ("fdl_fat_nf_opt_imp", "Imposto"),
+        ("fdl_fat_nf_opt_df", "Despesa fixa"),
+    ]
+    for _ok, _colname in _nf_opt_cols:
+        if bool(st.session_state.get(_ok, False)):
+            _nf_vis.append(_colname)
+    if _nf_panel_ads_ui and bool(st.session_state.get("fdl_fat_nf_opt_ads", False)):
+        _nf_vis.extend(["ADS 3,5%", "ADS fixo"])
+    if bool(st.session_state.get("fdl_fat_nf_opt_alert", False)):
+        _nf_vis.append("Alertas")
+
+    _nf_table_cols_order_ui: list[str] = []
+    for _c in _nf_vis:
+        if _c in ("ADS 3,5%", "ADS fixo") and not _nf_panel_ads_ui:
+            continue
+        _nf_table_cols_order_ui.append(_c)
 
     _df_nf_table = df_nf_panel
     if not df_nf_panel.empty and "Nota_Data_Emissao" in df_nf_panel.columns:
@@ -8108,7 +8125,6 @@ def _render_faturamento_dre_minimal(
             if "comercial_incompleto" in _df_nf_table.columns
             else pd.Series(False, index=_df_nf_table.index, dtype=bool)
         )
-        _info_dados = _inc_flag.map(lambda b: "Falta custo / dados" if b else "—")
         _ads_v_s = (
             pd.to_numeric(_df_nf_table["custo_ads_variavel"], errors="coerce").fillna(0.0)
             if "custo_ads_variavel" in _df_nf_table.columns
@@ -8120,6 +8136,34 @@ def _render_faturamento_dre_minimal(
             else pd.Series(0.0, index=_df_nf_table.index, dtype=float)
         )
         _res_line_nf = pd.to_numeric(_df_nf_table["resultado"], errors="coerce")
+        _vv_num = pd.to_numeric(_df_nf_table["valor_venda"], errors="coerce").fillna(0.0)
+        _cm_num = pd.to_numeric(_df_nf_table["comissao"], errors="coerce").fillna(0.0)
+        _imp_num = pd.to_numeric(_df_nf_table["imposto"], errors="coerce").fillna(0.0)
+        _cp_num = pd.to_numeric(_custo_s, errors="coerce").fillna(0.0)
+        _eps_z = 1e-6
+        _sem_mov = (
+            (_vv_num.abs() <= _eps_z)
+            & (_cp_num.abs() <= _eps_z)
+            & (_res_line_nf.fillna(0.0).abs() <= _eps_z)
+            & (_cm_num.abs() <= _eps_z)
+            & (_imp_num.abs() <= _eps_z)
+        )
+        if _is_admin_mode() and bool(_sem_mov.any()):
+            st.caption(f"Admin: {_fmt_int_ptbr(int(_sem_mov.sum()))} NF(s) só com zeros nos principais valores comerciais.")
+
+        def _nf_alert_txt(i: int) -> str:
+            _parts: list[str] = []
+            if bool(_sem_mov.iloc[i]):
+                _parts.append("NF sem movimento comercial")
+            if bool(_inc_flag.iloc[i]):
+                _parts.append("Falta custo / dados")
+            return " · ".join(_parts) if _parts else "—"
+
+        _alertas_col = pd.Series(
+            [_nf_alert_txt(i) for i in range(len(_df_nf_table))],
+            index=_df_nf_table.index,
+            dtype=object,
+        )
         _qtd_itens = _faturamento_nf_quantidade_itens_por_nf(df, _df_nf_table)
 
         def _nf_status_label_nf(r: object) -> str:
@@ -8133,7 +8177,7 @@ def _render_faturamento_dre_minimal(
                 return "Lucro"
             if x < 0:
                 return "Prejuízo"
-            return "Empate"
+            return "Neutro"
 
         _disp_nf_full = pd.DataFrame(
             {
@@ -8172,7 +8216,7 @@ def _render_faturamento_dre_minimal(
                 )
                 if "custo_frete_plataforma" in _df_nf_table.columns
                 else pd.Series(0.0, index=_df_nf_table.index),
-                "Repasse transp. própr.": pd.to_numeric(
+                "Repasse transp.": pd.to_numeric(
                     _df_nf_table["repasse_frete_transportadora_propria"], errors="coerce"
                 )
                 if "repasse_frete_transportadora_propria" in _df_nf_table.columns
@@ -8183,11 +8227,11 @@ def _render_faturamento_dre_minimal(
                 if "tarifa_custo_envio" in _df_nf_table.columns
                 else pd.Series(0.0, index=_df_nf_table.index),
                 "Imposto": pd.to_numeric(_df_nf_table["imposto"], errors="coerce"),
-                "Desp. fixa": pd.to_numeric(_df_nf_table["despesa_fixa"], errors="coerce"),
+                "Despesa fixa": pd.to_numeric(_df_nf_table["despesa_fixa"], errors="coerce"),
                 "ADS 3,5%": _ads_v_s,
                 "ADS fixo": _ads_f_s,
                 "Resultado": _res_line_nf,
-                "Info dados": _info_dados.astype(str),
+                "Alertas": _alertas_col.astype(str),
                 "Margem %": (_marg_ratio * 100.0),
             }
         )
@@ -8246,10 +8290,10 @@ def _render_faturamento_dre_minimal(
             "Custo produto",
             "Receita de Frete",
             "Frete plataforma",
-            "Repasse transp. própr.",
+            "Repasse transp.",
             "Frete pedido (Σ)",
             "Imposto",
-            "Desp. fixa",
+            "Despesa fixa",
             "ADS 3,5%",
             "ADS fixo",
             "Resultado",
@@ -8289,13 +8333,13 @@ def _render_faturamento_dre_minimal(
     _cfg_nf: dict[str, NumberColumn | TextColumn] = {}
     _nf_col_help: dict[str, str | None] = {
         "Emissão": None,
-        "Status": "Lucro, prejuízo ou empate conforme o **resultado** consolidado da NF (materializado).",
+        "Status": "Lucro, prejuízo ou neutro (resultado ~0) conforme o resultado consolidado da NF.",
         "Empresa": None,
-        "Plataforma": None,
+        "Plataforma": "«—» = NF sem canal comercial associado neste recorte.",
         "NF": None,
         "Situação": None,
-        "Pedido": "Resumo do pedido / multiloja (texto completo no CSV).",
-        "Produtos": "Resumo de itens (texto completo no CSV).",
+        "Pedido": "«—» = sem pedido comercial resolvido para esta NF. Texto completo no CSV.",
+        "Produtos": "«—» = sem produto agregado na NF. Texto completo no CSV.",
         "Linhas": "Quantidade de linhas de pedido agregadas nesta NF (comercial).",
         "Quantidade": "Soma de **Quantidade** (unidades) nas linhas de pedido ligadas a esta NF (materializado linha).",
         "Receita de Venda": (
@@ -8304,9 +8348,9 @@ def _render_faturamento_dre_minimal(
             else "Σ Quantidade × Preço de lista (pedidos ligados à NF)."
         ),
         "Faturado (NF)": (
-            "Fiscal: valor líquido 1× por NF (dataset_faturamento_fiscal.parquet / Bling), data de emissão no período."
+            "Valor líquido da NF na referência fiscal (Bling / export), 1× por nota no período."
             if use_fiscal_kpi
-            else "Valor líquido da NF (uma vez por nota), grão NF-first / materializado."
+            else "Valor líquido da NF (uma vez por nota) na base materializada."
         ),
         "Diferença": (
             "Comercial − fiscal nesta linha: Receita de Venda − Faturado (NF). "
@@ -8330,7 +8374,7 @@ def _render_faturamento_dre_minimal(
             if use_fiscal_kpi
             else "Parcela plataforma do frete no pedido."
         ),
-        "Repasse transp. própr.": (
+        "Repasse transp.": (
             "Repasse à **transportadora própria** (parcela TP do «Custo de Frete»); se o pedido não separa modalidade "
             "mas a NF cobra frete, imputa-se pass-through até o teto da tarifa da NF."
             if use_fiscal_kpi
@@ -8342,7 +8386,7 @@ def _render_faturamento_dre_minimal(
             else "Σ frete no pedido."
         ),
         "Imposto": "Comercial: soma do imposto das linhas de pedido ligadas à NF." if use_fiscal_kpi else None,
-        "Desp. fixa": (
+        "Despesa fixa": (
             "Comercial: 5% sobre valor da venda (lista) agregado à NF."
             if use_fiscal_kpi
             else "5% sobre valor da venda agregado à NF."
@@ -8359,8 +8403,9 @@ def _render_faturamento_dre_minimal(
             if use_fiscal_kpi
             else "Resultado ÷ Receita de Venda; alinhado ao KPI «Margem %» do painel."
         ),
-        "Info dados": (
-            "Materializado: **comercial_incompleto** — custo ou resultado incompletos nas linhas desta NF; rever base de custo / SKUs."
+        "Alertas": (
+            "«NF sem movimento comercial» quando receita, custo, comissão, imposto e resultado são ~0. "
+            "«Falta custo / dados» quando o materializado sinaliza dados incompletos."
         ),
     }
     _nf_col_width: dict[str, str] = {
@@ -8381,14 +8426,14 @@ def _render_faturamento_dre_minimal(
         "Custo produto": "medium",
         "Receita de Frete": "small",
         "Frete plataforma": "small",
-        "Repasse transp. própr.": "small",
+        "Repasse transp.": "small",
         "Frete pedido (Σ)": "small",
         "Imposto": "small",
-        "Desp. fixa": "small",
+        "Despesa fixa": "small",
         "ADS 3,5%": "small",
         "ADS fixo": "small",
         "Resultado": "medium",
-        "Info dados": "medium",
+        "Alertas": "medium",
         "Margem %": "small",
     }
     for _cn in _nf_table_cols_order_ui:
@@ -8481,7 +8526,7 @@ def _render_faturamento_dre_minimal(
                         out.append(
                             "background-color: #fee2e2; color: #991b1b; font-weight: 500; font-size: 0.75rem"
                         )
-                    elif vs == "Empate":
+                    elif vs == "Neutro":
                         out.append(
                             "background-color: #f3f4f6; color: #6b7280; font-weight: 500; font-size: 0.75rem"
                         )
@@ -8510,10 +8555,7 @@ def _render_faturamento_dre_minimal(
                 except Exception:
                     _df_arg = _slice_ui_r
             if _nf_total_rows > _FAT_NF_TABLE_STYLER_MAX_ROWS and _nf_styler_ok:
-                st.caption(
-                    "Realce de **linha** para prejuízo só em recortes com até **500** notas; a coluna **Status** "
-                    "continua destacada em todas as páginas."
-                )
+            st.caption("Destaque de linha para prejuízo ativo até **500** notas.")
             st.dataframe(
                 _df_arg,
                 use_container_width=True,

@@ -30,6 +30,19 @@ if TYPE_CHECKING:
     from app.components.health_score import HealthScore
 
 
+def _diag_md_para_html(md: str) -> str:
+    """``**texto**`` → negrito; restante escapado para HTML."""
+    chunks = md.split("**")
+    out: list[str] = []
+    for i, seg in enumerate(chunks):
+        if i % 2 == 0:
+            out.append(html.escape(seg))
+        else:
+            out.append("<strong>" + html.escape(seg) + "</strong>")
+    joined = "".join(out)
+    return joined.replace("\n\n", "</p><p>").replace("\n", "<br/>")
+
+
 def _fmt_brl0(x: float) -> str:
     ax = abs(float(x))
     body = f"{ax:,.0f}".replace(",", "v").replace(".", ",").replace("v", ".")
@@ -38,7 +51,7 @@ def _fmt_brl0(x: float) -> str:
 
 def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> None:
     lbl, color, mark = health_level_meta(health.level)
-    esc_tit = html.escape(f"Saude financeira - {health.periodo}")
+    esc_tit = html.escape(f"Saúde financeira – {health.periodo}")
     esc_sub = html.escape(str(health.empresa).replace("_", " ").title())
     esc_lbl = html.escape(f"{mark} {lbl}")
     st.html(
@@ -66,7 +79,7 @@ def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> 
         st.metric(
             "Margem",
             f"{health.margem_pct:.1f}%",
-            delta=(f"{d:+.1f} pp vs mes ant." if d is not None else None),
+            delta=(f"{d:+.1f} pp vs mês ant." if d is not None else None),
             delta_color=(
                 "inverse"
                 if d is not None and d < 0
@@ -74,7 +87,7 @@ def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> 
                 if d is not None and d > 0
                 else "off"
             ),
-            help="Margem = resultado / receita (Vl_Venda) no recorte.",
+            help="Margem = resultado ÷ receita nas linhas com custo válido no período.",
         )
     with col2:
         st.metric(
@@ -82,7 +95,10 @@ def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> 
             _fmt_brl0(health.resultado),
             delta=None,
             delta_color="normal",
-            help=health.periodo,
+            help=(
+                "Soma do resultado no recorte por **linha de nota** (apenas custo válido). "
+                "Os **cards principais** acima somam por **NF agregada** no painel — podem diferir quando há filtros ou granularidade diferente."
+            ),
         )
     with col3:
         st.metric(
@@ -90,28 +106,29 @@ def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> 
             f"{health.custo_pct:.1f}%",
             delta=None,
             delta_color="inverse" if health.custo_pct > 50 else "normal",
-            help="Custo produto / receita. Benchmark referencia 50%.",
+            help="Custo produto ÷ receita. Referência orientativa ~50%.",
         )
     with col4:
         vg = health.vs_grupo_pp
         mg = health.margem_grupo
-        h = (
-            f"Media de margem das outras orgs no mesmo mes civil: {mg:.1f}%."
-            if mg is not None
-            else "Sem benchmark (recorte consolidado ou uma unica org)."
-        )
-        st.metric(
-            "vs Grupo",
-            (f"{vg:+.1f} pp" if vg is not None else "N/A"),
-            delta=None,
-            delta_color="inverse" if (vg is not None and vg < 0) else "normal",
-            help=h,
-        )
+        if vg is not None:
+            h = (
+                f"Média de margem das outras empresas no mesmo mês civil: {mg:.1f}%."
+                if mg is not None
+                else "Sem benchmark (recorte consolidado ou uma única empresa)."
+            )
+            st.metric(
+                "vs Grupo",
+                f"{vg:+.1f} pp",
+                delta=None,
+                delta_color="inverse" if vg < 0 else "normal",
+                help=h,
+            )
 
     st.divider()
 
     if health.diagnosticos:
-        st.markdown("#### Diagnostico automatico")
+        st.markdown("#### Diagnóstico automático")
         for diag in health.diagnosticos:
             _render_diagnostico(diag)
 
@@ -123,12 +140,18 @@ def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> 
 def _render_diagnostico(diag: Diagnostico) -> None:
     parts: list[str] = [f"**{diag.titulo}**", diag.detalhe]
     if diag.acao:
-        parts.append(f"**Acao sugerida:** {diag.acao}")
+        parts.append(f"**Ação sugerida:** {diag.acao}")
     body = "\n\n".join(parts)
     if diag.nivel == AlertLevel.CRITICAL:
         st.error(body)
     elif diag.nivel in (AlertLevel.HIGH, AlertLevel.MEDIUM):
-        st.warning(body)
+        inner = _diag_md_para_html(body)
+        st.markdown(
+            '<div style="background:#fefce8;border-left:4px solid #eab308;border-radius:8px;padding:12px 14px;margin:0 0 8px 0;color:#1e293b;line-height:1.45;">'
+            f"<p>{inner}</p>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
     else:
         st.info(body)
 
@@ -163,7 +186,7 @@ def _render_skus_risco(skus: list[SKURisco]) -> None:
     total_prejuizo = sum(s.resultado for s in skus)
     total_receita = sum(s.receita for s in skus)
     st.caption(
-        f"Total prejuizo (amostra): R$ {abs(total_prejuizo):,.2f} · Receita afetada: R$ {total_receita:,.2f}"
+        f"Total prejuízo (amostra): R$ {abs(total_prejuizo):,.2f} · Receita afetada: R$ {total_receita:,.2f}"
     )
 
 
@@ -185,7 +208,7 @@ def render_faturamento_health_panel_if_enabled(
     if not req.issubset(set(df_faturamento.columns)):
         return
     if not st.checkbox(
-        "Mostrar painel de saude financeira (score, diagnosticos, SKUs em risco)",
+        "Mostrar painel de saúde financeira",
         value=True,
         key="fdl_fat_min_health_panel_show",
     ):
@@ -193,7 +216,7 @@ def render_faturamento_health_panel_if_enabled(
 
     sl = slice_linhas_nf_periodo(df_faturamento, d_ini=nf_d_ini, d_fim=nf_d_fim, empresas_sel=empresas_sel)
     if sl.empty:
-        st.caption("Painel de saude: sem linhas CUSTO_OK no intervalo de emissao NF selecionado.")
+        st.caption("Painel de saúde: sem linhas com custo válido no intervalo de emissão NF selecionado.")
         return
 
     ano, mes, periodo_lbl = periodo_mes_de_datas(nf_d_ini, nf_d_fim)

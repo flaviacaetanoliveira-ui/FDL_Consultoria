@@ -357,8 +357,8 @@ def fat_dre_premium_css() -> str:
   color: #64748b;
 }
 .fdl-dre-result {
-  margin-top: 8px;
-  padding: 24px;
+  margin-top: 16px;
+  padding: 16px 20px;
   border-radius: 12px;
 }
 .fdl-dre-result--positive {
@@ -395,8 +395,8 @@ def fat_dre_premium_css() -> str:
   border-top-color: #e2e8f0;
 }
 .fdl-dre-result-label {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -410,7 +410,7 @@ def fat_dre_premium_css() -> str:
   color: #475569;
 }
 .fdl-dre-result-value {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
@@ -439,8 +439,8 @@ def fat_dre_premium_css() -> str:
   color: #64748b;
 }
 .fdl-dre-margin-value {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .fdl-dre-result--positive .fdl-dre-margin-value {
@@ -464,7 +464,7 @@ def fat_dre_premium_css() -> str:
 }
 @media (max-width: 560px) {
   .fdl-dre-container { padding: 18px 16px 22px 16px; }
-  .fdl-dre-result-value { font-size: 1.55rem; }
+  .fdl-dre-result-value { font-size: 1.45rem; }
   .fdl-dre-value,
   .fdl-dre-result-value,
   .fdl-dre-margin-value {

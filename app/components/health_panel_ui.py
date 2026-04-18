@@ -32,6 +32,54 @@ if TYPE_CHECKING:
 
 HEALTH_PANEL_CSS = """
 <style>
+.fdl-health-header {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+.fdl-health-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.fdl-health-title {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.fdl-health-subtitle {
+  margin: 6px 0 0 0;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+.fdl-health-score-wrap {
+  text-align: center;
+  min-width: 72px;
+}
+.fdl-health-score-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+.fdl-health-score-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.fdl-health-status-label {
+  margin: 8px 0 0 0;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
 .fdl-health-panel-inner { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
 .fdl-health-metrics-container {
   display: flex;
@@ -53,7 +101,7 @@ HEALTH_PANEL_CSS = """
   padding-right: 24px;
 }
 .fdl-health-metric-label {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: #64748b;
   text-transform: uppercase;
@@ -61,7 +109,7 @@ HEALTH_PANEL_CSS = """
   margin-bottom: 8px;
 }
 .fdl-health-metric-value {
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: #1e293b;
   font-variant-numeric: tabular-nums;
@@ -366,7 +414,6 @@ def _metrics_block_html(health: "HealthScore") -> str:
     inner = "".join(blocks)
     return (
         '<div class="fdl-health-panel-inner">'
-        f"{HEALTH_PANEL_CSS}"
         f'<div class="fdl-health-metrics-container">{inner}</div>'
         "</div>"
     )
@@ -406,18 +453,19 @@ def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> 
     esc_sub = html.escape(str(health.empresa).replace("_", " ").title())
     esc_lbl = html.escape(f"{mark} {lbl}")
     st.html(
-        f"""
-<section style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:12px;padding:24px;margin-bottom:16px;">
-  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
+        HEALTH_PANEL_CSS
+        + f"""
+<section class="fdl-health-header">
+  <div class="fdl-health-header-row">
     <div>
-      <h2 style="margin:0;color:#f8fafc;font-size:1.45rem;font-weight:700;">{esc_tit}</h2>
-      <p style="margin:6px 0 0 0;color:#94a3b8;font-size:0.92rem;">{esc_sub}</p>
+      <h2 class="fdl-health-title">{esc_tit}</h2>
+      <p class="fdl-health-subtitle">{esc_sub}</p>
     </div>
-    <div style="text-align:center;min-width:96px;">
-      <div style="width:80px;height:80px;border-radius:50%;background:{color}22;border:4px solid {color};display:flex;align-items:center;justify-content:center;margin:0 auto;">
-        <span style="font-size:1.75rem;font-weight:700;color:{color};">{int(health.score)}</span>
+    <div class="fdl-health-score-wrap">
+      <div class="fdl-health-score-circle" style="background:{color}22;border:3px solid {color};">
+        <span class="fdl-health-score-value" style="color:{color};">{int(health.score)}</span>
       </div>
-      <p style="margin:8px 0 0 0;color:{color};font-weight:600;font-size:0.95rem;">{esc_lbl}</p>
+      <p class="fdl-health-status-label" style="color:{color};">{esc_lbl}</p>
     </div>
   </div>
 </section>
@@ -498,7 +546,7 @@ def render_faturamento_health_panel_if_enabled(
     """
     Filtro: emissao NF + CUSTO_OK + empresas (rotulos), alinhado ao painel NF minimo.
     Score e benchmark usam o mesmo mes civil do inicio do intervalo (tendencia = mes anterior).
-    Visibilidade: ``st.session_state["fdl_fat_min_health_panel_show"]`` (padrão ``True`` se ausente).
+    Visibilidade: checkbox «Exibir diagnóstico» após os KPIs (``fdl_fat_min_health_panel_show``, padrão ``True``).
     """
     if df_faturamento is None or df_faturamento.empty:
         return

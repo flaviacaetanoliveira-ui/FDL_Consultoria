@@ -7774,6 +7774,16 @@ def _render_faturamento_dre_minimal(
         nf_panel_ads=_nf_panel_ads_ui,
     )
 
+    _fdl_fat_min_vsp(size="sm")
+    _, _col_diag = st.columns([4, 1])
+    with _col_diag:
+        st.checkbox(
+            "Exibir diagnóstico",
+            value=True,
+            key="fdl_fat_min_health_panel_show",
+            help="Mostra ou oculta o painel de saúde financeira após a DRE.",
+        )
+
     _fdl_fat_min_vsp(size="md")
     _periodo_dre_lbl = ""
     if ok_nf_dates:

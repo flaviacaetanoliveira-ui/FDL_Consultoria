@@ -635,6 +635,11 @@ _FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN = (
     "Independente do **período da venda** e da **Plataforma**. "
     "Neste painel o calendário **não considera emissões anteriores a 01/01/2026**."
 )
+_FATURAMENTO_HELP_PERIODO_DATA_VENDA_RG_MIN = (
+    "Filtra pelo período da **data da venda** (coluna **Data** do pedido). "
+    "O **imposto** apresentado na DRE é calculado sobre a **base fiscal** (período das NFs correspondentes, "
+    "via ponte fiscal) — pode haver pequena **defasagem temporal** entre KPIs e linhas fiscais da DRE."
+)
 # Piso de emissão NF no painel mínimo Faturamento & DRE (produto / alinhamento fiscal 2026+).
 _FDL_FAT_DRE_MIN_PANEL_NF_EMISSAO_DESDE = date(2026, 1, 1)
 _FATURAMENTO_HELP_PERIODO_DATA = (
@@ -5303,7 +5308,9 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     nf_panel_ads: bool = True,
 ) -> None:
     """
-    Cards executivos NF-first (Faturamento & DRE): hierarquia em 3 níveis (resultado/margem, venda/pedidos/ticket, chips).
+    Cards executivos NF-first (legado NF / fallback): hierarquia em 3 níveis.
+
+    Preferir ``_render_resultado_gerencial_kpi_cards`` no Resultado Gerencial (âncora **Data** venda).
     """
     _ = valor_faturado_from_fiscal_parquet, fat_dre_faturado_mode, use_nf_materializado, nf_panel_ads
     if not _FAT_DRE_UI_V2 or build_kpi_nf_premium_shell_html is None:
@@ -5314,7 +5321,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
         with c1:
             st.metric("Valor da venda", _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00")
         with c2:
-            st.metric("Pedidos faturados", _fmt_int_ptbr(n_ped) if ok_nf_dates else "—")
+            st.metric("Pedidos", _fmt_int_ptbr(n_ped) if ok_nf_dates else "—")
         with c3:
             st.metric("Ticket médio", tm_s or "—")
         with c4:
@@ -5344,7 +5351,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     st.markdown(
         build_kpi_nf_premium_shell_html(
             valor_venda_fmt=venda_fmt,
-            pedidos_faturados_fmt=pedidos_fmt,
+            pedidos_fmt=pedidos_fmt,
             ticket_medio_fmt=ticket_fmt,
             resultado_fmt=res_fmt,
             margem_str=margem_str,
@@ -5352,6 +5359,83 @@ def _render_fdl_fat_dre_nf_kpi_cards(
             resultado=res,
             chips=[],
             mode_pill_html="",
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _render_resultado_gerencial_kpi_cards(
+    *,
+    kp_rg: dict[str, float | int],
+    ok_dates: bool,
+    use_nf_materializado: bool,
+    valor_faturado_from_fiscal_parquet: bool = False,
+    fat_dre_faturado_mode: str = "nf_first",
+    nf_panel_ads: bool = True,
+) -> None:
+    """
+    Cards superiores do Resultado Gerencial — totais por **data da venda** (grão linha) + imposto fiscal injetado.
+    """
+    _ = valor_faturado_from_fiscal_parquet, fat_dre_faturado_mode, use_nf_materializado, nf_panel_ads
+    vv = float(kp_rg["valor_venda_lista"])
+    res = float(kp_rg["resultado"])
+    n_ped = int(kp_rg["pedidos"])
+    _RG_KPI_RESULTADO_TITLE = (
+        "Resultado no período por data da venda (coluna Data), com deduções comerciais no grão linha "
+        "e imposto injetado pela ponte fiscal (base de emissão NF). Pode diferir da DRE abaixo até a migração "
+        "completa do bloco DRE."
+    )
+    if not _FAT_DRE_UI_V2 or build_kpi_nf_premium_shell_html is None:
+        tm_s = "—"
+        if ok_dates and n_ped > 0:
+            tr = kp_rg["ticket_medio"]
+            if isinstance(tr, float) and math.isnan(tr):
+                tm_s = _fmt_brl_ptbr_celula(vv / float(n_ped)) or "—"
+            else:
+                tm_s = _fmt_brl_ptbr_celula(float(tr)) or "—"
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1:
+            st.metric("Valor da venda", _fmt_brl_ptbr_celula(vv) or "R$ 0,00")
+        with c2:
+            st.metric("Pedidos", _fmt_int_ptbr(n_ped) if ok_dates else "—")
+        with c3:
+            st.metric("Ticket médio", tm_s or "—")
+        with c4:
+            st.metric(
+                "Resultado",
+                _fmt_brl_ptbr_celula(res) or "—",
+                help=(
+                    "Resultado no recorte por **data da venda**, com imposto da ponte fiscal. "
+                    "Pode diferir dos blocos que ainda usam grão NF ou linhas sem este recorte."
+                ),
+            )
+        with c5:
+            st.metric("Margem %", _margem_sobre_venda_str(res, vv))
+        return
+
+    pedidos_fmt = _fmt_int_ptbr(n_ped) if ok_dates else "—"
+    tm_raw = kp_rg["ticket_medio"]
+    if ok_dates and n_ped > 0:
+        tm_ok = float(tm_raw) if not (isinstance(tm_raw, float) and math.isnan(tm_raw)) else vv / float(n_ped)
+        ticket_fmt = _fmt_brl_ptbr_celula(tm_ok) or "—"
+    else:
+        ticket_fmt = "—"
+    margem_str = _margem_sobre_venda_str(res, vv)
+    venda_fmt = _fmt_brl_ptbr_celula(vv) or "R$ 0,00"
+    res_fmt = _fmt_brl_ptbr_celula(res) or "—"
+
+    st.markdown(
+        build_kpi_nf_premium_shell_html(
+            valor_venda_fmt=venda_fmt,
+            pedidos_fmt=pedidos_fmt,
+            ticket_medio_fmt=ticket_fmt,
+            resultado_fmt=res_fmt,
+            margem_str=margem_str,
+            valor_venda=vv,
+            resultado=res,
+            chips=[],
+            mode_pill_html="",
+            resultado_title=_RG_KPI_RESULTADO_TITLE,
         ),
         unsafe_allow_html=True,
     )
@@ -5499,6 +5583,132 @@ def _render_fdl_fat_dre_nf_gerencial(
         foot = "Margem = resultado ÷ receita de venda (lista). Sem custo de ADS neste cliente."
 
     per = (periodo_label or "").strip() or ("Emissão NF no filtro" if ok_nf_dates else "Período indisponível")
+
+    st.markdown(
+        build_dre_gerencial_premium_html(
+            period_caption=per,
+            valor_venda_fmt=rec_venda,
+            rec_frete_fmt=rec_frete_disp,
+            total_receita_fmt=total_rec_fmt,
+            enc_rows=enc_rows,
+            total_deducoes_fmt=total_ded_fmt,
+            resultado_fmt=res_disp,
+            resultado_value=res_nf,
+            margem_str=margem_s,
+            resultado_tooltip=tt_res,
+            margem_tooltip=tt_marg,
+            footnote_plain=foot,
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _render_fdl_fat_dre_gerencial_linha(
+    *,
+    stats: object,
+    kp_rg: dict[str, float | int],
+    imp_nf: float,
+    ok_nf_dates: bool,
+    valor_faturado_from_fiscal_parquet: bool,
+    periodo_label: str,
+    nf_panel_ads: bool,
+) -> None:
+    """DRE gerencial no **grão linha**, mesmo recorte dos KPIs (**Data** venda) + imposto da ponte fiscal."""
+    vv = float(kp_rg["valor_venda_lista"])
+    res_nf = float(kp_rg["resultado"])
+    rec_frete_num = float(stats.frete_transportadora_propria_total)
+    rec_venda = _fmt_brl_ptbr_celula(vv) or "R$ 0,00"
+    margem_s = _margem_sobre_venda_str(res_nf, vv)
+    res_disp = _fmt_brl_ptbr_celula(res_nf) or "—"
+    enc_com = _fmt_brl_ptbr_encargo_dre(stats.comissao_total)
+    enc_custo = _fmt_brl_ptbr_encargo_dre(stats.cmv_total)
+    rec_frete_disp = _fmt_brl_ptbr_celula(rec_frete_num) or "R$ 0,00"
+    enc_frete_plat = _fmt_brl_ptbr_encargo_dre(stats.frete_plataforma_total)
+    enc_repasse_tp = _fmt_brl_ptbr_encargo_dre(stats.frete_transportadora_propria_total)
+    enc_imp = _fmt_brl_ptbr_encargo_dre(imp_nf)
+    enc_df = _fmt_brl_ptbr_encargo_dre(stats.despesa_fixa_total)
+    ads_sum = float(stats.ads_total)
+    enc_ads = _fmt_brl_ptbr_encargo_dre(ads_sum)
+
+    enc_rows = [
+        ("Comissão", enc_com),
+        ("Custo produto", enc_custo),
+        ("Frete plataforma", enc_frete_plat),
+        ("Frete transp. própria", enc_repasse_tp),
+        ("Imposto", enc_imp),
+        ("Despesa fixa", enc_df),
+    ]
+    if nf_panel_ads:
+        enc_rows.append(("ADS (3,5% + fixo)", enc_ads))
+
+    total_rec_num = vv + rec_frete_num
+    total_rec_fmt = _fmt_brl_ptbr_celula(total_rec_num) or "R$ 0,00"
+    _ded_sum_num = float(kp_rg["total_deducoes"])
+    total_ded_fmt = _fmt_brl_ptbr_encargo_dre(_ded_sum_num)
+
+    _marg_base = (
+        "Margem = soma do resultado ÷ soma da receita de venda (lista). "
+        "O valor faturado fiscal não entra neste cálculo."
+    )
+    _marg_simple = "Margem = resultado ÷ receita de venda (lista)."
+    if valor_faturado_from_fiscal_parquet:
+        if nf_panel_ads:
+            tt_res = (
+                "Totais consolidados no **grão linha** por **data da venda** (mesmo filtro dos KPIs). "
+                "Imposto na linha «Imposto» vem da **ponte fiscal** (base de emissão). "
+                "Inclui ADS quando aplicável ao materializado."
+            )
+            tt_marg = _marg_base
+        else:
+            tt_res = (
+                "Totais consolidados no **grão linha** por **data da venda**. "
+                "Imposto via ponte fiscal. Sem linha de ADS neste quadro."
+            )
+            tt_marg = _marg_base
+    elif nf_panel_ads:
+        tt_res = (
+            "Totais consolidados no **grão linha** por **data da venda** (coluna Data). "
+            "Inclui ADS quando presente nas linhas."
+        )
+        tt_marg = _marg_simple
+    else:
+        tt_res = (
+            "Totais consolidados no **grão linha** por **data da venda**. Sem custo de ADS neste quadro."
+        )
+        tt_marg = _marg_simple
+
+    if valor_faturado_from_fiscal_parquet:
+        if nf_panel_ads:
+            foot = (
+                "Receita e deduções no recorte por **data da venda**; imposto exibido segue a **ponte fiscal**. "
+                "Margem = resultado ÷ receita de venda (lista)."
+            )
+        else:
+            foot = (
+                "Recorte por **data da venda**; imposto via ponte fiscal. Sem linha de ADS neste quadro. "
+                "Margem = resultado ÷ receita de venda (lista)."
+            )
+    elif nf_panel_ads:
+        foot = (
+            "Totais no grão linha por **data da venda**, alinhados aos KPIs superiores. "
+            "Margem = resultado ÷ receita de venda (lista)."
+        )
+    else:
+        foot = "Recorte por **data da venda**. Margem = resultado ÷ receita de venda (lista). Sem ADS neste quadro."
+
+    per = (periodo_label or "").strip() or ("Data da venda no filtro" if ok_nf_dates else "Período indisponível")
+
+    if not _FAT_DRE_UI_V2 or build_dre_gerencial_premium_html is None:
+        st.subheader("DRE gerencial")
+        st.write(
+            {
+                "Venda (lista)": vv,
+                "Resultado": res_nf,
+                "Margem %": margem_s,
+                "Total deduções": _ded_sum_num,
+            }
+        )
+        return
 
     st.markdown(
         build_dre_gerencial_premium_html(
@@ -8723,7 +8933,7 @@ def _render_faturamento_dre_minimal(
                 key="fdl_fat_min_reset",
                 type="secondary",
                 use_container_width=True,
-                help="Repor empresa, plataforma, situação NF e datas de emissão NF ao padrão (inclui preferências antigas da tabela NF no estado).",
+                help="Repor empresa, plataforma, situação NF e período (data da venda) ao padrão (inclui preferências antigas da tabela NF no estado).",
             ):
                 for _k in (
                     "fdl_fat_min_emp",
@@ -8784,7 +8994,7 @@ def _render_faturamento_dre_minimal(
                 st.caption("Plataforma: sem opções no recorte.")
         if ok_nf_dates:
             st.markdown(
-                '<p class="fdl-fat-filtros-periodo-tit">Período de emissão</p>',
+                '<p class="fdl-fat-filtros-periodo-tit">Período da venda</p>',
                 unsafe_allow_html=True,
             )
             r_nf = st.columns((1, 1))
@@ -8795,7 +9005,7 @@ def _render_faturamento_dre_minimal(
                     max_value=nf_cal_max,
                     format="DD/MM/YYYY",
                     key="fdl_fat_min_nf_d_ini",
-                    help=_FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN,
+                    help=_FATURAMENTO_HELP_PERIODO_DATA_VENDA_RG_MIN,
                 )
             with r_nf[1]:
                 st.date_input(
@@ -8804,12 +9014,14 @@ def _render_faturamento_dre_minimal(
                     max_value=nf_cal_max,
                     format="DD/MM/YYYY",
                     key="fdl_fat_min_nf_d_fim",
-                    help=_FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN,
+                    help=_FATURAMENTO_HELP_PERIODO_DATA_VENDA_RG_MIN,
                 )
         elif "Nota_Data_Emissao" in _df_bounds.columns:
-            st.caption("Período de emissão indisponível (datas não utilizáveis em Nota_Data_Emissao).")
+            st.caption(
+                "Período da venda indisponível (limites de calendário não derivados corretamente das datas do carregamento)."
+            )
         else:
-            st.caption("Período de emissão indisponível (sem coluna Nota_Data_Emissao).")
+            st.caption("Período da venda indisponível (referência temporal ausente neste carregamento).")
 
     _fdl_ui_gap_section()
     _fdl_fat_min_vsp(size="md")
@@ -8855,16 +9067,29 @@ def _render_faturamento_dre_minimal(
         )
     _commercial_coverage = compute_commercial_coverage_stats(df_nf_commercial_kpi)
     _kp_cards = compute_nf_panel_kpis(df_nf_commercial_kpi)
+    _imp_rg_kpis = dre_imposto_para_linha_dre_gerencial(
+        _kp_cards,
+        fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
+        aplicar_ponte_base_liquida=(
+            (_fiscal_base_stats if use_fiscal_parquet else None) is not None and use_fiscal_kpi
+        ),
+    )
 
     with st.expander("ℹ️ Sobre este módulo", expanded=False):
         st.caption(
             "Este módulo apresenta a Demonstração de Resultado Gerencial (**DRE**), com KPIs de desempenho, margem e "
-            "diagnóstico automático de **saúde financeira**. O **imposto** exibido na DRE vem da **Apuração Fiscal** "
-            "(base fiscal líquida × alíquota efetiva derivada do materializado)."
+            "diagnóstico automático de **saúde financeira**. Os **KPIs** e a **DRE gerencial** (quando a base linha "
+            "está completa) filtram pela **data da venda** (coluna Data). O **imposto** na DRE segue a **ponte fiscal** "
+            "(emissão NF); na Apuração Fiscal o mesmo valor aparece quando os filtros coincidem."
+        )
+        st.caption(
+            "Este módulo filtra por data da venda (data em que o pedido foi realizado). O imposto apresentado na DRE "
+            "vem da Apuração Fiscal e pode ter pequena defasagem temporal, pois vendas e emissões fiscais nem sempre "
+            "ocorrem no mesmo dia."
         )
         st.caption(
             "Notas **canceladas**, **denegadas** ou **inutilizadas** já ficam de fora da base materializada — não é "
-            "necessário filtrar por situação neste painel."
+            "necessário filtrar por situação neste painel para esse efeito."
         )
         _render_faturamento_dre_commercial_complement_banner(
             coverage=_commercial_coverage,
@@ -8878,27 +9103,88 @@ def _render_faturamento_dre_minimal(
 
     _fdl_fat_min_vsp(size="md")
     _fdl_fat_divider_simple()
-    _render_fdl_fat_dre_nf_kpi_cards(
-        kp=_kp_cards,
-        ok_nf_dates=ok_nf_dates,
-        use_nf_materializado=use_nf_materializado,
-        valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
-        fat_dre_faturado_mode=("fiscal" if use_fiscal_kpi else "nf_first"),
-        nf_panel_ads=_nf_panel_ads_ui,
-    )
+    try:
+        from processing.faturamento.resultado_gerencial_slice import (
+            REQUIRED_LINE_COLUMNS,
+            build_resultado_gerencial_slice,
+            compute_resultado_gerencial_kpis,
+        )
+
+        _rg_kpi_cols_ok = REQUIRED_LINE_COLUMNS.issubset(df.columns)
+    except ImportError:
+        _rg_kpi_cols_ok = False
+
+    _slice_rg = None
+    _kp_rg = None
+    _rg_kpis_rendered = False
+    if _rg_kpi_cols_ok:
+        try:
+            _slice_rg = build_resultado_gerencial_slice(
+                df,
+                empresas_sel=tuple(_min_state.empresas),
+                plataformas_sel=tuple(_min_state.plataformas),
+                data_venda_ini=_nf_kpi_ini,
+                data_venda_fim=_nf_kpi_fim,
+            )
+            _kp_rg = compute_resultado_gerencial_kpis(_slice_rg, fiscal_imposto_valor=_imp_rg_kpis)
+            _render_resultado_gerencial_kpi_cards(
+                kp_rg=_kp_rg,
+                ok_dates=ok_nf_dates,
+                use_nf_materializado=use_nf_materializado,
+                valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
+                fat_dre_faturado_mode=("fiscal" if use_fiscal_kpi else "nf_first"),
+                nf_panel_ads=_nf_panel_ads_ui,
+            )
+            _rg_kpis_rendered = True
+        except (ValueError, KeyError, TypeError) as _exc_rg_kpi:
+            if _is_admin_mode():
+                st.warning(f"KPIs por data da venda indisponíveis ({_exc_rg_kpi!s}); usando visão NF.")
+            _render_fdl_fat_dre_nf_kpi_cards(
+                kp=_kp_cards,
+                ok_nf_dates=ok_nf_dates,
+                use_nf_materializado=use_nf_materializado,
+                valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
+                fat_dre_faturado_mode=("fiscal" if use_fiscal_kpi else "nf_first"),
+                nf_panel_ads=_nf_panel_ads_ui,
+            )
+    else:
+        if _is_admin_mode():
+            st.caption(
+                "Colunas insuficientes no grão linha para KPIs por **data da venda** — exibindo KPIs na visão NF."
+            )
+        _render_fdl_fat_dre_nf_kpi_cards(
+            kp=_kp_cards,
+            ok_nf_dates=ok_nf_dates,
+            use_nf_materializado=use_nf_materializado,
+            valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
+            fat_dre_faturado_mode=("fiscal" if use_fiscal_kpi else "nf_first"),
+            nf_panel_ads=_nf_panel_ads_ui,
+        )
 
     _fdl_fat_min_vsp(size="md")
     _periodo_dre_lbl = ""
     if ok_nf_dates:
         _periodo_dre_lbl = f"{_nf_kpi_ini.strftime('%d/%m/%Y')} — {_nf_kpi_fim.strftime('%d/%m/%Y')}"
-    _render_fdl_fat_dre_nf_gerencial(
-        kp=_kp_cards,
-        ok_nf_dates=ok_nf_dates,
-        valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
-        periodo_label=_periodo_dre_lbl,
-        nf_panel_ads=_nf_panel_ads_ui,
-        fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
-    )
+
+    if _rg_kpis_rendered and _slice_rg is not None and _kp_rg is not None:
+        _render_fdl_fat_dre_gerencial_linha(
+            stats=_slice_rg.stats,
+            kp_rg=_kp_rg,
+            imp_nf=float(_imp_rg_kpis),
+            ok_nf_dates=ok_nf_dates,
+            valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
+            periodo_label=_periodo_dre_lbl,
+            nf_panel_ads=_nf_panel_ads_ui,
+        )
+    else:
+        _render_fdl_fat_dre_nf_gerencial(
+            kp=_kp_cards,
+            ok_nf_dates=ok_nf_dates,
+            valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
+            periodo_label=_periodo_dre_lbl,
+            nf_panel_ads=_nf_panel_ads_ui,
+            fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
+        )
 
     _fdl_fat_min_vsp(size="md")
     try:

@@ -510,7 +510,7 @@ def kpi_perf_resultado(resultado: float) -> KpiPerfTone:
 def build_kpi_nf_premium_shell_html(
     *,
     valor_venda_fmt: str,
-    pedidos_faturados_fmt: str,
+    pedidos_fmt: str,
     ticket_medio_fmt: str,
     resultado_fmt: str,
     margem_str: str,
@@ -518,6 +518,7 @@ def build_kpi_nf_premium_shell_html(
     resultado: float,
     chips: list[tuple[str, str]],
     mode_pill_html: str,
+    resultado_title: str | None = None,
 ) -> str:
     mr = _margin_ratio_from_pct_str(margem_str)
     t_res = kpi_perf_resultado(resultado)
@@ -531,13 +532,17 @@ def build_kpi_nf_premium_shell_html(
 
     _chip_row = f'<div class="fdl-fat-kpi-chip-row">{chips_html}</div>' if chips else ""
 
+    _res_title = resultado_title or (
+        "Soma do resultado por nota fiscal no recorte selecionado (empresa, período, situação, plataforma). "
+        "Base consolidada por NF — pode diferir do Painel de Saúde que usa grão de linha de pedido."
+    )
+
     return (
         '<div class="fdl-fat-premium fdl-fat-kpi-shell">'
         f"{mode_pill_html}"
         '<div class="fdl-fat-kpi-hero-row">'
         f'<div class="fdl-fat-kpi-hero-card fdl-fat-kpi-hero-card--result {html.escape(t_res.css_modifier)}" '
-        'title="Soma do resultado por nota fiscal no recorte selecionado (empresa, período, situação, plataforma). '
-        'Base consolidada por NF — pode diferir do Painel de Saúde que usa grão de linha de pedido.">'
+        f'title="{html.escape(_res_title)}">'
         '<div class="fdl-fat-kpi-hero-label">Resultado</div>'
         f'<div class="fdl-fat-kpi-hero-value">{html.escape(resultado_fmt)}</div>'
         f'<div class="fdl-fat-kpi-hero-meta {html.escape(_meta_class(t_res.css_modifier))}">'
@@ -553,8 +558,8 @@ def build_kpi_nf_premium_shell_html(
         '<div class="fdl-fat-kpi-mid-label">Valor da venda (lista)</div>'
         f'<div class="fdl-fat-kpi-mid-value">{html.escape(valor_venda_fmt)}</div></div>'
         '<div class="fdl-fat-kpi-mid-card">'
-        '<div class="fdl-fat-kpi-mid-label">Pedidos faturados</div>'
-        f'<div class="fdl-fat-kpi-mid-value">{html.escape(pedidos_faturados_fmt)}</div></div>'
+        '<div class="fdl-fat-kpi-mid-label">Pedidos</div>'
+        f'<div class="fdl-fat-kpi-mid-value">{html.escape(pedidos_fmt)}</div></div>'
         '<div class="fdl-fat-kpi-mid-card">'
         '<div class="fdl-fat-kpi-mid-label">Ticket médio</div>'
         f'<div class="fdl-fat-kpi-mid-value">{html.escape(ticket_medio_fmt)}</div></div>'

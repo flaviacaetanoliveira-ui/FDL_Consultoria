@@ -124,6 +124,39 @@ class TestBuildFaturamentoFiscalBaseSlice(unittest.TestCase):
         )
         self.assertEqual(a, b)
 
+    def test_abatimento_devolucoes_base_liquida(self) -> None:
+        df_f = pd.DataFrame(
+            {
+                "org_id": ["o1"],
+                "empresa": ["Acme"],
+                "Nota_Numero_Normalizado": ["N1"],
+                "Nota_Data_Emissao": [pd.Timestamp("2026-03-15")],
+                "Nota_Situacao": ["Autorizada"],
+                "Valor_Liquido_NF": [1000.0],
+            }
+        )
+        df_d = pd.DataFrame(
+            {
+                "org_id": ["o1"],
+                "empresa": ["Acme"],
+                "Nota_Numero_Normalizado": ["D1"],
+                "Nota_Data_Emissao": [pd.Timestamp("2026-03-20")],
+                "Valor_Liquido_Devolucao": [23.0],
+            }
+        )
+        _, st = build_faturamento_fiscal_base_slice(
+            df_f,
+            empresas_sel=("Acme",),
+            nf_d_ini=date(2026, 3, 1),
+            nf_d_fim=date(2026, 3, 31),
+            ok_nf_dates=True,
+            df_devolucoes=df_d,
+        )
+        self.assertAlmostEqual(st.valor_liquido_fiscal_sum, 1000.0)
+        self.assertAlmostEqual(st.total_devolvido, 23.0)
+        self.assertEqual(st.nfs_devolucao, 1)
+        self.assertAlmostEqual(st.base_fiscal_liquida, 977.0)
+
     @unittest.skipUnless(_PARQUET_FISCAL.is_file(), f"sem {_PARQUET_FISCAL.name}")
     def test_gama_home_marco_2026_conferencia_bling(self) -> None:
         df = pd.read_parquet(_PARQUET_FISCAL, engine="pyarrow")

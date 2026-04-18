@@ -611,6 +611,11 @@ def _materialize_faturamento(
         build_fiscal_materializado_dataframe,
         fiscal_materializado_meta_snapshot,
     )
+    from processing.faturamento.fiscal_devolucoes_materializado import (
+        SCHEMA_VERSION_DEVOLUCOES,
+        build_devolucoes_fiscal_dataframe,
+        devolucoes_materializado_meta_snapshot,
+    )
 
     df_nf = build_nf_materializado_dataframe(df)
     _write_parquet(_dataframe_safe_for_parquet(df_nf), out_dir / "dataset_faturamento_nf.parquet")
@@ -635,6 +640,12 @@ def _materialize_faturamento(
     meta["dataset_faturamento_fiscal_parquet"] = "dataset_faturamento_fiscal.parquet"
     meta["schema_version_fiscal"] = SCHEMA_VERSION_FISCAL
     meta.update(fiscal_materializado_meta_snapshot(df_fiscal))
+
+    df_devolucoes = build_devolucoes_fiscal_dataframe(params_path)
+    _write_parquet(_dataframe_safe_for_parquet(df_devolucoes), out_dir / "dataset_faturamento_devolucoes.parquet")
+    meta["dataset_faturamento_devolucoes_parquet"] = "dataset_faturamento_devolucoes.parquet"
+    meta["schema_version_devolucoes"] = SCHEMA_VERSION_DEVOLUCOES
+    meta.update(devolucoes_materializado_meta_snapshot(df_devolucoes))
 
     _write_metadata(out_dir / "metadata.json", meta)
 

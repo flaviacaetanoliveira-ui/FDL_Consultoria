@@ -2007,6 +2007,15 @@ def _faturamento_fiscal_parquet_resolve(path_s: str) -> tuple[Path | None, str]:
     return None, ""
 
 
+def _faturamento_devolucoes_parquet_resolve(path_s: str) -> tuple[Path | None, str]:
+    """Resolve ``dataset_faturamento_devolucoes.parquet`` junto ao fiscal materializado."""
+    fp_f, how = _faturamento_fiscal_parquet_resolve(path_s)
+    if fp_f is None:
+        return None, ""
+    cand = fp_f.parent / "dataset_faturamento_devolucoes.parquet"
+    return (cand if cand.is_file() else None), how
+
+
 def _faturamento_nf_parquet_stat_token(path_s: str) -> str:
     nf = _faturamento_nf_parquet_path_from_materialized_path(path_s)
     if nf is None:
@@ -2129,6 +2138,7 @@ def _load_faturamento_data(
             "faturamento_nf_panel_df": None,
             "faturamento_fiscal_first": False,
             "faturamento_fiscal_df": None,
+            "faturamento_devolucoes_df": None,
         }
         if path_s:
             nf_p = _faturamento_nf_parquet_path_from_materialized_path(path_s)
@@ -2226,6 +2236,35 @@ def _load_faturamento_data(
                 info["faturamento_fiscal_first_skip"] = "ficheiro_ausente"
         else:
             info["faturamento_fiscal_first_skip"] = "sem_path_local"
+        if path_s:
+            dv_p, dv_how = _faturamento_devolucoes_parquet_resolve(path_s)
+            if dv_p is not None:
+                info["faturamento_devolucoes_path_resolution"] = dv_how
+                try:
+                    from processing.faturamento.fiscal_devolucoes_materializado import (
+                        devolucoes_contract_dataframe_valid,
+                    )
+
+                    df_dv0 = pd.read_parquet(dv_p, engine="pyarrow")
+                    if devolucoes_contract_dataframe_valid(df_dv0):
+                        if scope_consolidado and layout_effective == "v2":
+                            df_dv_scoped, _dw = _faturamento_apply_layout_scope_consolidado_v2(
+                                df_dv0, allowed_org_ids=aids
+                            )
+                        else:
+                            df_dv_scoped, _dw = _faturamento_apply_layout_scope(
+                                df_dv0, layout_effective=layout_effective, org_id=active_org_id
+                            )
+                        info["faturamento_devolucoes_df"] = df_dv_scoped
+                        info["faturamento_devolucoes_first"] = True
+                        info["faturamento_devolucoes_first_path"] = str(dv_p.resolve())
+                        info["faturamento_devolucoes_first_row_count_loaded"] = int(len(df_dv0))
+                    else:
+                        info["faturamento_devolucoes_first_skip"] = "contract_columns_incompletos_ou_vazio"
+                except Exception as ex_dv:  # noqa: BLE001
+                    info["faturamento_devolucoes_first_error"] = (
+                        str(ex_dv).strip() or ex_dv.__class__.__name__
+                    )
         info.update(_faturamento_materialized_fiscal_audit(df_scoped))
         if resolution_source == "explicit" and not bool(info.get("faturamento_fiscal_join_complete")):
             v2_alt = _faturamento_v2_canonical_dataset_path_str()
@@ -5331,6 +5370,7 @@ def _render_fdl_fat_dre_nf_gerencial(
     valor_faturado_from_fiscal_parquet: bool = False,
     periodo_label: str = "",
     nf_panel_ads: bool = True,
+    fiscal_base_stats: FaturamentoFiscalBaseStats | None = None,
 ) -> None:
     """DRE gerencial (totais de ``compute_nf_panel_kpis``), layout demonstração financeira."""
     if not _FAT_DRE_UI_V2 or build_dre_gerencial_premium_html is None:
@@ -5346,19 +5386,29 @@ def _render_fdl_fat_dre_nf_gerencial(
 
     vv = float(kp["valor_venda"])
     res = float(kp["resultado"])
+    imp_raw = float(kp["imposto"])
+    imp_nf = imp_raw
+    res_nf = res
+    if fiscal_base_stats is not None and valor_faturado_from_fiscal_parquet:
+        vfscal = float(fiscal_base_stats.valor_liquido_fiscal_sum)
+        bliq = float(fiscal_base_stats.base_fiscal_liquida)
+        if vfscal > 1e-12:
+            rate = imp_raw / vfscal
+            imp_nf = max(0.0, bliq * rate)
+            res_nf = res_nf + (imp_raw - imp_nf)
     dif = float(kp.get("diferenca", 0.0))
     rec_frete_num = float(kp.get("receita_frete_tp", 0.0))
     rec_venda = _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00"
     vf_disp = (_fmt_brl_ptbr_celula(kp["valor_faturado_nf"]) or "—") if ok_nf_dates else "—"
     dif_disp = (_fmt_brl_ptbr_celula(kp["diferenca"]) or "—") if ok_nf_dates else "—"
-    margem_s = _margem_sobre_venda_str(res, vv)
-    res_disp = _fmt_brl_ptbr_celula(kp["resultado"]) or "—"
+    margem_s = _margem_sobre_venda_str(res_nf, vv)
+    res_disp = _fmt_brl_ptbr_celula(res_nf) or "—"
     enc_com = _fmt_brl_ptbr_encargo_dre(kp["comissao"])
     enc_custo = _fmt_brl_ptbr_encargo_dre(kp.get("custo_produto", 0.0))
     rec_frete_disp = _fmt_brl_ptbr_celula(float(kp.get("receita_frete_tp", 0.0))) or "R$ 0,00"
     enc_frete_plat = _fmt_brl_ptbr_encargo_dre(float(kp.get("custo_frete_plataforma", 0.0)))
     enc_repasse_tp = _fmt_brl_ptbr_encargo_dre(float(kp.get("repasse_frete_transportadora_propria", 0.0)))
-    enc_imp = _fmt_brl_ptbr_encargo_dre(kp["imposto"])
+    enc_imp = _fmt_brl_ptbr_encargo_dre(imp_nf)
     enc_df = _fmt_brl_ptbr_encargo_dre(kp["despesa_fixa"])
     ads_sum = float(kp.get("custo_ads_variavel", 0.0)) + float(kp.get("custo_ads_fixo", 0.0))
     enc_ads = _fmt_brl_ptbr_encargo_dre(ads_sum)
@@ -5381,7 +5431,7 @@ def _render_fdl_fat_dre_nf_gerencial(
         + float(kp.get("custo_produto", 0.0))
         + float(kp.get("custo_frete_plataforma", 0.0))
         + float(kp.get("repasse_frete_transportadora_propria", 0.0))
-        + float(kp["imposto"])
+        + float(imp_nf)
         + float(kp["despesa_fixa"])
     )
     if nf_panel_ads:
@@ -5450,7 +5500,7 @@ def _render_fdl_fat_dre_nf_gerencial(
             enc_rows=enc_rows,
             total_deducoes_fmt=total_ded_fmt,
             resultado_fmt=res_disp,
-            resultado_value=res,
+            resultado_value=res_nf,
             margem_str=margem_s,
             resultado_tooltip=tt_res,
             margem_tooltip=tt_marg,
@@ -7451,6 +7501,8 @@ def _render_faturamento_dre_minimal(
     _nf_panel_ads_ui = bool(load_info.get("faturamento_nf_panel_ads", True))
 
     df_fiscal_pre = load_info.get("faturamento_fiscal_df")
+    df_devolucoes_pre = load_info.get("faturamento_devolucoes_df")
+    _df_dev_ok = isinstance(df_devolucoes_pre, pd.DataFrame)
     use_fiscal_parquet = (
         bool(load_info.get("faturamento_fiscal_first"))
         and isinstance(df_fiscal_pre, pd.DataFrame)
@@ -7730,6 +7782,7 @@ def _render_faturamento_dre_minimal(
         nf_d_fim=_nf_kpi_fim,
         ok_nf_dates=ok_nf_dates,
         situacoes_sel=_min_state.situacoes_nf,
+        df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
     )
     _render_faturamento_dre_fiscal_base_top(
         stats=_fiscal_base_stats,
@@ -7794,6 +7847,7 @@ def _render_faturamento_dre_minimal(
         valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
         periodo_label=_periodo_dre_lbl,
         nf_panel_ads=_nf_panel_ads_ui,
+        fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
     )
 
     _fdl_fat_min_vsp(size="md")

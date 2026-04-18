@@ -44,6 +44,7 @@ class EmpresaFaturamentoEntry:
     pedidos_dir: str
     permite_faturamento_sem_nf: bool | None
     notas_saida_dir: str | None = None
+    notas_entrada_dir: str | None = None
     aliquota_imposto: float | None = None
     aliquota_despesas_fixas: float | None = None
     excluir_notas_fiscal: tuple[str, ...] = ()
@@ -61,6 +62,7 @@ class FaturamentoParamsV2:
     coluna_base_imposto: tuple[str, ...]
     params_mensais_resolved: Path | None
     notas_saida_dir: str
+    notas_entrada_dir: str | None = None
     # Quando True (padrão), o painel NF materializado aplica custo ADS (3,5% + fixo) e desconta do resultado.
     nf_panel_ads: bool = True
 
@@ -194,6 +196,8 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
             raise FaturamentoParamsError(f"Pasta de pedidos não existe: {ped_path}")
         ns_emp = e.get("notas_saida_dir")
         ns_emp_s = str(ns_emp).strip() if ns_emp is not None and str(ns_emp).strip() else None
+        ne_emp = e.get("notas_entrada_dir")
+        ne_emp_s = str(ne_emp).strip() if ne_emp is not None and str(ne_emp).strip() else None
         ai_e = _optional_float(f"empresas[{i}].aliquota_imposto", e.get("aliquota_imposto"))
         ad_e = _optional_float(f"empresas[{i}].aliquota_despesas_fixas", e.get("aliquota_despesas_fixas"))
         excl_raw = e.get("excluir_notas_fiscal")
@@ -213,6 +217,7 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
                 pedidos_dir=pdir,
                 permite_faturamento_sem_nf=_optional_bool(e.get("permite_faturamento_sem_nf")),
                 notas_saida_dir=ns_emp_s,
+                notas_entrada_dir=ne_emp_s,
                 aliquota_imposto=ai_e,
                 aliquota_despesas_fixas=ad_e,
                 excluir_notas_fiscal=excl_tuple,
@@ -230,6 +235,9 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
         params_mensais_resolved = p_pm.resolve() if p_pm.is_absolute() else (cliente_root / p_pm).resolve()
 
     notas_saida_dir = str(raw.get("notas_saida_dir", "notas_saida") or "notas_saida").strip() or "notas_saida"
+
+    ne_root = raw.get("notas_entrada_dir")
+    notas_entrada_dir_default = str(ne_root).strip() if ne_root is not None and str(ne_root).strip() else None
 
     nf_panel_ads = _as_bool(raw.get("nf_panel_ads", True))
 
@@ -254,6 +262,7 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
         coluna_base_imposto=cands,
         params_mensais_resolved=params_mensais_resolved,
         notas_saida_dir=notas_saida_dir,
+        notas_entrada_dir=notas_entrada_dir_default,
         nf_panel_ads=nf_panel_ads,
     )
 

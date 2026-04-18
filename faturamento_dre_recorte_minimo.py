@@ -268,6 +268,37 @@ class FaturamentoFiscalBaseStats:
 
     n_nf: int
     valor_liquido_fiscal_sum: float
+    total_devolvido: float = 0.0
+    nfs_devolucao: int = 0
+    base_fiscal_liquida: float = 0.0
+
+
+def _slice_devolucoes_fiscal_recorte(
+    df_devolucoes: pd.DataFrame | None,
+    *,
+    empresas_sel: tuple[str, ...],
+    nf_d_ini: date,
+    nf_d_fim: date,
+    ok_nf_dates: bool,
+) -> tuple[float, int]:
+    """Soma devoluções (NF entrada) no mesmo recorte de empresa + emissão que a base fiscal."""
+    if df_devolucoes is None or df_devolucoes.empty or not ok_nf_dates or nf_d_fim < nf_d_ini:
+        return 0.0, 0
+    need = {"empresa", "Nota_Data_Emissao", "Valor_Liquido_Devolucao"}
+    if not need.issubset(df_devolucoes.columns):
+        return 0.0, 0
+    d = df_devolucoes.copy()
+    emp_opts = _fdl_fr_etiquetas_empresa_recorte(d)
+    if emp_opts and empresas_sel:
+        d = _fdl_fr_filtrar_por_etiquetas_empresa(d, list(empresas_sel))
+    if d.empty:
+        return 0.0, 0
+    m_period = _fdl_fr_mask_nf_emissao_no_periodo(d["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
+    d = d.loc[m_period].copy()
+    if d.empty:
+        return 0.0, 0
+    vl = pd.to_numeric(d["Valor_Liquido_Devolucao"], errors="coerce").fillna(0.0)
+    return float(vl.sum()), int(len(d))
 
 
 def build_faturamento_fiscal_base_slice(
@@ -278,6 +309,7 @@ def build_faturamento_fiscal_base_slice(
     nf_d_fim: date,
     ok_nf_dates: bool,
     situacoes_sel: tuple[str, ...] | None = None,
+    df_devolucoes: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, FaturamentoFiscalBaseStats]:
     """
     Recorte **base fiscal** alinhado ao Bling: **empresa** + **emissão** no intervalo + NF com situação válida
@@ -340,7 +372,21 @@ def build_faturamento_fiscal_base_slice(
     vl = pd.to_numeric(grouped["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
     n_nf = int(len(grouped))
     total = float(vl.sum())
-    return grouped, FaturamentoFiscalBaseStats(n_nf=n_nf, valor_liquido_fiscal_sum=total)
+    td, ndev = _slice_devolucoes_fiscal_recorte(
+        df_devolucoes,
+        empresas_sel=empresas_sel,
+        nf_d_ini=nf_d_ini,
+        nf_d_fim=nf_d_fim,
+        ok_nf_dates=ok_nf_dates,
+    )
+    base_liq = max(0.0, total - td)
+    return grouped, FaturamentoFiscalBaseStats(
+        n_nf=n_nf,
+        valor_liquido_fiscal_sum=total,
+        total_devolvido=td,
+        nfs_devolucao=ndev,
+        base_fiscal_liquida=base_liq,
+    )
 
 
 def _fiscal_base_merge_keys(df: pd.DataFrame) -> list[str]:

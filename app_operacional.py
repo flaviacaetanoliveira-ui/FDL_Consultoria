@@ -7303,19 +7303,38 @@ def _render_faturamento_dre_commercial_complement_banner(
     st.divider()
 
 
+def _fdl_parse_ts_proc(ts_raw: str) -> datetime | None:
+    """Interpreta carimbos típicos de ``ts_proc`` (ISO, ``YYYY-mm-dd HH:MM[:SS][.µs]``, ``T``)."""
+    s = (ts_raw or "").strip()
+    if not s:
+        return None
+    candidates = [s]
+    if " " in s and "T" not in s[:12]:
+        candidates.append(s.replace(" ", "T", 1))
+    for c in candidates:
+        try:
+            d = datetime.fromisoformat(c.replace("Z", "+00:00"))
+            if d.tzinfo is not None:
+                d = d.astimezone(_BR_TZ).replace(tzinfo=None)
+            return d
+        except ValueError:
+            continue
+    ts = pd.to_datetime(s, errors="coerce")
+    if isinstance(ts, pd.Timestamp) and not pd.isna(ts):
+        if ts.tz is not None:
+            ts = ts.tz_convert(_BR_TZ)
+        return ts.to_pydatetime().replace(tzinfo=None)
+    return None
+
+
 def _fdl_fat_min_format_updated_at(ts_raw: str) -> str:
     """Formata ``ts_proc`` para «Última atualização: DD/mmm às HH:MM»."""
     s = (ts_raw or "").strip()
-    if not s:
-        return "—"
+    dt = _fdl_parse_ts_proc(s)
+    if dt is None:
+        return s if s else "—"
     _meses = ("jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez")
-    for _fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
-        try:
-            dt = datetime.strptime(s[: len(_fmt)], _fmt)
-            return f"Última atualização: {dt.day}/{_meses[dt.month - 1]} às {dt.strftime('%H:%M')}"
-        except ValueError:
-            continue
-    return s
+    return f"Última atualização: {dt.day}/{_meses[dt.month - 1]} às {dt.strftime('%H:%M')}"
 
 
 def _build_faturamento_dre_page_header_html(*, updated_at: str) -> str:
@@ -11536,11 +11555,11 @@ else:
     info = {**info, "linhas": int(len(tabela_geral))}
     _fdl_global_trace(f"repasse: após filtro empresa ({len(tabela_geral)} linhas)")
 
-try:
-    _ts_raw = str(ts_proc).strip() if ts_proc is not None else ""
-    _sb_ts_display = datetime.strptime(_ts_raw, "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M")
-except (ValueError, TypeError, OSError):
-    _sb_ts_display = str(ts_proc) if ts_proc is not None else "—"
+_ts_raw = str(ts_proc).strip() if ts_proc is not None else ""
+_dt_sb = _fdl_parse_ts_proc(_ts_raw)
+_sb_ts_display = (
+    _dt_sb.strftime("%d/%m/%Y %H:%M") if _dt_sb is not None else (_ts_raw if _ts_raw else "—")
+)
 
 _fdl_global_trace("04: antes da sidebar (dados carregados)")
 _inject_fdl_professional_theme()

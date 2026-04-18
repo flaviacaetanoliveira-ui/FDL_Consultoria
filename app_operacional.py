@@ -7540,7 +7540,7 @@ def _render_faturamento_dre_nf_table_section(
     csv_file_name: str = "faturamento_recorte_minimo_nf.csv",
     table_heading: str = "### Tabela por NF",
 ) -> None:
-    """Tabela por NF (filtros inline, CSV, paginação) — usada em Faturamento & DRE e Apuração Fiscal."""
+    """Tabela por NF (filtros inline, CSV, paginação) — UI consumida pela Apuração Fiscal (prefixos ``prefix_main`` / ``prefix_nf``)."""
     _oid = str(org_id)
     # Só chegamos aqui com painel materializado válido: recorte = filtrar linhas já agregadas (sem recomputar DRE).
     df_nf_lines = _faturamento_nf_apply_minimal_recorte(
@@ -8401,10 +8401,9 @@ def _render_faturamento_dre_minimal(
     st.html(_build_faturamento_dre_page_header_html(updated_at=_upd_disp))
     with st.expander("ℹ️ Sobre este módulo", expanded=False):
         st.caption(
-            "Valores vêm do materializado publicado para a sua organização. O **topo fiscal** segue empresa e emissão; "
-            "**cards** e **DRE** acrescentam o filtro **Plataforma** quando usado. A **tabela por NF** pode ainda filtrar por "
-            "**produto** e **status de resultado**. Linhas com «—» ou valores em R$ 0,00 podem ser NF só fiscal ou sem pedido "
-            "comercial ligado — veja a coluna **Alertas**."
+            "Valores vêm do materializado publicado para a sua organização. Os **filtros** refinam empresa, período de emissão "
+            "e situação da NF; **Plataforma** restringe **KPIs** e **DRE gerencial** quando aplicável. "
+            "O **valor faturado (NF)** nos cards permanece alinhado ao fiscal quando o Parquet fiscal está ativo."
         )
     _fdl_fat_min_vsp(size="sm")
     _oid = str(org_id)
@@ -8574,8 +8573,8 @@ def _render_faturamento_dre_minimal(
     )
     if use_fiscal_parquet:
         _plat_expl += (
-            " O **topo fiscal** **não** usa **Plataforma**. Com Parquet fiscal ativo, **Plataforma** restringe **cards**, **DRE** "
-            "e **tabela** (e as opções de produto/resultado), mantendo **valor faturado (NF)** por NF alinhado ao fiscal."
+            " Com Parquet fiscal ativo, **Plataforma** restringe **cards** e **DRE** (não altera o recorte fiscal subjacente); "
+            "**valor faturado (NF)** nos KPIs permanece alinhado ao fiscal."
         )
     _plat_help = "Plataforma: " + _plat_expl
 
@@ -8589,7 +8588,7 @@ def _render_faturamento_dre_minimal(
                 key="fdl_fat_min_reset",
                 type="secondary",
                 use_container_width=True,
-                help="Repor empresa, plataforma, situação NF, datas de emissão NF, produto e sinal do resultado ao padrão.",
+                help="Repor empresa, plataforma, situação NF e datas de emissão NF ao padrão (inclui preferências antigas da tabela NF no estado).",
             ):
                 for _k in (
                     "fdl_fat_min_emp",
@@ -8656,7 +8655,7 @@ def _render_faturamento_dre_minimal(
                     _sit_opts,
                     help=(
                         "**Vazio** = todas as situações válidas já admitidas no materializado (exceto cancelada/denegada/inutilizada). "
-                        "Com valor selecionado, restringe o **topo fiscal**, **cards/DRE** e **tabela** às situações indicadas."
+                        "Com valor selecionado, restringe **KPIs** e **DRE** ao conjunto fiscal filtrado por situação."
                     ),
                     placeholder="Todas",
                 )
@@ -8715,16 +8714,6 @@ def _render_faturamento_dre_minimal(
         ok_nf_dates=ok_nf_dates,
         situacoes_sel=_min_state.situacoes_nf,
         df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
-    )
-    _render_faturamento_dre_fiscal_base_top(
-        stats=_fiscal_base_stats,
-        ok_nf_dates=ok_nf_dates,
-        empresas_sel=_min_state.empresas,
-        emp_opts=emp_opts,
-        nf_d_ini=_nf_kpi_ini,
-        nf_d_fim=_nf_kpi_fim,
-        fiscal_parquet_ok=use_fiscal_parquet,
-        situacoes_nf_sel=_min_state.situacoes_nf,
     )
 
     df_nf_scope_emissao = _faturamento_nf_apply_minimal_recorte(
@@ -8798,30 +8787,6 @@ def _render_faturamento_dre_minimal(
             st.caption(f"Painel de saúde financeira indisponível: `{_exc_hp}`")
 
     _fdl_fat_min_vsp(size="md")
-    _fdl_ui_gap_section()
-    _fdl_fat_min_vsp(size="lg")
-    _fdl_fat_min_vsp(size="sm")
-
-    _render_faturamento_dre_nf_table_section(
-        df_nf_pre=df_nf_pre,
-        df=df,
-        df_fiscal_pre=df_fiscal_pre,
-        load_info=load_info,
-        _min_state=_min_state,
-        _nf_kpi_ini=_nf_kpi_ini,
-        _nf_kpi_fim=_nf_kpi_fim,
-        ok_nf_dates=ok_nf_dates,
-        use_fiscal_kpi=use_fiscal_kpi,
-        use_nf_materializado=use_nf_materializado,
-        use_fiscal_parquet=use_fiscal_parquet,
-        _nf_panel_ads_ui=_nf_panel_ads_ui,
-        _df_fiscal_base=_df_fiscal_base,
-        _fiscal_base_stats=_fiscal_base_stats,
-        _kp_cards=_kp_cards,
-        org_id=org_id,
-        prefix_main="fdl_fat_min",
-        prefix_nf="fdl_fat_nf",
-    )
 
     _fdl_fat_section_rule("Cobertura")
     _render_faturamento_dre_commercial_complement_banner(

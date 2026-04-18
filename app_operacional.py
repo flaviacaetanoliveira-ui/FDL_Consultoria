@@ -5416,6 +5416,25 @@ def _render_fdl_fat_dre_nf_gerencial(
             "Sem custo de ADS neste cliente."
         )
         tt_marg = _marg_simple
+    if valor_faturado_from_fiscal_parquet:
+        if nf_panel_ads:
+            foot = (
+                "Resultado e margem consideram ADS (3,5% sobre receita lista e valor fixo por NF) quando aplicável. "
+                "Margem = resultado ÷ receita de venda (lista); o valor faturado fiscal não entra no denominador."
+            )
+        else:
+            foot = (
+                "Margem = resultado ÷ receita de venda (lista); o valor faturado fiscal não entra no denominador. "
+                "Sem linha de ADS neste quadro."
+            )
+    elif nf_panel_ads:
+        foot = (
+            "Resultado e margem consideram ADS quando aplicável. "
+            "Margem = resultado ÷ receita de venda (lista); totais consolidados por nota fiscal."
+        )
+    else:
+        foot = "Margem = resultado ÷ receita de venda (lista). Sem custo de ADS neste cliente."
+
     per = (periodo_label or "").strip() or ("Emissão NF no filtro" if ok_nf_dates else "Período indisponível")
 
     st.markdown(
@@ -5430,6 +5449,7 @@ def _render_fdl_fat_dre_nf_gerencial(
             margem_str=margem_s,
             resultado_tooltip=tt_res,
             margem_tooltip=tt_marg,
+            footnote_plain=foot,
             dif_highlight=dif_highlight,
         ),
         unsafe_allow_html=True,

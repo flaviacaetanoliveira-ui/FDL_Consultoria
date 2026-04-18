@@ -178,86 +178,96 @@ def fat_dre_premium_css() -> str:
   margin: 0;
   padding: 0;
 }
-.fdl-fat-dre-premium-card {
+.fdl-fat-dre-card-v2 {
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 10px 28px rgba(15, 23, 42, 0.05);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fafbfc 0%, #ffffff 48px);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px rgba(15, 23, 42, 0.06);
   overflow: hidden;
 }
-.fdl-fat-dre-premium-head {
+.fdl-fat-dre-head-v2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 18px 22px 16px 22px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+.fdl-fat-dre-head-v2 h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+  letter-spacing: -0.02em;
+}
+.fdl-fat-dre-period-v2 {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #64748b;
+}
+.fdl-fat-dre-body-v2 {
+  padding: 18px 22px 20px 22px;
+}
+.fdl-fat-dre-sec-v2 {
+  margin-bottom: 20px;
+}
+.fdl-fat-dre-sec-title-v2 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.fdl-fat-dre-line-v2 {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  padding: 14px 18px 10px 18px;
-  border-bottom: 1px solid #f1f5f9;
-  background: #fafbfc;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-bottom: 1px solid #f8fafc;
 }
-.fdl-fat-dre-premium-title {
-  font-size: 1rem;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.02em;
-  margin: 0;
+.fdl-fat-dre-line-v2:last-child {
+  border-bottom: none;
 }
-.fdl-fat-dre-premium-period {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+.fdl-fat-dre-line-v2--indent {
+  padding-left: 16px;
 }
-.fdl-fat-dre-premium-body { padding: 4px 0 2px 0; }
-.fdl-fat-dre-sec-title {
-  font-size: 0.66rem;
-  font-weight: 800;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: #64748b;
-  margin: 14px 18px 6px 18px;
+.fdl-fat-dre-label-v2 {
+  font-size: 0.9rem;
+  color: #334155;
+  line-height: 1.4;
+  min-width: min(14rem, 42vw);
+  flex: 1 1 12rem;
 }
-.fdl-fat-dre-tree {
-  margin: 0 12px 8px 12px;
-  padding: 4px 6px 8px 10px;
-  border-left: 2px solid #e2e8f0;
-}
-.fdl-fat-dre-tree-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(9.5rem, max-content);
-  column-gap: 1rem;
-  align-items: baseline;
-  padding: 6px 0 6px 4px;
-  font-size: 0.875rem;
-  color: #1e293b;
-}
-.fdl-fat-premium .fdl-fat-dre-tree-glyph,
-.fdl-fat-premium .fdl-fat-dre-tree-val {
-  font-family: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
-}
-.fdl-fat-dre-tree-glyph {
-  font-size: 0.8rem;
-  color: #94a3b8;
-  margin-right: 6px;
-  user-select: none;
-}
-.fdl-fat-dre-tree-lab { min-width: 0; line-height: 1.35; }
-.fdl-fat-dre-tree-val {
-  font-size: 1rem;
+.fdl-fat-dre-value-v2 {
+  font-size: 0.9rem;
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-  color: #0f172a;
+  color: #1e293b;
 }
-.fdl-fat-dre-tree-val--neg { color: var(--fdl-danger); }
-.fdl-fat-dre-tree-val--amber { color: var(--fdl-warning); font-weight: 600; }
-.fdl-fat-dre-tree-val--pos { color: var(--fdl-success); font-weight: 700; }
+.fdl-fat-dre-value-v2--warn {
+  color: #d97706;
+  font-weight: 600;
+}
+.fdl-fat-dre-value-v2--ded {
+  color: #dc2626;
+  font-weight: 500;
+}
 .fdl-fat-dre-section.fdl-fat-dre-deducoes {
-  margin: 4px 12px 12px 12px;
-  border: 1px solid #e2e8f0;
+  margin: 0 0 18px 0;
+  border: 1px solid #e8edf3;
   border-radius: 10px;
-  background: #fafbfc;
-  padding: 0;
+  background: #f8fafc;
+  overflow: hidden;
 }
 .fdl-fat-dre-deducoes summary.fdl-fat-dre-section-title {
   cursor: pointer;
@@ -265,10 +275,10 @@ def fat_dre_premium_css() -> str:
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 14px;
-  font-size: 0.66rem;
-  font-weight: 800;
-  letter-spacing: 0.11em;
+  padding: 12px 16px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #475569;
 }
@@ -279,11 +289,11 @@ def fat_dre_premium_css() -> str:
   content: "";
 }
 .fdl-fat-dre-deducoes[open] summary.fdl-fat-dre-section-title {
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e8edf3;
 }
 .fdl-fat-dre-toggle {
   font-size: 0.75rem;
-  color: var(--fdl-neutral-500, #6b7280);
+  color: #64748b;
   transition: transform 0.2s ease;
   flex-shrink: 0;
   margin-left: 0.75rem;
@@ -294,26 +304,83 @@ def fat_dre_premium_css() -> str:
 .fdl-fat-dre-deducoes:not([open]) .fdl-fat-dre-toggle {
   transform: rotate(-90deg);
 }
-.fdl-fat-dre-close-block {
-  margin: 10px 14px 14px 14px;
-  padding: 12px 14px;
+.fdl-fat-dre-ded-body-v2 {
+  padding: 4px 14px 14px 14px;
+}
+.fdl-fat-dre-result-shell {
+  margin-top: 4px;
+  padding: 16px 18px;
   border-radius: 10px;
-  border: 1px solid #d8dee6;
-  background: #f8fafc;
+  border-left: 4px solid #22c55e;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
 }
-.fdl-fat-dre-close-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(9.5rem, max-content);
-  align-items: baseline;
-  column-gap: 1rem;
+.fdl-fat-dre-result-shell--neg {
+  border-left-color: #ef4444;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
 }
-.fdl-fat-dre-close-row + .fdl-fat-dre-close-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
+.fdl-fat-dre-line-v2--result-main {
+  padding: 4px 0 10px 0;
+  border-bottom: none;
+}
+.fdl-fat-dre-line-v2--margin-sub {
+  padding-top: 10px;
+  margin-top: 2px;
+  border-top: 1px solid rgba(34, 197, 94, 0.28);
+  border-bottom: none;
+}
+.fdl-fat-dre-result-shell--neg .fdl-fat-dre-line-v2--margin-sub {
+  border-top-color: rgba(239, 68, 68, 0.28);
+}
+.fdl-fat-dre-result-title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.fdl-fat-dre-result-shell--pos .fdl-fat-dre-result-title {
+  color: #166534;
+}
+.fdl-fat-dre-result-shell--neg .fdl-fat-dre-result-title {
+  color: #991b1b;
+}
+.fdl-fat-dre-result-amount {
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.fdl-fat-dre-result-shell--pos .fdl-fat-dre-result-amount {
+  color: #166534;
+}
+.fdl-fat-dre-result-shell--neg .fdl-fat-dre-result-amount {
+  color: #991b1b;
+}
+.fdl-fat-dre-margin-lab {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #475569;
+}
+.fdl-fat-dre-margin-val {
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #334155;
+}
 .fdl-fat-dre-hint-label { cursor: help; }
+@media (max-width: 520px) {
+  .fdl-fat-dre-body-v2 { padding: 14px 14px 16px 14px; }
+  .fdl-fat-dre-head-v2 { padding: 14px 14px 12px 14px; }
+  .fdl-fat-dre-value-v2,
+  .fdl-fat-dre-result-amount,
+  .fdl-fat-dre-margin-val {
+    flex: 1 1 100%;
+    text-align: right;
+  }
+}
 .fdl-fat-dre-foot-note {
-  margin: 10px 18px 14px 18px;
-  font-size: 0.65rem;
+  margin: 14px 0 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+  font-size: 0.68rem;
   color: #94a3b8;
-  line-height: 1.45;
+  line-height: 1.5;
   max-width: 46rem;
 }
 </style>
@@ -429,15 +496,29 @@ def _meta_class(css_mod: str) -> str:
     return "fdl-fat-kpi-hero-meta--mid"
 
 
-def _tree_row(glyph: str, label: str, value: str, *, val_class: str = "") -> str:
-    cls = "fdl-fat-dre-tree-val"
-    if val_class.strip():
-        cls += " " + val_class.strip()
+def dre_gerencial_result_shell_class(resultado_value: float) -> str:
+    """Classe do bloco de resultado (gradiente verde ou vermelho)."""
+    if resultado_value < 0:
+        return "fdl-fat-dre-result-shell fdl-fat-dre-result-shell--neg"
+    return "fdl-fat-dre-result-shell fdl-fat-dre-result-shell--pos"
+
+
+def _dre_line_v2(
+    label: str,
+    value: str,
+    *,
+    value_extra_class: str = "",
+    indent: bool = False,
+) -> str:
+    extra_line = " fdl-fat-dre-line-v2--indent" if indent else ""
+    vc = "fdl-fat-dre-value-v2"
+    if value_extra_class.strip():
+        vc += " " + value_extra_class.strip()
     return (
-        f'<div class="fdl-fat-dre-tree-row">'
-        f'<div class="fdl-fat-dre-tree-lab"><span class="fdl-fat-dre-tree-glyph">{html.escape(glyph)}</span>'
-        f"{html.escape(label)}</div>"
-        f'<div class="{cls}">{html.escape(value)}</div></div>'
+        f'<div class="fdl-fat-dre-line-v2{extra_line}">'
+        f'<span class="fdl-fat-dre-label-v2">{html.escape(label)}</span>'
+        f'<span class="{vc}">{html.escape(value)}</span>'
+        "</div>"
     )
 
 
@@ -456,26 +537,16 @@ def build_dre_gerencial_premium_html(
     footnote_plain: str = "",
     dif_highlight: bool,
 ) -> str:
-    dif_cls = "fdl-fat-dre-tree-val--amber" if dif_highlight else ""
+    dif_suffix = "fdl-fat-dre-value-v2--warn" if dif_highlight else ""
     enc_inner = (
         "".join(
-            _tree_row(
-                "├─" if i < len(enc_rows) - 1 else "└─",
-                lab,
-                val,
-                val_class="fdl-fat-dre-tree-val--neg",
-            )
-            for i, (lab, val) in enumerate(enc_rows)
+            _dre_line_v2(lab, val, value_extra_class="fdl-fat-dre-value-v2--ded", indent=True)
+            for lab, val in enc_rows
         )
         if enc_rows
-        else '<div class="fdl-fat-dre-tree-row"><span class="fdl-fat-dre-tree-lab">—</span></div>'
+        else '<div class="fdl-fat-dre-line-v2"><span class="fdl-fat-dre-label-v2">—</span></div>'
     )
-    if resultado_value > 0:
-        res_cls = "fdl-fat-dre-tree-val--pos"
-    elif resultado_value < 0:
-        res_cls = "fdl-fat-dre-tree-val--neg"
-    else:
-        res_cls = ""
+    _shell = dre_gerencial_result_shell_class(resultado_value)
     _rt = html.escape(resultado_tooltip.strip(), quote=True)
     _mt = html.escape(margem_tooltip.strip(), quote=True)
     _foot_html = ""
@@ -483,31 +554,32 @@ def build_dre_gerencial_premium_html(
         _foot_html = f'<p class="fdl-fat-dre-foot-note">{html.escape(footnote_plain.strip())}</p>'
     return (
         '<div class="fdl-fat-premium fdl-fat-dre-premium-wrap">'
-        '<div class="fdl-fat-dre-premium-card">'
-        '<div class="fdl-fat-dre-premium-head">'
-        '<h3 class="fdl-fat-dre-premium-title">DRE gerencial</h3>'
-        f'<span class="fdl-fat-dre-premium-period">{html.escape(period_caption)}</span></div>'
-        '<div class="fdl-fat-dre-premium-body">'
-        '<div class="fdl-fat-dre-sec-title">Receita</div>'
-        '<div class="fdl-fat-dre-tree">'
-        + _tree_row("├─", "Receita de venda (lista)", valor_venda_fmt)
-        + _tree_row("├─", "Receita frete (transp. própria)", rec_frete_fmt)
-        + _tree_row("└─", "Diferença (lista − fiscal)", diferenca_fmt, val_class=dif_cls)
-        + "</div>"
+        '<div class="fdl-fat-dre-card-v2">'
+        '<header class="fdl-fat-dre-head-v2">'
+        "<h3>DRE gerencial</h3>"
+        f'<span class="fdl-fat-dre-period-v2">{html.escape(period_caption)}</span>'
+        "</header>"
+        '<div class="fdl-fat-dre-body-v2">'
+        '<section class="fdl-fat-dre-sec-v2">'
+        '<div class="fdl-fat-dre-sec-title-v2">Receita</div>'
+        + _dre_line_v2("Receita de venda (lista)", valor_venda_fmt)
+        + _dre_line_v2("Receita frete (transp. própria)", rec_frete_fmt)
+        + _dre_line_v2("Diferença (lista − fiscal)", diferenca_fmt, value_extra_class=dif_suffix)
+        + "</section>"
         '<details class="fdl-fat-dre-section fdl-fat-dre-deducoes" open>'
-        '<summary class="fdl-fat-dre-section-title">DEDUÇÕES'
+        '<summary class="fdl-fat-dre-section-title">Deduções'
         '<span class="fdl-fat-dre-toggle" aria-hidden="true">▼</span></summary>'
-        f'<div class="fdl-fat-dre-tree" style="border-left:none;margin-left:8px">{enc_inner}</div>'
+        f'<div class="fdl-fat-dre-ded-body-v2">{enc_inner}</div>'
         "</details>"
-        '<div class="fdl-fat-dre-close-block">'
-        '<div class="fdl-fat-dre-close-row">'
-        f'<div class="fdl-fat-dre-hint-label" style="font-weight:800;font-size:0.95rem;color:#0f172a" '
-        f'title="{_rt}">Resultado</div>'
-        f'<div class="fdl-fat-dre-tree-val {res_cls}">{html.escape(resultado_fmt)}</div></div>'
-        '<div class="fdl-fat-dre-close-row">'
-        f'<div class="fdl-fat-dre-hint-label" style="font-weight:600;font-size:0.85rem;color:#64748b" '
-        f'title="{_mt}">Margem sobre venda</div>'
-        f'<div class="fdl-fat-dre-tree-val">{html.escape(margem_str)}</div></div>'
+        f'<div class="{_shell}">'
+        '<div class="fdl-fat-dre-line-v2 fdl-fat-dre-line-v2--result-main">'
+        f'<span class="fdl-fat-dre-hint-label fdl-fat-dre-result-title" title="{_rt}">Resultado</span>'
+        f'<span class="fdl-fat-dre-result-amount">{html.escape(resultado_fmt)}</span>'
+        "</div>"
+        '<div class="fdl-fat-dre-line-v2 fdl-fat-dre-line-v2--margin-sub">'
+        f'<span class="fdl-fat-dre-hint-label fdl-fat-dre-margin-lab" title="{_mt}">Margem sobre venda</span>'
+        f'<span class="fdl-fat-dre-margin-val">{html.escape(margem_str)}</span>'
+        "</div>"
         "</div>"
         f"{_foot_html}"
         "</div></div></div>"

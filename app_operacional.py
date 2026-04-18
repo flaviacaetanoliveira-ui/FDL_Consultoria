@@ -9366,6 +9366,24 @@ def _render_faturamento_dre_minimal(
 
     _fdl_fat_min_vsp(size="md")
 
+    if _rg_kpis_rendered and _slice_rg is not None and _kp_rg is not None:
+        try:
+            from app.components.tabela_pedidos_gerencial import render_tabela_pedidos_rg
+
+            _rg_tbl_label = f"{str(_oid).strip()}_{_nf_kpi_ini.year:04d}-{_nf_kpi_ini.month:02d}"
+            render_tabela_pedidos_rg(
+                _slice_rg,
+                _kp_rg,
+                fiscal_imposto_valor=float(_imp_rg_kpis),
+                export_label=_rg_tbl_label,
+                debug_coerencia=_is_admin_mode(),
+            )
+        except Exception as _exc_tp:
+            if _is_admin_mode():
+                st.caption(f"Tabela por pedido indisponível: `{_exc_tp}`")
+
+    _fdl_fat_min_vsp(size="md")
+
     _fdl_ui_gap_section()
     _fdl_fat_min_vsp(size="sm")
 

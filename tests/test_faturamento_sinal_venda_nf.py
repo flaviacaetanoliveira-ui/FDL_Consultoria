@@ -10,7 +10,7 @@ def _apply_produto_e_sinal_resultado(
     df_nf: pd.DataFrame,
     *,
     produtos_sel: tuple[str, ...] = (),
-    sinais_resultado: tuple[str, ...] = ("lucro", "prejuizo", "empate"),
+    sinais_resultado: tuple[str, ...] = (),
 ) -> pd.DataFrame:
     """Cópia da lógica em app_operacional (sem Streamlit)."""
     if df_nf.empty:
@@ -23,7 +23,7 @@ def _apply_produto_e_sinal_resultado(
     raw = [str(x).strip().lower() for x in sinais_resultado if str(x).strip()]
     sel = {x for x in raw if x in {"lucro", "prejuizo", "empate"}}
     if not sel:
-        sel = {"lucro", "prejuizo", "empate"}
+        return out
     if "resultado" not in out.columns:
         return out
     if "lucro" in sel and "prejuizo" in sel:
@@ -61,7 +61,7 @@ class TestSinalResultadoNf(unittest.TestCase):
         luc_emp = _apply_produto_e_sinal_resultado(df, sinais_resultado=("lucro", "empate"))
         self.assertEqual(set(luc_emp["Nota_Numero_Normalizado"]), {"A", "C", "D"})
 
-    def test_sinais_vazio_cai_em_ambos(self) -> None:
+    def test_sinais_vazio_sem_filtro_por_sinal(self) -> None:
         df = pd.DataFrame(
             {
                 "Nota_Numero_Normalizado": ["A", "B"],
@@ -70,6 +70,8 @@ class TestSinalResultadoNf(unittest.TestCase):
         )
         out = _apply_produto_e_sinal_resultado(df, sinais_resultado=())
         self.assertEqual(set(out["Nota_Numero_Normalizado"]), {"A", "B"})
+        out_default = _apply_produto_e_sinal_resultado(df)
+        self.assertEqual(set(out_default["Nota_Numero_Normalizado"]), {"A", "B"})
 
     def test_sem_coluna_resultado_nao_quebra(self) -> None:
         df = pd.DataFrame({"x": [1]})

@@ -7017,9 +7017,9 @@ def _faturamento_dre_apply_produto_e_sinal_venda(
     """
     Refina o quadro NF por ``produto_resumo`` e pelo **sinal do resultado comercial** (lucro / prejuízo / empate).
 
-    ``sinais_resultado`` pode incluir ``lucro``, ``prejuizo``, ``empate``. Vazio ou inválido = os três.
-    Com **lucro** e **prejuízo** ativos em conjunto (com ou sem empate), **não** se filtra por sinal — igual ao recorte
-    legado dos cards (inclui empate ~0, NaN e linhas só fiscais). Caso contrário, faz a união das faixas escolhidas.
+    ``sinais_resultado`` pode incluir ``lucro``, ``prejuizo``, ``empate``. **Vazio** = não filtra por sinal (mostra todas as NFs).
+    Com **lucro** e **prejuízo** ambos na seleção (com ou sem empate), **não** se filtra por sinal — mesmo efeito que vazio na UI legada.
+    Caso contrário, faz a união das faixas escolhidas.
     Valores vêm do materializado — sem recalcular DRE.
     """
     if df_nf.empty:
@@ -7032,10 +7032,10 @@ def _faturamento_dre_apply_produto_e_sinal_venda(
     raw = [str(x).strip().lower() for x in sinais_resultado if str(x).strip()]
     sel = {x for x in raw if x in {"lucro", "prejuizo", "empate"}}
     if not sel:
-        sel = {"lucro", "prejuizo", "empate"}
+        return out
     if "resultado" not in out.columns:
         return out
-    # Com lucro **e** prejuízo ativos (com ou sem empate no multiselect), não filtra por sinal — mesmo critério legado.
+    # Lucro **e** prejuízo na mesma seleção ⇒ não filtra por sinal (equivale ao multiselect “cheio” legado).
     if "lucro" in sel and "prejuizo" in sel:
         return out
     res = pd.to_numeric(out["resultado"], errors="coerce")
@@ -7760,22 +7760,22 @@ def _render_faturamento_dre_minimal(
             elif _s == "prejuizo":
                 st.session_state[_k_sinais] = ["prejuizo"]
             else:
-                st.session_state[_k_sinais] = ["lucro", "prejuizo", "empate"]
+                st.session_state[_k_sinais] = []
             st.session_state.pop("fdl_fat_min_sinal_resultado", None)
         elif isinstance(_leg_vs, str):
             _m = {"positiva": "lucro", "negativa": "prejuizo"}
             _one = _m.get(_leg_vs.strip().lower())
             st.session_state[_k_sinais] = (
-                [_one] if _one else ["lucro", "prejuizo", "empate"]
+                [_one] if _one else []
             )
         else:
-            st.session_state[_k_sinais] = ["lucro", "prejuizo", "empate"]
+            st.session_state[_k_sinais] = []
     _prev_s = st.session_state.get(_k_sinais)
     if not isinstance(_prev_s, list):
-        st.session_state[_k_sinais] = ["lucro", "prejuizo", "empate"]
+        st.session_state[_k_sinais] = []
     else:
         _filt = [x for x in _prev_s if x in ("lucro", "prejuizo", "empate")]
-        st.session_state[_k_sinais] = _filt if _filt else ["lucro", "prejuizo", "empate"]
+        st.session_state[_k_sinais] = _filt
 
     st.markdown(
         """
@@ -7836,11 +7836,12 @@ def _render_faturamento_dre_minimal(
                 "empate": "Empate",
             }[x],
             key=_k_sinais,
-            placeholder="Lucro · Prejuízo · Empate…",
+            placeholder="Status…",
             label_visibility="collapsed",
             help=(
-                "«Empate» = resultado ~0 na NF. Com **Lucro** e **Prejuízo** ao mesmo tempo, não se filtra por sinal "
-                "(equivalente ao recorte completo). Com uma ou duas faixas sem o par lucro+prejuízo, aplica-se união."
+                "**Vazio** = todas as NFs (sem filtro por resultado). «Empate» = resultado ~0. "
+                "Com **Lucro** e **Prejuízo** juntos na seleção, não se filtra por sinal. "
+                "Noutros casos aplica-se a união das opções escolhidas."
             ),
         )
     with _f2:
@@ -7905,7 +7906,7 @@ def _render_faturamento_dre_minimal(
     _sinais_tuple = (
         tuple(str(x).strip().lower() for x in _sinais_ui if str(x).strip())
         if isinstance(_sinais_ui, list)
-        else ("lucro", "prejuizo", "empate")
+        else ()
     )
     df_nf_panel = _faturamento_dre_apply_produto_e_sinal_venda(
         df_nf,

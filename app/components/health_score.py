@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+import math
 from typing import Any, Optional
 
 import pandas as pd
@@ -103,6 +104,82 @@ def _num(s: pd.Series) -> pd.Series:
     return pd.to_numeric(s, errors="coerce").fillna(0.0)
 
 
+@dataclass(frozen=True)
+class PainelSaudeTopoKpis:
+    """Totais de topo do Painel de Saúde alinhados ao Resultado Gerencial (``compute_resultado_gerencial_kpis``)."""
+
+    resultado: float
+    venda_base: float
+    margem: float  # fração 0–1 (igual a ``kpis["margem"]``)
+
+
+def build_health_panel_top_kpis(kpis_gerenciais: dict[str, float | int]) -> PainelSaudeTopoKpis:
+    """Projeta o dicionário de KPIs gerenciais no contrato estável do Painel de Saúde (totais de topo)."""
+    return PainelSaudeTopoKpis(
+        resultado=float(kpis_gerenciais["resultado"]),
+        venda_base=float(kpis_gerenciais["valor_venda_lista"]),
+        margem=float(kpis_gerenciais["margem"]),
+    )
+
+
+def compute_skus_em_risco(df: pd.DataFrame) -> tuple[list[SKURisco], pd.DataFrame, int]:
+    """
+    Agregação por SKU no recorte (grão linha) — drill-down do Painel de Saúde.
+    Não define KPIs de topo; usar ``compute_resultado_gerencial_kpis`` para totais do módulo.
+    """
+    skus_risco: list[SKURisco] = []
+    sku_analise = pd.DataFrame()
+    if "SKU_Normalizado" not in df.columns or "Quantidade" not in df.columns:
+        return skus_risco, sku_analise, 0
+
+    sku_analise = (
+        df.groupby("SKU_Normalizado", dropna=False)
+        .agg(
+            Vl_Venda=("Vl_Venda", "sum"),
+            Custo_Produto_Total=("Custo_Produto_Total", "sum"),
+            Resultado=("Resultado", "sum"),
+            Quantidade=("Quantidade", "sum"),
+        )
+        .reset_index()
+    )
+    sku_analise["margem_pct"] = sku_analise.apply(
+        lambda r: (r["Resultado"] / r["Vl_Venda"] * 100.0) if r["Vl_Venda"] else 0.0, axis=1
+    )
+    sku_analise["custo_pct"] = sku_analise.apply(
+        lambda r: (r["Custo_Produto_Total"] / r["Vl_Venda"] * 100.0) if r["Vl_Venda"] else 0.0, axis=1
+    )
+    sku_analise["preco_medio"] = sku_analise.apply(
+        lambda r: (r["Vl_Venda"] / r["Quantidade"]) if r["Quantidade"] else 0.0, axis=1
+    )
+    sku_analise["custo_unitario"] = sku_analise.apply(
+        lambda r: (r["Custo_Produto_Total"] / r["Quantidade"]) if r["Quantidade"] else 0.0, axis=1
+    )
+
+    skus_negativos = sku_analise.loc[sku_analise["Resultado"] < 0].sort_values("Resultado")
+    for _, row in skus_negativos.head(20).iterrows():
+        q = float(row["Quantidade"]) or 1.0
+        prejuizo_unit = abs(float(row["Resultado"])) / q
+        pm = float(row["preco_medio"])
+        ajuste_pct = (prejuizo_unit / pm * 100.0) if pm > 0 else 0.0
+        skus_risco.append(
+            SKURisco(
+                sku=str(row["SKU_Normalizado"]),
+                receita=float(row["Vl_Venda"]),
+                margem_pct=float(row["margem_pct"]),
+                custo_pct=float(row["custo_pct"]),
+                resultado=float(row["Resultado"]),
+                quantidade=float(row["Quantidade"]),
+                preco_medio=pm,
+                custo_unitario=float(row["custo_unitario"]),
+                ajuste_breakeven=prejuizo_unit,
+                ajuste_breakeven_pct=ajuste_pct,
+            )
+        )
+
+    n_skus_negativos = int((sku_analise["Resultado"] < 0).sum())
+    return skus_risco, sku_analise, n_skus_negativos
+
+
 def calcular_health_score(
     df: pd.DataFrame,
     org_id: str,
@@ -113,6 +190,10 @@ def calcular_health_score(
     config: Optional[dict[str, Any]] = None,
     *,
     periodo_override: Optional[str] = None,
+    kpis_gerenciais: Optional[dict[str, float | int]] = None,
+    cmv_total_gerencial: Optional[float] = None,
+    margem_benchmark_anterior_pct: Optional[float] = None,
+    margem_benchmark_grupo_pct: Optional[float] = None,
 ) -> HealthScore:
     cfg: dict[str, Any] = {
         "benchmark_custo_pct": 50.0,
@@ -124,16 +205,30 @@ def calcular_health_score(
     if config:
         cfg.update(config)
 
-    receita = float(_num(df["Vl_Venda"]).sum()) if "Vl_Venda" in df.columns else 0.0
-    resultado = float(_num(df["Resultado"]).sum()) if "Resultado" in df.columns else 0.0
-    margem_pct = (resultado / receita * 100.0) if receita > 0 else 0.0
+    if kpis_gerenciais is not None:
+        receita = float(kpis_gerenciais["valor_venda_lista"])
+        resultado = float(kpis_gerenciais["resultado"])
+        m_frac = float(kpis_gerenciais["margem"])
+        margem_pct = m_frac * 100.0 if not math.isnan(m_frac) else 0.0
+        if cmv_total_gerencial is not None:
+            custo = float(cmv_total_gerencial)
+        else:
+            custo = float(_num(df["Custo_Produto_Total"]).sum()) if "Custo_Produto_Total" in df.columns else 0.0
+        custo_pct = (custo / receita * 100.0) if receita > 0 else 0.0
+    else:
+        receita = float(_num(df["Vl_Venda"]).sum()) if "Vl_Venda" in df.columns else 0.0
+        resultado = float(_num(df["Resultado"]).sum()) if "Resultado" in df.columns else 0.0
+        margem_pct = (resultado / receita * 100.0) if receita > 0 else 0.0
 
-    custo = float(_num(df["Custo_Produto_Total"]).sum()) if "Custo_Produto_Total" in df.columns else 0.0
-    custo_pct = (custo / receita * 100.0) if receita > 0 else 0.0
+        custo = float(_num(df["Custo_Produto_Total"]).sum()) if "Custo_Produto_Total" in df.columns else 0.0
+        custo_pct = (custo / receita * 100.0) if receita > 0 else 0.0
 
     margem_anterior: Optional[float] = None
     tendencia_pp: Optional[float] = None
-    if df_anterior is not None and len(df_anterior) > 0 and "Vl_Venda" in df_anterior.columns:
+    if margem_benchmark_anterior_pct is not None:
+        margem_anterior = float(margem_benchmark_anterior_pct)
+        tendencia_pp = margem_pct - margem_anterior
+    elif kpis_gerenciais is None and df_anterior is not None and len(df_anterior) > 0 and "Vl_Venda" in df_anterior.columns:
         ra = float(_num(df_anterior["Vl_Venda"]).sum())
         res_a = float(_num(df_anterior["Resultado"]).sum()) if "Resultado" in df_anterior.columns else 0.0
         if ra > 0:
@@ -144,8 +239,12 @@ def calcular_health_score(
     vs_grupo_pp: Optional[float] = None
     oid = str(org_id).strip()
     skip_bench = oid.casefold() in {"consolidado", "_multi_", ""} or oid.startswith("_multi")
-    if (
-        not skip_bench
+    if margem_benchmark_grupo_pct is not None and not skip_bench:
+        margem_grupo = float(margem_benchmark_grupo_pct)
+        vs_grupo_pp = margem_pct - margem_grupo
+    elif (
+        kpis_gerenciais is None
+        and not skip_bench
         and df_grupo is not None
         and len(df_grupo) > 0
         and "org_id" in df_grupo.columns
@@ -279,67 +378,19 @@ def calcular_health_score(
             )
         )
 
-    skus_risco: list[SKURisco] = []
-    sku_analise = pd.DataFrame()
-    n_skus_negativos = 0
-    if "SKU_Normalizado" in df.columns and "Quantidade" in df.columns:
-        sku_analise = (
-            df.groupby("SKU_Normalizado", dropna=False)
-            .agg(
-                Vl_Venda=("Vl_Venda", "sum"),
-                Custo_Produto_Total=("Custo_Produto_Total", "sum"),
-                Resultado=("Resultado", "sum"),
-                Quantidade=("Quantidade", "sum"),
+    skus_risco, sku_analise, n_skus_negativos = compute_skus_em_risco(df)
+    if n_skus_negativos:
+        prejuizo_skus = float(sku_analise.loc[sku_analise["Resultado"] < 0, "Resultado"].sum())
+        diagnosticos.append(
+            Diagnostico(
+                tipo="CAUSA",
+                nivel=AlertLevel.HIGH if n_skus_negativos > 10 else AlertLevel.MEDIUM,
+                titulo=f"{n_skus_negativos} SKUs com margem negativa",
+                detalhe=f"Prejuízo total desses SKUs: R$ {abs(prejuizo_skus):,.2f}",
+                acao="Rever precificação ou descontinuar produtos",
+                valor=float(n_skus_negativos),
             )
-            .reset_index()
         )
-        sku_analise["margem_pct"] = sku_analise.apply(
-            lambda r: (r["Resultado"] / r["Vl_Venda"] * 100.0) if r["Vl_Venda"] else 0.0, axis=1
-        )
-        sku_analise["custo_pct"] = sku_analise.apply(
-            lambda r: (r["Custo_Produto_Total"] / r["Vl_Venda"] * 100.0) if r["Vl_Venda"] else 0.0, axis=1
-        )
-        sku_analise["preco_medio"] = sku_analise.apply(
-            lambda r: (r["Vl_Venda"] / r["Quantidade"]) if r["Quantidade"] else 0.0, axis=1
-        )
-        sku_analise["custo_unitario"] = sku_analise.apply(
-            lambda r: (r["Custo_Produto_Total"] / r["Quantidade"]) if r["Quantidade"] else 0.0, axis=1
-        )
-
-        skus_negativos = sku_analise.loc[sku_analise["Resultado"] < 0].sort_values("Resultado")
-        for _, row in skus_negativos.head(20).iterrows():
-            q = float(row["Quantidade"]) or 1.0
-            prejuizo_unit = abs(float(row["Resultado"])) / q
-            pm = float(row["preco_medio"])
-            ajuste_pct = (prejuizo_unit / pm * 100.0) if pm > 0 else 0.0
-            skus_risco.append(
-                SKURisco(
-                    sku=str(row["SKU_Normalizado"]),
-                    receita=float(row["Vl_Venda"]),
-                    margem_pct=float(row["margem_pct"]),
-                    custo_pct=float(row["custo_pct"]),
-                    resultado=float(row["Resultado"]),
-                    quantidade=float(row["Quantidade"]),
-                    preco_medio=pm,
-                    custo_unitario=float(row["custo_unitario"]),
-                    ajuste_breakeven=prejuizo_unit,
-                    ajuste_breakeven_pct=ajuste_pct,
-                )
-            )
-
-        n_skus_negativos = int((sku_analise["Resultado"] < 0).sum())
-        if n_skus_negativos:
-            prejuizo_skus = float(sku_analise.loc[sku_analise["Resultado"] < 0, "Resultado"].sum())
-            diagnosticos.append(
-                Diagnostico(
-                    tipo="CAUSA",
-                    nivel=AlertLevel.HIGH if n_skus_negativos > 10 else AlertLevel.MEDIUM,
-                    titulo=f"{n_skus_negativos} SKUs com margem negativa",
-                    detalhe=f"Prejuízo total desses SKUs: R$ {abs(prejuizo_skus):,.2f}",
-                    acao="Rever precificação ou descontinuar produtos",
-                    valor=float(n_skus_negativos),
-                )
-            )
 
     return HealthScore(
         score=score,

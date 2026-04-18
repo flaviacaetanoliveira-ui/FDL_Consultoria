@@ -8740,6 +8740,133 @@ def _render_faturamento_dre_nf_table_section(
 
     _fdl_fat_min_vsp(size="md")
 
+def _fdl_health_panel_rg_benchmark_margins(
+    *,
+    df_linha: pd.DataFrame,
+    df_nf_pre: pd.DataFrame,
+    df_commercial_nf_kpi: pd.DataFrame,
+    df_fiscal_pre: pd.DataFrame,
+    df_devolucoes_pre: pd.DataFrame | None,
+    devolucoes_ok: bool,
+    use_fiscal_parquet: bool,
+    use_fiscal_kpi: bool,
+    ok_nf_dates: bool,
+    fiscal_base_stats: FaturamentoFiscalBaseStats | None,
+    nf_d_ini: date,
+    nf_d_fim: date,
+    ano_civil: int,
+    mes_civil: int,
+    empresas_sel: tuple[str, ...],
+    plataformas_sel: tuple[str, ...],
+    situacoes_nf: tuple[str, ...],
+    org_sidebar: str,
+) -> tuple[float | None, float | None]:
+    """Margens % (período anterior e grupo) via ``compute_resultado_gerencial_kpis`` — mesma fonte dos KPIs/DRE."""
+    from calendar import monthrange
+
+    from app.components.health_score import inferir_org_id_alvo, slice_linhas_nf_periodo
+    from processing.faturamento.resultado_gerencial_slice import (
+        build_resultado_gerencial_slice,
+        compute_resultado_gerencial_kpis,
+    )
+
+    margem_ant: float | None = None
+    margem_grupo: float | None = None
+
+    df_w = df_linha.copy()
+    if "Vl_Venda" not in df_w.columns and "Valor total" in df_w.columns:
+        df_w["Vl_Venda"] = pd.to_numeric(df_w["Valor total"], errors="coerce").fillna(0.0)
+    sl = slice_linhas_nf_periodo(
+        df_w,
+        d_ini=nf_d_ini,
+        d_fim=nf_d_fim,
+        empresas_sel=empresas_sel,
+        coluna_temporal="Data",
+        plataformas_sel=plataformas_sel,
+    )
+    org_alvo = inferir_org_id_alvo(sl, org_sidebar)
+
+    try:
+        if mes_civil == 1:
+            py, pm = ano_civil - 1, 12
+        else:
+            py, pm = ano_civil, mes_civil - 1
+        p_ini = date(py, pm, 1)
+        p_fim = date(py, pm, monthrange(py, pm)[1])
+
+        _df_fb_p, fst_p = build_faturamento_fiscal_base_slice(
+            df_fiscal_pre if use_fiscal_parquet else pd.DataFrame(),
+            empresas_sel=empresas_sel,
+            nf_d_ini=p_ini,
+            nf_d_fim=p_fim,
+            ok_nf_dates=ok_nf_dates,
+            situacoes_sel=situacoes_nf,
+            df_devolucoes=df_devolucoes_pre if devolucoes_ok else None,
+        )
+        df_nf_p = _faturamento_nf_apply_minimal_recorte(
+            df_nf_pre,
+            empresas_sel=empresas_sel,
+            plataformas_sel=(),
+            nf_d_ini=p_ini,
+            nf_d_fim=p_fim,
+            ok_nf_dates=ok_nf_dates,
+        )
+        df_nf_p = _faturamento_nf_filter_by_situacao(df_nf_p, situacoes_nf)
+        if _df_fb_p.empty:
+            df_nf_p_kpi = df_nf_p.copy()
+        else:
+            df_nf_p_kpi = build_nf_panel_aligned_to_fiscal_base(_df_fb_p, df_nf_p)
+        kp_p = compute_nf_panel_kpis(df_nf_p_kpi)
+        imp_p = dre_imposto_para_linha_dre_gerencial(
+            kp_p,
+            fiscal_base_stats=fst_p if use_fiscal_parquet else None,
+            aplicar_ponte_base_liquida=(fst_p is not None and use_fiscal_kpi),
+        )
+        slice_prev = build_resultado_gerencial_slice(
+            df_linha,
+            empresas_sel=empresas_sel,
+            plataformas_sel=plataformas_sel,
+            data_venda_ini=p_ini,
+            data_venda_fim=p_fim,
+        )
+        kp_rg_p = compute_resultado_gerencial_kpis(slice_prev, fiscal_imposto_valor=imp_p)
+        margem_ant = float(kp_rg_p["margem"]) * 100.0
+    except Exception:
+        margem_ant = None
+
+    oid = str(org_alvo).strip()
+    skip_bench = oid.casefold() in {"consolidado", "_multi_", ""} or oid.startswith("_multi")
+    if not skip_bench and "org_id" in df_linha.columns:
+        try:
+            df_other = df_linha.loc[df_linha["org_id"].astype(str).str.strip() != oid].copy()
+            if len(df_other) > 0:
+                slice_g = build_resultado_gerencial_slice(
+                    df_other,
+                    empresas_sel=(),
+                    plataformas_sel=plataformas_sel,
+                    data_venda_ini=nf_d_ini,
+                    data_venda_fim=nf_d_fim,
+                )
+                nf_o = pd.DataFrame()
+                if "org_id" in df_commercial_nf_kpi.columns:
+                    nf_o = df_commercial_nf_kpi.loc[
+                        df_commercial_nf_kpi["org_id"].astype(str).str.strip() != oid
+                    ].copy()
+                if not nf_o.empty:
+                    kp_o = compute_nf_panel_kpis(nf_o)
+                    imp_o = dre_imposto_para_linha_dre_gerencial(
+                        kp_o,
+                        fiscal_base_stats=fiscal_base_stats if use_fiscal_parquet else None,
+                        aplicar_ponte_base_liquida=(fiscal_base_stats is not None and use_fiscal_kpi),
+                    )
+                    kp_rg_o = compute_resultado_gerencial_kpis(slice_g, fiscal_imposto_valor=imp_o)
+                    margem_grupo = float(kp_rg_o["margem"]) * 100.0
+        except Exception:
+            margem_grupo = None
+
+    return margem_ant, margem_grupo
+
+
 def _render_faturamento_dre_minimal(
     df: pd.DataFrame,
     load_info: dict[str, object],
@@ -9186,6 +9313,37 @@ def _render_faturamento_dre_minimal(
         )
 
     _fdl_fat_min_vsp(size="md")
+
+    _hp_mrg_ant: float | None = None
+    _hp_mrg_grupo: float | None = None
+    if _rg_kpis_rendered and _slice_rg is not None and _kp_rg is not None:
+        try:
+            from app.components.health_score import periodo_mes_de_datas
+
+            _ano_h, _mes_h, _ = periodo_mes_de_datas(_nf_kpi_ini, _nf_kpi_fim)
+            _hp_mrg_ant, _hp_mrg_grupo = _fdl_health_panel_rg_benchmark_margins(
+                df_linha=df,
+                df_nf_pre=df_nf_pre,
+                df_commercial_nf_kpi=df_nf_commercial_kpi,
+                df_fiscal_pre=df_fiscal_pre if isinstance(df_fiscal_pre, pd.DataFrame) else pd.DataFrame(),
+                df_devolucoes_pre=df_devolucoes_pre if _df_dev_ok else None,
+                devolucoes_ok=_df_dev_ok,
+                use_fiscal_parquet=use_fiscal_parquet,
+                use_fiscal_kpi=use_fiscal_kpi,
+                ok_nf_dates=ok_nf_dates,
+                fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
+                nf_d_ini=_nf_kpi_ini,
+                nf_d_fim=_nf_kpi_fim,
+                ano_civil=_ano_h,
+                mes_civil=_mes_h,
+                empresas_sel=tuple(_min_state.empresas),
+                plataformas_sel=tuple(_min_state.plataformas),
+                situacoes_nf=_min_state.situacoes_nf,
+                org_sidebar=_oid,
+            )
+        except Exception:
+            pass
+
     try:
         from app.components.health_panel_ui import render_faturamento_health_panel_if_enabled
 
@@ -9197,6 +9355,10 @@ def _render_faturamento_dre_minimal(
             org_sidebar=_oid,
             plataformas_sel=tuple(_min_state.plataformas),
             coluna_temporal="Data",
+            kpis_rg=_kp_rg if _rg_kpis_rendered else None,
+            cmv_total_rg=float(_slice_rg.stats.cmv_total) if _slice_rg is not None else None,
+            margem_anterior_pct=_hp_mrg_ant,
+            margem_grupo_pct=_hp_mrg_grupo,
         )
     except Exception as _exc_hp:
         if _is_admin_mode():

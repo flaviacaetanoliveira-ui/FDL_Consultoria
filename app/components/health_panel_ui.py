@@ -365,12 +365,10 @@ def _executive_summary_html(health: "HealthScore") -> str:
 def _metrics_block_html(health: "HealthScore") -> str:
     """Métricas principais em container único (substitui colunas soltas)."""
     h_margem = html.escape(
-        "Margem = resultado ÷ receita nas linhas com custo válido no período."
+        "Margem gerencial alinhada aos KPIs/DRE (resultado ÷ valor da venda lista no recorte por data da venda)."
     )
     h_res = html.escape(
-        "Soma do resultado em linhas de pedido com custo válido no período. "
-        "Usa receita de venda (lista) para cálculo de margem. "
-        "Não aplica filtro de plataforma — por isso pode diferir do Resultado dos KPIs."
+        "Resultado gerencial consolidado — mesma fonte dos cards e da DRE quando disponível (inclui ponte fiscal no imposto)."
     )
     h_custo = html.escape("Custo produto ÷ receita. Referência orientativa ~50%.")
     d = health.tendencia_pp
@@ -558,6 +556,10 @@ def render_faturamento_health_panel_if_enabled(
     org_sidebar: str,
     plataformas_sel: tuple[str, ...] = (),
     coluna_temporal: str = "Nota_Data_Emissao",
+    kpis_rg: dict[str, float | int] | None = None,
+    cmv_total_rg: float | None = None,
+    margem_anterior_pct: float | None = None,
+    margem_grupo_pct: float | None = None,
 ) -> None:
     """
     Recorte no eixo ``coluna_temporal`` (``Data`` = venda, alinhado ao Resultado Gerencial; ``Nota_Data_Emissao`` = legado).
@@ -607,6 +609,10 @@ def render_faturamento_health_panel_if_enabled(
         df_anterior=df_ant,
         df_grupo=df_grupo,
         periodo_override=periodo_lbl,
+        kpis_gerenciais=kpis_rg,
+        cmv_total_gerencial=cmv_total_rg,
+        margem_benchmark_anterior_pct=margem_anterior_pct,
+        margem_benchmark_grupo_pct=margem_grupo_pct,
     )
     show_diag = bool(st.session_state.get("fdl_fat_min_health_panel_show", True))
     render_health_panel(health, show_details=show_diag, header_diagnostic_checkbox=True)

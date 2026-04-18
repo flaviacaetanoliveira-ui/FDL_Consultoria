@@ -4,13 +4,13 @@ overview: "Ajustar textos de ajuda no card KPI (HTML premium + fallback `st.metr
 todos:
   - id: kpi-html-title
     content: Atualizar `title` do hero Resultado em `build_kpi_nf_premium_shell_html` (faturamento_dre_ui.py) com explicação NF vs linhas + Plataforma.
-    status: pending
+    status: cancelled
   - id: kpi-fallback-help
     content: Alinhar `help` do `st.metric` Resultado em `_render_fdl_fat_dre_nf_kpi_cards` (app_operacional.py).
-    status: pending
+    status: cancelled
   - id: health-help
     content: Atualizar `help` do `st.metric` Resultado em `render_health_panel` (health_panel_ui.py).
-    status: pending
+    status: cancelled
 isProject: false
 ---
 

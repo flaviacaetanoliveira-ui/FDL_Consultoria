@@ -16,6 +16,7 @@ import streamlit as st
 from app.components.health_score import (
     AlertLevel,
     Diagnostico,
+    HealthLevel,
     SKURisco,
     calcular_health_score,
     health_level_meta,
@@ -28,6 +29,215 @@ from app.components.health_score import (
 
 if TYPE_CHECKING:
     from app.components.health_score import HealthScore
+
+HEALTH_PANEL_CSS = """
+<style>
+.fdl-health-panel-inner { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.fdl-health-metrics-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin: 20px 0;
+}
+.fdl-health-metric-item {
+  flex: 1 1 140px;
+  text-align: center;
+  padding: 4px 12px;
+}
+.fdl-health-metric-item:not(:last-child) {
+  border-right: 1px solid #e2e8f0;
+  padding-right: 24px;
+}
+.fdl-health-metric-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.fdl-health-metric-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.fdl-health-metric-delta {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+  margin-top: 6px;
+}
+.fdl-health-metric-delta--down { color: #b91c1c; }
+.fdl-health-metric-delta--up { color: #047857; }
+.fdl-health-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #94a3b8;
+}
+.fdl-health-summary--saudavel {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #bbf7d0;
+  border-left-color: #22c55e;
+}
+.fdl-health-summary--atencao {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border-color: #fcd34d;
+  border-left-color: #f59e0b;
+}
+.fdl-health-summary--risco {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border-color: #fdba74;
+  border-left-color: #f97316;
+}
+.fdl-health-summary--critico {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-color: #fca5a5;
+  border-left-color: #ef4444;
+}
+.fdl-health-summary-icon { font-size: 1.25rem; flex-shrink: 0; line-height: 1.3; }
+.fdl-health-summary-text {
+  font-size: 0.95rem;
+  color: #334155;
+  line-height: 1.55;
+}
+.fdl-health-summary--atencao .fdl-health-summary-text,
+.fdl-health-summary--risco .fdl-health-summary-text { color: #92400e; }
+.fdl-health-summary--critico .fdl-health-summary-text { color: #7f1d1d; }
+.fdl-health-summary--saudavel .fdl-health-summary-text { color: #14532d; }
+.fdl-health-diagnostics-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 8px 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fdl-health-diagnostics-title .fdl-health-diag-ico { font-size: 1rem; }
+.fdl-health-diag-card {
+  border-radius: 10px;
+  padding: 16px 48px 16px 20px;
+  margin-bottom: 12px;
+  border-left: 4px solid;
+  position: relative;
+  box-sizing: border-box;
+}
+.fdl-health-severity-high {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-left-color: #ef4444;
+}
+.fdl-health-severity-high .fdl-health-diagnostic-title { color: #991b1b; }
+.fdl-health-severity-high .fdl-health-diag-ico-tr { position: absolute; right: 16px; top: 16px; font-size: 1.15rem; }
+.fdl-health-severity-medium {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border-left-color: #f59e0b;
+}
+.fdl-health-severity-medium .fdl-health-diagnostic-title { color: #92400e; }
+.fdl-health-severity-medium .fdl-health-diag-ico-tr { position: absolute; right: 16px; top: 16px; font-size: 1.15rem; }
+.fdl-health-severity-low {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-left-color: #22c55e;
+}
+.fdl-health-severity-low .fdl-health-diagnostic-title { color: #166534; }
+.fdl-health-severity-low .fdl-health-diag-ico-tr { position: absolute; right: 16px; top: 16px; font-size: 1.25rem; color: #22c55e; font-weight: 700; }
+.fdl-health-severity-info {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-left-color: #3b82f6;
+}
+.fdl-health-severity-info .fdl-health-diagnostic-title { color: #1e40af; }
+.fdl-health-diagnostic-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.fdl-health-diagnostic-detail {
+  font-size: 0.85rem;
+  color: #4b5563;
+  margin-bottom: 8px;
+  line-height: 1.45;
+}
+.fdl-health-diagnostic-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1e40af;
+  background: rgba(59, 130, 246, 0.12);
+  padding: 8px 14px;
+  border-radius: 6px;
+  margin-top: 4px;
+}
+.fdl-health-diagnostic-action::before { content: "→"; font-weight: 700; }
+.fdl-health-skus-wrap { margin-top: 20px; }
+.fdl-health-skus-details {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.fdl-health-skus-details > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 20px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+.fdl-health-skus-details > summary::-webkit-details-marker { display: none; }
+.fdl-health-skus-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+}
+.fdl-health-skus-badge {
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+.fdl-health-skus-preview {
+  font-size: 0.8rem;
+  color: #6b7280;
+  padding: 10px 20px 14px 20px;
+  background: #fafafa;
+  border-bottom: 1px solid #f1f5f9;
+  line-height: 1.45;
+}
+.fdl-health-skus-body { padding: 12px 16px 16px 16px; }
+.fdl-health-skus-preview-inline {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin: 0 0 14px 0;
+  line-height: 1.45;
+}
+.fdl-health-skus-spacer { height: 16px; }
+@media (max-width: 640px) {
+  .fdl-health-metric-item { border-right: none !important; padding-right: 8px !important; border-bottom: 1px solid #f1f5f9; }
+  .fdl-health-metric-item:last-child { border-bottom: none; }
+}
+</style>
+"""
 
 
 def _diag_md_para_html(md: str) -> str:
@@ -47,6 +257,147 @@ def _fmt_brl0(x: float) -> str:
     ax = abs(float(x))
     body = f"{ax:,.0f}".replace(",", "v").replace(".", ",").replace("v", ".")
     return ("-R$ " if x < 0 else "R$ ") + body
+
+
+def _diagnostic_severity_class(diag: Diagnostico) -> str:
+    """Mapeia nível/tipo do diagnóstico para classe visual (sem alterar regras de negócio)."""
+    if diag.nivel == AlertLevel.CRITICAL:
+        return "fdl-health-diag-card fdl-health-severity-high"
+    if diag.nivel == AlertLevel.HIGH:
+        return "fdl-health-diag-card fdl-health-severity-high"
+    if diag.nivel == AlertLevel.MEDIUM:
+        return "fdl-health-diag-card fdl-health-severity-medium"
+    if diag.tipo == "POSITIVO" and diag.nivel == AlertLevel.INFO:
+        return "fdl-health-diag-card fdl-health-severity-low"
+    return "fdl-health-diag-card fdl-health-severity-info"
+
+
+def _severity_corner_icon(cls: str) -> str:
+    if "severity-low" in cls:
+        return '<span class="fdl-health-diag-ico-tr" aria-hidden="true">✓</span>'
+    if "severity-high" in cls or "severity-medium" in cls:
+        return '<span class="fdl-health-diag-ico-tr" aria-hidden="true">⚠️</span>'
+    return ""
+
+
+def _executive_summary_html(health: "HealthScore") -> str:
+    """Resumo em uma frase a partir solely dos campos já calculados no HealthScore."""
+    hl_name, _hl_c, _mk = health_level_meta(health.level)
+    parts: list[str] = [
+        f"Operação classificada como <strong>{html.escape(hl_name)}</strong>",
+        f"margem <strong>{health.margem_pct:.1f}%</strong>",
+        f"custo/receita <strong>{health.custo_pct:.1f}%</strong>",
+    ]
+    if health.tendencia_pp is not None:
+        parts.append(f"tendência <strong>{health.tendencia_pp:+.1f} pp</strong> vs. mês anterior")
+    if health.vs_grupo_pp is not None:
+        parts.append(f"vs. grupo <strong>{health.vs_grupo_pp:+.1f} pp</strong>")
+    text = " · ".join(parts) + "."
+    summary_cls = {
+        HealthLevel.SAUDAVEL: "fdl-health-summary--saudavel",
+        HealthLevel.ATENCAO: "fdl-health-summary--atencao",
+        HealthLevel.RISCO: "fdl-health-summary--risco",
+        HealthLevel.CRITICO: "fdl-health-summary--critico",
+    }[health.level]
+    icons = {
+        HealthLevel.SAUDAVEL: "✓",
+        HealthLevel.ATENCAO: "⚡",
+        HealthLevel.RISCO: "⚠️",
+        HealthLevel.CRITICO: "⛔",
+    }
+    ico = icons[health.level]
+    return (
+        f'<div class="fdl-health-summary {summary_cls}">'
+        f'<span class="fdl-health-summary-icon" aria-hidden="true">{ico}</span>'
+        f'<span class="fdl-health-summary-text">{text}</span>'
+        "</div>"
+    )
+
+
+def _metrics_block_html(health: "HealthScore") -> str:
+    """Métricas principais em container único (substitui colunas soltas)."""
+    h_margem = html.escape(
+        "Margem = resultado ÷ receita nas linhas com custo válido no período."
+    )
+    h_res = html.escape(
+        "Soma do resultado em linhas de pedido com custo válido no período. "
+        "Usa receita de venda (lista) para cálculo de margem. "
+        "Não aplica filtro de plataforma — por isso pode diferir do Resultado dos KPIs."
+    )
+    h_custo = html.escape("Custo produto ÷ receita. Referência orientativa ~50%.")
+    d = health.tendencia_pp
+    delta_html = ""
+    if d is not None:
+        dc = "fdl-health-metric-delta--down" if d < 0 else "fdl-health-metric-delta--up" if d > 0 else ""
+        delta_html = (
+            f'<div class="fdl-health-metric-delta {dc}">{html.escape(f"{d:+.1f} pp vs mês ant.")}</div>'
+        )
+
+    blocks: list[str] = [
+        '<div class="fdl-health-metric-item">'
+        f'<div class="fdl-health-metric-label" title="{h_margem}">Margem</div>'
+        f'<div class="fdl-health-metric-value">{html.escape(f"{health.margem_pct:.1f}%")}</div>'
+        f"{delta_html}"
+        "</div>",
+        '<div class="fdl-health-metric-item">'
+        f'<div class="fdl-health-metric-label" title="{h_res}">Resultado</div>'
+        f'<div class="fdl-health-metric-value">{html.escape(_fmt_brl0(health.resultado))}</div>'
+        "</div>",
+        '<div class="fdl-health-metric-item">'
+        f'<div class="fdl-health-metric-label" title="{h_custo}">Custo / Receita</div>'
+        f'<div class="fdl-health-metric-value">{html.escape(f"{health.custo_pct:.1f}%")}</div>'
+        "</div>",
+    ]
+    vg = health.vs_grupo_pp
+    if vg is not None:
+        mg = health.margem_grupo
+        h_vg = html.escape(
+            f"Média de margem das outras empresas no mesmo mês civil: {mg:.1f}%."
+            if mg is not None
+            else "Sem benchmark (recorte consolidado ou uma única empresa)."
+        )
+        blocks.append(
+            '<div class="fdl-health-metric-item">'
+            f'<div class="fdl-health-metric-label" title="{h_vg}">vs Grupo</div>'
+            f'<div class="fdl-health-metric-value">{html.escape(f"{vg:+.1f} pp")}</div>'
+            "</div>"
+        )
+
+    inner = "".join(blocks)
+    return (
+        '<div class="fdl-health-panel-inner">'
+        f"{HEALTH_PANEL_CSS}"
+        f'<div class="fdl-health-metrics-container">{inner}</div>'
+        "</div>"
+    )
+
+
+def _render_diagnostico_card(diag: Diagnostico) -> None:
+    scls = _diagnostic_severity_class(diag)
+    ico = _severity_corner_icon(scls)
+    tit = html.escape(diag.titulo)
+    det_html = _diag_md_para_html(diag.detalhe)
+    action_html = ""
+    if diag.acao:
+        action_html = (
+            f'<div class="fdl-health-diagnostic-action">{html.escape(diag.acao)}</div>'
+        )
+    st.html(
+        f'<div class="{html.escape(scls)}">'
+        f"{ico}"
+        f'<div class="fdl-health-diagnostic-title">{tit}</div>'
+        f'<div class="fdl-health-diagnostic-detail">{det_html}</div>'
+        f"{action_html}"
+        "</div>"
+    )
+
+
+def _skus_preview_line(skus: list[SKURisco]) -> str:
+    top = sorted(skus, key=lambda s: s.resultado)[:3]
+    if not top:
+        return ""
+    parts = [f"{html.escape(str(s.sku))} ({html.escape(_fmt_brl0(s.resultado))})" for s in top]
+    return " · ".join(parts)
 
 
 def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> None:
@@ -73,88 +424,33 @@ def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> 
 """
     )
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        d = health.tendencia_pp
-        st.metric(
-            "Margem",
-            f"{health.margem_pct:.1f}%",
-            delta=(f"{d:+.1f} pp vs mês ant." if d is not None else None),
-            delta_color=(
-                "inverse"
-                if d is not None and d < 0
-                else "normal"
-                if d is not None and d > 0
-                else "off"
-            ),
-            help="Margem = resultado ÷ receita nas linhas com custo válido no período.",
-        )
-    with col2:
-        st.metric(
-            "Resultado",
-            _fmt_brl0(health.resultado),
-            delta=None,
-            delta_color="normal",
-            help=(
-                "Soma do resultado em linhas de pedido com custo válido no período. "
-                "Usa receita de venda (lista) para cálculo de margem. "
-                "Não aplica filtro de plataforma — por isso pode diferir do Resultado dos KPIs."
-            ),
-        )
-    with col3:
-        st.metric(
-            "Custo / Receita",
-            f"{health.custo_pct:.1f}%",
-            delta=None,
-            delta_color="inverse" if health.custo_pct > 50 else "normal",
-            help="Custo produto ÷ receita. Referência orientativa ~50%.",
-        )
-    with col4:
-        vg = health.vs_grupo_pp
-        mg = health.margem_grupo
-        if vg is not None:
-            h = (
-                f"Média de margem das outras empresas no mesmo mês civil: {mg:.1f}%."
-                if mg is not None
-                else "Sem benchmark (recorte consolidado ou uma única empresa)."
-            )
-            st.metric(
-                "vs Grupo",
-                f"{vg:+.1f} pp",
-                delta=None,
-                delta_color="inverse" if vg < 0 else "normal",
-                help=h,
-            )
-
-    st.divider()
+    st.html(_metrics_block_html(health))
+    st.html(_executive_summary_html(health))
 
     if health.diagnosticos:
-        st.markdown("#### Diagnóstico automático")
+        st.html(
+            '<h3 class="fdl-health-diagnostics-title">'
+            '<span class="fdl-health-diag-ico" aria-hidden="true">🔍</span>'
+            "Diagnóstico automático"
+            "</h3>"
+        )
         for diag in health.diagnosticos:
-            _render_diagnostico(diag)
+            _render_diagnostico_card(diag)
 
     if health.skus_risco and show_details:
-        with st.expander(f"SKUs em risco ({len(health.skus_risco)})", expanded=False):
-            _render_skus_risco(health.skus_risco)
-
-
-def _render_diagnostico(diag: Diagnostico) -> None:
-    parts: list[str] = [f"**{diag.titulo}**", diag.detalhe]
-    if diag.acao:
-        parts.append(f"**Ação sugerida:** {diag.acao}")
-    body = "\n\n".join(parts)
-    if diag.nivel == AlertLevel.CRITICAL:
-        st.error(body)
-    elif diag.nivel in (AlertLevel.HIGH, AlertLevel.MEDIUM):
-        inner = _diag_md_para_html(body)
-        st.markdown(
-            '<div style="background:#fefce8;border-left:4px solid #eab308;border-radius:8px;padding:12px 14px;margin:0 0 8px 0;color:#1e293b;line-height:1.45;">'
-            f"<p>{inner}</p>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-    else:
-        st.info(body)
+        n = len(health.skus_risco)
+        preview_plain = _skus_preview_line(health.skus_risco)
+        st.html('<div class="fdl-health-skus-spacer" aria-hidden="true"></div>')
+        with st.container(border=True):
+            _exp_lab = f"📦 SKUs em risco ({n})"
+            with st.expander(_exp_lab, expanded=False):
+                if preview_plain:
+                    st.markdown(
+                        f'<p class="fdl-health-skus-preview-inline"><strong>Top 3</strong> '
+                        f"(pior resultado): {preview_plain}</p>",
+                        unsafe_allow_html=True,
+                    )
+                _render_skus_risco(health.skus_risco)
 
 
 def _render_skus_risco(skus: list[SKURisco]) -> None:

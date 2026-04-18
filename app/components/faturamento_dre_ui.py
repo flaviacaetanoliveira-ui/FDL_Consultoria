@@ -88,24 +88,30 @@ def fat_dre_premium_css() -> str:
 .fdl-fat-kpi-hero-card--margem.fdl-fat-kpi--mid::before { background: var(--fdl-warning); }
 .fdl-fat-kpi-hero-card--margem.fdl-fat-kpi--neg::before { background: var(--fdl-danger); }
 .fdl-fat-kpi-hero-label {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: #64748b;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   margin: 0 0 6px 0;
 }
 .fdl-fat-kpi-hero-value {
-  font-size: 2.5rem;
-  font-weight: 700;
   line-height: 1.08;
   color: var(--fdl-neutral-800);
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
+.fdl-fat-kpi-hero-card--result .fdl-fat-kpi-hero-value {
+  font-size: 2.25rem;
+  font-weight: 800;
+}
+.fdl-fat-kpi-hero-card--margem .fdl-fat-kpi-hero-value {
+  font-size: 2rem;
+  font-weight: 700;
+}
 .fdl-fat-kpi-hero-meta {
   margin-top: 8px;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #475569;
 }

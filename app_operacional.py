@@ -7015,11 +7015,11 @@ def _faturamento_dre_apply_produto_e_sinal_venda(
     sinais_resultado: tuple[str, ...],
 ) -> pd.DataFrame:
     """
-    Refina o quadro NF por ``produto_resumo`` e pelo **sinal do resultado comercial** (lucro e/ou prejuízo).
+    Refina o quadro NF por ``produto_resumo`` e pelo **sinal do resultado comercial** (lucro / prejuízo / empate).
 
-    ``sinais_resultado`` pode incluir ``lucro``, ``prejuizo`` ou ambos (união). Vazio ou inválido = ambos.
-    Com **lucro** e **prejuízo** ativos (recorte padrão), **não** se filtra por sinal — a tabela alinha-se aos
-    cards (inclui empate ~0, NaN e linhas só fiscais). Com **só um** sinal, mantém o critério estrito (>0 ou <0).
+    ``sinais_resultado`` pode incluir ``lucro``, ``prejuizo``, ``empate``. Vazio ou inválido = os três.
+    Com **lucro** e **prejuízo** ativos em conjunto (com ou sem empate), **não** se filtra por sinal — igual ao recorte
+    legado dos cards (inclui empate ~0, NaN e linhas só fiscais). Caso contrário, faz a união das faixas escolhidas.
     Valores vêm do materializado — sem recalcular DRE.
     """
     if df_nf.empty:
@@ -7030,12 +7030,13 @@ def _faturamento_dre_apply_produto_e_sinal_venda(
         pr = out["produto_resumo"].fillna("").astype(str).str.strip()
         out = out.loc[pr.isin(sel_p)].copy()
     raw = [str(x).strip().lower() for x in sinais_resultado if str(x).strip()]
-    sel = {x for x in raw if x in {"lucro", "prejuizo"}}
+    sel = {x for x in raw if x in {"lucro", "prejuizo", "empate"}}
     if not sel:
-        sel = {"lucro", "prejuizo"}
+        sel = {"lucro", "prejuizo", "empate"}
     if "resultado" not in out.columns:
         return out
-    if sel == {"lucro", "prejuizo"}:
+    # Com lucro **e** prejuízo ativos (com ou sem empate no multiselect), não filtra por sinal — mesmo critério legado.
+    if "lucro" in sel and "prejuizo" in sel:
         return out
     res = pd.to_numeric(out["resultado"], errors="coerce")
     _eps = 1e-9
@@ -7044,6 +7045,8 @@ def _faturamento_dre_apply_produto_e_sinal_venda(
         mask |= res.notna() & (res > _eps)
     if "prejuizo" in sel:
         mask |= res.notna() & (res < -_eps)
+    if "empate" in sel:
+        mask |= res.notna() & (res >= -_eps) & (res <= _eps)
     return out.loc[mask].copy()
 
 
@@ -7757,36 +7760,26 @@ def _render_faturamento_dre_minimal(
             elif _s == "prejuizo":
                 st.session_state[_k_sinais] = ["prejuizo"]
             else:
-                st.session_state[_k_sinais] = ["lucro", "prejuizo"]
+                st.session_state[_k_sinais] = ["lucro", "prejuizo", "empate"]
             st.session_state.pop("fdl_fat_min_sinal_resultado", None)
         elif isinstance(_leg_vs, str):
             _m = {"positiva": "lucro", "negativa": "prejuizo"}
             _one = _m.get(_leg_vs.strip().lower())
             st.session_state[_k_sinais] = (
-                [_one] if _one else ["lucro", "prejuizo"]
+                [_one] if _one else ["lucro", "prejuizo", "empate"]
             )
         else:
-            st.session_state[_k_sinais] = ["lucro", "prejuizo"]
+            st.session_state[_k_sinais] = ["lucro", "prejuizo", "empate"]
     _prev_s = st.session_state.get(_k_sinais)
     if not isinstance(_prev_s, list):
-        st.session_state[_k_sinais] = ["lucro", "prejuizo"]
+        st.session_state[_k_sinais] = ["lucro", "prejuizo", "empate"]
     else:
-        _filt = [x for x in _prev_s if x in ("lucro", "prejuizo")]
-        st.session_state[_k_sinais] = _filt if _filt else ["lucro", "prejuizo"]
+        _filt = [x for x in _prev_s if x in ("lucro", "prejuizo", "empate")]
+        st.session_state[_k_sinais] = _filt if _filt else ["lucro", "prejuizo", "empate"]
 
     st.markdown(
         """
 <style>
-.tabela-nf-container {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 20px;
-    margin-top: 16px;
-}
-.tabela-nf-container div[data-testid="stVerticalBlock"] > div:has(div[data-baseweb="select"]) {
-    min-height: 38px;
-}
 .tabela-nf-contador {
     color: #64748b;
     font-size: 0.85rem;
@@ -7836,17 +7829,18 @@ def _render_faturamento_dre_minimal(
     with _f1:
         st.multiselect(
             "Status",
-            options=("lucro", "prejuizo"),
+            options=("lucro", "prejuizo", "empate"),
             format_func=lambda x: {
                 "lucro": "Lucro",
                 "prejuizo": "Prejuízo",
+                "empate": "Empate",
             }[x],
             key=_k_sinais,
-            placeholder="Lucro · Prejuízo…",
+            placeholder="Lucro · Prejuízo · Empate…",
             label_visibility="collapsed",
             help=(
-                "Com as duas opções, a tabela inclui também empate (~0) e linhas só fiscais. "
-                "Com uma opção, filtra resultado > 0 ou < 0."
+                "«Empate» = resultado ~0 na NF. Com **Lucro** e **Prejuízo** ao mesmo tempo, não se filtra por sinal "
+                "(equivalente ao recorte completo). Com uma ou duas faixas sem o par lucro+prejuízo, aplica-se união."
             ),
         )
     with _f2:
@@ -7898,6 +7892,10 @@ def _render_faturamento_dre_minimal(
             label_visibility="collapsed",
         )
 
+    st.caption(
+        "«—» em Plataforma / Pedido / Produtos → NF sem pedido ligado ou campo ausente no materializado (esperado quando só há lado fiscal)."
+    )
+
     _prod_sel = tuple(
         str(x).strip()
         for x in (st.session_state.get("fdl_fat_min_prod") or [])
@@ -7907,7 +7905,7 @@ def _render_faturamento_dre_minimal(
     _sinais_tuple = (
         tuple(str(x).strip().lower() for x in _sinais_ui if str(x).strip())
         if isinstance(_sinais_ui, list)
-        else ("lucro", "prejuizo")
+        else ("lucro", "prejuizo", "empate")
     )
     df_nf_panel = _faturamento_dre_apply_produto_e_sinal_venda(
         df_nf,
@@ -8033,10 +8031,6 @@ def _render_faturamento_dre_minimal(
                     f"Parquet fiscal (escopo org no carregamento): <strong>{len(df_fiscal_pre)}</strong> NF(s).",
                     tight=True,
                 )
-
-    st.markdown("<div class='tabela-nf-container'>", unsafe_allow_html=True)
-
-    _fdl_fat_min_vsp(size="sm")
 
     _FAT_NF_TABLE_STYLER_MAX_ROWS = 500
 
@@ -8411,117 +8405,116 @@ def _render_faturamento_dre_minimal(
         disabled=_disp_nf_full.empty,
     )
 
-    _nf_cap_txt = ""
-    if _nf_dl_scope and _nf_dl_n == _nf_dl_scope:
-        _nf_cap_txt = (
-            f"{_nf_dl_scope:,} notas · emissão em ordem decrescente · CSV alinhado às colunas visíveis."
-            if use_fiscal_kpi
-            else f"{_nf_dl_scope:,} notas · emissão decrescente · CSV alinhado às colunas visíveis."
-        )
-    elif _nf_dl_scope:
-        _nf_cap_txt = (
-            f"Mostrando {_nf_dl_n:,} de {_nf_dl_scope:,} notas · emissão decrescente."
-        )
-    else:
-        _nf_cap_txt = "Sem linhas para exibir com os filtros atuais."
-    st.markdown(f"<p class='tabela-nf-contador'>{html.escape(_nf_cap_txt)}</p>", unsafe_allow_html=True)
-    if _disp_nf_ui.empty:
-        st.info(
-            (
-                "Sem linhas na **tabela** com os filtros atuais (status, produto, plataforma, busca). "
-                "O **topo fiscal** e os **cards/DRE** podem ainda ter **N_base** > 0 — confira período e empresa."
+    with st.container(border=True):
+        _nf_cap_txt = ""
+        if _nf_dl_scope and _nf_dl_n == _nf_dl_scope:
+            _nf_cap_txt = (
+                f"{_nf_dl_scope:,} notas · emissão em ordem decrescente · CSV alinhado às colunas visíveis."
+                if use_fiscal_kpi
+                else f"{_nf_dl_scope:,} notas · emissão decrescente · CSV alinhado às colunas visíveis."
             )
-            if use_fiscal_kpi
-            else (
-                "Sem linhas no recorte (confirme **período de emissão**, **empresa** e **plataforma**)."
+        elif _nf_dl_scope:
+            _nf_cap_txt = (
+                f"Mostrando {_nf_dl_n:,} de {_nf_dl_scope:,} notas · emissão decrescente."
             )
-        )
-    else:
-        _nf_page_sz = 25
-        _nf_total_rows = len(_disp_nf_ui)
-        _nf_pages = max(1, (_nf_total_rows + _nf_page_sz - 1) // _nf_page_sz)
-        _pg_sel = 1
-        if _nf_pages > 1:
-            _pg_a, _pg_b = st.columns((1, 2))
-            with _pg_a:
-                _pg_sel = int(
-                    st.number_input(
-                        "Página",
-                        min_value=1,
-                        max_value=int(_nf_pages),
-                        value=1,
-                        step=1,
-                        key="fdl_fat_min_nf_pg",
-                    )
-                )
-            with _pg_b:
-                _i0p = (int(_pg_sel) - 1) * _nf_page_sz
-                _i1p = min(_i0p + _nf_page_sz, _nf_total_rows)
-                st.caption(
-                    f"Mostrando **{_i0p + 1}**–**{_i1p}** de **{_nf_total_rows}** notas. "
-                    "Use o cabeçalho da tabela para ordenar a página atual."
-                )
         else:
-            st.caption(f"**{_nf_total_rows}** nota(s) no recorte (ordenar pelo cabeçalho da coluna).")
-        _i0 = (int(_pg_sel) - 1) * _nf_page_sz
-        _slice_ui = _disp_nf_ui.iloc[_i0 : _i0 + _nf_page_sz].copy()
-        _slice_num = _disp_nf_full.iloc[_i0 : _i0 + _nf_page_sz].reset_index(drop=True)
-        _slice_ui_r = _slice_ui.reset_index(drop=True)
-
-        def _nf_style_status_col(s: pd.Series) -> list[str]:
-            out: list[str] = []
-            for v in s.astype(object):
-                vs = str(v).strip()
-                if vs == "Lucro":
-                    out.append(
-                        "background-color: #dcfce7; color: #166534; font-weight: 500; font-size: 0.75rem"
-                    )
-                elif vs == "Prejuízo":
-                    out.append(
-                        "background-color: #fee2e2; color: #991b1b; font-weight: 500; font-size: 0.75rem"
-                    )
-                elif vs == "Empate":
-                    out.append(
-                        "background-color: #f3f4f6; color: #6b7280; font-weight: 500; font-size: 0.75rem"
-                    )
-                else:
-                    out.append("")
-            return out
-
-        def _nf_row_highlight_fat(r: pd.Series) -> list[str]:
-            ri = r.name
-            try:
-                res = float(pd.to_numeric(_slice_num.loc[ri, "Resultado"], errors="coerce"))
-            except Exception:
-                res = 0.0
-            c = "background-color: #fef2f2" if res < 0 else ""
-            return [c] * len(r)
-
-        _h_tbl = min(440, 132 + 34 * min(len(_slice_ui_r), 14))
-        _df_arg: object = _slice_ui_r
-        _nf_styler_ok = (not _fdl_safe_mode()) and int(_slice_ui_r.size) < 200_000
-        if _nf_styler_ok:
-            try:
-                _st_obj = _slice_ui_r.style.apply(_nf_style_status_col, subset=["Status"], axis=0)
-                if _nf_total_rows <= _FAT_NF_TABLE_STYLER_MAX_ROWS:
-                    _st_obj = _st_obj.apply(_nf_row_highlight_fat, axis=1)
-                _df_arg = _st_obj
-            except Exception:
-                _df_arg = _slice_ui_r
-        if _nf_total_rows > _FAT_NF_TABLE_STYLER_MAX_ROWS and _nf_styler_ok:
-            st.caption(
-                "Realce de **linha** para prejuízo só em recortes com até **500** notas; a coluna **Status** "
-                "continua destacada em todas as páginas."
+            _nf_cap_txt = "Sem linhas para exibir com os filtros atuais."
+        st.markdown(f"<p class='tabela-nf-contador'>{html.escape(_nf_cap_txt)}</p>", unsafe_allow_html=True)
+        if _disp_nf_ui.empty:
+            st.info(
+                (
+                    "Sem linhas na **tabela** com os filtros atuais (status, produto, plataforma, busca). "
+                    "O **topo fiscal** e os **cards/DRE** podem ainda ter **N_base** > 0 — confira período e empresa."
+                )
+                if use_fiscal_kpi
+                else (
+                    "Sem linhas no recorte (confirme **período de emissão**, **empresa** e **plataforma**)."
+                )
             )
-        st.dataframe(
-            _df_arg,
-            use_container_width=True,
-            hide_index=True,
-            height=_h_tbl,
-            column_config=_cfg_nf,
-        )
+        else:
+            _nf_page_sz = 25
+            _nf_total_rows = len(_disp_nf_ui)
+            _nf_pages = max(1, (_nf_total_rows + _nf_page_sz - 1) // _nf_page_sz)
+            _pg_sel = 1
+            if _nf_pages > 1:
+                _pg_a, _pg_b = st.columns((1, 2))
+                with _pg_a:
+                    _pg_sel = int(
+                        st.number_input(
+                            "Página",
+                            min_value=1,
+                            max_value=int(_nf_pages),
+                            value=1,
+                            step=1,
+                            key="fdl_fat_min_nf_pg",
+                        )
+                    )
+                with _pg_b:
+                    _i0p = (int(_pg_sel) - 1) * _nf_page_sz
+                    _i1p = min(_i0p + _nf_page_sz, _nf_total_rows)
+                    st.caption(
+                        f"Mostrando **{_i0p + 1}**–**{_i1p}** de **{_nf_total_rows}** notas. "
+                        "Use o cabeçalho da tabela para ordenar a página atual."
+                    )
+            else:
+                st.caption(f"**{_nf_total_rows}** nota(s) no recorte (ordenar pelo cabeçalho da coluna).")
+            _i0 = (int(_pg_sel) - 1) * _nf_page_sz
+            _slice_ui = _disp_nf_ui.iloc[_i0 : _i0 + _nf_page_sz].copy()
+            _slice_num = _disp_nf_full.iloc[_i0 : _i0 + _nf_page_sz].reset_index(drop=True)
+            _slice_ui_r = _slice_ui.reset_index(drop=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
+            def _nf_style_status_col(s: pd.Series) -> list[str]:
+                out: list[str] = []
+                for v in s.astype(object):
+                    vs = str(v).strip()
+                    if vs == "Lucro":
+                        out.append(
+                            "background-color: #dcfce7; color: #166534; font-weight: 500; font-size: 0.75rem"
+                        )
+                    elif vs == "Prejuízo":
+                        out.append(
+                            "background-color: #fee2e2; color: #991b1b; font-weight: 500; font-size: 0.75rem"
+                        )
+                    elif vs == "Empate":
+                        out.append(
+                            "background-color: #f3f4f6; color: #6b7280; font-weight: 500; font-size: 0.75rem"
+                        )
+                    else:
+                        out.append("")
+                return out
+
+            def _nf_row_highlight_fat(r: pd.Series) -> list[str]:
+                ri = r.name
+                try:
+                    res = float(pd.to_numeric(_slice_num.loc[ri, "Resultado"], errors="coerce"))
+                except Exception:
+                    res = 0.0
+                c = "background-color: #fef2f2" if res < 0 else ""
+                return [c] * len(r)
+
+            _h_tbl = min(440, 132 + 34 * min(len(_slice_ui_r), 14))
+            _df_arg: object = _slice_ui_r
+            _nf_styler_ok = (not _fdl_safe_mode()) and int(_slice_ui_r.size) < 200_000
+            if _nf_styler_ok:
+                try:
+                    _st_obj = _slice_ui_r.style.apply(_nf_style_status_col, subset=["Status"], axis=0)
+                    if _nf_total_rows <= _FAT_NF_TABLE_STYLER_MAX_ROWS:
+                        _st_obj = _st_obj.apply(_nf_row_highlight_fat, axis=1)
+                    _df_arg = _st_obj
+                except Exception:
+                    _df_arg = _slice_ui_r
+            if _nf_total_rows > _FAT_NF_TABLE_STYLER_MAX_ROWS and _nf_styler_ok:
+                st.caption(
+                    "Realce de **linha** para prejuízo só em recortes com até **500** notas; a coluna **Status** "
+                    "continua destacada em todas as páginas."
+                )
+            st.dataframe(
+                _df_arg,
+                use_container_width=True,
+                hide_index=True,
+                height=_h_tbl,
+                column_config=_cfg_nf,
+            )
 
     _fdl_ui_gap_section()
     _fdl_fat_min_vsp(size="sm")

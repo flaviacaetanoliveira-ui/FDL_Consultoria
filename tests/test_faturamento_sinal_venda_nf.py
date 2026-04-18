@@ -10,7 +10,7 @@ def _apply_produto_e_sinal_resultado(
     df_nf: pd.DataFrame,
     *,
     produtos_sel: tuple[str, ...] = (),
-    sinais_resultado: tuple[str, ...] = ("lucro", "prejuizo"),
+    sinais_resultado: tuple[str, ...] = ("lucro", "prejuizo", "empate"),
 ) -> pd.DataFrame:
     """Cópia da lógica em app_operacional (sem Streamlit)."""
     if df_nf.empty:
@@ -21,12 +21,12 @@ def _apply_produto_e_sinal_resultado(
         pr = out["produto_resumo"].fillna("").astype(str).str.strip()
         out = out.loc[pr.isin(sel_p)].copy()
     raw = [str(x).strip().lower() for x in sinais_resultado if str(x).strip()]
-    sel = {x for x in raw if x in {"lucro", "prejuizo"}}
+    sel = {x for x in raw if x in {"lucro", "prejuizo", "empate"}}
     if not sel:
-        sel = {"lucro", "prejuizo"}
+        sel = {"lucro", "prejuizo", "empate"}
     if "resultado" not in out.columns:
         return out
-    if sel == {"lucro", "prejuizo"}:
+    if "lucro" in sel and "prejuizo" in sel:
         return out
     res = pd.to_numeric(out["resultado"], errors="coerce")
     _eps = 1e-9
@@ -35,6 +35,8 @@ def _apply_produto_e_sinal_resultado(
         mask |= res.notna() & (res > _eps)
     if "prejuizo" in sel:
         mask |= res.notna() & (res < -_eps)
+    if "empate" in sel:
+        mask |= res.notna() & (res >= -_eps) & (res <= _eps)
     return out.loc[mask].copy()
 
 
@@ -48,10 +50,16 @@ class TestSinalResultadoNf(unittest.TestCase):
         )
         both = _apply_produto_e_sinal_resultado(df, sinais_resultado=("lucro", "prejuizo"))
         self.assertEqual(set(both["Nota_Numero_Normalizado"]), {"A", "B", "C", "D", "E"})
+        both3 = _apply_produto_e_sinal_resultado(df, sinais_resultado=("lucro", "prejuizo", "empate"))
+        self.assertEqual(set(both3["Nota_Numero_Normalizado"]), {"A", "B", "C", "D", "E"})
         luc = _apply_produto_e_sinal_resultado(df, sinais_resultado=("lucro",))
         self.assertEqual(set(luc["Nota_Numero_Normalizado"]), {"A"})
         prej = _apply_produto_e_sinal_resultado(df, sinais_resultado=("prejuizo",))
         self.assertEqual(set(prej["Nota_Numero_Normalizado"]), {"B"})
+        emp = _apply_produto_e_sinal_resultado(df, sinais_resultado=("empate",))
+        self.assertEqual(set(emp["Nota_Numero_Normalizado"]), {"C", "D"})
+        luc_emp = _apply_produto_e_sinal_resultado(df, sinais_resultado=("lucro", "empate"))
+        self.assertEqual(set(luc_emp["Nota_Numero_Normalizado"]), {"A", "C", "D"})
 
     def test_sinais_vazio_cai_em_ambos(self) -> None:
         df = pd.DataFrame(

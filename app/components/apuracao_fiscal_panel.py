@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import html
-import math
 from datetime import datetime
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-from streamlit.column_config import NumberColumn, TextColumn
 
 from faturamento_dre_recorte import _BR_TZ
 from faturamento_dre_recorte_minimo import (
@@ -23,7 +20,6 @@ from faturamento_dre_recorte_minimo import (
 from processing.faturamento.fiscal_materializado import fiscal_contract_dataframe_valid
 from processing.faturamento.nf_materializado import nf_first_contract_dataframe_valid
 from processing.faturamento.nf_panel_materializado import nf_panel_materializado_dataframe_valid
-from processing.faturamento.nf_table_display_filters import nf_table_filter_mask
 
 
 def render_apuracao_fiscal_panel(
@@ -355,11 +351,25 @@ def render_apuracao_fiscal_panel(
     ao._fdl_fat_divider_simple()
     ao._fdl_fat_min_vsp(size="sm")
 
-    _oid = str(org_id)
-
-    # Bloco «Tabela por NF» alinhado ao Faturamento & DRE (chaves de sessão ``fdl_apu_*``).
-    _frag_path = Path(__file__).with_name("_apuracao_nf_table_fragment.py")
-    _frag_src = _frag_path.read_text(encoding="utf-8")
-    _g = globals().copy()
-    _g.update(locals())
-    exec(compile(_frag_src, str(_frag_path), "exec"), _g, _g)
+    ao._render_faturamento_dre_nf_table_section(
+        df_nf_pre=df_nf_pre,
+        df=df,
+        df_fiscal_pre=df_fiscal_pre,
+        load_info=load_info,
+        _min_state=_min_state,
+        _nf_kpi_ini=_nf_kpi_ini,
+        _nf_kpi_fim=_nf_kpi_fim,
+        ok_nf_dates=ok_nf_dates,
+        use_fiscal_kpi=use_fiscal_kpi,
+        use_nf_materializado=use_nf_materializado,
+        use_fiscal_parquet=use_fiscal_parquet,
+        _nf_panel_ads_ui=_nf_panel_ads_ui,
+        _df_fiscal_base=_df_fiscal_base,
+        _fiscal_base_stats=_fiscal_base_stats,
+        _kp_cards=_kp_cards,
+        org_id=org_id,
+        prefix_main="fdl_apu",
+        prefix_nf="fdl_apu_nf",
+        csv_file_name="apuracao_fiscal_nf.csv",
+        table_heading="### Tabela de NFs (visão fiscal)",
+    )

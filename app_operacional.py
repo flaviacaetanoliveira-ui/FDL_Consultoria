@@ -5359,6 +5359,7 @@ def _render_fdl_fat_dre_nf_gerencial(
     vv = float(kp["valor_venda"])
     res = float(kp["resultado"])
     dif = float(kp.get("diferenca", 0.0))
+    rec_frete_num = float(kp.get("receita_frete_tp", 0.0))
     rec_venda = _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00"
     vf_disp = (_fmt_brl_ptbr_celula(kp["valor_faturado_nf"]) or "—") if ok_nf_dates else "—"
     dif_disp = (_fmt_brl_ptbr_celula(kp["diferenca"]) or "—") if ok_nf_dates else "—"
@@ -5384,6 +5385,20 @@ def _render_fdl_fat_dre_nf_gerencial(
     ]
     if nf_panel_ads:
         enc_rows.append(("ADS (3,5% + fixo)", enc_ads))
+
+    total_rec_num = vv + rec_frete_num + dif
+    total_rec_fmt = _fmt_brl_ptbr_celula(total_rec_num) or "R$ 0,00"
+    _ded_sum_num = (
+        float(kp["comissao"])
+        + float(kp.get("custo_produto", 0.0))
+        + float(kp.get("custo_frete_plataforma", 0.0))
+        + float(kp.get("repasse_frete_transportadora_propria", 0.0))
+        + float(kp["imposto"])
+        + float(kp["despesa_fixa"])
+    )
+    if nf_panel_ads:
+        _ded_sum_num += ads_sum
+    total_ded_fmt = _fmt_brl_ptbr_encargo_dre(_ded_sum_num)
 
     dif_highlight = bool(ok_nf_dates and vv > 0 and abs(dif) / vv >= 0.30)
     _marg_base = (
@@ -5443,7 +5458,9 @@ def _render_fdl_fat_dre_nf_gerencial(
             valor_venda_fmt=rec_venda,
             rec_frete_fmt=rec_frete_disp,
             diferenca_fmt=dif_disp,
+            total_receita_fmt=total_rec_fmt,
             enc_rows=enc_rows,
+            total_deducoes_fmt=total_ded_fmt,
             resultado_fmt=res_disp,
             resultado_value=res,
             margem_str=margem_s,

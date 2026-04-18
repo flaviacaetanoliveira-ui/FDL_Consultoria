@@ -178,210 +178,270 @@ def fat_dre_premium_css() -> str:
   margin: 0;
   padding: 0;
 }
-.fdl-fat-dre-card-v2 {
+.fdl-dre-container {
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #fafbfc 0%, #ffffff 48px);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px rgba(15, 23, 42, 0.06);
-  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  padding: 28px 32px 32px 32px;
 }
-.fdl-fat-dre-head-v2 {
+.fdl-dre-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 12px;
-  padding: 18px 22px 16px 22px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #ffffff;
+  gap: 12px 16px;
+  margin-bottom: 24px;
 }
-.fdl-fat-dre-head-v2 h3 {
+.fdl-dre-title {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1e293b;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
   letter-spacing: -0.02em;
+  line-height: 1.2;
 }
-.fdl-fat-dre-period-v2 {
+.fdl-dre-periodo {
   font-size: 0.875rem;
   font-weight: 500;
   color: #64748b;
+  background: #f1f5f9;
+  padding: 6px 12px;
+  border-radius: 6px;
+  white-space: nowrap;
 }
-.fdl-fat-dre-body-v2 {
-  padding: 18px 22px 20px 22px;
+.fdl-dre-section {
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 18px 22px 16px 22px;
+  margin-bottom: 16px;
 }
-.fdl-fat-dre-sec-v2 {
-  margin-bottom: 20px;
-}
-.fdl-fat-dre-sec-title-v2 {
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #64748b;
-  margin: 0 0 12px 0;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #f1f5f9;
-}
-.fdl-fat-dre-line-v2 {
+.fdl-dre-section-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  padding-bottom: 12px;
+  margin-bottom: 10px;
+  border-bottom: 2px solid #e5e7eb;
+}
+.fdl-dre-section-heading {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #374151;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.fdl-dre-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 8px 0;
-  border-bottom: 1px solid #f8fafc;
+  padding: 10px 0;
+  border-bottom: 1px solid #f3f4f6;
 }
-.fdl-fat-dre-line-v2:last-child {
+.fdl-dre-line:last-child {
   border-bottom: none;
 }
-.fdl-fat-dre-line-v2--indent {
-  padding-left: 16px;
+.fdl-dre-line--indent {
+  padding-left: 14px;
 }
-.fdl-fat-dre-label-v2 {
-  font-size: 0.9rem;
-  color: #334155;
-  line-height: 1.4;
-  min-width: min(14rem, 42vw);
+.fdl-dre-line--total {
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 2px solid #d1d5db;
+  border-bottom: none;
+}
+.fdl-dre-label {
+  font-size: 0.95rem;
+  color: #4b5563;
+  font-weight: 400;
+  line-height: 1.35;
   flex: 1 1 12rem;
+  min-width: min(14rem, 46vw);
 }
-.fdl-fat-dre-value-v2 {
-  font-size: 0.9rem;
-  font-weight: 500;
+.fdl-dre-total-label {
+  font-weight: 600;
+  color: #1f2937;
+}
+.fdl-dre-value {
+  font-size: 0.95rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  color: #1f2937;
   text-align: right;
   white-space: nowrap;
-  color: #1e293b;
 }
-.fdl-fat-dre-value-v2--warn {
-  color: #d97706;
+.fdl-dre-total-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.fdl-dre-value--negative {
+  color: #b91c1c;
   font-weight: 600;
 }
-.fdl-fat-dre-value-v2--ded {
-  color: #dc2626;
-  font-weight: 500;
+.fdl-dre-value--warning {
+  color: #b45309;
+  font-weight: 600;
 }
-.fdl-fat-dre-section.fdl-fat-dre-deducoes {
-  margin: 0 0 18px 0;
-  border: 1px solid #e8edf3;
-  border-radius: 10px;
-  background: #f8fafc;
+.fdl-dre-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #d1d5db 18%, #d1d5db 82%, transparent);
+  margin: 18px 0;
+}
+.fdl-dre-details {
+  margin-bottom: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fafafa;
   overflow: hidden;
 }
-.fdl-fat-dre-deducoes summary.fdl-fat-dre-section-title {
+.fdl-dre-details > summary {
   cursor: pointer;
   list-style: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #475569;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px 22px;
+  margin: 0;
+  border-bottom: 1px solid #e5e7eb;
 }
-.fdl-fat-dre-deducoes summary.fdl-fat-dre-section-title::-webkit-details-marker {
+.fdl-dre-details > summary::-webkit-details-marker {
   display: none;
 }
-.fdl-fat-dre-deducoes summary.fdl-fat-dre-section-title::marker {
+.fdl-dre-details > summary::marker {
   content: "";
 }
-.fdl-fat-dre-deducoes[open] summary.fdl-fat-dre-section-title {
-  border-bottom: 1px solid #e8edf3;
+.fdl-dre-details[open] > summary {
+  border-bottom: 2px solid #e5e7eb;
 }
-.fdl-fat-dre-toggle {
+.fdl-dre-details-body {
+  padding: 8px 22px 18px 22px;
+}
+.fdl-dre-ded-chevron {
   font-size: 0.75rem;
   color: #64748b;
-  transition: transform 0.2s ease;
-  flex-shrink: 0;
-  margin-left: 0.75rem;
 }
-.fdl-fat-dre-deducoes[open] .fdl-fat-dre-toggle {
-  transform: rotate(0deg);
+.fdl-dre-result {
+  margin-top: 8px;
+  padding: 24px;
+  border-radius: 12px;
 }
-.fdl-fat-dre-deducoes:not([open]) .fdl-fat-dre-toggle {
-  transform: rotate(-90deg);
+.fdl-dre-result--positive {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 1px solid #6ee7b7;
+  border-left: 5px solid #10b981;
 }
-.fdl-fat-dre-ded-body-v2 {
-  padding: 4px 14px 14px 14px;
-}
-.fdl-fat-dre-result-shell {
-  margin-top: 4px;
-  padding: 16px 18px;
-  border-radius: 10px;
-  border-left: 4px solid #22c55e;
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-}
-.fdl-fat-dre-result-shell--neg {
-  border-left-color: #ef4444;
+.fdl-dre-result--negative {
   background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 1px solid #fca5a5;
+  border-left: 5px solid #ef4444;
 }
-.fdl-fat-dre-line-v2--result-main {
-  padding: 4px 0 10px 0;
-  border-bottom: none;
+.fdl-dre-result--neutral {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-left: 5px solid #64748b;
 }
-.fdl-fat-dre-line-v2--margin-sub {
-  padding-top: 10px;
-  margin-top: 2px;
-  border-top: 1px solid rgba(34, 197, 94, 0.28);
-  border-bottom: none;
+.fdl-dre-result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
 }
-.fdl-fat-dre-result-shell--neg .fdl-fat-dre-line-v2--margin-sub {
-  border-top-color: rgba(239, 68, 68, 0.28);
+.fdl-dre-result-row--margin {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(16, 185, 129, 0.35);
 }
-.fdl-fat-dre-result-title {
+.fdl-dre-result--negative .fdl-dre-result-row--margin {
+  border-top-color: rgba(239, 68, 68, 0.35);
+}
+.fdl-dre-result--neutral .fdl-dre-result-row--margin {
+  border-top-color: #e2e8f0;
+}
+.fdl-dre-result-label {
   font-size: 1rem;
   font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
-.fdl-fat-dre-result-shell--pos .fdl-fat-dre-result-title {
-  color: #166534;
+.fdl-dre-result--positive .fdl-dre-result-label {
+  color: #065f46;
 }
-.fdl-fat-dre-result-shell--neg .fdl-fat-dre-result-title {
+.fdl-dre-result--negative .fdl-dre-result-label {
   color: #991b1b;
 }
-.fdl-fat-dre-result-amount {
+.fdl-dre-result--neutral .fdl-dre-result-label {
+  color: #475569;
+}
+.fdl-dre-result-value {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.fdl-dre-result--positive .fdl-dre-result-value {
+  color: #047857;
+}
+.fdl-dre-result--negative .fdl-dre-result-value {
+  color: #b91c1c;
+}
+.fdl-dre-result--neutral .fdl-dre-result-value {
+  color: #334155;
+}
+.fdl-dre-margin-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.fdl-dre-result--positive .fdl-dre-margin-label {
+  color: #065f46;
+}
+.fdl-dre-result--negative .fdl-dre-margin-label {
+  color: #991b1b;
+}
+.fdl-dre-result--neutral .fdl-dre-margin-label {
+  color: #64748b;
+}
+.fdl-dre-margin-value {
   font-size: 1.25rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.fdl-fat-dre-result-shell--pos .fdl-fat-dre-result-amount {
-  color: #166534;
+.fdl-dre-result--positive .fdl-dre-margin-value {
+  color: #047857;
 }
-.fdl-fat-dre-result-shell--neg .fdl-fat-dre-result-amount {
-  color: #991b1b;
+.fdl-dre-result--negative .fdl-dre-margin-value {
+  color: #b91c1c;
 }
-.fdl-fat-dre-margin-lab {
-  font-size: 0.875rem;
-  font-weight: 600;
+.fdl-dre-result--neutral .fdl-dre-margin-value {
   color: #475569;
 }
-.fdl-fat-dre-margin-val {
-  font-size: 0.95rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: #334155;
-}
-.fdl-fat-dre-hint-label { cursor: help; }
-@media (max-width: 520px) {
-  .fdl-fat-dre-body-v2 { padding: 14px 14px 16px 14px; }
-  .fdl-fat-dre-head-v2 { padding: 14px 14px 12px 14px; }
-  .fdl-fat-dre-value-v2,
-  .fdl-fat-dre-result-amount,
-  .fdl-fat-dre-margin-val {
-    flex: 1 1 100%;
-    text-align: right;
-  }
-}
-.fdl-fat-dre-foot-note {
-  margin: 14px 0 0 0;
-  padding-top: 12px;
+.fdl-dre-hint { cursor: help; }
+.fdl-dre-note {
+  margin: 18px 0 0 0;
+  padding-top: 14px;
   border-top: 1px solid #f1f5f9;
   font-size: 0.68rem;
   color: #94a3b8;
-  line-height: 1.5;
+  line-height: 1.55;
   max-width: 46rem;
+}
+@media (max-width: 560px) {
+  .fdl-dre-container { padding: 18px 16px 22px 16px; }
+  .fdl-dre-result-value { font-size: 1.55rem; }
+  .fdl-dre-value,
+  .fdl-dre-result-value,
+  .fdl-dre-margin-value {
+    flex: 1 1 100%;
+    text-align: right;
+  }
 }
 </style>
 """
@@ -497,26 +557,38 @@ def _meta_class(css_mod: str) -> str:
 
 
 def dre_gerencial_result_shell_class(resultado_value: float) -> str:
-    """Classe do bloco de resultado (gradiente verde ou vermelho)."""
-    if resultado_value < 0:
-        return "fdl-fat-dre-result-shell fdl-fat-dre-result-shell--neg"
-    return "fdl-fat-dre-result-shell fdl-fat-dre-result-shell--pos"
+    """Classes do bloco de resultado: positivo, negativo ou neutro (~zero)."""
+    eps = 0.01
+    if resultado_value > eps:
+        return "fdl-dre-result fdl-dre-result--positive"
+    if resultado_value < -eps:
+        return "fdl-dre-result fdl-dre-result--negative"
+    return "fdl-dre-result fdl-dre-result--neutral"
 
 
-def _dre_line_v2(
+def _dre_line_premium(
     label: str,
     value: str,
     *,
-    value_extra_class: str = "",
-    indent: bool = False,
+    line_extra: str = "",
+    value_class: str = "fdl-dre-value",
 ) -> str:
-    extra_line = " fdl-fat-dre-line-v2--indent" if indent else ""
-    vc = "fdl-fat-dre-value-v2"
-    if value_extra_class.strip():
-        vc += " " + value_extra_class.strip()
+    le = f" fdl-dre-line {line_extra}".strip()
     return (
-        f'<div class="fdl-fat-dre-line-v2{extra_line}">'
-        f'<span class="fdl-fat-dre-label-v2">{html.escape(label)}</span>'
+        f'<div class="{le}">'
+        f'<span class="fdl-dre-label">{html.escape(label)}</span>'
+        f'<span class="{value_class.strip()}">{html.escape(value)}</span>'
+        "</div>"
+    )
+
+
+def _dre_total_line(label: str, value: str, *, negative: bool = False) -> str:
+    vc = "fdl-dre-value fdl-dre-total-value"
+    if negative:
+        vc += " fdl-dre-value--negative"
+    return (
+        '<div class="fdl-dre-line fdl-dre-line--total">'
+        f'<span class="fdl-dre-label fdl-dre-total-label">{html.escape(label)}</span>'
         f'<span class="{vc}">{html.escape(value)}</span>'
         "</div>"
     )
@@ -528,7 +600,9 @@ def build_dre_gerencial_premium_html(
     valor_venda_fmt: str,
     rec_frete_fmt: str,
     diferenca_fmt: str,
+    total_receita_fmt: str,
     enc_rows: list[tuple[str, str]],
+    total_deducoes_fmt: str,
     resultado_fmt: str,
     resultado_value: float,
     margem_str: str,
@@ -537,52 +611,69 @@ def build_dre_gerencial_premium_html(
     footnote_plain: str = "",
     dif_highlight: bool,
 ) -> str:
-    dif_suffix = "fdl-fat-dre-value-v2--warn" if dif_highlight else ""
+    dif_vc = (
+        "fdl-dre-value fdl-dre-value--warning"
+        if dif_highlight
+        else "fdl-dre-value"
+    )
     enc_inner = (
         "".join(
-            _dre_line_v2(lab, val, value_extra_class="fdl-fat-dre-value-v2--ded", indent=True)
+            _dre_line_premium(
+                lab,
+                val,
+                line_extra="fdl-dre-line--indent",
+                value_class="fdl-dre-value fdl-dre-value--negative",
+            )
             for lab, val in enc_rows
         )
         if enc_rows
-        else '<div class="fdl-fat-dre-line-v2"><span class="fdl-fat-dre-label-v2">—</span></div>'
+        else '<div class="fdl-dre-line"><span class="fdl-dre-label">—</span></div>'
     )
     _shell = dre_gerencial_result_shell_class(resultado_value)
     _rt = html.escape(resultado_tooltip.strip(), quote=True)
     _mt = html.escape(margem_tooltip.strip(), quote=True)
     _foot_html = ""
     if footnote_plain.strip():
-        _foot_html = f'<p class="fdl-fat-dre-foot-note">{html.escape(footnote_plain.strip())}</p>'
+        _foot_html = f'<p class="fdl-dre-note">{html.escape(footnote_plain.strip())}</p>'
     return (
         '<div class="fdl-fat-premium fdl-fat-dre-premium-wrap">'
-        '<div class="fdl-fat-dre-card-v2">'
-        '<header class="fdl-fat-dre-head-v2">'
-        "<h3>DRE gerencial</h3>"
-        f'<span class="fdl-fat-dre-period-v2">{html.escape(period_caption)}</span>'
+        '<div class="fdl-dre-container">'
+        '<header class="fdl-dre-header">'
+        '<h2 class="fdl-dre-title">DRE Gerencial</h2>'
+        f'<span class="fdl-dre-periodo">{html.escape(period_caption)}</span>'
         "</header>"
-        '<div class="fdl-fat-dre-body-v2">'
-        '<section class="fdl-fat-dre-sec-v2">'
-        '<div class="fdl-fat-dre-sec-title-v2">Receita</div>'
-        + _dre_line_v2("Receita de venda (lista)", valor_venda_fmt)
-        + _dre_line_v2("Receita frete (transp. própria)", rec_frete_fmt)
-        + _dre_line_v2("Diferença (lista − fiscal)", diferenca_fmt, value_extra_class=dif_suffix)
-        + "</section>"
-        '<details class="fdl-fat-dre-section fdl-fat-dre-deducoes" open>'
-        '<summary class="fdl-fat-dre-section-title">Deduções'
-        '<span class="fdl-fat-dre-toggle" aria-hidden="true">▼</span></summary>'
-        f'<div class="fdl-fat-dre-ded-body-v2">{enc_inner}</div>'
-        "</details>"
-        f'<div class="{_shell}">'
-        '<div class="fdl-fat-dre-line-v2 fdl-fat-dre-line-v2--result-main">'
-        f'<span class="fdl-fat-dre-hint-label fdl-fat-dre-result-title" title="{_rt}">Resultado</span>'
-        f'<span class="fdl-fat-dre-result-amount">{html.escape(resultado_fmt)}</span>'
+        '<section class="fdl-dre-section">'
+        '<div class="fdl-dre-section-header">'
+        '<span class="fdl-dre-section-heading">Receita</span>'
         "</div>"
-        '<div class="fdl-fat-dre-line-v2 fdl-fat-dre-line-v2--margin-sub">'
-        f'<span class="fdl-fat-dre-hint-label fdl-fat-dre-margin-lab" title="{_mt}">Margem sobre venda</span>'
-        f'<span class="fdl-fat-dre-margin-val">{html.escape(margem_str)}</span>'
+        + _dre_line_premium("Receita de venda (lista)", valor_venda_fmt)
+        + _dre_line_premium("Receita frete (transp. própria)", rec_frete_fmt)
+        + _dre_line_premium("Diferença (lista − fiscal)", diferenca_fmt, value_class=dif_vc)
+        + _dre_total_line("Total Receita", total_receita_fmt, negative=False)
+        + "</section>"
+        '<div class="fdl-dre-divider"></div>'
+        '<details class="fdl-dre-details" open>'
+        '<summary>'
+        '<span class="fdl-dre-section-heading">Deduções</span>'
+        '<span class="fdl-dre-ded-chevron" aria-hidden="true">▼</span>'
+        "</summary>"
+        f'<div class="fdl-dre-details-body">{enc_inner}'
+        + _dre_total_line("Total Deduções", total_deducoes_fmt, negative=True)
+        + "</div>"
+        "</details>"
+        '<div class="fdl-dre-divider"></div>'
+        f'<div class="{_shell}">'
+        '<div class="fdl-dre-result-row">'
+        f'<span class="fdl-dre-hint fdl-dre-result-label" title="{_rt}">Resultado</span>'
+        f'<span class="fdl-dre-result-value">{html.escape(resultado_fmt)}</span>'
+        "</div>"
+        '<div class="fdl-dre-result-row fdl-dre-result-row--margin">'
+        f'<span class="fdl-dre-hint fdl-dre-margin-label" title="{_mt}">Margem sobre venda</span>'
+        f'<span class="fdl-dre-margin-value">{html.escape(margem_str)}</span>'
         "</div>"
         "</div>"
         f"{_foot_html}"
-        "</div></div></div>"
+        "</div></div>"
     )
 
 

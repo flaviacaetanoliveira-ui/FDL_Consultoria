@@ -11538,20 +11538,11 @@ elif _fv == "devolucoes" and "devolucoes" in _enabled_modules:
     info = devolucoes_info
     _fdl_global_trace("devolucoes: dados carregados")
 elif (
-    _fdl_product_area == FDL_PRODUCT_AREA_APURACAO_FISCAL
-    and "faturamento" in _enabled_modules
-    and not _user_perfil_acesso_operacional_only()
-):
-    # Etapa 1: página placeholder — sem carga de datasets nesta rota.
-    ts_proc = ""
-    tabela_geral = pd.DataFrame()
-    info = {}
-    _fdl_global_trace("apuracao_fiscal: placeholder (sem carga de dados)")
-elif (
     _fdl_product_area
     in (
         FDL_PRODUCT_AREA_FATURAMENTO_DRE,
         FDL_PRODUCT_AREA_COMERCIAL_PEDIDOS,
+        FDL_PRODUCT_AREA_APURACAO_FISCAL,
     )
     and "faturamento" in _enabled_modules
     and not _user_perfil_acesso_operacional_only()
@@ -12103,13 +12094,17 @@ if _fv == "repasse" and _fdl_product_area == FDL_PRODUCT_AREA_FINANCEIRO:
         st.exception(exc)
 elif _fdl_product_area == FDL_PRODUCT_AREA_APURACAO_FISCAL and "faturamento" in _enabled_modules:
     try:
-        _fdl_global_trace("apuracao_fiscal: placeholder UI")
-        _fdl_fat_min_inject_ui_styles()
-        _upd_disp = _fdl_fat_min_format_updated_at(str(ts_proc))
-        from app.pages.apuracao_fiscal import render_apuracao_fiscal_placeholder
+        _fdl_global_trace("apuracao_fiscal: painel fiscal")
+        from app.pages.apuracao_fiscal import render_apuracao_fiscal_page
 
-        render_apuracao_fiscal_placeholder(updated_at_display=_upd_disp)
-        _fdl_global_trace("apuracao_fiscal: placeholder concluído")
+        render_apuracao_fiscal_page(
+            faturamento_df,
+            faturamento_info,
+            ts_proc,
+            org_id=_active_org.org_id,
+            org_display_name=_active_org.display_name,
+        )
+        _fdl_global_trace("apuracao_fiscal: painel concluído")
     except Exception as exc:
         _fdl_global_trace(f"apuracao_fiscal: ERRO — {exc.__class__.__name__}")
         st.error("Erro ao renderizar **Apuração Fiscal**.")

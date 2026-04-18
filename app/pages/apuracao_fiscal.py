@@ -1,4 +1,4 @@
-"""Placeholder do módulo Apuração Fiscal — Etapa 1 (estrutura vazia)."""
+"""Página «Apuração Fiscal» — visão fiscal (notas, base e imposto)."""
 
 from __future__ import annotations
 
@@ -25,8 +25,20 @@ def _build_apuracao_fiscal_page_header_html(*, updated_at: str) -> str:
     )
 
 
-def render_apuracao_fiscal_placeholder(*, updated_at_display: str) -> None:
-    """Renderiza o esqueleto da página (sem dados nem componentes de negócio)."""
+def render_apuracao_fiscal_page(
+    df,
+    load_info: dict[str, object],
+    ts_proc: str,
+    *,
+    org_id: str,
+    org_display_name: str,
+) -> None:
+    """Cabeçalho + painel fiscal (import tardio de ``app_operacional`` evita ciclo)."""
+    _ = org_display_name
+    import app_operacional as ao
+
+    ao._fdl_fat_min_inject_ui_styles()
+    _upd_disp = ao._fdl_fat_min_format_updated_at(str(ts_proc))
     st.markdown(
         dedent(
             """
@@ -44,13 +56,14 @@ def render_apuracao_fiscal_placeholder(*, updated_at_display: str) -> None:
         ),
         unsafe_allow_html=True,
     )
-    st.html(_build_apuracao_fiscal_page_header_html(updated_at=updated_at_display))
+    st.html(_build_apuracao_fiscal_page_header_html(updated_at=_upd_disp))
     with st.expander("ℹ️ Sobre este módulo", expanded=False):
         st.caption(
-            "Área dedicada à apuração fiscal (notas, bases e impostos). Nesta fase o conteúdo ainda "
-            "será organizado; a navegação e o cabeçalho seguem o padrão FDL Analytics."
+            "Visão fiscal para apuração tributária. Exibe notas emitidas, canceladas, devoluções, "
+            "base fiscal líquida e imposto calculado."
         )
-    st.markdown('<div style="margin-top:0.75rem"></div>', unsafe_allow_html=True)
-    st.caption(
-        "Módulo em construção — componentes serão migrados do atual Faturamento & DRE nas próximas etapas."
-    )
+    ao._fdl_fat_min_vsp(size="sm")
+
+    from app.components.apuracao_fiscal_panel import render_apuracao_fiscal_panel
+
+    render_apuracao_fiscal_panel(df, load_info, ts_proc, org_id=org_id)

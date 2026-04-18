@@ -122,7 +122,13 @@ class FaturamentoRecorteMinState:
     situacoes_nf: tuple[str, ...] = ()
 
 
-def faturamento_recorte_min_state_from_session(ss: Mapping[str, Any]) -> FaturamentoRecorteMinState:
+def faturamento_recorte_min_state_from_session(
+    ss: Mapping[str, Any],
+    *,
+    key_emp: str = "fdl_fat_min_emp",
+    key_plat: str = "fdl_fat_min_plat",
+    key_sit: str = "fdl_fat_min_nf_sit",
+) -> FaturamentoRecorteMinState:
     def _tup(key: str) -> tuple[str, ...]:
         raw = ss.get(key)
         if not isinstance(raw, list):
@@ -130,9 +136,9 @@ def faturamento_recorte_min_state_from_session(ss: Mapping[str, Any]) -> Faturam
         return tuple(str(x) for x in raw if str(x).strip())
 
     return FaturamentoRecorteMinState(
-        empresas=_tup("fdl_fat_min_emp"),
-        plataformas=_tup("fdl_fat_min_plat"),
-        situacoes_nf=_tup("fdl_fat_min_nf_sit"),
+        empresas=_tup(key_emp),
+        plataformas=_tup(key_plat),
+        situacoes_nf=_tup(key_sit),
     )
 
 

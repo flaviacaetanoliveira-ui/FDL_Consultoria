@@ -99,7 +99,6 @@ from faturamento_dre_recorte_minimo import (
     compute_nf_panel_kpis,
     dre_imposto_para_linha_dre_gerencial,
     faturamento_min_series_nf_emissao_bounds_dates,
-    faturamento_nf_situacao_select_options,
     faturamento_recorte_min_state_from_session,
     nf_grain_plataforma_label_for_ui,
     nf_grain_plataforma_match_key,
@@ -5304,16 +5303,21 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     nf_panel_ads: bool = True,
 ) -> None:
     """
-    Cards executivos NF-first (Faturamento & DRE): hierarquia em 3 níveis (resultado/margem, venda/faturado, chips).
+    Cards executivos NF-first (Faturamento & DRE): hierarquia em 3 níveis (resultado/margem, venda/pedidos/ticket, chips).
     """
+    _ = valor_faturado_from_fiscal_parquet, fat_dre_faturado_mode, use_nf_materializado, nf_panel_ads
     if not _FAT_DRE_UI_V2 or build_kpi_nf_premium_shell_html is None:
-        c1, c2, c3, c4 = st.columns(4)
-        vf = _fmt_brl_ptbr_celula(kp["valor_faturado_nf"]) if ok_nf_dates else "—"
+        n_ped = int(kp.get("n_nf", 0))
+        vv = float(kp["valor_venda"])
+        tm_s = _fmt_brl_ptbr_celula(vv / float(n_ped)) if ok_nf_dates and n_ped > 0 else "—"
+        c1, c2, c3, c4, c5 = st.columns(5)
         with c1:
             st.metric("Valor da venda", _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00")
         with c2:
-            st.metric("Faturado (NF)", vf or "—")
+            st.metric("Pedidos faturados", _fmt_int_ptbr(n_ped) if ok_nf_dates else "—")
         with c3:
+            st.metric("Ticket médio", tm_s or "—")
+        with c4:
             st.metric(
                 "Resultado",
                 _fmt_brl_ptbr_celula(kp["resultado"]) or "—",
@@ -5322,43 +5326,32 @@ def _render_fdl_fat_dre_nf_kpi_cards(
                     "Pode diferir do Painel de Saúde, que usa grão de linha de pedido e não aplica filtro de plataforma."
                 ),
             )
-        with c4:
+        with c5:
             st.metric("Margem %", _margem_sobre_venda_str(float(kp["resultado"]), float(kp["valor_venda"])))
         return
 
     vv = float(kp["valor_venda"])
     res = float(kp["resultado"])
-    dif_f = float(kp.get("diferenca", 0.0))
-    vf_str = _fmt_brl_ptbr_celula(kp["valor_faturado_nf"]) if ok_nf_dates else "—"
-    dif_str = _fmt_brl_ptbr_celula(kp["diferenca"]) if ok_nf_dates else "—"
+    n_ped_i = int(kp.get("n_nf", 0))
+    pedidos_fmt = _fmt_int_ptbr(n_ped_i) if ok_nf_dates else "—"
+    ticket_fmt = (
+        (_fmt_brl_ptbr_celula(vv / float(n_ped_i)) or "—") if ok_nf_dates and n_ped_i > 0 else "—"
+    )
     margem_str = _margem_sobre_venda_str(res, vv)
     venda_fmt = _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00"
     res_fmt = _fmt_brl_ptbr_celula(kp["resultado"]) or "—"
 
-    if fat_dre_faturado_mode == "fiscal":
-        mode_pill = (
-            '<div class="fdl-fat-kpi-mode"><span class="fdl-fat-kpi-mode-pill fdl-fat-kpi-mode-pill--fiscal">'
-            "Valor faturado — referência fiscal</span></div>"
-        )
-    elif use_nf_materializado:
-        mode_pill = (
-            '<div class="fdl-fat-kpi-mode"><span class="fdl-fat-kpi-mode-pill">Valor faturado — pedidos ligados</span></div>'
-        )
-    else:
-        mode_pill = ""
-
     st.markdown(
         build_kpi_nf_premium_shell_html(
             valor_venda_fmt=venda_fmt,
-            valor_faturado_fmt=vf_str or "—",
+            pedidos_faturados_fmt=pedidos_fmt,
+            ticket_medio_fmt=ticket_fmt,
             resultado_fmt=res_fmt,
             margem_str=margem_str,
-            diferenca_fmt=dif_str or "—",
             valor_venda=vv,
             resultado=res,
-            diferenca=dif_f,
             chips=[],
-            mode_pill_html=mode_pill,
+            mode_pill_html="",
         ),
         unsafe_allow_html=True,
     )
@@ -5417,11 +5410,8 @@ def _render_fdl_fat_dre_nf_gerencial(
         ),
     )
     res_nf = res + (imp_raw - imp_nf)
-    dif = float(kp.get("diferenca", 0.0))
     rec_frete_num = float(kp.get("receita_frete_tp", 0.0))
     rec_venda = _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00"
-    vf_disp = (_fmt_brl_ptbr_celula(kp["valor_faturado_nf"]) or "—") if ok_nf_dates else "—"
-    dif_disp = (_fmt_brl_ptbr_celula(kp["diferenca"]) or "—") if ok_nf_dates else "—"
     margem_s = _margem_sobre_venda_str(res_nf, vv)
     res_disp = _fmt_brl_ptbr_celula(res_nf) or "—"
     enc_com = _fmt_brl_ptbr_encargo_dre(kp["comissao"])
@@ -5445,7 +5435,7 @@ def _render_fdl_fat_dre_nf_gerencial(
     if nf_panel_ads:
         enc_rows.append(("ADS (3,5% + fixo)", enc_ads))
 
-    total_rec_num = vv + rec_frete_num + dif
+    total_rec_num = vv + rec_frete_num
     total_rec_fmt = _fmt_brl_ptbr_celula(total_rec_num) or "R$ 0,00"
     _ded_sum_num = (
         float(kp["comissao"])
@@ -5459,7 +5449,6 @@ def _render_fdl_fat_dre_nf_gerencial(
         _ded_sum_num += ads_sum
     total_ded_fmt = _fmt_brl_ptbr_encargo_dre(_ded_sum_num)
 
-    dif_highlight = bool(ok_nf_dates and vv > 0 and abs(dif) / vv >= 0.30)
     _marg_base = (
         "Margem = soma do resultado ÷ soma da receita de venda (lista). "
         "O valor faturado fiscal não entra neste cálculo."
@@ -5516,7 +5505,6 @@ def _render_fdl_fat_dre_nf_gerencial(
             period_caption=per,
             valor_venda_fmt=rec_venda,
             rec_frete_fmt=rec_frete_disp,
-            diferenca_fmt=dif_disp,
             total_receita_fmt=total_rec_fmt,
             enc_rows=enc_rows,
             total_deducoes_fmt=total_ded_fmt,
@@ -5526,7 +5514,6 @@ def _render_fdl_fat_dre_nf_gerencial(
             resultado_tooltip=tt_res,
             margem_tooltip=tt_marg,
             footnote_plain=foot,
-            dif_highlight=dif_highlight,
         ),
         unsafe_allow_html=True,
     )
@@ -5930,6 +5917,23 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               border-radius: 4px;
               margin-top: 1rem;
               max-width: 52rem;
+            }
+            .fdl-fat-cobertura--embedded {
+              margin-top: 0.5rem;
+              padding-top: 0.85rem;
+              border-top: 1px solid var(--fdl-neutral-200, #e2e8f0);
+            }
+            .fdl-fat-cobertura-embed-title {
+              font-size: 0.78rem;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.06em;
+              color: #64748b;
+              margin: 0 0 0.65rem 0;
+              display: flex;
+              align-items: center;
+              gap: 0.5rem;
+              flex-wrap: wrap;
             }
             /* Filtros + Base fiscal — vista mínima Faturamento & DRE */
             .fdl-fat-filtros-periodo-tit {
@@ -7336,10 +7340,14 @@ def _render_faturamento_dre_commercial_complement_banner(
     ok_nf_dates: bool,
     fiscal_parquet_ok: bool,
     kpi_subset_by_platform: bool = False,
+    embedded_in_sobre_expander: bool = False,
 ) -> None:
     """
     Bloco imediatamente abaixo do topo fiscal: deixa explícito que os KPIs/DRE comerciais são complemento
     sobre o mesmo período/empresa, com cobertura parcial possível. Colapsável (fechado por defeito) + badge de alerta.
+
+    Quando ``embedded_in_sobre_expander=True``, o bloco é só o conteúdo técnico (sem ``<details>`` nem divisor final),
+    para uso dentro do expander «Sobre este módulo» no Resultado Gerencial.
     """
 
     def _md_bold_to_html(s: str) -> str:
@@ -7467,6 +7475,13 @@ def _render_faturamento_dre_commercial_complement_banner(
     # ``st.markdown(..., unsafe_allow_html=True)`` passa pelo parser GFM e pode degradar/sanitizar
     # ``<details>``/aninhamento; ``st.html`` envia o fragmento como HTML nativo (CSS já injetado em
     # ``_fdl_fat_min_inject_ui_styles`` no início desta vista).
+    if embedded_in_sobre_expander:
+        _badge_tail = f" {_badge_html}" if _badge_html else ""
+        st.html(
+            f'<div class="fdl-fat-cobertura fdl-fat-cobertura--embedded"><p class="fdl-fat-cobertura-embed-title">'
+            f"Cobertura comercial{_badge_tail}</p>{_inner}</div>"
+        )
+        return
     st.html(
         '<details class="fdl-fat-cobertura">'
         f'<summary>Cobertura comercial{" " if _badge_html else ""}{_badge_html}</summary>'
@@ -8531,12 +8546,6 @@ def _render_faturamento_dre_minimal(
     _fdl_fat_min_inject_ui_styles()
     _upd_disp = _fdl_fat_min_format_updated_at(ts_proc)
     st.html(_build_faturamento_dre_page_header_html(updated_at=_upd_disp))
-    with st.expander("ℹ️ Sobre este módulo", expanded=False):
-        st.caption(
-            "Este módulo apresenta a Demonstração de Resultado Gerencial (**DRE**), com KPIs de desempenho, margem e "
-            "diagnóstico automático de **saúde financeira**. O **imposto** exibido na DRE vem da **Apuração Fiscal** "
-            "(base fiscal líquida × alíquota efetiva derivada do materializado)."
-        )
     _fdl_fat_min_vsp(size="sm")
     _oid = str(org_id)
     _ = org_display_name, load_info
@@ -8692,12 +8701,6 @@ def _render_faturamento_dre_minimal(
     else:
         plats = []
 
-    _sit_opts: list[str] = []
-    if isinstance(df_nf_pre, pd.DataFrame) and not df_nf_pre.empty and "Nota_Situacao" in df_nf_pre.columns:
-        _sit_opts = faturamento_nf_situacao_select_options(df_nf_pre)
-    elif use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame) and "Nota_Situacao" in df_fiscal_pre.columns:
-        _sit_opts = faturamento_nf_situacao_select_options(df_fiscal_pre)
-
     _plat_expl = (
         "Filtra notas pela plataforma consolidada no grão NF (materializado)."
         if use_nf_materializado
@@ -8705,8 +8708,8 @@ def _render_faturamento_dre_minimal(
     )
     if use_fiscal_parquet:
         _plat_expl += (
-            " Com Parquet fiscal ativo, **Plataforma** restringe **cards** e **DRE** (não altera o recorte fiscal subjacente); "
-            "**valor faturado (NF)** nos KPIs permanece alinhado ao fiscal."
+            " Com Parquet fiscal ativo, **Plataforma** restringe **cards** e **DRE** ao subconjunto comercial nesse canal "
+            "(o conjunto fiscal de referência para imposto permanece na **Apuração Fiscal**)."
         )
     _plat_help = "Plataforma: " + _plat_expl
 
@@ -8752,7 +8755,7 @@ def _render_faturamento_dre_minimal(
                 ):
                     st.session_state.pop(_k, None)
                 st.rerun()
-        _fc1, _fc2, _fc3 = st.columns(3)
+        _fc1, _fc2 = st.columns(2)
         with _fc1:
             if emp_opts:
                 if "fdl_fat_min_emp" not in st.session_state:
@@ -8779,22 +8782,6 @@ def _render_faturamento_dre_minimal(
                 )
             else:
                 st.caption("Plataforma: sem opções no recorte.")
-        with _fc3:
-            if _sit_opts:
-                _multiselect_stable(
-                    "fdl_fat_min_nf_sit",
-                    "Situação da NF",
-                    _sit_opts,
-                    help=(
-                        "**Vazio** = todas as situações válidas já admitidas no materializado (exceto cancelada/denegada/inutilizada). "
-                        "Com valor selecionado, restringe **KPIs** e **DRE** ao conjunto fiscal filtrado por situação."
-                    ),
-                    placeholder="Todas",
-                )
-            else:
-                if "fdl_fat_min_nf_sit" not in st.session_state:
-                    st.session_state["fdl_fat_min_nf_sit"] = []
-                st.caption("Situação da NF: sem valores distintos no recorte — filtro indisponível.")
         if ok_nf_dates:
             st.markdown(
                 '<p class="fdl-fat-filtros-periodo-tit">Período de emissão</p>',
@@ -8869,6 +8856,26 @@ def _render_faturamento_dre_minimal(
     _commercial_coverage = compute_commercial_coverage_stats(df_nf_commercial_kpi)
     _kp_cards = compute_nf_panel_kpis(df_nf_commercial_kpi)
 
+    with st.expander("ℹ️ Sobre este módulo", expanded=False):
+        st.caption(
+            "Este módulo apresenta a Demonstração de Resultado Gerencial (**DRE**), com KPIs de desempenho, margem e "
+            "diagnóstico automático de **saúde financeira**. O **imposto** exibido na DRE vem da **Apuração Fiscal** "
+            "(base fiscal líquida × alíquota efetiva derivada do materializado)."
+        )
+        st.caption(
+            "Notas **canceladas**, **denegadas** ou **inutilizadas** já ficam de fora da base materializada — não é "
+            "necessário filtrar por situação neste painel."
+        )
+        _render_faturamento_dre_commercial_complement_banner(
+            coverage=_commercial_coverage,
+            n_fiscal_base=int(_fiscal_base_stats.n_nf),
+            aligned_to_fiscal_base=_commercial_kpi_aligned_fiscal,
+            ok_nf_dates=ok_nf_dates,
+            fiscal_parquet_ok=use_fiscal_parquet,
+            kpi_subset_by_platform=bool(_min_state.plataformas),
+            embedded_in_sobre_expander=True,
+        )
+
     _fdl_fat_min_vsp(size="md")
     _fdl_fat_divider_simple()
     _render_fdl_fat_dre_nf_kpi_cards(
@@ -8879,16 +8886,6 @@ def _render_faturamento_dre_minimal(
         fat_dre_faturado_mode=("fiscal" if use_fiscal_kpi else "nf_first"),
         nf_panel_ads=_nf_panel_ads_ui,
     )
-
-    _fdl_fat_min_vsp(size="sm")
-    _, _col_diag = st.columns([4, 1])
-    with _col_diag:
-        st.checkbox(
-            "Exibir diagnóstico",
-            value=True,
-            key="fdl_fat_min_health_panel_show",
-            help="Mostra ou oculta o painel de saúde financeira após a DRE.",
-        )
 
     _fdl_fat_min_vsp(size="md")
     _periodo_dre_lbl = ""
@@ -8919,16 +8916,6 @@ def _render_faturamento_dre_minimal(
             st.caption(f"Painel de saúde financeira indisponível: `{_exc_hp}`")
 
     _fdl_fat_min_vsp(size="md")
-
-    _fdl_fat_section_rule("Cobertura")
-    _render_faturamento_dre_commercial_complement_banner(
-        coverage=_commercial_coverage,
-        n_fiscal_base=int(_fiscal_base_stats.n_nf),
-        aligned_to_fiscal_base=_commercial_kpi_aligned_fiscal,
-        ok_nf_dates=ok_nf_dates,
-        fiscal_parquet_ok=use_fiscal_parquet,
-        kpi_subset_by_platform=bool(_min_state.plataformas),
-    )
 
     _fdl_ui_gap_section()
     _fdl_fat_min_vsp(size="sm")

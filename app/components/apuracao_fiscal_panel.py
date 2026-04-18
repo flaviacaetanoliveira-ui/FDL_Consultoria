@@ -1,5 +1,8 @@
 """Painel «Apuração Fiscal» — reutiliza funções de ``app_operacional`` (import tardio)."""
 
+# TODO(fiscal-kpis): acrescentar cartões «Valor faturado (NF)» e «Diferença (lista − NF)» neste módulo quando
+# forem consolidados como indicadores exclusivamente fiscais (removidos do Resultado Gerencial).
+
 from __future__ import annotations
 
 import html

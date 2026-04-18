@@ -507,52 +507,27 @@ def kpi_perf_resultado(resultado: float) -> KpiPerfTone:
     return KpiPerfTone("fdl-fat-kpi--mid", "→")
 
 
-def kpi_perf_diferenca(valor_venda: float, diferenca: float) -> KpiPerfTone:
-    if valor_venda <= 0 or math.isnan(valor_venda) or math.isnan(diferenca):
-        return KpiPerfTone("fdl-fat-kpi--mid", "→")
-    rel = abs(diferenca) / valor_venda
-    if rel >= 0.30:
-        return KpiPerfTone("fdl-fat-kpi--warn", "!")
-    return KpiPerfTone("fdl-fat-kpi--mid", "→")
-
-
 def build_kpi_nf_premium_shell_html(
     *,
     valor_venda_fmt: str,
-    valor_faturado_fmt: str,
+    pedidos_faturados_fmt: str,
+    ticket_medio_fmt: str,
     resultado_fmt: str,
     margem_str: str,
-    diferenca_fmt: str,
     valor_venda: float,
     resultado: float,
-    diferenca: float,
     chips: list[tuple[str, str]],
     mode_pill_html: str,
 ) -> str:
     mr = _margin_ratio_from_pct_str(margem_str)
     t_res = kpi_perf_resultado(resultado)
     t_mg = kpi_perf_margin(mr)
-    t_df = kpi_perf_diferenca(valor_venda, diferenca)
 
     chips_html = "".join(
         f'<div class="fdl-fat-kpi-chip"><span class="fdl-fat-kpi-chip-lab">{html.escape(lab)}</span>'
         f'<span class="fdl-fat-kpi-chip-val">{html.escape(val)}</span></div>'
         for lab, val in chips
     )
-
-    _df_mc = _meta_class(t_df.css_modifier)
-    if t_df.css_modifier == "fdl-fat-kpi--warn":
-        _df_meta_html = (
-            f'<div class="fdl-fat-kpi-mid-meta {html.escape(_df_mc)}">'
-            f"{html.escape(t_df.arrow)} "
-            '<span class="fdl-fat-kpi-mid-diferenca-alerta">'
-            f'{html.escape("alerta (>30% da venda)")}</span></div>'
-        )
-    else:
-        _df_meta_html = (
-            f'<div class="fdl-fat-kpi-mid-meta {html.escape(_df_mc)}">'
-            f"{html.escape(t_df.arrow)} em faixa</div>"
-        )
 
     _chip_row = f'<div class="fdl-fat-kpi-chip-row">{chips_html}</div>' if chips else ""
 
@@ -578,13 +553,11 @@ def build_kpi_nf_premium_shell_html(
         '<div class="fdl-fat-kpi-mid-label">Valor da venda (lista)</div>'
         f'<div class="fdl-fat-kpi-mid-value">{html.escape(valor_venda_fmt)}</div></div>'
         '<div class="fdl-fat-kpi-mid-card">'
-        '<div class="fdl-fat-kpi-mid-label">Valor faturado (NF)</div>'
-        f'<div class="fdl-fat-kpi-mid-value">{html.escape(valor_faturado_fmt)}</div></div>'
-        '<div class="fdl-fat-kpi-mid-card fdl-fat-kpi-mid-card--diferenca">'
-        '<div class="fdl-fat-kpi-mid-label">Diferença (lista − NF)</div>'
-        f'<div class="fdl-fat-kpi-mid-value">{html.escape(diferenca_fmt)}</div>'
-        f"{_df_meta_html}"
-        "</div>"
+        '<div class="fdl-fat-kpi-mid-label">Pedidos faturados</div>'
+        f'<div class="fdl-fat-kpi-mid-value">{html.escape(pedidos_faturados_fmt)}</div></div>'
+        '<div class="fdl-fat-kpi-mid-card">'
+        '<div class="fdl-fat-kpi-mid-label">Ticket médio</div>'
+        f'<div class="fdl-fat-kpi-mid-value">{html.escape(ticket_medio_fmt)}</div></div>'
         "</div>"
         f"{_chip_row}"
         "</div>"
@@ -644,7 +617,6 @@ def build_dre_gerencial_premium_html(
     period_caption: str,
     valor_venda_fmt: str,
     rec_frete_fmt: str,
-    diferenca_fmt: str,
     total_receita_fmt: str,
     enc_rows: list[tuple[str, str]],
     total_deducoes_fmt: str,
@@ -654,13 +626,7 @@ def build_dre_gerencial_premium_html(
     resultado_tooltip: str,
     margem_tooltip: str,
     footnote_plain: str = "",
-    dif_highlight: bool,
 ) -> str:
-    dif_vc = (
-        "fdl-dre-value fdl-dre-value--warning"
-        if dif_highlight
-        else "fdl-dre-value"
-    )
     enc_inner = (
         "".join(
             _dre_line_premium(
@@ -693,7 +659,6 @@ def build_dre_gerencial_premium_html(
         "</div>"
         + _dre_line_premium("Receita de venda (lista)", valor_venda_fmt)
         + _dre_line_premium("Receita frete (transp. própria)", rec_frete_fmt)
-        + _dre_line_premium("Diferença (lista − fiscal)", diferenca_fmt, value_class=dif_vc)
         + _dre_total_line("Total Receita", total_receita_fmt, negative=False)
         + "</section>"
         '<div class="fdl-dre-divider"></div>'

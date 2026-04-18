@@ -279,7 +279,7 @@ HEALTH_PANEL_CSS = """
   margin: 0 0 14px 0;
   line-height: 1.45;
 }
-.fdl-health-skus-spacer { height: 16px; }
+.fdl-health-skus-spacer { height: 6px; }
 @media (max-width: 640px) {
   .fdl-health-metric-item { border-right: none !important; padding-right: 8px !important; border-bottom: 1px solid #f1f5f9; }
   .fdl-health-metric-item:last-child { border-bottom: none; }
@@ -447,11 +447,25 @@ def _skus_preview_line(skus: list[SKURisco]) -> str:
     return " · ".join(parts)
 
 
-def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> None:
+def render_health_panel(
+    health: "HealthScore",
+    *,
+    show_details: bool = True,
+    header_diagnostic_checkbox: bool = False,
+) -> None:
     lbl, color, mark = health_level_meta(health.level)
     esc_tit = html.escape(f"Saúde financeira – {health.periodo}")
     esc_sub = html.escape(str(health.empresa).replace("_", " ").title())
     esc_lbl = html.escape(f"{mark} {lbl}")
+    if header_diagnostic_checkbox:
+        _, _tb2 = st.columns([3, 1])
+        with _tb2:
+            st.checkbox(
+                "Exibir diagnóstico",
+                value=True,
+                key="fdl_fat_min_health_panel_show",
+                help="Mostra ou oculta detalhes de diagnóstico e SKUs em risco (o resumo do score permanece visível ao recarregar).",
+            )
     st.html(
         HEALTH_PANEL_CSS
         + f"""
@@ -475,30 +489,30 @@ def render_health_panel(health: "HealthScore", *, show_details: bool = True) -> 
     st.html(_metrics_block_html(health))
     st.html(_executive_summary_html(health))
 
-    if health.diagnosticos:
-        st.html(
-            '<h3 class="fdl-health-diagnostics-title">'
-            '<span class="fdl-health-diag-ico" aria-hidden="true">🔍</span>'
-            "Diagnóstico automático"
-            "</h3>"
-        )
-        for diag in health.diagnosticos:
-            _render_diagnostico_card(diag)
-
-    if health.skus_risco and show_details:
-        n = len(health.skus_risco)
-        preview_plain = _skus_preview_line(health.skus_risco)
-        st.html('<div class="fdl-health-skus-spacer" aria-hidden="true"></div>')
+    if show_details and (health.diagnosticos or health.skus_risco):
         with st.container(border=True):
-            _exp_lab = f"📦 SKUs em risco ({n})"
-            with st.expander(_exp_lab, expanded=False):
-                if preview_plain:
-                    st.markdown(
-                        f'<p class="fdl-health-skus-preview-inline"><strong>Top 3</strong> '
-                        f"(pior resultado): {preview_plain}</p>",
-                        unsafe_allow_html=True,
-                    )
-                _render_skus_risco(health.skus_risco)
+            if health.diagnosticos:
+                st.html(
+                    '<h3 class="fdl-health-diagnostics-title">'
+                    '<span class="fdl-health-diag-ico" aria-hidden="true">🔍</span>'
+                    "Diagnóstico automático"
+                    "</h3>"
+                )
+                for diag in health.diagnosticos:
+                    _render_diagnostico_card(diag)
+            if health.skus_risco:
+                n = len(health.skus_risco)
+                preview_plain = _skus_preview_line(health.skus_risco)
+                st.html('<div class="fdl-health-skus-spacer" aria-hidden="true"></div>')
+                _exp_lab = f"📦 SKUs em risco ({n})"
+                with st.expander(_exp_lab, expanded=False):
+                    if preview_plain:
+                        st.markdown(
+                            f'<p class="fdl-health-skus-preview-inline"><strong>Top 3</strong> '
+                            f"(pior resultado): {preview_plain}</p>",
+                            unsafe_allow_html=True,
+                        )
+                    _render_skus_risco(health.skus_risco)
 
 
 def _render_skus_risco(skus: list[SKURisco]) -> None:
@@ -546,14 +560,12 @@ def render_faturamento_health_panel_if_enabled(
     """
     Filtro: emissao NF + CUSTO_OK + empresas (rotulos), alinhado ao painel NF minimo.
     Score e benchmark usam o mesmo mes civil do inicio do intervalo (tendencia = mes anterior).
-    Visibilidade: checkbox «Exibir diagnóstico» após os KPIs (``fdl_fat_min_health_panel_show``, padrão ``True``).
+    Checkbox «Exibir diagnóstico» no topo do painel (``fdl_fat_min_health_panel_show``, padrão ``True``).
     """
     if df_faturamento is None or df_faturamento.empty:
         return
     req = {"Nota_Data_Emissao", "Vl_Venda", "Resultado", "Custo_Produto_Total", "org_id", "Status_Custo"}
     if not req.issubset(set(df_faturamento.columns)):
-        return
-    if not bool(st.session_state.get("fdl_fat_min_health_panel_show", True)):
         return
 
     sl = slice_linhas_nf_periodo(df_faturamento, d_ini=nf_d_ini, d_fim=nf_d_fim, empresas_sel=empresas_sel)
@@ -575,7 +587,8 @@ def render_faturamento_health_panel_if_enabled(
         df_grupo=df_grupo,
         periodo_override=periodo_lbl,
     )
-    render_health_panel(health, show_details=True)
+    show_diag = bool(st.session_state.get("fdl_fat_min_health_panel_show", True))
+    render_health_panel(health, show_details=show_diag, header_diagnostic_checkbox=True)
 
 
 def render_health_mini(health: "HealthScore") -> None:

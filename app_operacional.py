@@ -36,6 +36,15 @@ try:
 except Exception:
     pass
 
+# Paleta semântica — status na UI Faturamento & DRE (tabela NF e referência para badges)
+CORES_STATUS: dict[str, str] = {
+    "Lucro": "#22c55e",
+    "Prejuízo": "#ef4444",
+    "Neutro": "#6b7280",
+    "Atenção": "#f59e0b",
+    "Saudável": "#16a34a",
+}
+
 import streamlit as st
 from streamlit.column_config import DatetimeColumn, NumberColumn, SelectboxColumn, TextColumn
 from openpyxl.styles import numbers as oxl_number_formats
@@ -8519,16 +8528,19 @@ def _render_faturamento_dre_minimal(
                 for v in s.astype(object):
                     vs = str(v).strip()
                     if vs == "Lucro":
+                        c = CORES_STATUS["Lucro"]
                         out.append(
-                            "background-color: #dcfce7; color: #166534; font-weight: 500; font-size: 0.75rem"
+                            f"background-color: #dcfce7; color: {c}; font-weight: 500; font-size: 0.75rem"
                         )
                     elif vs == "Prejuízo":
+                        c = CORES_STATUS["Prejuízo"]
                         out.append(
-                            "background-color: #fee2e2; color: #991b1b; font-weight: 500; font-size: 0.75rem"
+                            f"background-color: #fee2e2; color: {c}; font-weight: 500; font-size: 0.75rem"
                         )
                     elif vs == "Neutro":
+                        c = CORES_STATUS["Neutro"]
                         out.append(
-                            "background-color: #f3f4f6; color: #6b7280; font-weight: 500; font-size: 0.75rem"
+                            f"background-color: #f3f4f6; color: {c}; font-weight: 500; font-size: 0.75rem"
                         )
                     else:
                         out.append("")
@@ -8555,7 +8567,7 @@ def _render_faturamento_dre_minimal(
                 except Exception:
                     _df_arg = _slice_ui_r
             if _nf_total_rows > _FAT_NF_TABLE_STYLER_MAX_ROWS and _nf_styler_ok:
-            st.caption("Destaque de linha para prejuízo ativo até **500** notas.")
+                st.caption("Destaque de linha para prejuízo ativo até **500** notas.")
             st.dataframe(
                 _df_arg,
                 use_container_width=True,

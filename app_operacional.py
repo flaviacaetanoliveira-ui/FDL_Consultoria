@@ -7415,24 +7415,32 @@ def _render_faturamento_dre_minimal(
 
     if not use_nf_panel_baked_effective:
         st.error(
-            "Esta vista **só** funciona com o painel NF materializado "
-            "(`dataset_faturamento_nf_panel.parquet`). Não há fallback com cálculo no browser."
+            "**Dados por nota fiscal indisponíveis.** "
+            "Esta área usa a base consolidada **já publicada** para a sua organização."
         )
         st.caption(
-            "Execute a **materialização de faturamento** (pipeline habitual) para gerar ou atualizar esse ficheiro "
-            "na pasta do materializado do cliente."
+            "Peça a atualização pelo processo habitual de fecho ou aguarde a próxima publicação de dados."
         )
         _pe = load_info.get("faturamento_nf_panel_error")
         if _pe:
-            st.caption(f"Erro ao ler o painel: `{html.escape(str(_pe))}`")
+            _pe_line = (
+                f"Erro técnico: `{html.escape(str(_pe))}`"
+                if _is_admin_mode()
+                else "Não foi possível carregar a base consolidada. Tente novamente mais tarde ou contacte o suporte."
+            )
+            st.caption(_pe_line)
         elif not use_nf_panel_baked:
             st.caption(
-                "O painel não foi carregado: ficheiro em falta na pasta do materializado ou leitura ainda não tentada."
+                "A base consolidada ainda não está disponível neste ambiente ou não foi encontrada. "
+                "Volte mais tarde ou contacte o suporte."
             )
         elif not isinstance(_df_nf_panel, pd.DataFrame):
-            st.caption("Estado interno: dataframe do painel indisponível.")
+            st.caption("Não foi possível preparar a tabela neste momento. Recarregue a página ou tente mais tarde.")
         elif _df_nf_panel.empty:
-            st.info("O painel NF está **vazio** após o escopo (org / consolidado).")
+            st.info(
+                "Não há linhas para o período e empresa selecionados. "
+                "Verifique filtros ou o escopo na barra lateral."
+            )
         elif _is_admin_mode():
             st.warning(
                 "Contrato do painel incompleto (faltam colunas obrigatórias). "
@@ -7460,8 +7468,8 @@ def _render_faturamento_dre_minimal(
     )
     if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame) and df_nf_pre.empty:
         st.info(
-            "Sem linhas no **painel NF** para este escopo. Confirme materialização "
-            "(`dataset_faturamento_nf_panel.parquet`) e **escopo** (org / consolidado)."
+            "Sem notas fiscais neste recorte. Confirme filtros de data, empresa e consolidado na barra lateral "
+            "e que a base consolidada está atualizada."
         )
         return
     nf_min, nf_max, ok_nf_dates = faturamento_min_series_nf_emissao_bounds_dates(_df_bounds)

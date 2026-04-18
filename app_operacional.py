@@ -7171,12 +7171,16 @@ def _fdl_fat_min_base_fiscal_card_html(
     n_nfs: str,
     periodo: str,
     contexto: str,
+    primary_label: str = "Total faturado (fiscal)",
+    primary_valor_title: str | None = None,
 ) -> str:
     """Card HTML do topo fiscal (valores já formatados em pt-BR)."""
     _tt_fat = html.escape(
-        "Soma de Valor_Liquido_NF (1× por NF) no Parquet fiscal, após empresa + emissão + situação válida."
+        primary_valor_title
+        or "Soma de Valor_Liquido_NF (1× por NF) no Parquet fiscal, após empresa + emissão + situação válida."
     )
     _tt_nf = html.escape("Contagem de notas distintas no mesmo conjunto base fiscal.")
+    _lbl = html.escape(primary_label.strip() or "Total faturado (fiscal)")
     return (
         '<div class="fdl-base-fiscal-card">'
         '<div class="fdl-base-fiscal-header">'
@@ -7187,7 +7191,7 @@ def _fdl_fat_min_base_fiscal_card_html(
         '<div class="fdl-base-fiscal-kpi">'
         f'<span class="fdl-base-fiscal-valor" title="{_tt_fat}">'
         f"{html.escape(total_faturado)}</span>"
-        '<span class="fdl-base-fiscal-label">Total faturado (fiscal)</span>'
+        f'<span class="fdl-base-fiscal-label">{_lbl}</span>'
         "</div>"
         '<div class="fdl-base-fiscal-kpi">'
         f'<span class="fdl-base-fiscal-count" title="{_tt_nf}">'
@@ -7198,6 +7202,38 @@ def _fdl_fat_min_base_fiscal_card_html(
         '<div class="fdl-base-fiscal-footer">'
         f'<span class="fdl-base-fiscal-contexto">ℹ️ {html.escape(contexto)}</span>'
         "</div>"
+        "</div>"
+    )
+
+
+def _fdl_fat_base_fiscal_composition_block_html(*, stats: FaturamentoFiscalBaseStats) -> str:
+    """Bloco detalhado emitidas − devoluções = base líquida (auditoria)."""
+    emitido = float(stats.valor_liquido_fiscal_sum)
+    devolvido = float(stats.total_devolvido)
+    liquida = float(stats.base_fiscal_liquida)
+    nfs_emit = int(stats.n_nf)
+    nfs_dev = int(stats.nfs_devolucao)
+    s_emit = html.escape(_fmt_brl_ptbr_celula(emitido) or "R$ 0,00")
+    s_dev = html.escape(_fmt_brl_ptbr_celula(devolvido) or "R$ 0,00")
+    s_liq = html.escape(_fmt_brl_ptbr_celula(liquida) or "R$ 0,00")
+    s_ne = html.escape(_fmt_int_ptbr(nfs_emit))
+    s_nd = html.escape(_fmt_int_ptbr(nfs_dev))
+    return (
+        '<div style="'
+        "background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;"
+        "margin-top:12px;font-size:0.85rem;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;"
+        "color:#374151;line-height:1.8;"
+        '">'
+        '<span style="color:#16a34a">(+)</span> '
+        f"{s_emit} &nbsp;&nbsp;"
+        f'<span style="color:#6b7280">{s_ne} emitidas</span><br>'
+        '<span style="color:#dc2626">(−)</span> '
+        f"{s_dev} &nbsp;&nbsp;"
+        f'<span style="color:#6b7280">{s_nd} devoluções</span><br>'
+        '<hr style="border:none;border-top:1px solid #e2e8f0;margin:6px 0">'
+        '<span style="color:#1e293b;font-weight:600">(=)</span> '
+        f"<strong>{s_liq}</strong> &nbsp;&nbsp;"
+        '<span style="color:#6b7280">Base Fiscal Líquida</span>'
         "</div>"
     )
 
@@ -7238,16 +7274,28 @@ def _render_faturamento_dre_fiscal_base_top(
     if not ok_nf_dates:
         st.warning("Datas de emissão da NF não utilizáveis — recorte fiscal vazio.")
         return
-    _tot = _fmt_brl_ptbr_celula(stats.valor_liquido_fiscal_sum) or "R$ 0,00"
+    _has_dev_abatimento = float(stats.total_devolvido) > 0.0
+    _tot_val = float(stats.base_fiscal_liquida) if _has_dev_abatimento else float(stats.valor_liquido_fiscal_sum)
+    _tot = _fmt_brl_ptbr_celula(_tot_val) or "R$ 0,00"
     _nn = _fmt_int_ptbr(stats.n_nf)
+    _lbl_princ = "BASE FISCAL LÍQUIDA" if _has_dev_abatimento else "Total faturado (fiscal)"
+    _tt_princ = (
+        "Valor principal = base fiscal líquida (emitidas − devoluções no recorte); detalhe no quadro abaixo."
+        if _has_dev_abatimento
+        else None
+    )
     st.html(
         _fdl_fat_min_base_fiscal_card_html(
             total_faturado=_tot,
             n_nfs=_nn,
             periodo=_per,
             contexto=_contexto_compacto,
+            primary_label=_lbl_princ,
+            primary_valor_title=_tt_princ,
         )
     )
+    if _has_dev_abatimento:
+        st.markdown(_fdl_fat_base_fiscal_composition_block_html(stats=stats), unsafe_allow_html=True)
     _fdl_fat_min_vsp(size="sm")
 
 

@@ -498,17 +498,14 @@ def render_faturamento_health_panel_if_enabled(
     """
     Filtro: emissao NF + CUSTO_OK + empresas (rotulos), alinhado ao painel NF minimo.
     Score e benchmark usam o mesmo mes civil do inicio do intervalo (tendencia = mes anterior).
+    Visibilidade: ``st.session_state["fdl_fat_min_health_panel_show"]`` (checkbox no fluxo Faturamento & DRE).
     """
     if df_faturamento is None or df_faturamento.empty:
         return
     req = {"Nota_Data_Emissao", "Vl_Venda", "Resultado", "Custo_Produto_Total", "org_id", "Status_Custo"}
     if not req.issubset(set(df_faturamento.columns)):
         return
-    if not st.checkbox(
-        "Mostrar painel de saúde financeira",
-        value=True,
-        key="fdl_fat_min_health_panel_show",
-    ):
+    if not bool(st.session_state.get("fdl_fat_min_health_panel_show", True)):
         return
 
     sl = slice_linhas_nf_periodo(df_faturamento, d_ini=nf_d_ini, d_fim=nf_d_fim, empresas_sel=empresas_sel)

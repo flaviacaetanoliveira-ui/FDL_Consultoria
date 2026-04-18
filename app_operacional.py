@@ -5278,18 +5278,6 @@ def _render_fdl_fat_dre_nf_kpi_cards(
     venda_fmt = _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00"
     res_fmt = _fmt_brl_ptbr_celula(kp["resultado"]) or "—"
 
-    ads_sum = float(kp.get("custo_ads_variavel", 0.0)) + float(kp.get("custo_ads_fixo", 0.0))
-    chips: list[tuple[str, str]] = [
-        ("Comissão", _fmt_brl_ptbr_celula(kp["comissao"]) or "R$ 0,00"),
-        ("Custo produto", _fmt_brl_ptbr_celula(kp.get("custo_produto", 0.0)) or "R$ 0,00"),
-        ("Frete plataforma", _fmt_brl_ptbr_celula(kp.get("custo_frete_plataforma", 0.0)) or "R$ 0,00"),
-        ("Repasse transp.", _fmt_brl_ptbr_celula(kp.get("repasse_frete_transportadora_propria", 0.0)) or "R$ 0,00"),
-        ("Imposto", _fmt_brl_ptbr_celula(kp["imposto"]) or "R$ 0,00"),
-        ("Despesa fixa", _fmt_brl_ptbr_celula(kp["despesa_fixa"]) or "R$ 0,00"),
-    ]
-    if nf_panel_ads:
-        chips.append(("ADS (3,5% + fixo)", _fmt_brl_ptbr_celula(ads_sum) or "R$ 0,00"))
-
     if fat_dre_faturado_mode == "fiscal":
         mode_pill = (
             '<div class="fdl-fat-kpi-mode"><span class="fdl-fat-kpi-mode-pill fdl-fat-kpi-mode-pill--fiscal">'
@@ -5312,7 +5300,7 @@ def _render_fdl_fat_dre_nf_kpi_cards(
             valor_venda=vv,
             resultado=res,
             diferenca=dif_f,
-            chips=chips,
+            chips=[],
             mode_pill_html=mode_pill,
         ),
         unsafe_allow_html=True,
@@ -7777,10 +7765,28 @@ def _render_faturamento_dre_minimal(
         nf_panel_ads=_nf_panel_ads_ui,
     )
 
+    _fdl_fat_min_vsp(size="sm")
+    _, _kpi_chk_col = st.columns([4, 1])
+    with _kpi_chk_col:
+        st.checkbox(
+            "Mostrar painel de saúde financeira",
+            value=True,
+            key="fdl_fat_min_health_panel_show",
+        )
+
     _fdl_fat_min_vsp(size="md")
     _periodo_dre_lbl = ""
     if ok_nf_dates:
         _periodo_dre_lbl = f"{_nf_kpi_ini.strftime('%d/%m/%Y')} — {_nf_kpi_fim.strftime('%d/%m/%Y')}"
+    _render_fdl_fat_dre_nf_gerencial(
+        kp=_kp_cards,
+        ok_nf_dates=ok_nf_dates,
+        valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
+        periodo_label=_periodo_dre_lbl,
+        nf_panel_ads=_nf_panel_ads_ui,
+    )
+
+    _fdl_fat_min_vsp(size="md")
     try:
         from app.components.health_panel_ui import render_faturamento_health_panel_if_enabled
 
@@ -7794,25 +7800,6 @@ def _render_faturamento_dre_minimal(
     except Exception as _exc_hp:
         if _is_admin_mode():
             st.caption(f"Painel de saúde financeira indisponível: `{_exc_hp}`")
-    _fdl_fat_min_vsp(size="sm")
-    _render_fdl_fat_dre_nf_gerencial(
-        kp=_kp_cards,
-        ok_nf_dates=ok_nf_dates,
-        valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
-        periodo_label=_periodo_dre_lbl,
-        nf_panel_ads=_nf_panel_ads_ui,
-    )
-
-    _fdl_fat_min_vsp(size="md")
-    _fdl_fat_section_rule("Cobertura")
-    _render_faturamento_dre_commercial_complement_banner(
-        coverage=_commercial_coverage,
-        n_fiscal_base=int(_fiscal_base_stats.n_nf),
-        aligned_to_fiscal_base=_commercial_kpi_aligned_fiscal,
-        ok_nf_dates=ok_nf_dates,
-        fiscal_parquet_ok=use_fiscal_parquet,
-        kpi_subset_by_platform=bool(_min_state.plataformas),
-    )
 
     _fdl_fat_min_vsp(size="md")
     _fdl_ui_gap_section()
@@ -8658,6 +8645,17 @@ def _render_faturamento_dre_minimal(
                 height=_h_tbl,
                 column_config=_cfg_nf,
             )
+
+    _fdl_fat_min_vsp(size="md")
+    _fdl_fat_section_rule("Cobertura")
+    _render_faturamento_dre_commercial_complement_banner(
+        coverage=_commercial_coverage,
+        n_fiscal_base=int(_fiscal_base_stats.n_nf),
+        aligned_to_fiscal_base=_commercial_kpi_aligned_fiscal,
+        ok_nf_dates=ok_nf_dates,
+        fiscal_parquet_ok=use_fiscal_parquet,
+        kpi_subset_by_platform=bool(_min_state.plataformas),
+    )
 
     _fdl_ui_gap_section()
     _fdl_fat_min_vsp(size="sm")

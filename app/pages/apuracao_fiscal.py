@@ -59,8 +59,9 @@ def render_apuracao_fiscal_page(
     st.html(_build_apuracao_fiscal_page_header_html(updated_at=_upd_disp))
     with st.expander("ℹ️ Sobre este módulo", expanded=False):
         st.caption(
-            "Visão fiscal para apuração tributária. Exibe notas emitidas, canceladas, devoluções, "
-            "base fiscal líquida e imposto calculado."
+            "Este módulo apresenta a apuração fiscal consolidada. Exibe notas emitidas, canceladas e devoluções "
+            "no período, calcula a **base fiscal líquida** (emitidas − canceladas − devoluções) e o **imposto** aplicável. "
+            "A base líquida calculada aqui é consumida pela DRE do **Resultado Gerencial**."
         )
     ao._fdl_fat_min_vsp(size="sm")
 

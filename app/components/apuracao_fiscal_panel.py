@@ -347,11 +347,11 @@ def render_apuracao_fiscal_panel(
     with _c1:
         st.metric("Base Fiscal Líquida", _base_disp)
     with _c2:
-        st.metric("NFs emitidas", _nf_emi)
+        st.metric("NFs Emitidas", _nf_emi)
     with _c3:
-        st.metric("NFs devolução", f"{_nf_dev_n} · {_nf_dev_v}")
+        st.metric("NFs Devolução", f"{_nf_dev_n} · {_nf_dev_v}")
     with _c4:
-        st.metric("Imposto do período", _imp_p)
+        st.metric("Imposto Apurado", _imp_p)
 
     ao._fdl_fat_min_vsp(size="md")
     ao._fdl_fat_divider_simple()
@@ -378,4 +378,5 @@ def render_apuracao_fiscal_panel(
         prefix_nf="fdl_apu_nf",
         csv_file_name="apuracao_fiscal_nf.csv",
         table_heading="### Tabela de NFs (visão fiscal)",
+        nf_table_ui_mode="fiscal",
     )

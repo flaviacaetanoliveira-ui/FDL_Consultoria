@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-16T21:47:48Z",
-  "source_signature": "d59cdecba18ab3839573e51709267cfd",
+  "generated_at": "2026-04-17T22:56:01Z",
+  "source_signature": "e2254a892e025c5b5c58912c0571a152",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_5",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "esquilo",
   "cnpj": null,
-  "row_count": 2285,
+  "row_count": 2293,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -100,23 +100,23 @@
   "source_mode": "local_folder",
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo",
   "org_id": "esquilo",
-  "dataset_empresa": "Esquilo",
+  "dataset_empresa": "esquilo",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4\\Esquilo",
     "org_id": "esquilo",
-    "dataset_empresa": "Esquilo",
+    "dataset_empresa": "esquilo",
     "cliente_id": "cliente_5",
-    "row_count_pre_filtro_devolucao": 2610,
-    "row_count_excluidas_cancel_comercial": 325,
-    "row_count_candidatas": 2285,
-    "row_count_vendas_total": 18805,
-    "row_count_liberacoes": 38703,
-    "sales_from_lib_financial": 3358,
+    "row_count_pre_filtro_devolucao": 2621,
+    "row_count_excluidas_cancel_comercial": 328,
+    "row_count_candidatas": 2293,
+    "row_count_vendas_total": 18862,
+    "row_count_liberacoes": 38804,
+    "sales_from_lib_financial": 3368,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 18805,
-  "row_count_liberacoes": 38703,
-  "sales_from_lib_financial": 3358
+  "row_count_vendas_total": 18862,
+  "row_count_liberacoes": 38804,
+  "sales_from_lib_financial": 3368
 }

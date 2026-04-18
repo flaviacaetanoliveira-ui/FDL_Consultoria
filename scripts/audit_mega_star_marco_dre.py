@@ -1,15 +1,20 @@
 """
-Auditoria DRE por org (cliente_2): marco por ano (recorte emissao NF, America/Sao_Paulo).
+Auditoria DRE por org (schema 2): mes civil, recorte emissao NF (America/Sao_Paulo).
 
-- Prova dos 9 (CUSTO_OK) vs soma Resultado
-- Top SKUs, comparacao entre orgs, CSV Pedidos vs dataset
+- Prova dos 9 (CUSTO_OK) vs soma Resultado no dataset.parquet (sem ADS do painel NF)
+- Top SKUs, comparacao entre orgs do mesmo mes, CSV Pedidos vs dataset
 - Checklist + rascunho executivo (ASCII)
 
-Uso:
+Caminhos: le ``--params-json``, usa ``cliente_slug`` para
+``data_products/<slug>/faturamento/current/dataset.parquet`` e ``metadata.json``.
+``--all-orgs`` usa a ordem de ``empresas[].org_id`` no mesmo JSON.
+
+Uso (Pedro / cliente_2, defeito do --params-json):
   python scripts/audit_mega_star_marco_dre.py --org-id mega_star
-  python scripts/audit_mega_star_marco_dre.py --org-id moveis_eap --year 2026 --month 3
-  python scripts/audit_mega_star_marco_dre.py --all-orgs
-  python scripts/audit_mega_star_marco_dre.py --all-orgs --save-txt-dir relatorios_marco2026
+  python scripts/audit_mega_star_marco_dre.py --all-orgs --year 2026 --month 3
+
+Uso (Flavio / cliente_5):
+  python scripts/audit_mega_star_marco_dre.py --params-json ops/faturamento_params_cliente_5_flavio.json --all-orgs --year 2026 --month 3
 """
 from __future__ import annotations
 
@@ -25,14 +30,45 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from processing.faturamento.build import _normalize_pedidos_export
-from processing.faturamento.config import OUTRAS_DESPESAS_COL, STATUS_CUSTO_OK
+from processing.faturamento.config import CUSTO_SKU_COL, OUTRAS_DESPESAS_COL, STATUS_CUSTO_OK
+from processing.faturamento.custo_por_empresa import serie_custo_unitario_resolvida
+from processing.faturamento.io_custo import load_custo_xlsx
 from processing.faturamento.io_pedidos import load_all_pedidos_csv_concatenated
-from processing.faturamento.normalize import to_numeric_br
+from processing.faturamento.normalize import normalize_sku_key, to_numeric_br
 
 TOL_RESULTADO = 10.0
 
 DEFAULT_PARAMS = ROOT / "ops" / "faturamento_params_cliente_2_gama_star_eap.json"
-ALL_ORGS_ORDER = ("moveis_eap", "gama_home", "mega_facil", "mega_star")
+
+
+def _read_faturamento_params(params_path: Path) -> dict:
+    if not params_path.is_file():
+        raise FileNotFoundError(f"faturamento_params nao encontrado: {params_path}")
+    raw = json.loads(params_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("faturamento_params deve ser um objeto JSON")
+    return raw
+
+
+def _org_ids_from_params(raw: dict) -> list[str]:
+    out: list[str] = []
+    for e in raw.get("empresas") or []:
+        if not isinstance(e, dict):
+            continue
+        oid = str(e.get("org_id", "")).strip()
+        if oid:
+            out.append(oid)
+    return out
+
+
+def _resolve_data_paths(*, params_path: Path, parquet_arg: Path | None, metadata_arg: Path | None) -> tuple[Path, Path, str, list[str]]:
+    raw = _read_faturamento_params(params_path)
+    slug = str(raw.get("cliente_slug", "") or "").strip() or "cliente_2"
+    orgs = _org_ids_from_params(raw)
+    base = ROOT / "data_products" / slug / "faturamento" / "current"
+    parquet = parquet_arg if parquet_arg is not None else (base / "dataset.parquet")
+    metadata = metadata_arg if metadata_arg is not None else (base / "metadata.json")
+    return parquet, metadata, slug, orgs
 
 
 def money(v: float) -> str:
@@ -89,6 +125,113 @@ def _custo_col_doc(org_id: str) -> str:
     return "coluna de custo conforme empresa no XLSX"
 
 
+def _resolve_custo_xlsx_from_params_json(params_path: Path) -> Path | None:
+    raw = _read_faturamento_params(params_path)
+    cx = raw.get("custo_xlsx")
+    if not cx or not str(cx).strip():
+        return None
+    root_s = str(raw.get("cliente_root", "")).strip()
+    root = Path(root_s).expanduser() if root_s else Path()
+    p = Path(str(cx).strip()).expanduser()
+    return p.resolve() if p.is_absolute() else (root / p).resolve()
+
+
+def _empresa_nome_from_params_json(params_path: Path, org_id: str) -> str | None:
+    raw = _read_faturamento_params(params_path)
+    for e in raw.get("empresas") or []:
+        if not isinstance(e, dict):
+            continue
+        if str(e.get("org_id", "")).strip() == org_id:
+            lab = str(e.get("empresa", "")).strip()
+            return lab or None
+    return None
+
+
+def _custo_xlsx_sku_coverage_lines(params_path: Path | None, org_id: str) -> tuple[list[str], dict[str, object]]:
+    """
+    Relê o XLSX de custo do params-json com ``load_custo_xlsx`` + coluna de preço da empresa
+    (``serie_custo_unitario_resolvida``), igual ao build. Conta SKUs com código válido vs preço numérico.
+    """
+    stats: dict[str, object] = {"skipped": True, "reason": "params-json ausente"}
+    if params_path is None or not params_path.is_file():
+        return [], stats
+
+    empresa = _empresa_nome_from_params_json(params_path, org_id)
+    if not empresa:
+        stats["reason"] = "empresa nao encontrada no params-json para org_id=%s" % org_id
+        return [], stats
+
+    custo_path = _resolve_custo_xlsx_from_params_json(params_path)
+    if custo_path is None:
+        stats["reason"] = "custo_xlsx omitido no JSON"
+        return [], stats
+    if not custo_path.is_file():
+        stats["reason"] = "ficheiro inexistente: %s" % custo_path
+        return [], stats
+
+    try:
+        df_c, meta = load_custo_xlsx(custo_path)
+    except Exception as e:  # noqa: BLE001 — relatório: mostrar causa ao utilizador
+        stats["reason"] = "erro ao ler XLSX: %s" % e
+        return [], stats
+
+    s_val, col_meta = serie_custo_unitario_resolvida(df_c, empresa)
+    sku_norm = normalize_sku_key(df_c[CUSTO_SKU_COL]).astype(str)
+    valid = sku_norm.str.strip().ne("")
+    n_valid = int(valid.sum())
+    if n_valid == 0:
+        stats["reason"] = "nenhuma linha com Código normalizado nao vazio"
+        return [], stats
+
+    sub = s_val[valid]
+    miss = sub.isna()
+    n_missing = int(miss.sum())
+    n_with = n_valid - n_missing
+    n_zero = int((sub.notna() & (sub == 0.0)).sum())
+    pct = (100.0 * n_with / n_valid) if n_valid else 0.0
+
+    lines: list[str] = []
+    L = lines.append
+    sep = "=" * 70
+    L(sep)
+    L("LEITURA DA PLANILHA DE CUSTO (XLSX) — COBERTURA POR SKU (MESMA LOGICA DO BUILD)")
+    L(sep)
+    L("")
+    L("Ficheiro: %s" % custo_path)
+    L("Empresa (params): %s" % empresa)
+    L("Leitor custo: %s" % meta.get("custo_reader", "?"))
+    if meta.get("custo_dedupe_by_normalized_sku_dropped_rows"):
+        L("Linhas removidas por dedupe SKU normalizado: %s" % meta.get("custo_dedupe_by_normalized_sku_dropped_rows"))
+    L("Linhas na folha (apos dedupe interno): %d" % len(df_c))
+    L("Coluna de preco principal: %s" % col_meta.get("custo_coluna_preco", "?"))
+    if col_meta.get("custo_coluna_fallback_cascade"):
+        L("Fallbacks em cascata: %s" % col_meta.get("custo_coluna_fallback_cascade"))
+    L("")
+    L("SKUs com codigo valido (Código normalizado nao vazio): %d" % n_valid)
+    L("  Com preco numerico (nao nulo apos fallbacks): %d  (%.2f%%)" % (n_with, pct))
+    L("  Sem preco (nulo na coluna resolvida):        %d" % n_missing)
+    if n_zero:
+        L("  Com preco zero (R$ 0,00):                     %d" % n_zero)
+    L("")
+    if n_missing:
+        bad_idx = df_c.index[valid & miss]
+        amostra = df_c.loc[bad_idx, CUSTO_SKU_COL].astype(str).head(25).tolist()
+        L("Amostra de codigos sem preco (max 25): %s" % amostra)
+        L("")
+
+    stats = {
+        "skipped": False,
+        "n_valid_sku": n_valid,
+        "n_with_price": n_with,
+        "n_missing_price": n_missing,
+        "n_zero_price": n_zero,
+        "pct_with_price": pct,
+        "ok_all_prices": n_missing == 0,
+        "custo_path": str(custo_path),
+    }
+    return lines, stats
+
+
 def build_audit_report(
     *,
     df: pd.DataFrame,
@@ -97,6 +240,7 @@ def build_audit_report(
     month: int,
     pedidos_dir: Path | None,
     metadata_path: Path,
+    params_json: Path | None = None,
 ) -> str:
     y, m = year, month
     oid = org_id.strip()
@@ -307,6 +451,12 @@ def build_audit_report(
     else:
         L("[SKIP] Pasta pedidos inexistente ou nao resolvida para esta org.")
 
+    cov_lines, custo_cov = _custo_xlsx_sku_coverage_lines(params_json, oid)
+    if cov_lines:
+        L("")
+        for ln in cov_lines:
+            L(ln)
+
     L("")
     L(sep)
     L("CHECKLIST DE VALIDACAO")
@@ -330,6 +480,21 @@ def build_audit_report(
     checklist.append("[%s] SKUs com Custo pct > 100: %d" % ("OK" if outliers == 0 else "!!", outliers))
     margem_cli = (resultado_dataset / receita * 100.0) if receita > 0 else 0.0
     checklist.append("[%s] Margem resultado: %.1f%% (alerta se < -10%%)" % ("OK" if margem_cli > -10.0 else "!!", margem_cli))
+
+    if custo_cov.get("skipped"):
+        checklist.append("[i] Planilha custo XLSX: nao verificada (%s)" % custo_cov.get("reason", ""))
+    else:
+        nv = int(custo_cov.get("n_valid_sku", 0) or 0)
+        nm = int(custo_cov.get("n_missing_price", 0) or 0)
+        nz = int(custo_cov.get("n_zero_price", 0) or 0)
+        if nv <= 0:
+            checklist.append("[!!] Planilha custo XLSX: nenhum SKU valido na folha")
+        elif nm == 0:
+            checklist.append("[OK] Planilha custo XLSX: 100%% dos %d SKUs (codigo valido) tem preco numerico" % nv)
+        else:
+            checklist.append("[!!] Planilha custo XLSX: %d de %d SKUs sem preco na coluna resolvida" % (nm, nv))
+        if nz > 0 and nm == 0:
+            checklist.append("[i] Planilha custo XLSX: %d SKUs com preco zero (R$ 0,00)" % nz)
 
     data_proc = "N/A"
     if metadata_path.is_file():
@@ -390,18 +555,20 @@ def main() -> int:
     ap.add_argument(
         "--parquet",
         type=Path,
-        default=ROOT / "data_products/cliente_2/faturamento/current/dataset.parquet",
+        default=None,
+        help="Sobrescreve dataset.parquet (defeito: data_products/<cliente_slug>/faturamento/current/)",
     )
     ap.add_argument(
         "--metadata",
         type=Path,
-        default=ROOT / "data_products/cliente_2/faturamento/current/metadata.json",
+        default=None,
+        help="Sobrescreve metadata.json (defeito: mesma pasta do parquet)",
     )
     ap.add_argument(
         "--params-json",
         type=Path,
         default=DEFAULT_PARAMS,
-        help="faturamento_params (schema 2) para resolver pasta Pedidos por org_id",
+        help="faturamento_params (schema 2): cliente_slug, empresas, pedidos_dir, cliente_root",
     )
     ap.add_argument(
         "--pedidos-dir",
@@ -422,9 +589,30 @@ def main() -> int:
     ap.add_argument(
         "--all-orgs",
         action="store_true",
-        help="Corre a auditoria para: %s" % ", ".join(ALL_ORGS_ORDER),
+        help="Corre para todas as org_id em empresas[] do params-json (mesma ordem)",
     )
     args = ap.parse_args()
+
+    try:
+        pq, meta, slug, orgs_from_params = _resolve_data_paths(
+            params_path=args.params_json,
+            parquet_arg=args.parquet,
+            metadata_arg=args.metadata,
+        )
+    except (OSError, ValueError, FileNotFoundError) as e:
+        print(f"ERRO: {e}", file=sys.stderr)
+        return 1
+
+    args.parquet = pq
+    args.metadata = meta
+
+    if args.all_orgs:
+        if not orgs_from_params:
+            print("ERRO: params-json sem empresas[] / org_id.", file=sys.stderr)
+            return 1
+        orgs_list = orgs_from_params
+    else:
+        orgs_list = [args.org_id.strip()]
 
     if not args.parquet.is_file():
         print(f"ERRO: parquet inexistente: {args.parquet}", file=sys.stderr)
@@ -435,9 +623,8 @@ def main() -> int:
         print("ERRO: coluna Nota_Data_Emissao ausente.", file=sys.stderr)
         return 1
 
-    orgs = list(ALL_ORGS_ORDER) if args.all_orgs else [args.org_id.strip()]
     chunks: list[str] = []
-    for oid in orgs:
+    for oid in orgs_list:
         ped = args.pedidos_dir
         if ped is None:
             ped = _pedidos_dir_from_params(args.params_json, oid)
@@ -448,6 +635,7 @@ def main() -> int:
             month=args.month,
             pedidos_dir=ped,
             metadata_path=args.metadata,
+            params_json=args.params_json,
         )
         chunks.append(text)
         if args.save_txt_dir:

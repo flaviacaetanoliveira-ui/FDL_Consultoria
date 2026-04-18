@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-16T22:11:27Z",
-  "source_signature": "04cdec1ceaad2c1371c4458c543c2c9d",
+  "generated_at": "2026-04-18T10:12:14Z",
+  "source_signature": "bd9758f7c0b1d9e6eb01e2728a5dbf32",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "let_decor",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "let_decor",
   "cnpj": null,
-  "row_count": 12002,
+  "row_count": 12047,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -101,7 +101,7 @@
     "vendas_arquivo": "Let Decor - Vendas ML 2026.xlsx, Let Decor - Vendas ML 2025.xlsx",
     "frete_arquivo": "Let Decor - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 12002,
+    "linhas": 12047,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

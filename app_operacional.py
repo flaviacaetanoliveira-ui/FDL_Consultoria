@@ -9,6 +9,7 @@ import json
 import hashlib
 import math
 import numbers
+import re
 import os
 from pathlib import Path
 import shutil
@@ -58,6 +59,7 @@ from processing.faturamento.normalize import (
     normalize_empresa_fiscal_commercial_join_key,
     normalize_nf_fiscal_commercial_join_key,
 )
+from processing.faturamento.nf_table_display_filters import nf_table_filter_mask as _fdl_nf_table_filter_mask
 from processing.repasse_contract import REPASSE_ARTIFACT_FILENAME
 from processing.repasse_load import (
     postprocess_repasse_parquet_dataframe,
@@ -7743,69 +7745,157 @@ def _render_faturamento_dre_minimal(
                 if str(x).strip() and str(x).strip() != "—"
             }
         )
-    with st.container(border=True):
-        st.markdown("**Recorte da tabela (produto / resultado)**")
-        st.caption(
-            "Refinam **só** a tabela e a vista detalhada; **cards** e **DRE** usam o recorte comercial acima."
-        )
-        with st.expander("ℹ️ Como funcionam produto e resultado", expanded=False):
-            st.caption(
-                "**Cards** e **DRE** já refletem empresa, emissão, **situação NF** (se filtrada) e **plataforma** "
-                "(se filtrada); aqui aplica-se **produto** e **sinal** de resultado **apenas** à tabela."
+
+    _k_sinais = "fdl_fat_min_sinais_resultado"
+    if _k_sinais not in st.session_state:
+        _leg = st.session_state.get("fdl_fat_min_sinal_resultado")
+        _leg_vs = st.session_state.get("fdl_fat_min_venda_sinal")
+        if isinstance(_leg, str):
+            _s = _leg.strip().lower()
+            if _s == "lucro":
+                st.session_state[_k_sinais] = ["lucro"]
+            elif _s == "prejuizo":
+                st.session_state[_k_sinais] = ["prejuizo"]
+            else:
+                st.session_state[_k_sinais] = ["lucro", "prejuizo"]
+            st.session_state.pop("fdl_fat_min_sinal_resultado", None)
+        elif isinstance(_leg_vs, str):
+            _m = {"positiva": "lucro", "negativa": "prejuizo"}
+            _one = _m.get(_leg_vs.strip().lower())
+            st.session_state[_k_sinais] = (
+                [_one] if _one else ["lucro", "prejuizo"]
             )
+        else:
+            st.session_state[_k_sinais] = ["lucro", "prejuizo"]
+    _prev_s = st.session_state.get(_k_sinais)
+    if not isinstance(_prev_s, list):
+        st.session_state[_k_sinais] = ["lucro", "prejuizo"]
+    else:
+        _filt = [x for x in _prev_s if x in ("lucro", "prejuizo")]
+        st.session_state[_k_sinais] = _filt if _filt else ["lucro", "prejuizo"]
+
+    st.markdown(
+        """
+<style>
+.tabela-nf-container {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 16px;
+}
+.tabela-nf-container div[data-testid="stVerticalBlock"] > div:has(div[data-baseweb="select"]) {
+    min-height: 38px;
+}
+.tabela-nf-contador {
+    color: #64748b;
+    font-size: 0.85rem;
+    margin: 8px 0 16px 0;
+}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+    _col_tit, _col_acoes = st.columns([3, 1])
+    with _col_tit:
+        st.markdown("### Tabela por NF")
+    with _col_acoes:
+        _col_cfg, _col_csv = st.columns(2)
+        with _col_cfg:
+            with st.popover("⚙️"):
+                st.markdown("**Colunas visíveis**")
+                st.checkbox(
+                    "Diferença (lista − fiscal)",
+                    value=False,
+                    key="fdl_fat_nf_show_diferenca",
+                    help="Exibe coluna com diferença entre receita lista e faturado fiscal.",
+                )
+                st.checkbox(
+                    "Margem %",
+                    value=True,
+                    key="fdl_fat_nf_show_margem",
+                )
+                st.markdown("---")
+                st.caption(
+                    "**Cards** e **DRE** seguem o recorte comercial (empresa, emissão, situação, plataforma); "
+                    "**produto**, **resultado** e filtros abaixo refinam **só** esta tabela."
+                )
+                if use_fiscal_kpi:
+                    st.caption(
+                        "Uma linha por NF no recorte. «Faturado (NF)» = fiscal (Bling/Parquet); demais valores = comercial."
+                    )
+                else:
+                    st.caption(
+                        "Detalhamento por NF; valores conforme materializado quando o fiscal do topo não está publicado."
+                    )
+        with _col_csv:
+            _nf_dl_hdr_slot = st.empty()
+
+    _f1, _f2, _f3, _f4 = st.columns([1.5, 2, 1.5, 2])
+    with _f1:
+        st.multiselect(
+            "Status",
+            options=("lucro", "prejuizo"),
+            format_func=lambda x: {
+                "lucro": "Lucro",
+                "prejuizo": "Prejuízo",
+            }[x],
+            key=_k_sinais,
+            placeholder="Lucro · Prejuízo…",
+            label_visibility="collapsed",
+            help=(
+                "Com as duas opções, a tabela inclui também empate (~0) e linhas só fiscais. "
+                "Com uma opção, filtra resultado > 0 ou < 0."
+            ),
+        )
+    with _f2:
         if _prod_opts:
             _multiselect_stable(
                 "fdl_fat_min_prod",
-                "Produto (resumo na NF)",
+                "Produto",
                 _prod_opts,
+                compact_label=True,
+                placeholder="Filtrar por produto…",
                 help=(
-                    "**Vazio** = todos. Filtra apenas a **tabela** (não altera o **topo Base fiscal**). **Cards/DRE** já "
-                    "estão no recorte **sem** produto/sinal. Corresponde à coluna «Produtos» (agregado por NF)."
+                    "Vazio = todos. Filtra pela coluna «Produtos» (resumo na NF). "
+                    "Não altera o topo fiscal nem os cards/DRE."
                 ),
             )
         else:
-            st.caption("Sem «produto_resumo» no recorte atual — filtro por produto indisponível.")
-        _k_sinais = "fdl_fat_min_sinais_resultado"
-        if _k_sinais not in st.session_state:
-            _leg = st.session_state.get("fdl_fat_min_sinal_resultado")
-            _leg_vs = st.session_state.get("fdl_fat_min_venda_sinal")
-            if isinstance(_leg, str):
-                _s = _leg.strip().lower()
-                if _s == "lucro":
-                    st.session_state[_k_sinais] = ["lucro"]
-                elif _s == "prejuizo":
-                    st.session_state[_k_sinais] = ["prejuizo"]
-                else:
-                    st.session_state[_k_sinais] = ["lucro", "prejuizo"]
-                st.session_state.pop("fdl_fat_min_sinal_resultado", None)
-            elif isinstance(_leg_vs, str):
-                _m = {"positiva": "lucro", "negativa": "prejuizo"}
-                _one = _m.get(_leg_vs.strip().lower())
-                st.session_state[_k_sinais] = (
-                    [_one] if _one else ["lucro", "prejuizo"]
-                )
+            st.caption("Sem produto no recorte — filtro indisponível.")
+    with _f3:
+        _ps_plat = (
+            _faturamento_nf_platform_display_series(df_nf).fillna("").astype(str).str.strip()
+            if not df_nf.empty
+            else pd.Series(dtype=str)
+        )
+        _plat_opts = sorted({x for x in _ps_plat if x and x != "—"})
+        if _plat_opts:
+            if "fdl_fat_nf_tbl_plataforma" not in st.session_state:
+                st.session_state["fdl_fat_nf_tbl_plataforma"] = []
             else:
-                st.session_state[_k_sinais] = ["lucro", "prejuizo"]
-        _prev_s = st.session_state.get(_k_sinais)
-        if not isinstance(_prev_s, list):
-            st.session_state[_k_sinais] = ["lucro", "prejuizo"]
+                _po_prev = st.session_state["fdl_fat_nf_tbl_plataforma"]
+                if isinstance(_po_prev, list):
+                    st.session_state["fdl_fat_nf_tbl_plataforma"] = [
+                        x for x in _po_prev if x in _plat_opts
+                    ]
+            st.multiselect(
+                "Plataforma",
+                options=_plat_opts,
+                key="fdl_fat_nf_tbl_plataforma",
+                placeholder="Plataforma…",
+                label_visibility="collapsed",
+                help="Vazio = todas as plataformas do recorte. Refina só a tabela.",
+            )
         else:
-            _filt = [x for x in _prev_s if x in ("lucro", "prejuizo")]
-            st.session_state[_k_sinais] = _filt if _filt else ["lucro", "prejuizo"]
-        st.multiselect(
-            "Resultado comercial (por NF)",
-            options=("lucro", "prejuizo"),
-            format_func=lambda x: {
-                "lucro": "Venda com lucro (resultado > 0)",
-                "prejuizo": "Venda com prejuízo (resultado < 0)",
-            }[x],
-            key=_k_sinais,
-            help=(
-                "Com **as duas** opções ativas (padrão), a **tabela** mostra **todas** as NFs do recorte dos cards "
-                "(empate ~0, dados incompletos e só fiscal incluídos). "
-                "Se deixar **apenas uma** opção, a tabela restringe a lucro **ou** a prejuízo (resultado > 0 ou < 0). "
-                "**Cards/DRE** ignoram sempre este filtro."
-            ),
+            st.caption("Sem plataforma no recorte.")
+    with _f4:
+        st.text_input(
+            "Buscar",
+            key="fdl_fat_nf_tbl_busca",
+            placeholder="🔍 Buscar NF ou Pedido…",
+            label_visibility="collapsed",
         )
 
     _prod_sel = tuple(
@@ -7829,43 +7919,6 @@ def _render_faturamento_dre_minimal(
     _df_fiscal_kpi_anchor: pd.DataFrame | None = (
         _df_fiscal_base.copy() if use_fiscal_kpi and not _df_fiscal_base.empty else None
     )
-
-    _base_n = (
-        len(df_nf_pre)
-        if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame)
-        else len(df)
-    )
-    _base_tail = " no materializado NF" if use_nf_materializado else " no carregamento"
-    _n_table = int(_kp_table["n_nf"])
-    _n_kpi = int(_kp_cards["n_nf"])
-    st.caption(
-        f"Mostrando {_n_table:,} de {_n_kpi:,} notas na tabela após filtros de **produto** e **resultado** (por NF)."
-    )
-    _fiscal_sum_txt = _fmt_brl_ptbr_celula(_fiscal_base_stats.valor_liquido_fiscal_sum) or "R$ 0,00"
-    _cards_scope_txt = (
-        "N_base + plataforma (se filtrada)"
-        if _commercial_kpi_aligned_fiscal
-        else "painel NF: empresa + emissão + situação + plataforma"
-    )
-    with st.expander("ℹ️ Detalhes do recorte", expanded=False):
-        st.caption(
-            f"**Base fiscal (topo):** {_fiscal_base_stats.n_nf:,} nota(s) · total fiscal {_fiscal_sum_txt} "
-            "(empresa + emissão + situação NF se filtrada)."
-        )
-        st.caption(f"**Cards e DRE:** {_n_kpi:,} nota(s) ({_cards_scope_txt}).")
-        st.caption(
-            f"**Tabela:** {_n_table:,} linha(s) após produto e sinal (mesmo recorte de plataforma/situação). "
-            f"Linhas brutas no materializado NF: {_base_n:,}{_base_tail}."
-        )
-        if _n_table == _n_kpi:
-            st.caption(
-                "Nenhuma NF foi excluída da tabela por **produto** ou **sinal** — ou todas passam nos filtros atuais."
-            )
-        else:
-            st.caption(
-                f"**{_n_kpi - _n_table:,}** nota(s) do universo dos **cards/DRE** **não aparecem** na tabela com os "
-                "filtros atuais de **produto** ou **sinal** de resultado."
-            )
 
     if _is_admin_mode():
         with st.expander("Diagnóstico materializado (admin)", expanded=False):
@@ -7981,18 +8034,14 @@ def _render_faturamento_dre_minimal(
                     tight=True,
                 )
 
-    _fdl_ui_gap_tight()
-    _fdl_fat_min_vsp(size="md")
-    st.divider()
-    _fdl_fat_min_vsp(size="md")
+    st.markdown("<div class='tabela-nf-container'>", unsafe_allow_html=True)
+
+    _fdl_fat_min_vsp(size="sm")
 
     _FAT_NF_TABLE_STYLER_MAX_ROWS = 500
 
-    _show_col_diferenca = st.checkbox(
-        "Mostrar coluna «Diferença» (receita lista − faturado fiscal)",
-        value=False,
-        key="fdl_fat_nf_show_diferenca",
-    )
+    _show_col_diferenca = bool(st.session_state.get("fdl_fat_nf_show_diferenca", False))
+    _show_margem = bool(st.session_state.get("fdl_fat_nf_show_margem", True))
     _nf_table_cols_order = [
         "Emissão",
         "Status",
@@ -8019,7 +8068,7 @@ def _render_faturamento_dre_minimal(
         "ADS fixo",
         "Resultado",
         "Info dados",
-        "Margem %",
+        *([] if not _show_margem else ["Margem %"]),
     ]
     _nf_table_cols_order_ui: list[str] = (
         [c for c in _nf_table_cols_order if c not in ("ADS 3,5%", "ADS fixo")]
@@ -8210,9 +8259,32 @@ def _render_faturamento_dre_minimal(
         _disp_nf_ui["Linhas"] = _disp_nf_ui["Linhas"].map(_nf_tbl_linhas_str)
         if "Quantidade" in _disp_nf_ui.columns:
             _disp_nf_ui["Quantidade"] = _disp_nf_ui["Quantidade"].map(_nf_tbl_linhas_str)
-        _disp_nf_ui["Margem %"] = _disp_nf_full["Margem %"].map(_nf_tbl_margem_str)
+        if "Margem %" in _disp_nf_ui.columns:
+            _disp_nf_ui["Margem %"] = _disp_nf_full["Margem %"].map(_nf_tbl_margem_str)
         _disp_nf_ui["Pedido"] = _disp_nf_ui["Pedido"].map(lambda x: _fat_min_trunc_text_cell(x, 72))
         _disp_nf_ui["Produtos"] = _disp_nf_ui["Produtos"].map(lambda x: _fat_min_trunc_text_cell(x, 72))
+
+        _plat_filt = st.session_state.get("fdl_fat_nf_tbl_plataforma") or []
+        if not isinstance(_plat_filt, list):
+            _plat_filt = []
+        _ps_pf = (
+            _faturamento_nf_platform_display_series(df_nf).fillna("").astype(str).str.strip()
+            if not df_nf.empty
+            else pd.Series(dtype=str)
+        )
+        _plat_avail_nf = {x for x in _ps_pf if x and x != "—"}
+        _plat_filt = [x for x in _plat_filt if x in _plat_avail_nf]
+        _busca_filt = str(st.session_state.get("fdl_fat_nf_tbl_busca") or "")
+        _nf_tbl_n_antes_extra = len(_disp_nf_full)
+        _nf_tbl_mask = _fdl_nf_table_filter_mask(
+            _disp_nf_full,
+            plataformas_sel=_plat_filt,
+            busca=_busca_filt,
+        )
+        _disp_nf_full = _disp_nf_full.loc[_nf_tbl_mask].reset_index(drop=True)
+        _disp_nf_ui = _disp_nf_ui.loc[_nf_tbl_mask].reset_index(drop=True)
+    else:
+        _nf_tbl_n_antes_extra = 0
 
     _cfg_nf: dict[str, NumberColumn | TextColumn] = {}
     _nf_col_help: dict[str, str | None] = {
@@ -8328,28 +8400,35 @@ def _render_faturamento_dre_minimal(
             TextColumn(_cn, width=_w, help=_h) if _h else TextColumn(_cn, width=_w)
         )
 
-    _fdl_fat_min_vsp(size="sm")
-    st.markdown("## Tabela por NF")
-    with st.expander("ℹ️ Sobre esta tabela", expanded=False):
-        if use_fiscal_kpi:
-            st.caption(
-                "Uma linha por NF fiscal no recorte. «Faturado (NF)» = Bling/Parquet; "
-                "venda, encargos e resultado = dados comerciais (pedidos ligados)."
-            )
-        else:
-            st.caption(
-                "Detalhamento por NF no recorte; valores conforme materializado (sem Parquet fiscal no topo)."
-            )
-    if use_fiscal_kpi:
-        st.caption(
-            f"{len(_disp_nf_ui):,} notas · emissão em ordem decrescente · export CSV com colunas completas."
+    _nf_dl_n = len(_disp_nf_ui)
+    _nf_dl_scope = _nf_tbl_n_antes_extra if _nf_tbl_n_antes_extra else _nf_dl_n
+    _nf_dl_hdr_slot.download_button(
+        "📥 CSV",
+        _disp_nf_full.to_csv(index=False).encode("utf-8-sig") if not _disp_nf_full.empty else b"",
+        file_name="faturamento_recorte_minimo_nf.csv",
+        mime="text/csv",
+        key=f"fdl_fat_min_dl_hdr_{_oid}",
+        disabled=_disp_nf_full.empty,
+    )
+
+    _nf_cap_txt = ""
+    if _nf_dl_scope and _nf_dl_n == _nf_dl_scope:
+        _nf_cap_txt = (
+            f"{_nf_dl_scope:,} notas · emissão em ordem decrescente · CSV alinhado às colunas visíveis."
+            if use_fiscal_kpi
+            else f"{_nf_dl_scope:,} notas · emissão decrescente · CSV alinhado às colunas visíveis."
+        )
+    elif _nf_dl_scope:
+        _nf_cap_txt = (
+            f"Mostrando {_nf_dl_n:,} de {_nf_dl_scope:,} notas · emissão decrescente."
         )
     else:
-        st.caption(f"{len(_disp_nf_ui):,} notas · emissão decrescente · export CSV.")
+        _nf_cap_txt = "Sem linhas para exibir com os filtros atuais."
+    st.markdown(f"<p class='tabela-nf-contador'>{html.escape(_nf_cap_txt)}</p>", unsafe_allow_html=True)
     if _disp_nf_ui.empty:
         st.info(
             (
-                "Sem linhas na **tabela** com os filtros atuais (plataforma / produto / resultado). "
+                "Sem linhas na **tabela** com os filtros atuais (status, produto, plataforma, busca). "
                 "O **topo fiscal** e os **cards/DRE** podem ainda ter **N_base** > 0 — confira período e empresa."
             )
             if use_fiscal_kpi
@@ -8442,17 +8521,10 @@ def _render_faturamento_dre_minimal(
             column_config=_cfg_nf,
         )
 
+    st.markdown("</div>", unsafe_allow_html=True)
+
     _fdl_ui_gap_section()
     _fdl_fat_min_vsp(size="sm")
-
-    st.download_button(
-        "Exportar CSV (recorte atual)",
-        _disp_nf_full.to_csv(index=False).encode("utf-8-sig") if not _disp_nf_full.empty else b"",
-        file_name="faturamento_recorte_minimo_nf.csv",
-        mime="text/csv",
-        key=f"fdl_fat_min_dl_{_oid}",
-        disabled=_disp_nf_full.empty,
-    )
 
 
 def _faturamento_disp_texto_sem_none(s: pd.Series, *, placeholder: str = "—") -> pd.Series:

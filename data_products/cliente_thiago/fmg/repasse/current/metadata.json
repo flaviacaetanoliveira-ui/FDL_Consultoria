@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-16T22:01:07Z",
-  "source_signature": "364340497dd33022899b2fb0923296a9",
+  "generated_at": "2026-04-18T02:34:30Z",
+  "source_signature": "3a1879ed38e5d39f4ffa79c70e4f541a",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "fmg",
@@ -9,7 +9,7 @@
   "empresa_id": "fmg",
   "cnpj": null,
   "repasse_empresa_label": "FMG",
-  "row_count": 7914,
+  "row_count": 7975,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -35,7 +35,7 @@
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
-    "linhas": 7914,
+    "linhas": 7975,
     "arquivos_contas_lidos": 0,
     "col_situacao": "",
     "col_numero": ""

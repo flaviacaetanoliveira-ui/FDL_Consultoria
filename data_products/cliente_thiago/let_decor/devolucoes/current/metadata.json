@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-16T22:13:32Z",
-  "source_signature": "fd76a9c30859eaf632b5685a34ae8766",
+  "generated_at": "2026-04-18T10:12:34Z",
+  "source_signature": "6791fc99b36d857c3c5522b7b92d1260",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_thiago",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "let_decor",
   "cnpj": null,
-  "row_count": 734,
+  "row_count": 736,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -100,23 +100,23 @@
   "source_mode": "local_folder",
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
   "org_id": "let_decor",
-  "dataset_empresa": "Let Decor",
+  "dataset_empresa": "let_decor",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
     "org_id": "let_decor",
-    "dataset_empresa": "Let Decor",
+    "dataset_empresa": "let_decor",
     "cliente_id": "cliente_thiago",
-    "row_count_pre_filtro_devolucao": 911,
+    "row_count_pre_filtro_devolucao": 913,
     "row_count_excluidas_cancel_comercial": 177,
-    "row_count_candidatas": 734,
-    "row_count_vendas_total": 12002,
-    "row_count_liberacoes": 20194,
-    "sales_from_lib_financial": 1465,
+    "row_count_candidatas": 736,
+    "row_count_vendas_total": 12047,
+    "row_count_liberacoes": 20331,
+    "sales_from_lib_financial": 1468,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 12002,
-  "row_count_liberacoes": 20194,
-  "sales_from_lib_financial": 1465
+  "row_count_vendas_total": 12047,
+  "row_count_liberacoes": 20331,
+  "sales_from_lib_financial": 1468
 }

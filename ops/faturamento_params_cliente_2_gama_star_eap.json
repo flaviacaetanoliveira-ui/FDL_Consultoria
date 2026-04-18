@@ -14,6 +14,7 @@
       "empresa": "Gama Home",
       "pedidos_dir": "Gama Home/Pedidos",
       "notas_saida_dir": "Gama Home/notas_saida",
+      "notas_entrada_dir": "Gama Home/Entradas",
       "aliquota_imposto": 0.09,
       "aliquota_despesas_fixas": 0.05,
       "excluir_notas_fiscal": ["10032", "010032"]
@@ -23,6 +24,7 @@
       "empresa": "Mega Star",
       "pedidos_dir": "Mega Star/Pedidos",
       "notas_saida_dir": "Mega Star/notas_saida",
+      "notas_entrada_dir": "Mega Star/Entradas",
       "aliquota_imposto": 0.095,
       "aliquota_despesas_fixas": 0.05
     },
@@ -31,6 +33,7 @@
       "empresa": "Móveis EAP",
       "pedidos_dir": "Móveis EAP/Pedidos",
       "notas_saida_dir": "Móveis EAP/notas_saida",
+      "notas_entrada_dir": "Móveis EAP/Entradas",
       "aliquota_imposto": 0.11,
       "aliquota_despesas_fixas": 0.05
     },
@@ -39,6 +42,7 @@
       "empresa": "Mega Fácil",
       "pedidos_dir": "Mega Facil/Pedidos",
       "notas_saida_dir": "Mega Facil/notas_saida",
+      "notas_entrada_dir": "Mega Facil/Entradas",
       "aliquota_imposto": 0.11,
       "aliquota_despesas_fixas": 0.05
     }

@@ -5910,20 +5910,29 @@ def _fdl_fat_min_inject_ui_styles() -> None:
             }
             .fdl-base-fiscal-valor {
               display: block;
-              font-size: 1.85rem;
+              font-size: 1.5rem;
               font-weight: 700;
-              color: var(--fdl-neutral-800, #1e293b);
+              color: #1e293b;
+              font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+              font-variant-numeric: tabular-nums;
+              line-height: 1.15;
+            }
+            .fdl-base-fiscal-count {
+              display: block;
+              font-size: 1.25rem;
+              font-weight: 600;
+              color: #1e293b;
               font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
               font-variant-numeric: tabular-nums;
               line-height: 1.15;
             }
             .fdl-base-fiscal-label {
               display: block;
-              font-size: 0.72rem;
-              color: var(--fdl-neutral-500, #64748b);
-              margin-top: 0.35rem;
+              font-size: 0.75rem;
               text-transform: uppercase;
-              letter-spacing: 0.04em;
+              letter-spacing: 0.05em;
+              color: #64748b;
+              margin-top: 0.35rem;
               font-weight: 600;
             }
             .fdl-base-fiscal-footer {
@@ -7131,7 +7140,7 @@ def _fdl_fat_min_base_fiscal_card_html(
         '<span class="fdl-base-fiscal-label">Total faturado (fiscal)</span>'
         "</div>"
         '<div class="fdl-base-fiscal-kpi">'
-        f'<span class="fdl-base-fiscal-valor" title="{_tt_nf}">'
+        f'<span class="fdl-base-fiscal-count" title="{_tt_nf}">'
         f"{html.escape(n_nfs)}</span>"
         '<span class="fdl-base-fiscal-label">NFs emitidas</span>'
         "</div>"

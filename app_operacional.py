@@ -689,10 +689,11 @@ def _fdl_sidebar_inject_layout_css() -> None:
             <style>
             [data-testid="stSidebar"] .block-container {
               padding-top: 0.5rem;
-              padding-bottom: 1.35rem;
+              padding-bottom: 3.5rem;
+              position: relative;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] {
-              margin-bottom: 0.48rem !important;
+              margin-bottom: 6px !important;
             }
             .fdl-sb-brand-shell {
               margin: 0.06rem 0 0.35rem 0;
@@ -839,9 +840,8 @@ def _fdl_sidebar_inject_layout_css() -> None:
               box-shadow:
                 0 1px 0 rgba(255, 255, 255, 0.2) inset,
                 0 2px 6px rgba(26, 86, 219, 0.25) !important;
-              padding-top: 0.56rem !important;
-              padding-bottom: 0.56rem !important;
-              min-height: 2.65rem !important;
+              padding: 10px 14px !important;
+              min-height: 2.5rem !important;
               transition: box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease !important;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"]:hover {
@@ -858,15 +858,15 @@ def _fdl_sidebar_inject_layout_css() -> None:
               border: 1px solid rgba(226, 232, 240, 0.55) !important;
               background: linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(248, 250, 252, 0.55) 100%) !important;
               border-radius: 10px !important;
-              padding-top: 0.52rem !important;
-              padding-bottom: 0.52rem !important;
-              min-height: 2.52rem !important;
+              padding: 10px 14px !important;
+              min-height: 2.4rem !important;
               box-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) inset !important;
-              transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease !important;
+              transition: background 0.15s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease !important;
             }
             [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"]:hover {
               border-color: rgba(203, 213, 225, 0.85) !important;
-              background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%) !important;
+              background-color: #f1f5f9 !important;
+              background-image: none !important;
               color: #475569 !important;
               box-shadow:
                 0 1px 0 rgba(255, 255, 255, 0.85) inset,
@@ -11679,10 +11679,10 @@ with st.sidebar:
     st.markdown(
         '<div class="fdl-sb-brand-shell">'
         f'<div class="fdl-sb-brand">{_brand_inner}</div>'
-        '</div>'
-        '<div class="fdl-sb-divider" aria-hidden="true"></div>',
+        "</div>",
         unsafe_allow_html=True,
     )
+    st.divider()
 
     _empresas_usuario = list(st.session_state["empresas_permitidas"])
     _nomes_nav = nomes_permitidos_com_registro(_empresas_usuario)
@@ -11806,24 +11806,6 @@ with st.sidebar:
                 help="Fila operacional: só vendas candidatas a devolução/reembolso/mediação ou com eventos correlatos nas liberações.",
             )
 
-    st.markdown('<div class="fdl-sb-footer-rule" aria-hidden="true"></div>', unsafe_allow_html=True)
-    _ts_parts = str(_sb_ts_display).strip().split(None, 1)
-    _ts_d = _ts_parts[0] if _ts_parts else "—"
-    _ts_t = _ts_parts[1] if len(_ts_parts) > 1 else ""
-    _ts_d_esc = html.escape(_ts_d)
-    _ts_t_esc = html.escape(_ts_t) if _ts_t else ""
-    _dados_inner = f"Dados de <span class=\"fdl-sb-footer-ts\">{_ts_d_esc}</span>"
-    if _ts_t_esc:
-        _dados_inner += f' <span class="fdl-sb-footer-ts">às {_ts_t_esc}</span>'
-    st.markdown(
-        '<div class="fdl-sb-footer">'
-        '<div class="fdl-sb-footer-dados">'
-        '<span class="fdl-sb-footer-dados-icon" aria-hidden="true">🕐</span>'
-        '<div class="fdl-sb-footer-dados-text">'
-        f'<p class="fdl-sb-footer-dados-line">{_dados_inner}</p>'
-        "</div></div></div>",
-        unsafe_allow_html=True,
-    )
     if _admin_mode:
         st.markdown(
             f'<p class="fdl-sb-footer-admin">{html.escape(_sidebar_version_display())}</p>',
@@ -11857,6 +11839,27 @@ with st.sidebar:
         type="tertiary",
         key="fdl_sb_logout",
         on_click=_sb_logout_click,
+    )
+
+    _data_esc = html.escape(str(_sb_ts_display).strip() or "—")
+    st.markdown(
+        f"""
+<div style="
+    position: absolute;
+    bottom: 16px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 0.72rem;
+    color: #94a3b8;
+    padding: 0 16px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 12px;
+">
+    🕐 Dados de <strong>{_data_esc}</strong>
+</div>
+""",
+        unsafe_allow_html=True,
     )
 
 _fdl_global_trace("05: após sidebar — antes do hero / painel principal")

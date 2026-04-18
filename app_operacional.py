@@ -7551,15 +7551,15 @@ def _render_faturamento_dre_minimal(
                     "fdl_fat_nf_opt_linhas",
                     "fdl_fat_nf_opt_qtd",
                     "fdl_fat_nf_opt_vf",
-                    "fdl_fat_nf_opt_com",
                     "fdl_fat_nf_opt_rf",
-                    "fdl_fat_nf_opt_fp",
                     "fdl_fat_nf_opt_rp",
                     "fdl_fat_nf_opt_tar",
-                    "fdl_fat_nf_opt_imp",
                     "fdl_fat_nf_opt_df",
                     "fdl_fat_nf_opt_ads",
                     "fdl_fat_nf_opt_alert",
+                    "fdl_fat_nf_opt_com",
+                    "fdl_fat_nf_opt_fp",
+                    "fdl_fat_nf_opt_imp",
                 ):
                     st.session_state.pop(_k, None)
                 st.rerun()
@@ -7827,7 +7827,7 @@ def _render_faturamento_dre_minimal(
         with _col_cfg:
             with st.popover("⚙️"):
                 st.caption(
-                    "Por defeito mostram-se só as colunas essenciais. Marque abaixo para acrescentar ao quadro e ao CSV."
+                    "Por defeito mostram-se receita, deduções principais e resultado. Marque abaixo para acrescentar ao quadro e ao CSV."
                 )
                 st.checkbox(
                     "Diferença (lista − fiscal)",
@@ -7842,12 +7842,9 @@ def _render_faturamento_dre_minimal(
                 st.checkbox("Linhas", key="fdl_fat_nf_opt_linhas", value=False)
                 st.checkbox("Quantidade", key="fdl_fat_nf_opt_qtd", value=False)
                 st.checkbox("Faturado (NF)", key="fdl_fat_nf_opt_vf", value=False)
-                st.checkbox("Comissão", key="fdl_fat_nf_opt_com", value=False)
                 st.checkbox("Receita de Frete", key="fdl_fat_nf_opt_rf", value=False)
-                st.checkbox("Frete plataforma", key="fdl_fat_nf_opt_fp", value=False)
                 st.checkbox("Repasse transp.", key="fdl_fat_nf_opt_rp", value=False)
                 st.checkbox("Frete pedido (Σ)", key="fdl_fat_nf_opt_tar", value=False)
-                st.checkbox("Imposto", key="fdl_fat_nf_opt_imp", value=False)
                 st.checkbox("Despesa fixa", key="fdl_fat_nf_opt_df", value=False)
                 if _nf_panel_ads_ui:
                     st.checkbox("ADS (3,5% + fixo)", key="fdl_fat_nf_opt_ads", value=False)
@@ -8069,10 +8066,15 @@ def _render_faturamento_dre_minimal(
         "NF",
         "Produtos",
         "Receita de Venda",
+        "Comissão",
+        "Custo produto",
+        "Frete plataforma",
+        "Imposto",
+        "Resultado",
+        "Margem %",
     ]
     if _show_col_diferenca:
         _nf_vis.append("Diferença")
-    _nf_vis += ["Custo produto", "Resultado", "Margem %"]
     _nf_opt_cols: list[tuple[str, str]] = [
         ("fdl_fat_nf_opt_plat", "Plataforma"),
         ("fdl_fat_nf_opt_sit", "Situação"),
@@ -8080,12 +8082,9 @@ def _render_faturamento_dre_minimal(
         ("fdl_fat_nf_opt_linhas", "Linhas"),
         ("fdl_fat_nf_opt_qtd", "Quantidade"),
         ("fdl_fat_nf_opt_vf", "Faturado (NF)"),
-        ("fdl_fat_nf_opt_com", "Comissão"),
         ("fdl_fat_nf_opt_rf", "Receita de Frete"),
-        ("fdl_fat_nf_opt_fp", "Frete plataforma"),
         ("fdl_fat_nf_opt_rp", "Repasse transp."),
         ("fdl_fat_nf_opt_tar", "Frete pedido (Σ)"),
-        ("fdl_fat_nf_opt_imp", "Imposto"),
         ("fdl_fat_nf_opt_df", "Despesa fixa"),
     ]
     for _ok, _colname in _nf_opt_cols:

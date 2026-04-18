@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-18T13:59:21Z",
+  "generated_at": "2026-04-18T14:11:15Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "cliente_2",
   "empresa": "_multi",
@@ -347,7 +347,7 @@
     ],
     "custo_dedupe_by_normalized_sku_dropped_rows": 143
   },
-  "data_processamento": "2026-04-18T13:59:20Z",
+  "data_processamento": "2026-04-18T14:11:14Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,

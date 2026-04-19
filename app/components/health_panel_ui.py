@@ -285,9 +285,66 @@ HEALTH_PANEL_CSS = """
   .fdl-health-metric-item { border-right: none !important; padding-right: 8px !important; border-bottom: 1px solid #f1f5f9; }
   .fdl-health-metric-item:last-child { border-bottom: none; }
 }
+.fdl-health-rg-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 18px 20px 14px 20px;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+}
+.fdl-health-rg-head-line {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0 0 4px 0;
+}
+.fdl-health-rg-sub-line {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0 0 18px 0;
+  line-height: 1.35;
+}
+.fdl-health-rg-score-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.fdl-health-rg-score-circle-lg {
+  width: 88px;
+  height: 88px;
+  min-width: 88px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+.fdl-health-rg-score-num-lg {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.fdl-health-rg-status-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.fdl-health-rg-status-word {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin: 0;
+  line-height: 1.2;
+}
 </style>
 """
-
 
 def _diag_md_para_html(md: str) -> str:
     """``**texto**`` → negrito; restante escapado para HTML."""
@@ -458,12 +515,18 @@ def render_health_panel(
     *,
     show_details: bool = True,
     header_diagnostic_checkbox: bool = False,
+    rg_streamlined: bool = False,
 ) -> None:
     lbl, color, mark = health_level_meta(health.level)
     esc_tit = html.escape(f"Saúde financeira – {health.periodo}")
     esc_sub = html.escape(str(health.empresa).replace("_", " ").title())
     esc_lbl = html.escape(f"{mark} {lbl}")
-    if header_diagnostic_checkbox:
+    _word_only = html.escape(str(lbl).strip().upper())
+    if rg_streamlined:
+        show_eff = True
+    else:
+        show_eff = show_details
+    if header_diagnostic_checkbox and not rg_streamlined:
         _, _tb2 = st.columns([3, 1])
         with _tb2:
             st.checkbox(
@@ -472,9 +535,30 @@ def render_health_panel(
                 key="fdl_fat_min_health_panel_show",
                 help="Mostra ou oculta detalhes de diagnóstico e SKUs em risco (o resumo do score permanece visível ao recarregar).",
             )
-    st.html(
-        HEALTH_PANEL_CSS
-        + f"""
+    if rg_streamlined:
+        esc_line = html.escape("Painel de Saúde")
+        esc_ctx = esc_sub
+        st.html(
+            HEALTH_PANEL_CSS
+            + f"""
+<div class="fdl-health-rg-card">
+  <p class="fdl-health-rg-head-line">{esc_line}</p>
+  <p class="fdl-health-rg-sub-line">{esc_ctx}</p>
+  <div class="fdl-health-rg-score-row">
+    <div class="fdl-health-rg-score-circle-lg" style="background:{color}18;border:4px solid {color};">
+      <span class="fdl-health-rg-score-num-lg" style="color:{color};">{int(health.score)}</span>
+    </div>
+    <div class="fdl-health-rg-status-stack">
+      <p class="fdl-health-rg-status-word" style="color:{color};">{_word_only.upper()}</p>
+    </div>
+  </div>
+</div>
+"""
+        )
+    else:
+        st.html(
+            HEALTH_PANEL_CSS
+            + f"""
 <section class="fdl-health-header">
   <div class="fdl-health-header-row">
     <div>
@@ -490,12 +574,12 @@ def render_health_panel(
   </div>
 </section>
 """
-    )
+        )
 
-    st.html(_metrics_block_html(health))
-    st.html(_executive_summary_html(health))
+        st.html(_metrics_block_html(health))
+        st.html(_executive_summary_html(health))
 
-    if show_details and (
+    if show_eff and (
         health.diagnosticos or health.skus_risco or health.skus_prejuizo_real or health.skus_cobertura_parcial
     ):
         with st.container(border=True):
@@ -605,6 +689,7 @@ def render_faturamento_health_panel_if_enabled(
     cmv_total_rg: float | None = None,
     margem_anterior_pct: float | None = None,
     margem_grupo_pct: float | None = None,
+    rg_streamlined: bool = False,
 ) -> None:
     """
     Recorte no eixo ``coluna_temporal`` (``Data`` = venda, alinhado ao Resultado Gerencial; ``Nota_Data_Emissao`` = legado).
@@ -644,7 +729,11 @@ def render_faturamento_health_panel_if_enabled(
     df_ant = obter_dados_periodo_anterior(
         df_w, org_alvo, ano, mes, coluna_temporal=coluna_temporal
     )
-    df_grupo = obter_dados_grupo(df_w, ano, mes, coluna_temporal=coluna_temporal)
+    df_grupo = (
+        pd.DataFrame()
+        if rg_streamlined
+        else obter_dados_grupo(df_w, ano, mes, coluna_temporal=coluna_temporal)
+    )
 
     health = calcular_health_score(
         sl,
@@ -657,10 +746,15 @@ def render_faturamento_health_panel_if_enabled(
         kpis_gerenciais=kpis_rg,
         cmv_total_gerencial=cmv_total_rg,
         margem_benchmark_anterior_pct=margem_anterior_pct,
-        margem_benchmark_grupo_pct=margem_grupo_pct,
+        margem_benchmark_grupo_pct=(None if rg_streamlined else margem_grupo_pct),
     )
     show_diag = bool(st.session_state.get("fdl_fat_min_health_panel_show", True))
-    render_health_panel(health, show_details=show_diag, header_diagnostic_checkbox=True)
+    render_health_panel(
+        health,
+        show_details=show_diag,
+        header_diagnostic_checkbox=(not rg_streamlined),
+        rg_streamlined=rg_streamlined,
+    )
 
 
 def render_health_mini(health: "HealthScore") -> None:

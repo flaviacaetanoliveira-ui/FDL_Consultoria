@@ -120,6 +120,9 @@ except ImportError:
     build_kpi_nf_premium_shell_html = None  # type: ignore[misc,assignment]
     fat_dre_premium_css = lambda: ""  # type: ignore[misc,assignment]
     faturamento_section_rule_html = lambda _lbl: ""  # type: ignore[misc,assignment]
+from app.components.rg_layout_helpers import (
+    rg_pick_empresa_maior_receita_mes_fechado as _rg_pick_empresa_maior_receita_mes_fechado,
+)
 from fdl_paths import resolve_pasta_vendas_ml
 from operacional_app_context import (
     SESSION_ACTIVE_ORG_KEY,
@@ -5435,6 +5438,8 @@ def _render_resultado_gerencial_kpi_cards(
             chips=[],
             mode_pill_html="",
             resultado_title=_RG_KPI_RESULTADO_TITLE,
+            omit_hero_meta=True,
+            tier_b_layout=True,
         ),
         unsafe_allow_html=True,
     )
@@ -5723,6 +5728,9 @@ def _render_fdl_fat_dre_gerencial_linha(
             resultado_tooltip=tt_res,
             margem_tooltip=tt_marg,
             footnote_plain=foot,
+            hide_period_in_header=True,
+            hide_footnote=True,
+            hide_resultado_margem_block=True,
         ),
         unsafe_allow_html=True,
     )
@@ -6254,6 +6262,14 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
               letter-spacing: -0.02em;
               line-height: 1.15;
+            }
+            .fdl-page-title-hint {
+              font-size: 1rem;
+              font-weight: 500;
+              opacity: 0.55;
+              cursor: help;
+              margin-left: 0.35rem;
+              vertical-align: middle;
             }
             .fdl-page-subtitle {
               font-size: 0.95rem;
@@ -7735,21 +7751,36 @@ def _fdl_fat_min_format_updated_at(ts_raw: str) -> str:
     return f"Última atualização: {dt.day}/{_meses[dt.month - 1]} às {dt.strftime('%H:%M')}"
 
 
-def _build_faturamento_dre_page_header_html(*, updated_at: str) -> str:
+def _build_faturamento_dre_page_header_html(
+    *,
+    updated_at: str | None = None,
+    sobre_tooltip: str = "",
+) -> str:
     """Cabeçalho premium do módulo Resultado Gerencial (HTML; ``updated_at`` já seguro para inserção)."""
-    esc = html.escape(updated_at)
+    meta = ""
+    if (updated_at or "").strip():
+        meta = (
+            '<div class="fdl-page-header-meta">'
+            f'<span class="fdl-page-updated">{html.escape(str(updated_at).strip())}</span>'
+            "</div>"
+        )
+    tip = html.escape(sobre_tooltip.strip(), quote=True) if sobre_tooltip.strip() else ""
+    ico = (
+        f'<span class="fdl-page-title-hint" title="{tip}" aria-label="Sobre este módulo">ℹ️</span>'
+        if tip
+        else ""
+    )
     return (
         '<div class="fdl-page-header">'
         '<div class="fdl-page-header-main">'
         '<p class="fdl-page-breadcrumb">Gerencial &gt; Resultado Gerencial</p>'
-        '<h1 class="fdl-page-title">📊 Resultado Gerencial</h1>'
+        '<h1 class="fdl-page-title">📊 Resultado Gerencial '
+        f"{ico}</h1>"
         "<p class=\"fdl-page-subtitle\">"
         "DRE, margem e desempenho da operação"
         "</p>"
         "</div>"
-        '<div class="fdl-page-header-meta">'
-        f'<span class="fdl-page-updated">{esc}</span>'
-        "</div>"
+        f"{meta}"
         "</div>"
     )
 
@@ -8740,6 +8771,35 @@ def _render_faturamento_dre_nf_table_section(
 
     _fdl_fat_min_vsp(size="md")
 
+FDL_RG_MSG_SEM_EMPRESA = "Selecione pelo menos uma empresa para visualizar o resultado."
+_FDL_RG_TOOLTIP_MODULO = (
+    "DRE e KPIs filtram pela data da venda; o imposto na DRE segue a ponte fiscal (apuração por NF). "
+    "Canceladas/denegadas/inutilizadas já estão excluídas da base materializada."
+)
+
+
+def _fdl_rg_resumo_filtros_linha() -> str:
+    """Linha única para rótulo do expander de filtros (estado atual da sessão)."""
+    parts: list[str] = []
+    em = st.session_state.get("fdl_fat_min_emp")
+    if isinstance(em, list) and em:
+        parts.append(" · ".join(str(x) for x in em))
+    else:
+        parts.append("Todas as empresas")
+    pl = st.session_state.get("fdl_fat_min_plat")
+    if isinstance(pl, list) and pl:
+        parts.append(" · ".join(str(x) for x in pl))
+    else:
+        parts.append("Todas as plataformas")
+    d0 = st.session_state.get("fdl_fat_min_nf_d_ini")
+    d1 = st.session_state.get("fdl_fat_min_nf_d_fim")
+    if isinstance(d0, date) and isinstance(d1, date):
+        parts.append(f"{d0.strftime('%d/%m/%Y')} — {d1.strftime('%d/%m/%Y')}")
+    else:
+        parts.append("Período")
+    return " · ".join(parts)
+
+
 def _fdl_health_panel_rg_benchmark_margins(
     *,
     df_linha: pd.DataFrame,
@@ -8760,31 +8820,17 @@ def _fdl_health_panel_rg_benchmark_margins(
     plataformas_sel: tuple[str, ...],
     situacoes_nf: tuple[str, ...],
     org_sidebar: str,
-) -> tuple[float | None, float | None]:
-    """Margens % (período anterior e grupo) via ``compute_resultado_gerencial_kpis`` — mesma fonte dos KPIs/DRE."""
+) -> float | None:
+    """Margem % do período anterior — mesma fonte dos KPIs/DRE (``compute_resultado_gerencial_kpis``)."""
     from calendar import monthrange
 
-    from app.components.health_score import inferir_org_id_alvo, slice_linhas_nf_periodo
     from processing.faturamento.resultado_gerencial_slice import (
         build_resultado_gerencial_slice,
         compute_resultado_gerencial_kpis,
     )
 
     margem_ant: float | None = None
-    margem_grupo: float | None = None
-
-    df_w = df_linha.copy()
-    if "Vl_Venda" not in df_w.columns and "Valor total" in df_w.columns:
-        df_w["Vl_Venda"] = pd.to_numeric(df_w["Valor total"], errors="coerce").fillna(0.0)
-    sl = slice_linhas_nf_periodo(
-        df_w,
-        d_ini=nf_d_ini,
-        d_fim=nf_d_fim,
-        empresas_sel=empresas_sel,
-        coluna_temporal="Data",
-        plataformas_sel=plataformas_sel,
-    )
-    org_alvo = inferir_org_id_alvo(sl, org_sidebar)
+    _ = df_commercial_nf_kpi, org_sidebar
 
     try:
         if mes_civil == 1:
@@ -8834,37 +8880,7 @@ def _fdl_health_panel_rg_benchmark_margins(
     except Exception:
         margem_ant = None
 
-    oid = str(org_alvo).strip()
-    skip_bench = oid.casefold() in {"consolidado", "_multi_", ""} or oid.startswith("_multi")
-    if not skip_bench and "org_id" in df_linha.columns:
-        try:
-            df_other = df_linha.loc[df_linha["org_id"].astype(str).str.strip() != oid].copy()
-            if len(df_other) > 0:
-                slice_g = build_resultado_gerencial_slice(
-                    df_other,
-                    empresas_sel=(),
-                    plataformas_sel=plataformas_sel,
-                    data_venda_ini=nf_d_ini,
-                    data_venda_fim=nf_d_fim,
-                )
-                nf_o = pd.DataFrame()
-                if "org_id" in df_commercial_nf_kpi.columns:
-                    nf_o = df_commercial_nf_kpi.loc[
-                        df_commercial_nf_kpi["org_id"].astype(str).str.strip() != oid
-                    ].copy()
-                if not nf_o.empty:
-                    kp_o = compute_nf_panel_kpis(nf_o)
-                    imp_o = dre_imposto_para_linha_dre_gerencial(
-                        kp_o,
-                        fiscal_base_stats=fiscal_base_stats if use_fiscal_parquet else None,
-                        aplicar_ponte_base_liquida=(fiscal_base_stats is not None and use_fiscal_kpi),
-                    )
-                    kp_rg_o = compute_resultado_gerencial_kpis(slice_g, fiscal_imposto_valor=imp_o)
-                    margem_grupo = float(kp_rg_o["margem"]) * 100.0
-        except Exception:
-            margem_grupo = None
-
-    return margem_ant, margem_grupo
+    return margem_ant
 
 
 def _render_faturamento_dre_minimal(
@@ -8881,7 +8897,16 @@ def _render_faturamento_dre_minimal(
     """
     _fdl_fat_min_inject_ui_styles()
     _upd_disp = _fdl_fat_min_format_updated_at(ts_proc)
-    st.html(_build_faturamento_dre_page_header_html(updated_at=_upd_disp))
+    _h_periodo = (
+        f"{_FATURAMENTO_HELP_PERIODO_DATA_VENDA_RG_MIN} "
+        f"Última atualização dos dados carregados: {_upd_disp}."
+    )
+    st.html(
+        _build_faturamento_dre_page_header_html(
+            updated_at=None,
+            sobre_tooltip=_FDL_RG_TOOLTIP_MODULO,
+        )
+    )
     _fdl_fat_min_vsp(size="sm")
     _oid = str(org_id)
     _ = org_display_name, load_info
@@ -9049,110 +9074,146 @@ def _render_faturamento_dre_minimal(
         )
     _plat_help = "Plataforma: " + _plat_expl
 
-    with st.container(border=True):
-        _fh_t, _fh_b = st.columns((4, 1))
-        with _fh_t:
-            st.markdown("**Filtros**")
-        with _fh_b:
-            if st.button(
-                "Limpar filtros",
-                key="fdl_fat_min_reset",
-                type="secondary",
-                use_container_width=True,
-                help="Repor empresa, plataforma, situação NF e período (data da venda) ao padrão (inclui preferências antigas da tabela NF no estado).",
-            ):
-                for _k in (
-                    "fdl_fat_min_emp",
-                    "fdl_fat_min_plat",
-                    "fdl_fat_min_nf_sit",
-                    "fdl_fat_min_nf_d_ini",
-                    "fdl_fat_min_nf_d_fim",
-                    "fdl_fat_min_nf_bounds_sig",
-                    "fdl_fat_min_prod",
-                    "fdl_fat_min_venda_sinal",
-                    "fdl_fat_min_sinal_resultado",
-                    "fdl_fat_min_sinais_resultado",
-                    "fdl_fat_nf_show_diferenca",
-                    "fdl_fat_nf_opt_plat",
-                    "fdl_fat_nf_opt_sit",
-                    "fdl_fat_nf_opt_ped",
-                    "fdl_fat_nf_opt_linhas",
-                    "fdl_fat_nf_opt_qtd",
-                    "fdl_fat_nf_opt_vf",
-                    "fdl_fat_nf_opt_rf",
-                    "fdl_fat_nf_opt_rp",
-                    "fdl_fat_nf_opt_tar",
-                    "fdl_fat_nf_opt_df",
-                    "fdl_fat_nf_opt_ads",
-                    "fdl_fat_nf_opt_alert",
-                    "fdl_fat_nf_opt_com",
-                    "fdl_fat_nf_opt_fp",
-                    "fdl_fat_nf_opt_imp",
+    def _fdl_rg_cb_emp_changed() -> None:
+        st.session_state["fdl_rg_emp_multiselect_dirty"] = True
+
+    _exp_filtros = not st.session_state.get("fdl_rg_filtros_ever_shown", False)
+    with st.expander(
+        f"▸ Filtros · {_fdl_rg_resumo_filtros_linha()}",
+        expanded=_exp_filtros,
+    ):
+        with st.container(border=True):
+            _fh_t, _fh_b = st.columns((4, 1))
+            with _fh_t:
+                st.markdown("**Filtros**")
+            with _fh_b:
+                if st.button(
+                    "Limpar filtros",
+                    key="fdl_fat_min_reset",
+                    type="secondary",
+                    use_container_width=True,
+                    help="Repor empresa, plataforma, situação NF e período (data da venda) ao padrão (inclui preferências antigas da tabela NF no estado).",
                 ):
-                    st.session_state.pop(_k, None)
-                st.rerun()
-        _fc1, _fc2 = st.columns(2)
-        with _fc1:
-            if emp_opts:
-                if "fdl_fat_min_emp" not in st.session_state:
-                    st.session_state["fdl_fat_min_emp"] = []
-                else:
-                    prev_e = st.session_state["fdl_fat_min_emp"]
-                    if isinstance(prev_e, list):
-                        st.session_state["fdl_fat_min_emp"] = [x for x in prev_e if x in emp_opts]
-                    else:
+                    for _k in (
+                        "fdl_fat_min_emp",
+                        "fdl_fat_min_plat",
+                        "fdl_fat_min_nf_sit",
+                        "fdl_fat_min_nf_d_ini",
+                        "fdl_fat_min_nf_d_fim",
+                        "fdl_fat_min_nf_bounds_sig",
+                        "fdl_fat_min_prod",
+                        "fdl_fat_min_venda_sinal",
+                        "fdl_fat_min_sinal_resultado",
+                        "fdl_fat_min_sinais_resultado",
+                        "fdl_fat_nf_show_diferenca",
+                        "fdl_fat_nf_opt_plat",
+                        "fdl_fat_nf_opt_sit",
+                        "fdl_fat_nf_opt_ped",
+                        "fdl_fat_nf_opt_linhas",
+                        "fdl_fat_nf_opt_qtd",
+                        "fdl_fat_nf_opt_vf",
+                        "fdl_fat_nf_opt_rf",
+                        "fdl_fat_nf_opt_rp",
+                        "fdl_fat_nf_opt_tar",
+                        "fdl_fat_nf_opt_df",
+                        "fdl_fat_nf_opt_ads",
+                        "fdl_fat_nf_opt_alert",
+                        "fdl_fat_nf_opt_com",
+                        "fdl_fat_nf_opt_fp",
+                        "fdl_fat_nf_opt_imp",
+                        "fdl_rg_sess_emp_default_feito",
+                        "fdl_rg_emp_multiselect_dirty",
+                    ):
+                        st.session_state.pop(_k, None)
+                    st.rerun()
+            _fc1, _fc2 = st.columns(2)
+            with _fc1:
+                if emp_opts:
+                    if not st.session_state.get("fdl_rg_sess_emp_default_feito"):
+                        cur_e = st.session_state.get("fdl_fat_min_emp")
+                        if not isinstance(cur_e, list) or len(cur_e) == 0:
+                            _pick_e = _rg_pick_empresa_maior_receita_mes_fechado(df, emp_opts)
+                            st.session_state["fdl_fat_min_emp"] = (
+                                [_pick_e] if _pick_e else [sorted(emp_opts)[0]]
+                            )
+                        st.session_state["fdl_rg_sess_emp_default_feito"] = True
+                    if "fdl_fat_min_emp" not in st.session_state:
                         st.session_state["fdl_fat_min_emp"] = []
-                st.multiselect(
-                    "Empresa",
-                    emp_opts,
-                    key="fdl_fat_min_emp",
-                    help="**Vazio** = todas as empresas neste carregamento. Uma ou mais marcas para refinar.",
-                    placeholder="Todas",
+                    else:
+                        prev_e = st.session_state["fdl_fat_min_emp"]
+                        if isinstance(prev_e, list):
+                            st.session_state["fdl_fat_min_emp"] = [x for x in prev_e if x in emp_opts]
+                        else:
+                            st.session_state["fdl_fat_min_emp"] = []
+                    st.multiselect(
+                        "Empresa",
+                        emp_opts,
+                        key="fdl_fat_min_emp",
+                        help=(
+                            "Selecione uma ou mais marcas. Para consolidar várias empresas, selecione-as ao mesmo tempo."
+                        ),
+                        placeholder="Selecione",
+                        on_change=_fdl_rg_cb_emp_changed,
+                    )
+                else:
+                    st.caption("Empresa: sem opções distintas no recorte atual.")
+            with _fc2:
+                if plats:
+                    _multiselect_stable(
+                        "fdl_fat_min_plat", "Plataforma", plats, help=_plat_help, placeholder="Todas"
+                    )
+                else:
+                    st.caption("Plataforma: sem opções no recorte.")
+            if ok_nf_dates:
+                st.markdown(
+                    '<p class="fdl-fat-filtros-periodo-tit">Período da venda</p>',
+                    unsafe_allow_html=True,
+                )
+                r_nf = st.columns((1, 1))
+                with r_nf[0]:
+                    st.date_input(
+                        "Início",
+                        min_value=nf_cal_min,
+                        max_value=nf_cal_max,
+                        format="DD/MM/YYYY",
+                        key="fdl_fat_min_nf_d_ini",
+                        help=_h_periodo,
+                    )
+                with r_nf[1]:
+                    st.date_input(
+                        "Fim",
+                        min_value=nf_cal_min,
+                        max_value=nf_cal_max,
+                        format="DD/MM/YYYY",
+                        key="fdl_fat_min_nf_d_fim",
+                        help=_h_periodo,
+                    )
+            elif "Nota_Data_Emissao" in _df_bounds.columns:
+                st.caption(
+                    "Período da venda indisponível (limites de calendário não derivados corretamente das datas do carregamento)."
                 )
             else:
-                st.caption("Empresa: sem opções distintas no recorte atual.")
-        with _fc2:
-            if plats:
-                _multiselect_stable(
-                    "fdl_fat_min_plat", "Plataforma", plats, help=_plat_help, placeholder="Todas"
-                )
-            else:
-                st.caption("Plataforma: sem opções no recorte.")
-        if ok_nf_dates:
-            st.markdown(
-                '<p class="fdl-fat-filtros-periodo-tit">Período da venda</p>',
-                unsafe_allow_html=True,
-            )
-            r_nf = st.columns((1, 1))
-            with r_nf[0]:
-                st.date_input(
-                    "Início",
-                    min_value=nf_cal_min,
-                    max_value=nf_cal_max,
-                    format="DD/MM/YYYY",
-                    key="fdl_fat_min_nf_d_ini",
-                    help=_FATURAMENTO_HELP_PERIODO_DATA_VENDA_RG_MIN,
-                )
-            with r_nf[1]:
-                st.date_input(
-                    "Fim",
-                    min_value=nf_cal_min,
-                    max_value=nf_cal_max,
-                    format="DD/MM/YYYY",
-                    key="fdl_fat_min_nf_d_fim",
-                    help=_FATURAMENTO_HELP_PERIODO_DATA_VENDA_RG_MIN,
-                )
-        elif "Nota_Data_Emissao" in _df_bounds.columns:
-            st.caption(
-                "Período da venda indisponível (limites de calendário não derivados corretamente das datas do carregamento)."
-            )
-        else:
-            st.caption("Período da venda indisponível (referência temporal ausente neste carregamento).")
+                st.caption("Período da venda indisponível (referência temporal ausente neste carregamento).")
+
+    st.session_state["fdl_rg_filtros_ever_shown"] = True
+
+    if (
+        emp_opts
+        and isinstance(st.session_state.get("fdl_fat_min_emp"), list)
+        and len(st.session_state["fdl_fat_min_emp"]) == 0
+        and st.session_state.get("fdl_rg_emp_multiselect_dirty")
+    ):
+        st.info(FDL_RG_MSG_SEM_EMPRESA)
+        return
 
     _fdl_ui_gap_section()
     _fdl_fat_min_vsp(size="md")
 
     _min_state = faturamento_recorte_min_state_from_session(st.session_state)
+    if _min_state.empresas:
+        st.session_state["fdl_rg_ultima_empresa_selecionada"] = _min_state.empresas
+    if len(_min_state.empresas) >= 2:
+        st.caption("📊 Visão consolidada · " + " + ".join(_min_state.empresas))
     _nf_kpi_ini = _safe_streamlit_date(st.session_state.get("fdl_fat_min_nf_d_ini"), nf_min)
     _nf_kpi_fim = _safe_streamlit_date(st.session_state.get("fdl_fat_min_nf_d_fim"), nf_max)
     if ok_nf_dates:
@@ -9201,22 +9262,7 @@ def _render_faturamento_dre_minimal(
         ),
     )
 
-    with st.expander("ℹ️ Sobre este módulo", expanded=False):
-        st.caption(
-            "Este módulo apresenta a Demonstração de Resultado Gerencial (**DRE**), com KPIs de desempenho, margem e "
-            "diagnóstico automático de **saúde financeira**. Os **KPIs** e a **DRE gerencial** (quando a base linha "
-            "está completa) filtram pela **data da venda** (coluna Data). O **imposto** na DRE segue a **ponte fiscal** "
-            "(emissão NF); na Apuração Fiscal o mesmo valor aparece quando os filtros coincidem."
-        )
-        st.caption(
-            "Este módulo filtra por data da venda (data em que o pedido foi realizado). O imposto apresentado na DRE "
-            "vem da Apuração Fiscal e pode ter pequena defasagem temporal, pois vendas e emissões fiscais nem sempre "
-            "ocorrem no mesmo dia."
-        )
-        st.caption(
-            "Notas **canceladas**, **denegadas** ou **inutilizadas** já ficam de fora da base materializada — não é "
-            "necessário filtrar por situação neste painel para esse efeito."
-        )
+    with st.expander("Cobertura comercial", expanded=False):
         _render_faturamento_dre_commercial_complement_banner(
             coverage=_commercial_coverage,
             n_fiscal_base=int(_fiscal_base_stats.n_nf),
@@ -9224,7 +9270,7 @@ def _render_faturamento_dre_minimal(
             ok_nf_dates=ok_nf_dates,
             fiscal_parquet_ok=use_fiscal_parquet,
             kpi_subset_by_platform=bool(_min_state.plataformas),
-            embedded_in_sobre_expander=True,
+            embedded_in_sobre_expander=False,
         )
 
     _fdl_fat_min_vsp(size="md")
@@ -9295,36 +9341,13 @@ def _render_faturamento_dre_minimal(
     if ok_nf_dates:
         _periodo_dre_lbl = f"{_nf_kpi_ini.strftime('%d/%m/%Y')} — {_nf_kpi_fim.strftime('%d/%m/%Y')}"
 
-    if _rg_kpis_rendered and _slice_rg is not None and _kp_rg is not None:
-        _render_fdl_fat_dre_gerencial_linha(
-            stats=_slice_rg.stats,
-            kp_rg=_kp_rg,
-            imp_nf=float(_imp_rg_kpis),
-            ok_nf_dates=ok_nf_dates,
-            valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
-            periodo_label=_periodo_dre_lbl,
-            nf_panel_ads=_nf_panel_ads_ui,
-        )
-    else:
-        _render_fdl_fat_dre_nf_gerencial(
-            kp=_kp_cards,
-            ok_nf_dates=ok_nf_dates,
-            valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
-            periodo_label=_periodo_dre_lbl,
-            nf_panel_ads=_nf_panel_ads_ui,
-            fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
-        )
-
-    _fdl_fat_min_vsp(size="md")
-
     _hp_mrg_ant: float | None = None
-    _hp_mrg_grupo: float | None = None
     if _rg_kpis_rendered and _slice_rg is not None and _kp_rg is not None:
         try:
             from app.components.health_score import periodo_mes_de_datas
 
             _ano_h, _mes_h, _ = periodo_mes_de_datas(_nf_kpi_ini, _nf_kpi_fim)
-            _hp_mrg_ant, _hp_mrg_grupo = _fdl_health_panel_rg_benchmark_margins(
+            _hp_mrg_ant = _fdl_health_panel_rg_benchmark_margins(
                 df_linha=df,
                 df_nf_pre=df_nf_pre,
                 df_commercial_nf_kpi=df_nf_commercial_kpi,
@@ -9347,25 +9370,52 @@ def _render_faturamento_dre_minimal(
         except Exception:
             pass
 
-    try:
-        from app.components.health_panel_ui import render_faturamento_health_panel_if_enabled
-
-        render_faturamento_health_panel_if_enabled(
-            df,
-            nf_d_ini=_nf_kpi_ini,
-            nf_d_fim=_nf_kpi_fim,
-            empresas_sel=tuple(_min_state.empresas),
-            org_sidebar=_oid,
-            plataformas_sel=tuple(_min_state.plataformas),
-            coluna_temporal="Data",
-            kpis_rg=_kp_rg if _rg_kpis_rendered else None,
-            cmv_total_rg=float(_slice_rg.stats.cmv_total) if _slice_rg is not None else None,
-            margem_anterior_pct=_hp_mrg_ant,
-            margem_grupo_pct=_hp_mrg_grupo,
+    _col_dre, _col_hp = st.columns([5, 7])
+    with _col_dre:
+        st.markdown(
+            '<span class="fdl-rg-col-mark-dre" aria-hidden="true"></span>',
+            unsafe_allow_html=True,
         )
-    except Exception as _exc_hp:
-        if _is_admin_mode():
-            st.caption(f"Painel de saúde financeira indisponível: `{_exc_hp}`")
+        if _rg_kpis_rendered and _slice_rg is not None and _kp_rg is not None:
+            _render_fdl_fat_dre_gerencial_linha(
+                stats=_slice_rg.stats,
+                kp_rg=_kp_rg,
+                imp_nf=float(_imp_rg_kpis),
+                ok_nf_dates=ok_nf_dates,
+                valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
+                periodo_label=_periodo_dre_lbl,
+                nf_panel_ads=_nf_panel_ads_ui,
+            )
+        else:
+            _render_fdl_fat_dre_nf_gerencial(
+                kp=_kp_cards,
+                ok_nf_dates=ok_nf_dates,
+                valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
+                periodo_label=_periodo_dre_lbl,
+                nf_panel_ads=_nf_panel_ads_ui,
+                fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
+            )
+    with _col_hp:
+        try:
+            from app.components.health_panel_ui import render_faturamento_health_panel_if_enabled
+
+            render_faturamento_health_panel_if_enabled(
+                df,
+                nf_d_ini=_nf_kpi_ini,
+                nf_d_fim=_nf_kpi_fim,
+                empresas_sel=tuple(_min_state.empresas),
+                org_sidebar=_oid,
+                plataformas_sel=tuple(_min_state.plataformas),
+                coluna_temporal="Data",
+                kpis_rg=_kp_rg if _rg_kpis_rendered else None,
+                cmv_total_rg=float(_slice_rg.stats.cmv_total) if _slice_rg is not None else None,
+                margem_anterior_pct=_hp_mrg_ant,
+                margem_grupo_pct=None,
+                rg_streamlined=True,
+            )
+        except Exception as _exc_hp:
+            if _is_admin_mode():
+                st.caption(f"Painel de saúde financeira indisponível: `{_exc_hp}`")
 
     _fdl_fat_min_vsp(size="md")
 

@@ -472,6 +472,46 @@ def fat_dre_premium_css() -> str:
     text-align: right;
   }
 }
+@media (max-width: 767px) {
+  .fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-hero-row {
+    grid-template-columns: 1fr;
+  }
+}
+.fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-hero-card--result .fdl-fat-kpi-hero-value,
+.fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-hero-card--margem .fdl-fat-kpi-hero-value {
+  font-size: 1.75rem;
+  font-weight: 500;
+}
+.fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-hero-card {
+  padding: 22px 22px 26px 22px;
+  min-height: 118px;
+}
+.fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-mid-value {
+  font-size: 1.125rem;
+  font-weight: 500;
+}
+.fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-mid-card {
+  padding: 12px 14px 14px 14px;
+  min-height: 72px;
+}
+.fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-hero-label,
+.fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-mid-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.08em;
+}
+@media (max-width: 1279px) {
+  [data-testid="stHorizontalBlock"]:has([data-testid="column"] .fdl-rg-col-mark-dre) {
+    flex-wrap: wrap !important;
+  }
+  [data-testid="stHorizontalBlock"]:has([data-testid="column"] .fdl-rg-col-mark-dre)
+    > [data-testid="column"] {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}
 </style>
 """
 
@@ -519,6 +559,8 @@ def build_kpi_nf_premium_shell_html(
     chips: list[tuple[str, str]],
     mode_pill_html: str,
     resultado_title: str | None = None,
+    omit_hero_meta: bool = False,
+    tier_b_layout: bool = False,
 ) -> str:
     mr = _margin_ratio_from_pct_str(margem_str)
     t_res = kpi_perf_resultado(resultado)
@@ -537,21 +579,33 @@ def build_kpi_nf_premium_shell_html(
         "Base consolidada por NF — pode diferir do Painel de Saúde que usa grão de linha de pedido."
     )
 
+    _meta_res = ""
+    _meta_mg = ""
+    if not omit_hero_meta:
+        _meta_res = (
+            f'<div class="fdl-fat-kpi-hero-meta {html.escape(_meta_class(t_res.css_modifier))}">'
+            f'{html.escape(t_res.arrow)} vs. zero</div>'
+        )
+        _meta_mg = (
+            f'<div class="fdl-fat-kpi-hero-meta {html.escape(_meta_class(t_mg.css_modifier))}">'
+            f'{html.escape(t_mg.arrow)} meta</div>'
+        )
+
+    _shell_extra = " fdl-fat-kpi-shell--rg-tierb" if tier_b_layout else ""
+
     return (
-        '<div class="fdl-fat-premium fdl-fat-kpi-shell">'
+        f'<div class="fdl-fat-premium fdl-fat-kpi-shell{_shell_extra}">'
         f"{mode_pill_html}"
         '<div class="fdl-fat-kpi-hero-row">'
         f'<div class="fdl-fat-kpi-hero-card fdl-fat-kpi-hero-card--result {html.escape(t_res.css_modifier)}" '
         f'title="{html.escape(_res_title)}">'
         '<div class="fdl-fat-kpi-hero-label">Resultado</div>'
         f'<div class="fdl-fat-kpi-hero-value">{html.escape(resultado_fmt)}</div>'
-        f'<div class="fdl-fat-kpi-hero-meta {html.escape(_meta_class(t_res.css_modifier))}">'
-        f'{html.escape(t_res.arrow)} vs. zero</div></div>'
+        f"{_meta_res}</div>"
         f'<div class="fdl-fat-kpi-hero-card fdl-fat-kpi-hero-card--margem {html.escape(t_mg.css_modifier)}">'
         '<div class="fdl-fat-kpi-hero-label">Margem sobre venda</div>'
         f'<div class="fdl-fat-kpi-hero-value">{html.escape(margem_str)}</div>'
-        f'<div class="fdl-fat-kpi-hero-meta {html.escape(_meta_class(t_mg.css_modifier))}">'
-        f'{html.escape(t_mg.arrow)} meta</div></div>'
+        f"{_meta_mg}</div>"
         "</div>"
         '<div class="fdl-fat-kpi-mid-row">'
         '<div class="fdl-fat-kpi-mid-card">'
@@ -631,6 +685,9 @@ def build_dre_gerencial_premium_html(
     resultado_tooltip: str,
     margem_tooltip: str,
     footnote_plain: str = "",
+    hide_period_in_header: bool = False,
+    hide_footnote: bool = False,
+    hide_resultado_margem_block: bool = False,
 ) -> str:
     enc_inner = (
         "".join(
@@ -649,14 +706,33 @@ def build_dre_gerencial_premium_html(
     _rt = html.escape(resultado_tooltip.strip(), quote=True)
     _mt = html.escape(margem_tooltip.strip(), quote=True)
     _foot_html = ""
-    if footnote_plain.strip():
+    if footnote_plain.strip() and not hide_footnote:
         _foot_html = f'<p class="fdl-dre-note">{html.escape(footnote_plain.strip())}</p>'
+    _period_el = (
+        ""
+        if hide_period_in_header
+        else f'<span class="fdl-dre-periodo">{html.escape(period_caption)}</span>'
+    )
+    _res_shell = ""
+    if not hide_resultado_margem_block:
+        _res_shell = (
+            f'<div class="{_shell}">'
+            '<div class="fdl-dre-result-row">'
+            f'<span class="fdl-dre-hint fdl-dre-result-label" title="{_rt}">Resultado</span>'
+            f'<span class="fdl-dre-result-value">{html.escape(resultado_fmt)}</span>'
+            "</div>"
+            '<div class="fdl-dre-result-row fdl-dre-result-row--margin">'
+            f'<span class="fdl-dre-hint fdl-dre-margin-label" title="{_mt}">Margem sobre venda</span>'
+            f'<span class="fdl-dre-margin-value">{html.escape(margem_str)}</span>'
+            "</div>"
+            "</div>"
+        )
     return (
         '<div class="fdl-fat-premium fdl-fat-dre-premium-wrap">'
         '<div class="fdl-dre-container">'
         '<header class="fdl-dre-header">'
         '<h2 class="fdl-dre-title">DRE Gerencial</h2>'
-        f'<span class="fdl-dre-periodo">{html.escape(period_caption)}</span>'
+        f"{_period_el}"
         "</header>"
         '<section class="fdl-dre-section">'
         '<div class="fdl-dre-section-header">'
@@ -677,16 +753,7 @@ def build_dre_gerencial_premium_html(
         + "</div>"
         "</details>"
         '<div class="fdl-dre-divider"></div>'
-        f'<div class="{_shell}">'
-        '<div class="fdl-dre-result-row">'
-        f'<span class="fdl-dre-hint fdl-dre-result-label" title="{_rt}">Resultado</span>'
-        f'<span class="fdl-dre-result-value">{html.escape(resultado_fmt)}</span>'
-        "</div>"
-        '<div class="fdl-dre-result-row fdl-dre-result-row--margin">'
-        f'<span class="fdl-dre-hint fdl-dre-margin-label" title="{_mt}">Margem sobre venda</span>'
-        f'<span class="fdl-dre-margin-value">{html.escape(margem_str)}</span>'
-        "</div>"
-        "</div>"
+        f"{_res_shell}"
         f"{_foot_html}"
         "</div></div>"
     )

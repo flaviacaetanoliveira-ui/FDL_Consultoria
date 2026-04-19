@@ -125,6 +125,39 @@ def test_mes_civil_cheio_abril_30_dias() -> None:
     assert determinar_modo(date(2026, 4, 1), date(2026, 4, 30), date(2026, 4, 19)) == "mes_corrente"
 
 
+def test_pace_mes_corrente_apenas_quando_hoje_no_mes_filtrado() -> None:
+    """
+    Regra do relógio: compute_pace_mensal retorna None quando hoje está fora do mês civil
+    do filtro (mês cheio válido), e retorna PaceMensal com modo mes_corrente quando dentro.
+    """
+    hist = [80_000.0, 85_000.0, 82_000.0]
+    slice_abril = _slice(86_878.81, date(2026, 4, 1), date(2026, 4, 30))
+    pace_marco = compute_pace_mensal(
+        slice_abril,
+        hist,
+        {},
+        ["Gama Home"],
+        date(2026, 4, 1),
+        date(2026, 4, 30),
+        date(2026, 3, 19),
+        historico_por_empresa={"Gama Home": hist},
+    )
+    assert pace_marco is None
+
+    pace_abril = compute_pace_mensal(
+        slice_abril,
+        hist,
+        {},
+        ["Gama Home"],
+        date(2026, 4, 1),
+        date(2026, 4, 30),
+        date(2026, 4, 19),
+        historico_por_empresa={"Gama Home": hist},
+    )
+    assert pace_abril is not None
+    assert pace_abril.modo == "mes_corrente"
+
+
 def test_modo_mes_fechado() -> None:
     assert determinar_modo(date(2026, 1, 1), date(2026, 1, 31), date(2026, 2, 5)) == "mes_fechado"
 

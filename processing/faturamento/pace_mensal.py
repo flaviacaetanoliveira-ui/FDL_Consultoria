@@ -299,8 +299,31 @@ def compute_pace_mensal(
     historico_por_empresa: dict[str, list[float]] | None = None,
 ) -> PaceMensal | None:
     """
-    ``historico_receitas_mensais`` — série consolidada (últimos meses) para MA3 de fallback.
+    Calcula o pace mensal do Resultado Gerencial.
+
+    ``historico_receitas_mensais`` — série consolidada para MA3 de fallback.
     ``historico_por_empresa`` — opcional, chaves nome ou slug.
+
+    REGRA DO RELÓGIO — IMPORTANTE:
+
+    O termômetro em modo ``mes_corrente`` só é calculado quando ``hoje``
+    está **no mesmo mês civil** que o filtro ``[data_inicio, data_fim]``
+    (mês civil cheio). Caso contrário, esta função devolve ``None`` —
+    proteção contra leituras inconsistentes:
+
+    - Filtro “mês futuro” ou relógio antes do mês filtrado → não há ritmo útil no sentido atual.
+    - Relógio em outro mês enquanto o usuário navega cenários históricos → não forçamos projeção cruzando mês.
+
+    Para testar ``mes_corrente`` em desenvolvimento:
+
+    - Ajustar o relógio do sistema para dentro do mês filtrado, ou
+    - Passar ``hoje=date(...)`` explicitamente nos testes/scripts (ex.: ``scripts/debug_pace_abril_corrente.py``), ou
+    - Filtrar sempre o **mês civil corrente real** em produção.
+
+    Returns:
+        ``PaceMensal`` quando há linhas no slice e o modo permite o cálculo;
+        ``None`` quando não há dados, quando ``hoje`` está fora do mês civil do filtro em ``mes_corrente``,
+        ou outros casos documentados em ``explicar_motivo_pace_none``.
     """
     if int(slice_rg.stats.n_linhas) == 0:
         return None

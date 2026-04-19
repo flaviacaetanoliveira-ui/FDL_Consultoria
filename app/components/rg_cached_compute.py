@@ -15,6 +15,7 @@ from processing.faturamento.resultado_gerencial_slice import (
     compute_resultado_gerencial_kpis,
     compute_tabela_por_pedido,
 )
+from processing.faturamento.analise_plataforma import AnalisePlataforma, compute_analise_plataforma
 from processing.faturamento.comparacao_temporal_kpis import ComparacaoKpisTemporal, compute_comparacao_kpis_temporal
 from processing.faturamento.rg_cache_keys import PIPELINE_VERSION_ENV_NAME, dataframe_cache_token
 
@@ -84,6 +85,37 @@ def cached_comparacao_kpis_temporal(
         data_fim=data_venda_fim,
         kp_rg=kp,
     )
+
+
+@st.cache_data(
+    ttl=3600,
+    show_spinner=False,
+    hash_funcs={pd.DataFrame: dataframe_cache_token},
+)
+def cached_analise_plataforma(
+    df_linha: pd.DataFrame,
+    empresas_sel: tuple[str, ...],
+    plataformas_sel: tuple[str, ...],
+    data_venda_ini: date,
+    data_venda_fim: date,
+    fiscal_imposto_valor: float,
+    pipeline_version: str,
+    cliente_slug: str,
+) -> AnalisePlataforma:
+    """Reusa ``cached_rg_slice_kpis_tabela`` (hit no cache) e agrega por plataforma."""
+    _ = pipeline_version
+    _ = cliente_slug
+    sl, kp, tab = cached_rg_slice_kpis_tabela(
+        df_linha,
+        empresas_sel,
+        plataformas_sel,
+        data_venda_ini,
+        data_venda_fim,
+        fiscal_imposto_valor,
+        pipeline_version,
+        cliente_slug,
+    )
+    return compute_analise_plataforma(slice_rg=sl, pedidos_tabela=tab, kp_rg=kp)
 
 
 # Re-export for app/tests

@@ -9664,6 +9664,29 @@ def _render_faturamento_dre_minimal(
 
     if _rg_kpis_rendered and _slice_rg is not None and _kp_rg is not None:
         try:
+            from app.components.analise_plataforma_ui import render_analise_plataforma
+            from app.components.rg_cached_compute import cached_analise_plataforma, pipeline_version as _rg_pv_plat
+            from processing.faturamento.rg_cache_keys import normalize_sorted_str_tuple
+
+            _ap_emp = normalize_sorted_str_tuple(_min_state.empresas)
+            _ap_plat = normalize_sorted_str_tuple(_min_state.plataformas)
+            _analise_plat = cached_analise_plataforma(
+                df,
+                _ap_emp,
+                _ap_plat,
+                _nf_kpi_ini,
+                _nf_kpi_fim,
+                float(_imp_rg_kpis),
+                _rg_pv_plat(),
+                str(_oid).strip() if _oid else "",
+            )
+            render_analise_plataforma(_analise_plat, debug_enabled=_fdl_rg_pace_debug_enabled())
+        except Exception as exc:
+            if _fdl_rg_pace_debug_enabled():
+                st.caption(f"🔍 analise_plat debug: exceção {type(exc).__name__}: {exc}")
+
+    if _rg_kpis_rendered and _slice_rg is not None and _kp_rg is not None:
+        try:
             from app.components.tabela_pedidos_gerencial import render_tabela_pedidos_rg
 
             _rg_tbl_label = f"{str(_oid).strip()}_{_nf_kpi_ini.year:04d}-{_nf_kpi_ini.month:02d}"

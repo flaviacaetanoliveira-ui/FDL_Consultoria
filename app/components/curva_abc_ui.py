@@ -161,6 +161,7 @@ def render_curva_abc(
     sty = df.style.apply(fn, axis=0, subset=subset_cols).format(
         {
             "Receita": lambda x: fmt_brl_ptbr_celula(x),
+            "Margem líq.": lambda x: fmt_pct_um_decimal(float(x)) if pd.notna(x) else "—",
             "% acum": lambda x: fmt_pct_um_decimal(float(x) * 100.0) if pd.notna(x) else "—",
         },
         na_rep="—",

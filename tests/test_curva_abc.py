@@ -448,6 +448,42 @@ def test_sku_unico_nao_renderiza(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls == []
 
 
+def test_margem_liquida_display_formato_percentual():
+    """margem_liquida_display como 'XX,X%' pt-BR (vírgula decimal, sem ponto inglês)."""
+    df = pd.DataFrame(
+        [
+            _base_row(
+                data="15/03/2026",
+                pedido="P1",
+                plataforma="ML",
+                valor_total=100.0,
+                comissao=10.0,
+                frete_plat=0.0,
+                cmv=20.0,
+                resultado=70.0,
+                sku="S1",
+                desp_fixa=15.0,
+            ),
+            _base_row(
+                data="15/03/2026",
+                pedido="P2",
+                plataforma="ML",
+                valor_total=50.0,
+                comissao=60.0,
+                frete_plat=0.0,
+                cmv=0.0,
+                resultado=-10.0,
+                sku="S2",
+            ),
+        ]
+    )
+    _sl, kp, curva = _slice_kpi_curva(df)
+    assert len(curva.linhas) >= 1
+    for linha in curva.linhas:
+        assert "%" in linha.margem_liquida_display
+        assert "." not in linha.margem_liquida_display
+
+
 def test_cache_invalida_com_filtro():
     df_a = pd.DataFrame([{"x": 1}])
     df_b = pd.DataFrame([{"x": 2}])

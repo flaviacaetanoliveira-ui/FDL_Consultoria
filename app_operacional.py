@@ -9687,6 +9687,35 @@ def _render_faturamento_dre_minimal(
 
     if _rg_kpis_rendered and _slice_rg is not None and _kp_rg is not None:
         try:
+            from app.components.curva_abc_ui import render_curva_abc
+            from app.components.rg_cached_compute import cached_curva_abc, pipeline_version as _rg_pv_abc
+            from processing.faturamento.rg_cache_keys import normalize_sorted_str_tuple
+
+            _abc_emp = normalize_sorted_str_tuple(_min_state.empresas)
+            _abc_plat = normalize_sorted_str_tuple(_min_state.plataformas)
+            curva_abc_obj = cached_curva_abc(
+                df,
+                _abc_emp,
+                _abc_plat,
+                _nf_kpi_ini,
+                _nf_kpi_fim,
+                float(_imp_rg_kpis),
+                _rg_pv_abc(),
+                str(_oid).strip() if _oid else "",
+            )
+            _rg_tbl_label = f"{str(_oid).strip()}_{_nf_kpi_ini.year:04d}-{_nf_kpi_ini.month:02d}"
+            if curva_abc_obj is not None and len(curva_abc_obj.linhas) >= 2:
+                render_curva_abc(
+                    curva_abc_obj,
+                    debug_enabled=_fdl_rg_pace_debug_enabled(),
+                    checkbox_key=f"fdl_curva_abc_ver_{_rg_tbl_label}",
+                )
+        except Exception as exc:
+            if _fdl_rg_pace_debug_enabled():
+                st.caption(f"🔍 curva_abc debug: exceção {type(exc).__name__}: {exc}")
+
+    if _rg_kpis_rendered and _slice_rg is not None and _kp_rg is not None:
+        try:
             from app.components.tabela_pedidos_gerencial import render_tabela_pedidos_rg
 
             _rg_tbl_label = f"{str(_oid).strip()}_{_nf_kpi_ini.year:04d}-{_nf_kpi_ini.month:02d}"

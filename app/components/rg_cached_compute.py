@@ -16,6 +16,7 @@ from processing.faturamento.resultado_gerencial_slice import (
     compute_tabela_por_pedido,
 )
 from processing.faturamento.analise_plataforma import AnalisePlataforma, compute_analise_plataforma
+from processing.faturamento.curva_abc import CurvaAbc, compute_curva_abc
 from processing.faturamento.comparacao_temporal_kpis import ComparacaoKpisTemporal, compute_comparacao_kpis_temporal
 from processing.faturamento.rg_cache_keys import PIPELINE_VERSION_ENV_NAME, dataframe_cache_token
 
@@ -116,6 +117,41 @@ def cached_analise_plataforma(
         cliente_slug,
     )
     return compute_analise_plataforma(slice_rg=sl, pedidos_tabela=tab, kp_rg=kp)
+
+
+@st.cache_data(
+    ttl=3600,
+    show_spinner=False,
+    hash_funcs={pd.DataFrame: dataframe_cache_token},
+)
+def cached_curva_abc(
+    df_linha: pd.DataFrame,
+    empresas_sel: tuple[str, ...],
+    plataformas_sel: tuple[str, ...],
+    data_venda_ini: date,
+    data_venda_fim: date,
+    fiscal_imposto_valor: float,
+    pipeline_version: str,
+    cliente_slug: str,
+) -> CurvaAbc:
+    """Reusa ``cached_rg_slice_kpis_tabela`` e agrega Curva ABC por SKU."""
+    _ = pipeline_version
+    _ = cliente_slug
+    sl, kp, _tab = cached_rg_slice_kpis_tabela(
+        df_linha,
+        empresas_sel,
+        plataformas_sel,
+        data_venda_ini,
+        data_venda_fim,
+        fiscal_imposto_valor,
+        pipeline_version,
+        cliente_slug,
+    )
+    return compute_curva_abc(
+        slice_rg=sl,
+        kp_rg=kp,
+        fiscal_imposto_valor=float(fiscal_imposto_valor),
+    )
 
 
 # Re-export for app/tests

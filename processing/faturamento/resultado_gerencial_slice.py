@@ -11,6 +11,7 @@ import math
 from dataclasses import dataclass
 from datetime import date, datetime
 
+import numpy as np
 import pandas as pd
 
 from comercial_pedidos_analise import pedido_id_series
@@ -372,6 +373,16 @@ def _sku_list_para_pedido(gr: pd.DataFrame) -> list[str]:
     return uniq
 
 
+def _skus_tuple_por_grupo_sku_col(s: pd.Series) -> tuple[str, ...]:
+    """Único conjunto ordenado de SKUs (mesma semântica que ``_sku_list_para_pedido`` sobre a coluna)."""
+    xs = {str(x).strip() for x in s.tolist() if str(x).strip()}
+    return tuple(sorted(xs))
+
+
+def _rollup_nf_por_grupo(s: pd.Series) -> str:
+    return _rollup_status_nf([str(x).strip() for x in s.tolist()])
+
+
 @dataclass(frozen=True)
 class PedidoGerencialRow:
     """Uma linha da tabela Resultado Gerencial por pedido (âncora Data da venda)."""
@@ -444,6 +455,12 @@ def compute_tabela_por_pedido(
     emp_col = df["empresa"].fillna("").astype(str).str.strip().values if "empresa" in df.columns else [""] * n
     np_col = df["Número do pedido"].fillna("").astype(str).str.strip().values if "Número do pedido" in df.columns else [""] * n
 
+    sku_col_name = SKU_NORMALIZADO_COL if SKU_NORMALIZADO_COL in df.columns else "Código"
+    if sku_col_name not in df.columns:
+        sku_col = np.array([""] * n, dtype=object)
+    else:
+        sku_col = df[sku_col_name].fillna("").astype(str).str.strip().values
+
     work = pd.DataFrame(
         {
             "_pid": pid.astype(str).values,
@@ -460,6 +477,7 @@ def compute_tabela_por_pedido(
             "_plat": plat_col,
             "_emp": emp_col,
             "_np": np_col,
+            "_sku": sku_col,
         },
         index=df.index,
     )
@@ -470,42 +488,52 @@ def compute_tabela_por_pedido(
     plat_first = grp["_plat"].first()
     emp_first = grp["_emp"].first()
     np_first = grp["_np"].first()
+    n_linhas_ped = grp.size().rename("_n_linhas")
+    skus_por_ped = grp["_sku"].apply(_skus_tuple_por_grupo_sku_col)
+    nf_stat_por_ped = grp["_nf"].apply(_rollup_nf_por_grupo)
 
-    receita_por = {str(k): float(sums.loc[k, "_rec"]) for k in sums.index}
+    base = sums.join(dt_min.rename("_dt_raw")).join(plat_first.rename("_plat")).join(emp_first.rename("_emp")).join(np_first.rename("_np_ui")).join(n_linhas_ped).join(skus_por_ped.rename("_skus")).join(nf_stat_por_ped.rename("_nf_roll"))
+
+    base.index = base.index.map(str)
+    receita_por = {str(k): float(base.at[k, "_rec"]) for k in base.index}
     keys_sorted = sorted(receita_por.keys())
     imp_por = _allocate_imposto_total_centavos(keys_sorted, receita_por, float(fiscal_imposto_valor))
 
+    imp_ser = pd.Series(imp_por, dtype="float64").reindex(base.index)
+    base["_imp"] = imp_ser.to_numpy(dtype=float)
+
     rows: list[PedidoGerencialRow] = []
+    def_dt = datetime.combine(slice_.meta.data_venda_ini, datetime.min.time())
+
     for pid_key in keys_sorted:
-        r = float(receita_por[pid_key])
-        c = float(sums.loc[pid_key, "_com"])
-        fp_ = float(sums.loc[pid_key, "_fp"])
-        cmv_ = float(sums.loc[pid_key, "_cmv"])
-        ftp_ = float(sums.loc[pid_key, "_ftp"])
-        desp_ = float(sums.loc[pid_key, "_desp"])
-        ads_v_ = float(sums.loc[pid_key, "_ads_v"])
-        ads_f_ = float(sums.loc[pid_key, "_ads_f"])
-        imp_ = float(imp_por.get(pid_key, 0.0))
+        row = base.loc[pid_key]
+        r = float(row["_rec"])
+        c = float(row["_com"])
+        fp_ = float(row["_fp"])
+        cmv_ = float(row["_cmv"])
+        ftp_ = float(row["_ftp"])
+        desp_ = float(row["_desp"])
+        ads_v_ = float(row["_ads_v"])
+        ads_f_ = float(row["_ads_f"])
+        imp_ = float(row["_imp"])
         res_op = r - c - fp_ - cmv_ - ftp_ - imp_ - ads_v_
         res_liq = r - c - fp_ - cmv_ - ftp_ - imp_ - desp_ - ads_v_ - ads_f_
         margem_op = (res_op / r * 100.0) if r > 1e-12 else 0.0
         margem_liq = (res_liq / r * 100.0) if r > 1e-12 else 0.0
 
-        m_pid = work["_pid"].astype(str).eq(pid_key)
-        idx_lines = work.index[m_pid].tolist()
-        sub = df.loc[idx_lines]
-        sts = _rollup_status_nf(work.loc[idx_lines, "_nf"].astype(str).tolist())
-        sku_u = tuple(_sku_list_para_pedido(sub))
-
-        raw_dt = dt_min.loc[pid_key]
+        raw_dt = row["_dt_raw"]
         if pd.isna(raw_dt):
-            dv = datetime.combine(slice_.meta.data_venda_ini, datetime.min.time())
+            dv = def_dt
         else:
             dv = pd.Timestamp(raw_dt).to_pydatetime()
 
-        pf = plat_first.loc[pid_key]
-        ef = emp_first.loc[pid_key]
-        nf_u = np_first.loc[pid_key]
+        pf = row["_plat"]
+        ef = row["_emp"]
+        nf_u = row["_np_ui"]
+        _su = row["_skus"]
+        sku_u: tuple[str, ...] = _su if isinstance(_su, tuple) else tuple(_su)
+        sts = str(row["_nf_roll"])
+        n_lin = int(row["_n_linhas"])
 
         rows.append(
             PedidoGerencialRow(
@@ -515,7 +543,7 @@ def compute_tabela_por_pedido(
                 pedido_id=str(pid_key),
                 numero_pedido_ui=str(nf_u).strip() if nf_u is not None else "",
                 skus=sku_u,
-                qtd_itens=int(len(sub)),
+                qtd_itens=n_lin,
                 receita=r,
                 comissao=c,
                 frete_plataforma=fp_,

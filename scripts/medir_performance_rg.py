@@ -2,12 +2,17 @@
 """
 Medição de performance do Resultado Gerencial (funções Python; sem UI Streamlit).
 
-Uso:
-    python scripts/medir_performance_rg.py ^
-        --parquet data_products/cliente_2/faturamento/current/dataset.parquet ^
-        --empresa "Gama Home" ^
-        --data-inicio 2026-01-01 ^
+Invoca as mesmas funções que o app usa (``cached_rg_slice_kpis_tabela``, ``compute_ficha_pedido``).
+
+Uso (Windows PowerShell):
+
+    python scripts/medir_performance_rg.py `
+        --parquet data_products/cliente_2/faturamento/current/dataset.parquet `
+        --empresa "Gama Home" `
+        --data-inicio 2026-01-01 `
         --data-fim 2026-04-17
+
+Metas comparadas ao **máximo** das 3 execuções (pior caso entre as três).
 """
 
 from __future__ import annotations
@@ -77,7 +82,16 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def _ensure_utf8_stdio() -> None:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+
 def main() -> int:
+    _ensure_utf8_stdio()
     args = parse_args()
     if args.pipeline_version:
         os.environ["FDL_RG_PIPELINE_VERSION"] = args.pipeline_version
@@ -269,6 +283,8 @@ def main() -> int:
     line(f"Cenário 5 — Mudar período (cold: parquet + miss: até {d_fim_alt.isoformat()})", st5, meta["c5"])
 
     print("Cenário 6 — 5 fichas sequenciais (tempos individuais + total)")
+    print(f"  Primeira ficha: {_fmt_s(times_each[0])} s")
+    print(f"  Segunda ficha: {_fmt_s(times_each[1])} s")
     print(f"  Por ficha — Mínimo: {_fmt_s(st6_each.mn)} s · Máximo: {_fmt_s(st6_each.mx)} s · Médio: {_fmt_s(st6_each.avg)} s")
     print(f"  Total 5 fichas: {_fmt_s(total_c6)} s")
     print(f"  Meta total: < {_fmt_s(meta['c6'])} s")
@@ -293,12 +309,19 @@ def main() -> int:
     if failures:
         print("=" * 70)
         print("DIAGNÓSTICO (metas não atingidas):", ", ".join(failures))
+        d_diag_ini, d_diag_fim = d_ini, d_fim
+        emp_diag = emp
+        if "c4" in failures:
+            emp_diag = emp_alt
+        if "c5" in failures:
+            d_diag_fim = d_fim_alt
+        print(f"(Amostra aninhada: empresa={emp_diag!r}, período={d_diag_ini} … {d_diag_fim})")
         _run_diagnostic(
             args.parquet,
-            emp,
+            emp_diag,
             plat,
-            d_ini,
-            d_fim,
+            d_diag_ini,
+            d_diag_fim,
             fiscal,
             pv,
             slug,

@@ -181,6 +181,22 @@ def fat_dre_premium_css() -> str:
 .fdl-fat-kpi-hero-meta--pos { color: var(--fdl-success); }
 .fdl-fat-kpi-hero-meta--mid { color: var(--fdl-warning); }
 .fdl-fat-kpi-hero-meta--neg { color: var(--fdl-danger); }
+.fdl-fat-kpi-hero-caption-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.fdl-fat-kpi-delta-ma3,
+.fdl-fat-kpi-delta-mom {
+  display: block;
+}
+.fdl-fat-kpi-delta--pos { color: #0f6e56; }
+.fdl-fat-kpi-delta--neg { color: #a32d2d; }
+.fdl-fat-kpi-delta--neut { color: #64748b; }
 .fdl-fat-kpi-mid-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -641,6 +657,8 @@ def build_kpi_nf_premium_shell_html(
     resultado_title: str | None = None,
     omit_hero_meta: bool = False,
     tier_b_layout: bool = False,
+    hero_caption_resultado_html: str = "",
+    hero_caption_margem_html: str = "",
 ) -> str:
     mr = _margin_ratio_from_pct_str(margem_str)
     t_res = kpi_perf_resultado(resultado)
@@ -671,6 +689,9 @@ def build_kpi_nf_premium_shell_html(
             f'{html.escape(t_mg.arrow)} meta</div>'
         )
 
+    _res_below = (hero_caption_resultado_html or "").strip() or _meta_res
+    _mg_below = (hero_caption_margem_html or "").strip() or _meta_mg
+
     _shell_extra = " fdl-fat-kpi-shell--rg-tierb" if tier_b_layout else ""
 
     return (
@@ -681,11 +702,11 @@ def build_kpi_nf_premium_shell_html(
         f'title="{html.escape(_res_title)}">'
         '<div class="fdl-fat-kpi-hero-label">Resultado</div>'
         f'<div class="fdl-fat-kpi-hero-value">{html.escape(resultado_fmt)}</div>'
-        f"{_meta_res}</div>"
+        f"{_res_below}</div>"
         f'<div class="fdl-fat-kpi-hero-card fdl-fat-kpi-hero-card--margem {html.escape(t_mg.css_modifier)}">'
         '<div class="fdl-fat-kpi-hero-label">Margem sobre venda</div>'
         f'<div class="fdl-fat-kpi-hero-value">{html.escape(margem_str)}</div>'
-        f"{_meta_mg}</div>"
+        f"{_mg_below}</div>"
         "</div>"
         '<div class="fdl-fat-kpi-mid-row">'
         '<div class="fdl-fat-kpi-mid-card">'

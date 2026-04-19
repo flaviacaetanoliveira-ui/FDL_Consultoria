@@ -5382,6 +5382,7 @@ def _render_resultado_gerencial_kpi_cards(
     valor_faturado_from_fiscal_parquet: bool = False,
     fat_dre_faturado_mode: str = "nf_first",
     nf_panel_ads: bool = True,
+    comparacao_temporal: object | None = None,
 ) -> None:
     """
     Cards superiores do Resultado Gerencial — totais por **data da venda** (grão linha) + imposto fiscal injetado.
@@ -5433,6 +5434,13 @@ def _render_resultado_gerencial_kpi_cards(
     venda_fmt = _fmt_brl_ptbr_celula(vv) or "R$ 0,00"
     res_fmt = _fmt_brl_ptbr_celula(res) or "—"
 
+    _cap_res = ""
+    _cap_mg = ""
+    if comparacao_temporal is not None:
+        from processing.faturamento.comparacao_temporal_kpis import build_temporal_kpi_captions_html
+
+        _cap_res, _cap_mg = build_temporal_kpi_captions_html(comparacao_temporal)
+
     st.markdown(
         build_kpi_nf_premium_shell_html(
             valor_venda_fmt=venda_fmt,
@@ -5447,6 +5455,8 @@ def _render_resultado_gerencial_kpi_cards(
             resultado_title=_RG_KPI_RESULTADO_TITLE,
             omit_hero_meta=True,
             tier_b_layout=True,
+            hero_caption_resultado_html=_cap_res,
+            hero_caption_margem_html=_cap_mg,
         ),
         unsafe_allow_html=True,
     )
@@ -9421,7 +9431,11 @@ def _render_faturamento_dre_minimal(
         try:
             from datetime import date as _date_pace
 
-            from app.components.rg_cached_compute import cached_rg_slice_kpis_tabela, pipeline_version as _rg_pipeline_version
+            from app.components.rg_cached_compute import (
+                cached_comparacao_kpis_temporal,
+                cached_rg_slice_kpis_tabela,
+                pipeline_version as _rg_pipeline_version,
+            )
             from app.components.termometro_pace import render_termometro_pace
             from processing.faturamento.ficha_pedido_rg import load_resultado_gerencial_config
             from processing.faturamento.pace_mensal import (
@@ -9504,6 +9518,22 @@ def _render_faturamento_dre_minimal(
                     st.caption("🔍 pace debug: bloco não executado · ok_nf_dates=False")
                 elif _slice_rg is None:
                     st.caption("🔍 pace debug: bloco não executado · slice_rg=None")
+            _comp_temporal = None
+            try:
+                _comp_temporal = cached_comparacao_kpis_temporal(
+                    df,
+                    _emp_norm,
+                    _plat_norm,
+                    _nf_kpi_ini,
+                    _nf_kpi_fim,
+                    float(_kp_rg["valor_venda_lista"]),
+                    float(_kp_rg["resultado"]),
+                    _rg_pipeline_version(),
+                    str(_oid).strip() if _oid else "",
+                )
+            except Exception as exc:
+                if _fdl_rg_pace_debug_enabled():
+                    st.caption(f"🔍 comparacao temporal debug: exceção {type(exc).__name__}: {exc}")
             _fdl_fat_divider_simple()
             _render_resultado_gerencial_kpi_cards(
                 kp_rg=_kp_rg,
@@ -9512,6 +9542,7 @@ def _render_faturamento_dre_minimal(
                 valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
                 fat_dre_faturado_mode=("fiscal" if use_fiscal_kpi else "nf_first"),
                 nf_panel_ads=_nf_panel_ads_ui,
+                comparacao_temporal=_comp_temporal,
             )
             _rg_kpis_rendered = True
         except (ValueError, KeyError, TypeError) as _exc_rg_kpi:

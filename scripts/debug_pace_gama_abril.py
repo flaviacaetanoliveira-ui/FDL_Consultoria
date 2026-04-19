@@ -3,6 +3,9 @@ Diagnóstico do termômetro de pace — cenário Gama Home · abril/2026 sem Str
 
 Uso (na raiz do repo):
   python scripts/debug_pace_gama_abril.py
+
+Para abril cheio + ``hoje`` fixo e simulação de relógio fora do mês (mes_corrente):
+  python scripts/debug_pace_abril_corrente.py --empresa "Mega Star"
 """
 
 from __future__ import annotations

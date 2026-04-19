@@ -8,6 +8,7 @@ import pandas as pd
 
 from processing.faturamento.pace_mensal import (
     PaceMensal,
+    _is_calendario_mes_cheio,
     compute_pace_mensal,
     compute_trailing_monthly_revenues,
     determinar_modo,
@@ -116,6 +117,12 @@ def test_ritmo_necessario_quando_abaixo_da_meta() -> None:
 def test_modo_mes_corrente_vs_recorte_parcial() -> None:
     assert determinar_modo(date(2026, 3, 1), date(2026, 3, 31), date(2026, 3, 18)) == "mes_corrente"
     assert determinar_modo(date(2026, 3, 1), date(2026, 3, 15), date(2026, 3, 20)) == "recorte_parcial"
+
+
+def test_mes_civil_cheio_abril_30_dias() -> None:
+    """Abril 2026 tem 30 dias — filtro civil cheio deve ser mes_corrente com hoje dentro do mes."""
+    assert _is_calendario_mes_cheio(date(2026, 4, 1), date(2026, 4, 30))
+    assert determinar_modo(date(2026, 4, 1), date(2026, 4, 30), date(2026, 4, 19)) == "mes_corrente"
 
 
 def test_modo_mes_fechado() -> None:

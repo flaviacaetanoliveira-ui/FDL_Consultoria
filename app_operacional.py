@@ -9400,7 +9400,6 @@ def _render_faturamento_dre_minimal(
         )
 
     _fdl_fat_min_vsp(size="md")
-    _fdl_fat_divider_simple()
     try:
         from processing.faturamento.resultado_gerencial_slice import REQUIRED_LINE_COLUMNS
 
@@ -9413,7 +9412,12 @@ def _render_faturamento_dre_minimal(
     _rg_kpis_rendered = False
     if _rg_kpi_cols_ok:
         try:
+            from datetime import date as _date_pace
+
             from app.components.rg_cached_compute import cached_rg_slice_kpis_tabela, pipeline_version as _rg_pipeline_version
+            from app.components.termometro_pace import render_termometro_pace
+            from processing.faturamento.ficha_pedido_rg import load_resultado_gerencial_config
+            from processing.faturamento.pace_mensal import compute_pace_mensal, compute_trailing_monthly_revenues
             from processing.faturamento.rg_cache_keys import normalize_sorted_str_tuple
 
             _emp_norm = normalize_sorted_str_tuple(_min_state.empresas)
@@ -9428,6 +9432,37 @@ def _render_faturamento_dre_minimal(
                 _rg_pipeline_version(),
                 str(_oid).strip() if _oid else "",
             )
+            if ok_nf_dates and _slice_rg is not None:
+                try:
+                    _rg_conf = load_resultado_gerencial_config(str(_oid).strip() if _oid else None)
+                    _hist_cons = compute_trailing_monthly_revenues(
+                        df,
+                        empresas_sel=_emp_norm,
+                        plataformas_sel=_plat_norm,
+                        mes_referencia=(_nf_kpi_fim.year, _nf_kpi_fim.month),
+                    )
+                    _hist_pe: dict[str, list[float]] = {}
+                    for _emp in _min_state.empresas:
+                        _hist_pe[str(_emp)] = compute_trailing_monthly_revenues(
+                            df,
+                            empresas_sel=(str(_emp),),
+                            plataformas_sel=_plat_norm,
+                            mes_referencia=(_nf_kpi_fim.year, _nf_kpi_fim.month),
+                        )
+                    _pace = compute_pace_mensal(
+                        _slice_rg,
+                        _hist_cons,
+                        _rg_conf,
+                        list(_min_state.empresas),
+                        _nf_kpi_ini,
+                        _nf_kpi_fim,
+                        _date_pace.today(),
+                        historico_por_empresa=_hist_pe,
+                    )
+                    render_termometro_pace(_pace)
+                except Exception:
+                    pass
+            _fdl_fat_divider_simple()
             _render_resultado_gerencial_kpi_cards(
                 kp_rg=_kp_rg,
                 ok_dates=ok_nf_dates,
@@ -9440,6 +9475,7 @@ def _render_faturamento_dre_minimal(
         except (ValueError, KeyError, TypeError) as _exc_rg_kpi:
             if _is_admin_mode():
                 st.warning(f"KPIs por data da venda indisponíveis ({_exc_rg_kpi!s}); usando visão NF.")
+            _fdl_fat_divider_simple()
             _render_fdl_fat_dre_nf_kpi_cards(
                 kp=_kp_cards,
                 ok_nf_dates=ok_nf_dates,
@@ -9453,6 +9489,7 @@ def _render_faturamento_dre_minimal(
             st.caption(
                 "Colunas insuficientes no grão linha para KPIs por **data da venda** — exibindo KPIs na visão NF."
             )
+        _fdl_fat_divider_simple()
         _render_fdl_fat_dre_nf_kpi_cards(
             kp=_kp_cards,
             ok_nf_dates=ok_nf_dates,

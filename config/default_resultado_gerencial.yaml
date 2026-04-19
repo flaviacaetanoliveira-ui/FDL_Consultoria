@@ -2,6 +2,14 @@
 # Sobrescreva em config/<org_id>.yaml (mesmo formato ou chave resultado_gerencial).
 
 resultado_gerencial:
+  # Termômetro de pace (Ciclo D): metas mensais por slug de empresa (YAML > MA3 > sem meta).
+  # Exemplo (comentar / ajustar no YAML do cliente):
+  # pace:
+  #   meta_mensal:
+  #     gama_home: 170000
+  #     mega_star: 95000
+  #   # meta_mensal_padrao: 150000   # quando não há chave por empresa
+
   benchmarks:
     margem_operacional_saudavel: 0.20
     margem_liquida_saudavel: 0.15

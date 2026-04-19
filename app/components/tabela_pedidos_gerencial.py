@@ -7,7 +7,6 @@ Agregação pesada só em ``processing/faturamento/resultado_gerencial_slice.com
 from __future__ import annotations
 
 import csv
-import hashlib
 import io
 import re
 from typing import Sequence
@@ -63,8 +62,20 @@ def _filtro_pedidos(
     return out
 
 
-def _hash_pedido_key(pedido_id: str) -> str:
-    return hashlib.md5(str(pedido_id).encode("utf-8")).hexdigest()[:16]
+def _df_event_row_indices(ev: object) -> list[int]:
+    if ev is None:
+        return []
+    try:
+        if isinstance(ev, dict):
+            return list((ev.get("selection") or {}).get("rows") or [])
+        sel = getattr(ev, "selection", None)
+        if sel is not None:
+            rows = getattr(sel, "rows", None)
+            if rows is not None:
+                return list(rows)
+    except Exception:
+        return []
+    return []
 
 
 def render_tabela_pedidos_rg(
@@ -75,6 +86,7 @@ def render_tabela_pedidos_rg(
     export_label: str,
     debug_coerencia: bool = False,
     cliente_slug: str | None = None,
+    linhas_full: Sequence[PedidoGerencialRow] | None = None,
 ) -> None:
     """Renderiza tabela por pedido: filtros, paginação 50, CSV, colunas opcionais."""
     from app.components.ficha_pedido import render_ficha_pedido
@@ -82,17 +94,16 @@ def render_tabela_pedidos_rg(
     from processing.faturamento.resultado_gerencial_slice import compute_tabela_por_pedido
 
     rg_conf = load_resultado_gerencial_config(cliente_slug)
-    _sess_k = "fdl_rg_ped_fichas_abertas"
-    if _sess_k not in st.session_state:
-        st.session_state[_sess_k] = set()
-    fichas_abertas: set[str] = st.session_state[_sess_k]
 
-    linhas_full = compute_tabela_por_pedido(slice_rg, fiscal_imposto_valor=float(fiscal_imposto_valor))
+    if linhas_full is not None:
+        linhas_full_list: list[PedidoGerencialRow] = list(linhas_full)
+    else:
+        linhas_full_list = compute_tabela_por_pedido(slice_rg, fiscal_imposto_valor=float(fiscal_imposto_valor))
 
-    soma_rec = sum(p.receita for p in linhas_full)
-    soma_res = sum(p.resultado for p in linhas_full)
-    soma_op = sum(p.resultado_operacional for p in linhas_full)
-    soma_desp = sum(p.despesa_fixa for p in linhas_full)
+    soma_rec = sum(p.receita for p in linhas_full_list)
+    soma_res = sum(p.resultado for p in linhas_full_list)
+    soma_op = sum(p.resultado_operacional for p in linhas_full_list)
+    soma_desp = sum(p.despesa_fixa for p in linhas_full_list)
     if debug_coerencia:
         d_r = abs(soma_rec - float(kp_rg["valor_venda_lista"]))
         d_x = abs(soma_res - float(kp_rg["resultado"]))
@@ -112,9 +123,9 @@ def render_tabela_pedidos_rg(
     total_receita_fmt = f"{soma_rec:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     st.markdown("### Pedidos do período")
     st.info(
-        "📋 A **ficha detalhada** fica **abaixo da tabela** (secção *Detalhe por pedido*). "
-        "Clique no botão **Ficha** alinhado a cada linha da página atual para abrir composição, "
-        "diagnóstico e comparação com médias do recorte."
+        "**Selecione uma ou mais linhas** na tabela (Shift/Ctrl conforme o navegador). "
+        "As **fichas** aparecem **abaixo**, com composição, diagnóstico e comparação com médias do recorte. "
+        "Para fechar, desmarque as linhas."
     )
     with st.expander("Duas leituras de margem", expanded=False):
         st.markdown(
@@ -125,12 +136,21 @@ def render_tabela_pedidos_rg(
 Pedidos saudáveis com líquida negativa ajudam a diluir estrutura; descontinuar pode piorar o mês.
 """
         )
+    with st.expander("Atualização dos dados", expanded=False):
+        st.caption(
+            "Se o ETL acabou de reprocessar a base materializada, force a releitura "
+            "(o cache evita recomputar agregações a cada interação)."
+        )
+        if st.button("Recarregar dados", key="fdl_rg_ped_reload_cache"):
+            st.cache_data.clear()
+            st.rerun()
+
     st.caption(
-        f"{len(linhas_full)} pedidos · R$ {total_receita_fmt} (receita lista no recorte)"
+        f"{len(linhas_full_list)} pedidos · R$ {total_receita_fmt} (receita lista no recorte)"
     )
 
-    plat_opts = sorted({p.plataforma for p in linhas_full if p.plataforma.strip()}, key=lambda t: t.casefold())
-    st_opts = sorted({p.status_nf for p in linhas_full if p.status_nf.strip()}, key=lambda t: t.casefold())
+    plat_opts = sorted({p.plataforma for p in linhas_full_list if p.plataforma.strip()}, key=lambda t: t.casefold())
+    st_opts = sorted({p.status_nf for p in linhas_full_list if p.status_nf.strip()}, key=lambda t: t.casefold())
 
     f1, f2, f3, f4 = st.columns((1, 1, 1, 1))
     with f1:
@@ -175,7 +195,7 @@ Pedidos saudáveis com líquida negativa ajudam a diluir estrutura; descontinuar
         "Lucro pleno": "lucro_pleno",
     }
     linhas = _filtro_pedidos(
-        linhas_full,
+        linhas_full_list,
         plats=sel_plat,
         statuses=sel_stat,
         texto=qtxt,
@@ -317,45 +337,50 @@ Pedidos saudáveis com líquida negativa ajudam a diluir estrutura; descontinuar
         "Qtd itens": st.column_config.NumberColumn("Qtd itens", format="%d"),
     }
 
-    st.dataframe(
-        df_show,
-        use_container_width=True,
-        hide_index=True,
-        column_config=cc,
-    )
-    st.caption(f"Mostrando {len(chunk)} de {n_tot} pedidos filtrados · página {page}/{n_pages} · use **Ficha** abaixo para detalhar cada linha")
+    _df_key = f"fdl_rg_ped_tbl_sel_p{page}"
+    sel_rows: list[int] = []
+    if df_show.empty:
+        st.dataframe(df_show, use_container_width=True, hide_index=True, column_config=cc)
+    else:
+        ev = st.dataframe(
+            df_show,
+            use_container_width=True,
+            hide_index=True,
+            column_config=cc,
+            on_select="rerun",
+            selection_mode="multi-row",
+            key=_df_key,
+        )
+        sel_rows = _df_event_row_indices(ev)
 
-    st.markdown("##### Detalhe por pedido (nesta página)")
-    for p in chunk:
-        sku_disp = p.skus[0] if len(p.skus) == 1 else (f"{len(p.skus)} itens" if p.skus else "—")
-        c0, c1, c2, c3, c4, c5, c6, c7 = st.columns([1.0, 1.0, 1.2, 2.0, 1.0, 1.0, 1.0, 0.52])
-        c0.caption(p.data_venda.strftime("%d/%m/%Y"))
-        c1.caption(p.plataforma or "—")
-        c2.caption(str(p.numero_pedido_ui or p.pedido_id.split("|")[-1])[:24])
-        c3.caption(str(sku_disp)[:40])
-        c4.caption(f"R$ {p.receita:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        c5.caption(f"{p.margem_operacional_pct:.1f}%")
-        c6.caption(f"{p.margem_liquida_pct:.1f}%")
-        hk = _hash_pedido_key(p.pedido_id)
-        btn_key = f"fdl_fp_btn_{page}_{hk}"
-        if c7.button("Ficha", key=btn_key, help="Abre ou fecha a composição e diagnóstico deste pedido"):
-            if p.pedido_id in fichas_abertas:
-                fichas_abertas.discard(p.pedido_id)
-            else:
-                fichas_abertas.add(p.pedido_id)
-            st.session_state[_sess_k] = fichas_abertas
-        if p.pedido_id in fichas_abertas:
+    st.caption(
+        f"Mostrando {len(chunk)} de {n_tot} pedidos filtrados · página {page}/{n_pages} · **selecione linhas** na tabela para abrir fichas abaixo"
+    )
+
+    seen_p: dict[str, None] = {}
+    pids_ficha: list[str] = []
+    for ri in sel_rows:
+        if isinstance(ri, int) and 0 <= ri < len(chunk):
+            pid = chunk[ri].pedido_id
+            if pid not in seen_p:
+                seen_p[pid] = None
+                pids_ficha.append(pid)
+
+    if pids_ficha:
+        st.markdown("##### Ficha(s) do pedido — recorte atual")
+        for pid in pids_ficha:
             fc = compute_ficha_pedido(
                 slice_rg,
-                pedido_id=p.pedido_id,
+                pedido_id=pid,
                 fiscal_imposto_valor=float(fiscal_imposto_valor),
                 pedidos_contexto=linhas,
                 rg_config=rg_conf,
+                tab_linhas_full=linhas_full_list,
             )
             if fc is not None:
                 render_ficha_pedido(ficha=fc)
             else:
-                st.warning("Não foi possível montar a ficha deste pedido.")
+                st.warning(f"Não foi possível montar a ficha do pedido `{pid}`.")
 
     export_rows: list[dict[str, object]] = []
     for p in linhas:

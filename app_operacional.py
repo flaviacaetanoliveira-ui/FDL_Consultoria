@@ -9230,11 +9230,7 @@ def _render_faturamento_dre_minimal(
     _fdl_fat_min_vsp(size="md")
     _fdl_fat_divider_simple()
     try:
-        from processing.faturamento.resultado_gerencial_slice import (
-            REQUIRED_LINE_COLUMNS,
-            build_resultado_gerencial_slice,
-            compute_resultado_gerencial_kpis,
-        )
+        from processing.faturamento.resultado_gerencial_slice import REQUIRED_LINE_COLUMNS
 
         _rg_kpi_cols_ok = REQUIRED_LINE_COLUMNS.issubset(df.columns)
     except ImportError:
@@ -9245,14 +9241,21 @@ def _render_faturamento_dre_minimal(
     _rg_kpis_rendered = False
     if _rg_kpi_cols_ok:
         try:
-            _slice_rg = build_resultado_gerencial_slice(
+            from app.components.rg_cached_compute import cached_rg_slice_kpis_tabela, pipeline_version as _rg_pipeline_version
+            from processing.faturamento.rg_cache_keys import normalize_sorted_str_tuple
+
+            _emp_norm = normalize_sorted_str_tuple(_min_state.empresas)
+            _plat_norm = normalize_sorted_str_tuple(_min_state.plataformas)
+            _slice_rg, _kp_rg, _rg_linhas_ped_tab = cached_rg_slice_kpis_tabela(
                 df,
-                empresas_sel=tuple(_min_state.empresas),
-                plataformas_sel=tuple(_min_state.plataformas),
-                data_venda_ini=_nf_kpi_ini,
-                data_venda_fim=_nf_kpi_fim,
+                _emp_norm,
+                _plat_norm,
+                _nf_kpi_ini,
+                _nf_kpi_fim,
+                float(_imp_rg_kpis),
+                _rg_pipeline_version(),
+                str(_oid).strip() if _oid else "",
             )
-            _kp_rg = compute_resultado_gerencial_kpis(_slice_rg, fiscal_imposto_valor=_imp_rg_kpis)
             _render_resultado_gerencial_kpi_cards(
                 kp_rg=_kp_rg,
                 ok_dates=ok_nf_dates,
@@ -9378,6 +9381,7 @@ def _render_faturamento_dre_minimal(
                 export_label=_rg_tbl_label,
                 debug_coerencia=_is_admin_mode(),
                 cliente_slug=str(_oid).strip() if _oid else None,
+                linhas_full=_rg_linhas_ped_tab,
             )
         except Exception as _exc_tp:
             st.warning(

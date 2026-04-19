@@ -369,8 +369,12 @@ def compute_ficha_pedido(
     fiscal_imposto_valor: float,
     pedidos_contexto: list[PedidoGerencialRow],
     rg_config: dict[str, Any],
+    tab_linhas_full: list[PedidoGerencialRow] | None = None,
 ) -> FichaPedido | None:
-    tab = compute_tabela_por_pedido(slice_, fiscal_imposto_valor=float(fiscal_imposto_valor))
+    if tab_linhas_full is not None:
+        tab = tab_linhas_full
+    else:
+        tab = compute_tabela_por_pedido(slice_, fiscal_imposto_valor=float(fiscal_imposto_valor))
     row = next((r for r in tab if r.pedido_id == pedido_id), None)
     if row is None:
         return None

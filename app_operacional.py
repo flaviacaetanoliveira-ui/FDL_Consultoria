@@ -9380,8 +9380,12 @@ def _render_faturamento_dre_minimal(
                 cliente_slug=str(_oid).strip() if _oid else None,
             )
         except Exception as _exc_tp:
+            st.warning(
+                "Não foi possível carregar a **tabela por pedido** / ficha neste recorte. "
+                "Confirme que está no **Faturamento (DRE)** com KPIs por **data da venda** ativos e reinicie o app após atualizar o código."
+            )
             if _is_admin_mode():
-                st.caption(f"Tabela por pedido indisponível: `{_exc_tp}`")
+                st.exception(_exc_tp)
 
     _fdl_fat_min_vsp(size="md")
 

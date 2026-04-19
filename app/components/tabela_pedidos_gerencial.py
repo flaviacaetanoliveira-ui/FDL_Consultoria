@@ -111,6 +111,11 @@ def render_tabela_pedidos_rg(
 
     total_receita_fmt = f"{soma_rec:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     st.markdown("### Pedidos do período")
+    st.info(
+        "📋 A **ficha detalhada** fica **abaixo da tabela** (secção *Detalhe por pedido*). "
+        "Clique no botão **Ficha** alinhado a cada linha da página atual para abrir composição, "
+        "diagnóstico e comparação com médias do recorte."
+    )
     with st.expander("Duas leituras de margem", expanded=False):
         st.markdown(
             """
@@ -338,6 +343,7 @@ Pedidos saudáveis com líquida negativa ajudam a diluir estrutura; descontinuar
                 fichas_abertas.discard(p.pedido_id)
             else:
                 fichas_abertas.add(p.pedido_id)
+            st.session_state[_sess_k] = fichas_abertas
         if p.pedido_id in fichas_abertas:
             fc = compute_ficha_pedido(
                 slice_rg,

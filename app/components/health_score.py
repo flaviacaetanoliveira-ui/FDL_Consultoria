@@ -426,10 +426,28 @@ def calcular_health_score(
         )
 
     if tendencia_pp is not None and tendencia_pp < float(cfg["threshold_tendencia_alerta"]):
+        mo_neg = False
+        if kpis_gerenciais is not None:
+            try:
+                rop = kpis_gerenciais.get("resultado_operacional")
+                mop = kpis_gerenciais.get("margem_operacional")
+                if rop is not None and float(rop) < -1e-9:
+                    mo_neg = True
+                if mop is not None and float(mop) < -1e-9:
+                    mo_neg = True
+            except (TypeError, ValueError):
+                mo_neg = False
+        queda_critica_pp = tendencia_pp <= -10.0
+        resultado_periodo_neg = resultado < -1e-9
+        nivel_queda = (
+            AlertLevel.CRITICAL
+            if (queda_critica_pp or mo_neg or resultado_periodo_neg)
+            else AlertLevel.MEDIUM
+        )
         diagnosticos.append(
             Diagnostico(
                 tipo="TENDENCIA",
-                nivel=AlertLevel.HIGH,
+                nivel=nivel_queda,
                 titulo=f"Margem em queda ({tendencia_pp:+.1f}pp)",
                 detalhe=f"Margem passou de {margem_anterior:.1f}% para {margem_pct:.1f}%"
                 if margem_anterior is not None
@@ -488,7 +506,7 @@ def calcular_health_score(
             diagnosticos.append(
                 Diagnostico(
                     tipo="CAUSA",
-                    nivel=AlertLevel.HIGH if len(skus_prejuizo_real) > 10 else AlertLevel.MEDIUM,
+                    nivel=AlertLevel.CRITICAL,
                     titulo=f"{len(skus_prejuizo_real)} SKUs em prejuízo real (operacional negativo)",
                     detalhe=f"Prejuízo líquido nesse grupo: R$ {abs(prej_liq):,.2f}. Não cobrem custos diretos.",
                     acao="Rever preço ou descontinuar",

@@ -33,7 +33,70 @@ def fat_dre_premium_css() -> str:
   --fdl-neutral-200: #e2e8f0;
   --fdl-neutral-500: #6b7280;
   --fdl-neutral-800: #1e293b;
+  --fdl-border-secondary: #cbd5e1;
+  --fdl-text-primary: #0f172a;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.fdl-rg-block-head-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 4px 0;
+}
+.fdl-rg-block-head-sub {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--fdl-text-primary);
+  margin: 0 0 16px 0;
+  line-height: 1.4;
+}
+.fdl-dre-header--unified {
+  display: block;
+  margin-bottom: 16px;
+}
+.fdl-dre-close-discrete {
+  border-top: 0.5px solid var(--fdl-border-secondary);
+  padding: 10px 0 4px 0;
+  margin: 0;
+  background: transparent;
+}
+.fdl-dre-close-discrete-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.fdl-dre-close-discrete-lab {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #4b5563;
+  line-height: 1.35;
+  flex: 1 1 10rem;
+}
+.fdl-dre-close-discrete-val {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--fdl-text-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.fdl-dre-close-discrete-margin {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: #64748b;
+}
+.fdl-dre-close-discrete-margin span:last-child {
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
 }
 .fdl-fat-sec-rule {
   display: flex;
@@ -484,15 +547,16 @@ def fat_dre_premium_css() -> str:
 }
 .fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-hero-card {
   padding: 22px 22px 26px 22px;
-  min-height: 118px;
+  min-height: 120px;
 }
 .fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-mid-value {
   font-size: 1.125rem;
   font-weight: 500;
 }
 .fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-mid-card {
-  padding: 12px 14px 14px 14px;
-  min-height: 72px;
+  padding: 8px 10px 10px 10px;
+  min-height: 80px;
+  box-sizing: border-box;
 }
 .fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-hero-label,
 .fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-mid-label {
@@ -500,6 +564,9 @@ def fat_dre_premium_css() -> str:
   font-weight: 600;
   color: #64748b;
   letter-spacing: 0.08em;
+}
+.fdl-fat-kpi-shell--rg-tierb .fdl-fat-kpi-mid-label {
+  font-size: 0.625rem;
 }
 @media (max-width: 1279px) {
   [data-testid="stHorizontalBlock"]:has([data-testid="column"] .fdl-rg-col-mark-dre) {
@@ -510,6 +577,19 @@ def fat_dre_premium_css() -> str:
     flex: 1 1 100% !important;
     max-width: 100% !important;
     width: 100% !important;
+  }
+}
+@media (min-width: 1280px) {
+  [data-testid="stHorizontalBlock"]:has([data-testid="column"] .fdl-rg-col-mark-dre) {
+    align-items: stretch !important;
+  }
+  [data-testid="column"]:has(.fdl-rg-col-mark-dre) .fdl-dre-container {
+    height: 100%;
+    box-sizing: border-box;
+  }
+  [data-testid="column"]:has(.fdl-rg-col-mark-hp) .fdl-health-rg-shell {
+    height: 100%;
+    box-sizing: border-box;
   }
 }
 </style>
@@ -688,6 +768,8 @@ def build_dre_gerencial_premium_html(
     hide_period_in_header: bool = False,
     hide_footnote: bool = False,
     hide_resultado_margem_block: bool = False,
+    show_resultado_discreto: bool = False,
+    rg_header_subtitle: str = "",
 ) -> str:
     enc_inner = (
         "".join(
@@ -727,13 +809,40 @@ def build_dre_gerencial_premium_html(
             "</div>"
             "</div>"
         )
+    _head_unified = (rg_header_subtitle or "").strip()
+    if _head_unified:
+        _header_html = (
+            '<header class="fdl-dre-header fdl-dre-header--unified">'
+            '<p class="fdl-rg-block-head-label">DRE Gerencial</p>'
+            f'<p class="fdl-rg-block-head-sub">{html.escape(_head_unified)}</p>'
+            "</header>"
+        )
+    else:
+        _header_html = (
+            '<header class="fdl-dre-header">'
+            '<h2 class="fdl-dre-title">DRE Gerencial</h2>'
+            f"{_period_el}"
+            "</header>"
+        )
+    _discrete = ""
+    if show_resultado_discreto:
+        _discrete = (
+            '<div class="fdl-dre-close-discrete" role="group" aria-label="Fechamento DRE">'
+            '<div class="fdl-dre-close-discrete-main">'
+            '<span class="fdl-dre-close-discrete-lab">Resultado líquido</span>'
+            f'<span class="fdl-dre-close-discrete-val">{html.escape(resultado_fmt)}</span>'
+            "</div>"
+            '<div class="fdl-dre-close-discrete-margin">'
+            f'<span title="{_mt}">Margem sobre venda</span>'
+            f"<span>{html.escape(margem_str)}</span>"
+            "</div>"
+            "</div>"
+        )
+    _after_ded = _discrete if _discrete else '<div class="fdl-dre-divider"></div>'
     return (
         '<div class="fdl-fat-premium fdl-fat-dre-premium-wrap">'
         '<div class="fdl-dre-container">'
-        '<header class="fdl-dre-header">'
-        '<h2 class="fdl-dre-title">DRE Gerencial</h2>'
-        f"{_period_el}"
-        "</header>"
+        f"{_header_html}"
         '<section class="fdl-dre-section">'
         '<div class="fdl-dre-section-header">'
         '<span class="fdl-dre-section-heading">Receita</span>'
@@ -752,7 +861,7 @@ def build_dre_gerencial_premium_html(
         + _dre_total_line("Total Deduções", total_deducoes_fmt, negative=True)
         + "</div>"
         "</details>"
-        '<div class="fdl-dre-divider"></div>'
+        f"{_after_ded}"
         f"{_res_shell}"
         f"{_foot_html}"
         "</div></div>"

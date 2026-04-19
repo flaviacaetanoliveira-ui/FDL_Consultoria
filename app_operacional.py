@@ -5616,6 +5616,8 @@ def _render_fdl_fat_dre_gerencial_linha(
     valor_faturado_from_fiscal_parquet: bool,
     periodo_label: str,
     nf_panel_ads: bool,
+    rg_header_subtitle: str = "",
+    show_resultado_discreto: bool = False,
 ) -> None:
     """DRE gerencial no **grão linha**, mesmo recorte dos KPIs (**Data** venda) + imposto da ponte fiscal."""
     vv = float(kp_rg["valor_venda_lista"])
@@ -5731,6 +5733,8 @@ def _render_fdl_fat_dre_gerencial_linha(
             hide_period_in_header=True,
             hide_footnote=True,
             hide_resultado_margem_block=True,
+            show_resultado_discreto=show_resultado_discreto,
+            rg_header_subtitle=rg_header_subtitle,
         ),
         unsafe_allow_html=True,
     )
@@ -6113,6 +6117,73 @@ def _fdl_fat_min_inject_ui_styles() -> None:
               font-weight: 700;
               font-variant-numeric: tabular-nums;
               color: #0f172a;
+            }
+            .fdl-fat-cobertura--rg-premium {
+              margin: 0;
+              padding: 14px 16px;
+              border: 1px solid var(--fdl-neutral-200, #e2e8f0);
+              border-radius: 12px;
+              background: #ffffff;
+              box-sizing: border-box;
+            }
+            .fdl-fat-cob-rg-head {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              gap: 10px;
+              flex-wrap: wrap;
+              margin-bottom: 12px;
+            }
+            .fdl-fat-cob-rg-title {
+              font-weight: 600;
+              font-size: 0.95rem;
+              color: var(--fdl-neutral-800, #0f172a);
+            }
+            .fdl-fat-cob-rg-meta {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            }
+            .fdl-fat-cob-rg-info {
+              cursor: help;
+              font-size: 1rem;
+              line-height: 1;
+              opacity: 0.6;
+            }
+            .fdl-fat-cob-v2-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 10px 14px;
+              margin-top: 4px;
+            }
+            .fdl-fat-cob-v2-cell {
+              min-width: 0;
+              border: 1px solid var(--fdl-neutral-200, #e5e7eb);
+              border-radius: 10px;
+              padding: 10px 12px;
+              box-sizing: border-box;
+              background: #fafafa;
+            }
+            .fdl-fat-cob-v2-lab {
+              font-size: 0.68rem;
+              font-weight: 600;
+              color: #64748b;
+              line-height: 1.35;
+              margin-bottom: 6px;
+            }
+            .fdl-fat-cob-v2-lab2 {
+              font-size: 0.62rem;
+              font-weight: 500;
+              color: #94a3b8;
+            }
+            .fdl-fat-cob-v2-val {
+              font-size: 1.05rem;
+              font-weight: 700;
+              font-variant-numeric: tabular-nums;
+              color: #0f172a;
+            }
+            @media (max-width: 520px) {
+              .fdl-fat-cob-v2-grid { grid-template-columns: 1fr; }
             }
             .fdl-fat-cobertura-admin {
               margin-top: 0.75rem;
@@ -7566,6 +7637,7 @@ def _render_faturamento_dre_commercial_complement_banner(
     fiscal_parquet_ok: bool,
     kpi_subset_by_platform: bool = False,
     embedded_in_sobre_expander: bool = False,
+    rg_premium_single_expander: bool = False,
 ) -> None:
     """
     Bloco imediatamente abaixo do topo fiscal: deixa explícito que os KPIs/DRE comerciais são complemento
@@ -7692,6 +7764,49 @@ def _render_faturamento_dre_commercial_complement_banner(
             "esperado igual; investigar chaves de merge."
             "</p>"
         )
+
+    if rg_premium_single_expander:
+
+        def _cell_rg(top: str, bot: str, val: int, tt: str) -> str:
+            return (
+                f'<div class="fdl-fat-cob-v2-cell" title="{html.escape(tt, quote=True)}">'
+                f'<div class="fdl-fat-cob-v2-lab">{html.escape(top)}<br/>'
+                f'<span class="fdl-fat-cob-v2-lab2">{html.escape(bot)}</span></div>'
+                f'<div class="fdl-fat-cob-v2-val">{html.escape(_fmt_int_ptbr(val))}</div></div>'
+            )
+
+        _tip_chunks = [
+            _cap_txt.replace("**", "").strip(),
+            "NFs «sem custo»: SKUs não encontrados na base de custo; resultado não entra na DRE até correção.",
+        ]
+        if _pct_sem > 10.0:
+            _tip_chunks.append("Revise cadastro de custos dos SKUs pendentes.")
+        _tip_esc = html.escape(" ".join(_tip_chunks).strip(), quote=True)
+        _grid_rg = ""
+        if ok_nf_dates and (aligned_to_fiscal_base or not fiscal_parquet_ok):
+            _grid_rg = (
+                '<div class="fdl-fat-cob-v2-grid">'
+                + _cell_rg("Notas no universo", "dos KPIs", coverage.n_total, _h_univ)
+                + _cell_rg("Com vínculo", "pedido–NF", coverage.n_com_vinculo_pedido_nf, _h_vinc)
+                + _cell_rg("Só fiscal /", "sem vínculo útil", coverage.n_sem_vinculo_ou_so_fiscal, _h_so_fiscal)
+                + _cell_rg("Com venda (lista)", "> 0", coverage.n_com_venda_lista, _h_venda)
+                + _cell_rg("Sem custo", "(SKU não mapeado)", coverage.n_sem_resultado, _h_sem_res)
+                + _cell_rg("Com custo", "calculado", coverage.n_com_resultado_numerico, _h_com_res)
+                + "</div>"
+            )
+        _badge_tail_rg = f" {_badge_html}" if _badge_html else ""
+        st.html(
+            '<div class="fdl-fat-cobertura fdl-fat-cobertura--rg-premium">'
+            '<div class="fdl-fat-cob-rg-head">'
+            '<span class="fdl-fat-cob-rg-title">Cobertura comercial</span>'
+            '<span class="fdl-fat-cob-rg-meta">'
+            f"{_badge_tail_rg}"
+            f'<span class="fdl-fat-cob-rg-info" title="{_tip_esc}" aria-label="Detalhes técnicos">ℹ️</span>'
+            "</span></div>"
+            f"{_grid_rg}{_admin_html}"
+            "</div>"
+        )
+        return
 
     _inner = (
         f'<p class="fdl-fat-cobertura-caption">{_md_bold_to_html(_cap_txt)}</p>'
@@ -8800,6 +8915,16 @@ def _fdl_rg_resumo_filtros_linha() -> str:
     return " · ".join(parts)
 
 
+def _fdl_rg_header_context(min_state: FaturamentoRecorteMinState) -> str:
+    """Subtítulo unificado (DRE + Painel): empresa selecionada, consolidado ou recorte aberto."""
+    ne = len(min_state.empresas)
+    if ne >= 2:
+        return f"Consolidado · {ne} empresas"
+    if ne == 1:
+        return str(min_state.empresas[0])
+    return "Todas as empresas no recorte"
+
+
 def _fdl_health_panel_rg_benchmark_margins(
     *,
     df_linha: pd.DataFrame,
@@ -9271,6 +9396,7 @@ def _render_faturamento_dre_minimal(
             fiscal_parquet_ok=use_fiscal_parquet,
             kpi_subset_by_platform=bool(_min_state.plataformas),
             embedded_in_sobre_expander=False,
+            rg_premium_single_expander=True,
         )
 
     _fdl_fat_min_vsp(size="md")
@@ -9385,6 +9511,8 @@ def _render_faturamento_dre_minimal(
                 valor_faturado_from_fiscal_parquet=use_fiscal_kpi,
                 periodo_label=_periodo_dre_lbl,
                 nf_panel_ads=_nf_panel_ads_ui,
+                rg_header_subtitle=_fdl_rg_header_context(_min_state),
+                show_resultado_discreto=True,
             )
         else:
             _render_fdl_fat_dre_nf_gerencial(
@@ -9396,6 +9524,10 @@ def _render_faturamento_dre_minimal(
                 fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
             )
     with _col_hp:
+        st.markdown(
+            '<span class="fdl-rg-col-mark-hp" aria-hidden="true"></span>',
+            unsafe_allow_html=True,
+        )
         try:
             from app.components.health_panel_ui import render_faturamento_health_panel_if_enabled
 
@@ -9412,6 +9544,7 @@ def _render_faturamento_dre_minimal(
                 margem_anterior_pct=_hp_mrg_ant,
                 margem_grupo_pct=None,
                 rg_streamlined=True,
+                rg_header_context=_fdl_rg_header_context(_min_state),
             )
         except Exception as _exc_hp:
             if _is_admin_mode():

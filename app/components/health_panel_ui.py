@@ -516,6 +516,7 @@ def render_health_panel(
     show_details: bool = True,
     header_diagnostic_checkbox: bool = False,
     rg_streamlined: bool = False,
+    rg_header_context: str = "",
 ) -> None:
     lbl, color, mark = health_level_meta(health.level)
     esc_tit = html.escape(f"Saúde financeira – {health.periodo}")
@@ -536,22 +537,24 @@ def render_health_panel(
                 help="Mostra ou oculta detalhes de diagnóstico e SKUs em risco (o resumo do score permanece visível ao recarregar).",
             )
     if rg_streamlined:
-        esc_line = html.escape("Painel de Saúde")
-        esc_ctx = esc_sub
+        _hc = (rg_header_context or "").strip()
+        esc_ctx = html.escape(_hc if _hc else str(health.empresa).replace("_", " ").title())
         st.html(
             HEALTH_PANEL_CSS
             + f"""
+<div class="fdl-health-rg-shell">
 <div class="fdl-health-rg-card">
-  <p class="fdl-health-rg-head-line">{esc_line}</p>
-  <p class="fdl-health-rg-sub-line">{esc_ctx}</p>
+  <p class="fdl-rg-block-head-label">Painel de Saúde</p>
+  <p class="fdl-rg-block-head-sub">{esc_ctx}</p>
   <div class="fdl-health-rg-score-row">
     <div class="fdl-health-rg-score-circle-lg" style="background:{color}18;border:4px solid {color};">
       <span class="fdl-health-rg-score-num-lg" style="color:{color};">{int(health.score)}</span>
     </div>
     <div class="fdl-health-rg-status-stack">
-      <p class="fdl-health-rg-status-word" style="color:{color};">{_word_only.upper()}</p>
+      <p class="fdl-health-rg-status-word" style="color:{color};">{_word_only}</p>
     </div>
   </div>
+</div>
 </div>
 """
         )
@@ -690,6 +693,7 @@ def render_faturamento_health_panel_if_enabled(
     margem_anterior_pct: float | None = None,
     margem_grupo_pct: float | None = None,
     rg_streamlined: bool = False,
+    rg_header_context: str = "",
 ) -> None:
     """
     Recorte no eixo ``coluna_temporal`` (``Data`` = venda, alinhado ao Resultado Gerencial; ``Nota_Data_Emissao`` = legado).
@@ -754,6 +758,7 @@ def render_faturamento_health_panel_if_enabled(
         show_details=show_diag,
         header_diagnostic_checkbox=(not rg_streamlined),
         rg_streamlined=rg_streamlined,
+        rg_header_context=rg_header_context,
     )
 
 

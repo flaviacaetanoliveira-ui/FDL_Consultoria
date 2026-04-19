@@ -11,6 +11,7 @@ from processing.faturamento.pace_mensal import (
     compute_pace_mensal,
     compute_trailing_monthly_revenues,
     determinar_modo,
+    explicar_motivo_pace_none,
 )
 from processing.faturamento.resultado_gerencial_slice import (
     ResultadoGerencialSlice,
@@ -278,6 +279,24 @@ def test_compute_trailing_smoke_from_frame() -> None:
         mes_referencia=(2026, 3),
     )
     assert len(s) == 3
+
+
+def test_debug_log_modo_admin_expoe_motivo() -> None:
+    """Espelha mensagens usadas no caption admin quando pace não renderiza."""
+    s_none = explicar_motivo_pace_none(
+        n_linhas=0,
+        data_inicio=date(2026, 4, 1),
+        data_fim=date(2026, 4, 30),
+        hoje=date(2026, 4, 19),
+    )
+    assert "n_linhas=0" in s_none
+    s_mes = explicar_motivo_pace_none(
+        n_linhas=50,
+        data_inicio=date(2026, 4, 1),
+        data_fim=date(2026, 4, 30),
+        hoje=date(2026, 3, 10),
+    )
+    assert "fora do mês civil" in s_mes
 
 
 def test_render_recorte_parcial_vazio_em_html_aux() -> None:

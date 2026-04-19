@@ -9417,7 +9417,11 @@ def _render_faturamento_dre_minimal(
             from app.components.rg_cached_compute import cached_rg_slice_kpis_tabela, pipeline_version as _rg_pipeline_version
             from app.components.termometro_pace import render_termometro_pace
             from processing.faturamento.ficha_pedido_rg import load_resultado_gerencial_config
-            from processing.faturamento.pace_mensal import compute_pace_mensal, compute_trailing_monthly_revenues
+            from processing.faturamento.pace_mensal import (
+                compute_pace_mensal,
+                compute_trailing_monthly_revenues,
+                explicar_motivo_pace_none,
+            )
             from processing.faturamento.rg_cache_keys import normalize_sorted_str_tuple
 
             _emp_norm = normalize_sorted_str_tuple(_min_state.empresas)
@@ -9432,6 +9436,10 @@ def _render_faturamento_dre_minimal(
                 _rg_pipeline_version(),
                 str(_oid).strip() if _oid else "",
             )
+            _pace_dbg_show = _is_admin_mode() or (
+                os.environ.get("FDL_RG_PACE_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
+            )
+            _pace_log_motivo: str | None = None
             if ok_nf_dates and _slice_rg is not None:
                 try:
                     _rg_conf = load_resultado_gerencial_config(str(_oid).strip() if _oid else None)
@@ -9449,6 +9457,7 @@ def _render_faturamento_dre_minimal(
                             plataformas_sel=_plat_norm,
                             mes_referencia=(_nf_kpi_fim.year, _nf_kpi_fim.month),
                         )
+                    _pace_today = _date_pace.today()
                     _pace = compute_pace_mensal(
                         _slice_rg,
                         _hist_cons,
@@ -9456,12 +9465,33 @@ def _render_faturamento_dre_minimal(
                         list(_min_state.empresas),
                         _nf_kpi_ini,
                         _nf_kpi_fim,
-                        _date_pace.today(),
+                        _pace_today,
                         historico_por_empresa=_hist_pe,
                     )
-                    render_termometro_pace(_pace)
-                except Exception:
-                    pass
+                    if _pace is None:
+                        _pace_log_motivo = explicar_motivo_pace_none(
+                            n_linhas=int(_slice_rg.stats.n_linhas),
+                            data_inicio=_nf_kpi_ini,
+                            data_fim=_nf_kpi_fim,
+                            hoje=_pace_today,
+                        )
+                    elif _pace.modo == "recorte_parcial":
+                        _pace_log_motivo = (
+                            "render omitido · modo=recorte_parcial · "
+                            f"ini={_nf_kpi_ini.isoformat()} · fim={_nf_kpi_fim.isoformat()}"
+                        )
+                    else:
+                        render_termometro_pace(_pace)
+                        _pace_log_motivo = f"renderizado · modo={_pace.modo}"
+                except Exception as exc:
+                    _pace_log_motivo = f"exceção: {type(exc).__name__}: {exc}"
+                if _pace_dbg_show and _pace_log_motivo:
+                    st.caption(f"🔍 pace debug: {_pace_log_motivo}")
+            elif _pace_dbg_show:
+                if not ok_nf_dates:
+                    st.caption("🔍 pace debug: bloco não executado · ok_nf_dates=False")
+                elif _slice_rg is None:
+                    st.caption("🔍 pace debug: bloco não executado · slice_rg=None")
             _fdl_fat_divider_simple()
             _render_resultado_gerencial_kpi_cards(
                 kp_rg=_kp_rg,

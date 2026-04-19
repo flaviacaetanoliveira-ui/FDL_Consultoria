@@ -49,6 +49,35 @@ def determinar_modo(data_inicio: date, data_fim: date, hoje: date) -> str:
     return "mes_corrente"
 
 
+def explicar_motivo_pace_none(
+    *,
+    n_linhas: int,
+    data_inicio: date,
+    data_fim: date,
+    hoje: date,
+) -> str:
+    """
+    Mensagem curta para debug (admin / ``FDL_RG_PACE_DEBUG``) quando ``compute_pace_mensal`` devolve ``None``.
+    Mantém texto estável para testes de regressão.
+    """
+    if int(n_linhas) <= 0:
+        return (
+            "compute_pace_mensal retornou None · n_linhas=0 (sem linhas no slice — "
+            "período/empresa/plataforma sem registros na base linha)"
+        )
+    modo = determinar_modo(data_inicio, data_fim, hoje)
+    yref, mref = data_inicio.year, data_inicio.month
+    if modo == "mes_corrente" and (hoje.year != yref or hoje.month != mref):
+        return (
+            f"compute_pace_mensal retornou None · hoje ({hoje.isoformat()}) fora do mês civil do filtro "
+            f"({mref:02d}/{yref}); ritmo só quando o relógio do servidor está nesse mês"
+        )
+    return (
+        f"compute_pace_mensal retornou None · modo={modo} — caso não catalogado "
+        "(abrir issue com este texto)"
+    )
+
+
 def compute_trailing_monthly_revenues(
     df_linha: pd.DataFrame,
     *,

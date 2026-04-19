@@ -51,9 +51,12 @@ def _filtro_pedidos(
             ).casefold()
             if txt not in hay:
                 continue
-        if faixa_resultado == "prejuizo" and p.resultado >= -1e-9:
+        if faixa_resultado == "prejuizo_real" and p.resultado_operacional >= -1e-9:
             continue
-        if faixa_resultado == "lucro" and p.resultado <= 1e-9:
+        if faixa_resultado == "saudavel_neg_liquido":
+            if p.resultado_operacional < -1e-9 or p.resultado_liquido >= -1e-9:
+                continue
+        if faixa_resultado == "lucro_pleno" and p.resultado_liquido < -1e-9:
             continue
         out.append(p)
     return out
@@ -74,19 +77,35 @@ def render_tabela_pedidos_rg(
 
     soma_rec = sum(p.receita for p in linhas_full)
     soma_res = sum(p.resultado for p in linhas_full)
+    soma_op = sum(p.resultado_operacional for p in linhas_full)
+    soma_desp = sum(p.despesa_fixa for p in linhas_full)
     if debug_coerencia:
         d_r = abs(soma_rec - float(kp_rg["valor_venda_lista"]))
         d_x = abs(soma_res - float(kp_rg["resultado"]))
-        if d_r >= 0.02 or d_x >= 0.02:
+        d_op = abs(soma_op - float(kp_rg.get("resultado_operacional", soma_op)))
+        d_de = abs(soma_desp - float(kp_rg.get("total_despesa_fixa", soma_desp)))
+        if d_r >= 0.02 or d_x >= 0.02 or d_op >= 0.02 or d_de >= 0.02:
             st.warning(
-                f"Coerência KPIs/tabela fora da tolerância (Δ receita R$ {d_r:,.4f}, Δ resultado R$ {d_x:,.4f}). "
+                f"Coerência KPIs/tabela fora da tolerância (Δ receita R$ {d_r:,.4f}, Δ resultado R$ {d_x:,.4f}, "
+                f"Δ op. R$ {d_op:,.4f}, Δ desp. R$ {d_de:,.4f}). "
                 "Contacte suporte técnico."
             )
         else:
-            st.caption(f"Coerência: Δ receita R$ {d_r:.4f} · Δ resultado R$ {d_x:.4f}")
+            st.caption(
+                f"Coerência: Δ receita R$ {d_r:.4f} · Δ resultado R$ {d_x:.4f} · Δ op. R$ {d_op:.4f} · Δ desp. R$ {d_de:.4f}"
+            )
 
     total_receita_fmt = f"{soma_rec:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     st.markdown("### Pedidos do período")
+    with st.expander("Duas leituras de margem", expanded=False):
+        st.markdown(
+            """
+**Operacional** — após custos diretos do pedido (comissão, CMV, fretes, imposto rateado, ADS variável).  
+**Líquida** — após despesa fixa e ADS fixo do período rateados nas linhas.  
+
+Pedidos saudáveis com líquida negativa ajudam a diluir estrutura; descontinuar pode piorar o mês.
+"""
+        )
     st.caption(
         f"{len(linhas_full)} pedidos · R$ {total_receita_fmt} (receita lista no recorte)"
     )
@@ -120,12 +139,22 @@ def render_tabela_pedidos_rg(
         )
     with f4:
         faixa = st.radio(
-            "Resultado",
-            ("Todos", "Só prejuízo", "Só lucro"),
+            "Faixa de resultado",
+            (
+                "Todos",
+                "Prejuízo real (op. < 0)",
+                "Saudável mas neg. no líquido",
+                "Lucro pleno",
+            ),
             horizontal=True,
             key="fdl_rg_ped_tbl_fx",
         )
-    fx_map = {"Todos": "todos", "Só prejuízo": "prejuizo", "Só lucro": "lucro"}
+    fx_map = {
+        "Todos": "todos",
+        "Prejuízo real (op. < 0)": "prejuizo_real",
+        "Saudável mas neg. no líquido": "saudavel_neg_liquido",
+        "Lucro pleno": "lucro_pleno",
+    }
     linhas = _filtro_pedidos(
         linhas_full,
         plats=sel_plat,
@@ -135,10 +164,17 @@ def render_tabela_pedidos_rg(
     )
 
     with st.popover("Colunas opcionais"):
-        show_emp = st.checkbox("Empresa", value=False, key="fdl_rg_ped_col_emp")
+        show_res_op = st.checkbox("Resultado operacional (R$)", value=False, key="fdl_rg_ped_col_ro")
+        show_res_liq = st.checkbox("Resultado líquido (R$)", value=False, key="fdl_rg_ped_col_rl")
         show_com = st.checkbox("Comissão", value=False, key="fdl_rg_ped_col_com")
         show_fp = st.checkbox("Frete plataforma", value=False, key="fdl_rg_ped_col_fp")
+        show_ftp = st.checkbox("Frete TP", value=False, key="fdl_rg_ped_col_ftp")
         show_cmv = st.checkbox("CMV", value=False, key="fdl_rg_ped_col_cmv")
+        show_imp = st.checkbox("Imposto (rateado)", value=False, key="fdl_rg_ped_col_imp")
+        show_desp = st.checkbox("Despesa fixa", value=False, key="fdl_rg_ped_col_desp")
+        show_ads_v = st.checkbox("ADS variável", value=False, key="fdl_rg_ped_col_av")
+        show_ads_f = st.checkbox("ADS fixo", value=False, key="fdl_rg_ped_col_af")
+        show_emp = st.checkbox("Empresa", value=False, key="fdl_rg_ped_col_emp")
         show_st = st.checkbox("Status NF", value=False, key="fdl_rg_ped_col_st")
         show_q = st.checkbox("Qtd itens", value=False, key="fdl_rg_ped_col_q")
 
@@ -155,16 +191,38 @@ def render_tabela_pedidos_rg(
     i0 = (int(page) - 1) * _ROWS_PER_PAGE
     chunk = linhas[i0 : i0 + _ROWS_PER_PAGE]
 
-    cols_default = ["Data venda", "Plataforma", "Nº Pedido", "SKU", "Receita", "Resultado", "Margem %"]
+    cols_default = [
+        "Data venda",
+        "Plataforma",
+        "Nº Pedido",
+        "SKU",
+        "Receita",
+        "Margem op. %",
+        "Margem líquida %",
+    ]
     extra_names: list[str] = []
-    if show_emp:
-        extra_names.append("Empresa")
+    if show_res_op:
+        extra_names.append("Resultado op.")
+    if show_res_liq:
+        extra_names.append("Resultado líquido")
     if show_com:
         extra_names.append("Comissão")
     if show_fp:
         extra_names.append("Frete plataforma")
+    if show_ftp:
+        extra_names.append("Frete TP")
     if show_cmv:
         extra_names.append("CMV")
+    if show_imp:
+        extra_names.append("Imposto")
+    if show_desp:
+        extra_names.append("Despesa fixa")
+    if show_ads_v:
+        extra_names.append("ADS var.")
+    if show_ads_f:
+        extra_names.append("ADS fixo")
+    if show_emp:
+        extra_names.append("Empresa")
     if show_st:
         extra_names.append("Status NF")
     if show_q:
@@ -179,17 +237,31 @@ def render_tabela_pedidos_rg(
             "Nº Pedido": p.numero_pedido_ui or p.pedido_id.split("|")[-1],
             "SKU": sku_disp,
             "Receita": p.receita,
-            "Resultado": p.resultado,
-            "Margem %": p.margem_pct,
+            "Margem op. %": p.margem_operacional_pct,
+            "Margem líquida %": p.margem_liquida_pct,
         }
-        if show_emp:
-            row["Empresa"] = p.empresa or "—"
+        if show_res_op:
+            row["Resultado op."] = p.resultado_operacional
+        if show_res_liq:
+            row["Resultado líquido"] = p.resultado_liquido
         if show_com:
             row["Comissão"] = p.comissao
         if show_fp:
             row["Frete plataforma"] = p.frete_plataforma
+        if show_ftp:
+            row["Frete TP"] = p.frete_tp
         if show_cmv:
             row["CMV"] = p.cmv
+        if show_imp:
+            row["Imposto"] = p.imposto_rateado
+        if show_desp:
+            row["Despesa fixa"] = p.despesa_fixa
+        if show_ads_v:
+            row["ADS var."] = p.ads_variavel
+        if show_ads_f:
+            row["ADS fixo"] = p.ads_fixo
+        if show_emp:
+            row["Empresa"] = p.empresa or "—"
         if show_st:
             row["Status NF"] = p.status_nf
         if show_q:
@@ -201,19 +273,36 @@ def render_tabela_pedidos_rg(
     if not df_show.empty:
         df_show = df_show[[c for c in disp_cols if c in df_show.columns]]
 
+    cc: dict[str, object] = {
+        "Receita": st.column_config.NumberColumn("Receita", format="R$ %,.2f"),
+        "Margem op. %": st.column_config.NumberColumn(
+            "Margem op. %",
+            format="%.1f",
+            help="Custos diretos + imposto + ADS variável",
+        ),
+        "Margem líquida %": st.column_config.NumberColumn(
+            "Margem líquida %",
+            format="%.1f",
+            help="Alinha ao KPI de topo (inclui despesa fixa + ADS fixo rateados)",
+        ),
+        "Resultado op.": st.column_config.NumberColumn("Resultado op.", format="R$ %,.2f"),
+        "Resultado líquido": st.column_config.NumberColumn("Resultado líquido", format="R$ %,.2f"),
+        "Comissão": st.column_config.NumberColumn("Comissão", format="R$ %,.2f"),
+        "Frete plataforma": st.column_config.NumberColumn("Frete plataforma", format="R$ %,.2f"),
+        "Frete TP": st.column_config.NumberColumn("Frete TP", format="R$ %,.2f"),
+        "CMV": st.column_config.NumberColumn("CMV", format="R$ %,.2f"),
+        "Imposto": st.column_config.NumberColumn("Imposto", format="R$ %,.2f"),
+        "Despesa fixa": st.column_config.NumberColumn("Despesa fixa", format="R$ %,.2f"),
+        "ADS var.": st.column_config.NumberColumn("ADS var.", format="R$ %,.2f"),
+        "ADS fixo": st.column_config.NumberColumn("ADS fixo", format="R$ %,.2f"),
+        "Qtd itens": st.column_config.NumberColumn("Qtd itens", format="%d"),
+    }
+
     st.dataframe(
         df_show,
         use_container_width=True,
         hide_index=True,
-        column_config={
-            "Receita": st.column_config.NumberColumn("Receita", format="R$ %,.2f"),
-            "Resultado": st.column_config.NumberColumn("Resultado", format="R$ %,.2f"),
-            "Margem %": st.column_config.NumberColumn("Margem %", format="%.1f"),
-            "Comissão": st.column_config.NumberColumn("Comissão", format="R$ %,.2f"),
-            "Frete plataforma": st.column_config.NumberColumn("Frete plataforma", format="R$ %,.2f"),
-            "CMV": st.column_config.NumberColumn("CMV", format="R$ %,.2f"),
-            "Qtd itens": st.column_config.NumberColumn("Qtd itens", format="%d"),
-        },
+        column_config=cc,
     )
     st.caption(f"Mostrando {len(chunk)} de {n_tot} pedidos filtrados · página {page}/{n_pages}")
 
@@ -226,17 +315,31 @@ def render_tabela_pedidos_rg(
             "Nº Pedido": p.numero_pedido_ui or p.pedido_id.split("|")[-1],
             "SKU": sku_disp,
             "Receita": round(p.receita, 2),
-            "Resultado": round(p.resultado, 2),
-            "Margem %": round(p.margem_pct, 4),
+            "Margem op. %": round(p.margem_operacional_pct, 4),
+            "Margem líquida %": round(p.margem_liquida_pct, 4),
         }
+        if show_res_op:
+            er["Resultado op."] = round(p.resultado_operacional, 2)
+        if show_res_liq:
+            er["Resultado líquido"] = round(p.resultado_liquido, 2)
         if show_emp:
             er["Empresa"] = p.empresa
         if show_com:
             er["Comissão"] = round(p.comissao, 2)
         if show_fp:
             er["Frete plataforma"] = round(p.frete_plataforma, 2)
+        if show_ftp:
+            er["Frete TP"] = round(p.frete_tp, 2)
         if show_cmv:
             er["CMV"] = round(p.cmv, 2)
+        if show_imp:
+            er["Imposto"] = round(p.imposto_rateado, 2)
+        if show_desp:
+            er["Despesa fixa"] = round(p.despesa_fixa, 2)
+        if show_ads_v:
+            er["ADS var."] = round(p.ads_variavel, 2)
+        if show_ads_f:
+            er["ADS fixo"] = round(p.ads_fixo, 2)
         if show_st:
             er["Status NF"] = p.status_nf
         if show_q:

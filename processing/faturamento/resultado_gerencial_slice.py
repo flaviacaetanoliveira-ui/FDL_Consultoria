@@ -79,6 +79,20 @@ def _ads_total(df: pd.DataFrame) -> float:
     return v
 
 
+def _ads_split_totals(df: pd.DataFrame) -> tuple[float, float, bool]:
+    """Totais ADS variável / fixo e flag ``custo_ads`` agregado sem colunas de split."""
+    has_v = "custo_ads_variavel" in df.columns
+    has_f = "custo_ads_fixo" in df.columns
+    has_a = "custo_ads" in df.columns
+    if has_v or has_f:
+        av = _num_sum(df, "custo_ads_variavel") if has_v else 0.0
+        af = _num_sum(df, "custo_ads_fixo") if has_f else 0.0
+        return av, af, False
+    if has_a:
+        return 0.0, _num_sum(df, "custo_ads"), True
+    return 0.0, 0.0, False
+
+
 @dataclass(frozen=True)
 class ResultadoGerencialSliceMeta:
     """Filtros e período aplicados ao slice."""
@@ -103,6 +117,9 @@ class ResultadoGerencialSliceStats:
     ads_total: float
     n_linhas: int
     n_pedidos_unicos: int
+    ads_variavel_total: float = 0.0
+    ads_fixo_total: float = 0.0
+    ads_sem_split_agregado: bool = False
 
 
 @dataclass(frozen=True)
@@ -147,6 +164,7 @@ def build_resultado_gerencial_slice(
     resultado_linhas_total = _num_sum(df, "Resultado")
     despesa_fixa_total = _num_sum(df, "Despesas Fixas")
     ads_total = _ads_total(df)
+    av_ads, af_ads, ads_sem_split = _ads_split_totals(df)
 
     pids = pedido_id_series(df).astype(str).str.strip()
     n_pedidos = int(pids[pids.ne("")].nunique())
@@ -162,6 +180,9 @@ def build_resultado_gerencial_slice(
         ads_total=ads_total,
         n_linhas=int(len(df)),
         n_pedidos_unicos=n_pedidos,
+        ads_variavel_total=av_ads,
+        ads_fixo_total=af_ads,
+        ads_sem_split_agregado=ads_sem_split,
     )
     meta = ResultadoGerencialSliceMeta(
         empresas_sel=empresas_sel,
@@ -200,24 +221,43 @@ def compute_resultado_gerencial_kpis(
     """
     s = slice_.stats
     receita = s.receita_total
+    imposto = float(fiscal_imposto_valor)
+    av = float(s.ads_variavel_total)
+    af = float(s.ads_fixo_total)
+
+    ded_diretos_operacional = (
+        s.comissao_total
+        + s.cmv_total
+        + s.frete_plataforma_total
+        + s.frete_transportadora_propria_total
+        + imposto
+        + av
+    )
+    resultado_operacional = receita - ded_diretos_operacional
+
     total_deducoes = (
         s.comissao_total
         + s.cmv_total
         + s.frete_plataforma_total
         + s.frete_transportadora_propria_total
-        + float(fiscal_imposto_valor)
+        + imposto
         + s.despesa_fixa_total
         + s.ads_total
     )
     resultado = receita - total_deducoes
+    resultado_liquido = resultado
+
     pedidos = s.n_pedidos_unicos
     ticket = receita / pedidos if pedidos else float("nan")
     margem = resultado / receita if receita else float("nan")
+    margem_operacional = resultado_operacional / receita if receita else float("nan")
+    margem_liquida = margem
     total_receita_dre = receita + s.frete_transportadora_propria_total
 
     return {
         "resultado": resultado,
         "margem": margem,
+        "margem_sobre_venda": margem_liquida,
         "valor_venda_lista": receita,
         "pedidos": pedidos,
         "ticket_medio": ticket,
@@ -226,6 +266,20 @@ def compute_resultado_gerencial_kpis(
         "fiscal_imposto_valor": float(fiscal_imposto_valor),
         "n_linhas": s.n_linhas,
         "resultado_linhas_total": s.resultado_linhas_total,
+        "resultado_operacional": resultado_operacional,
+        "resultado_liquido": resultado_liquido,
+        "margem_operacional": margem_operacional,
+        "margem_liquida": margem_liquida,
+        "total_comissao": s.comissao_total,
+        "total_frete_plataforma": s.frete_plataforma_total,
+        "total_frete_tp": s.frete_transportadora_propria_total,
+        "total_cmv": s.cmv_total,
+        "total_imposto": imposto,
+        "total_despesa_fixa": s.despesa_fixa_total,
+        "total_ads_variavel": av,
+        "total_ads_fixo": af,
+        "total_ads": s.ads_total,
+        "ads_sem_split_agregado": bool(s.ads_sem_split_agregado),
     }
 
 
@@ -240,16 +294,24 @@ def _frete_tp_linha_series(df: pd.DataFrame) -> pd.Series:
     return ftp.fillna(0.0)
 
 
-def _ads_linha_series(df: pd.DataFrame) -> pd.Series:
-    """Espelho linha-a-linha de ``_ads_total``."""
-    if "custo_ads" in df.columns:
-        return pd.to_numeric(df["custo_ads"], errors="coerce").fillna(0.0)
+def _ads_var_fix_linha_series(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    """Séries ADS variável e fixo; ``custo_ads`` agregado (sem split) cai 100% no fixo."""
     z = pd.Series(0.0, index=df.index, dtype=float)
+    if "custo_ads" in df.columns:
+        return z, pd.to_numeric(df["custo_ads"], errors="coerce").fillna(0.0)
+    v = z
+    f = z
     if "custo_ads_variavel" in df.columns:
-        z = z + pd.to_numeric(df["custo_ads_variavel"], errors="coerce").fillna(0.0)
+        v = pd.to_numeric(df["custo_ads_variavel"], errors="coerce").fillna(0.0)
     if "custo_ads_fixo" in df.columns:
-        z = z + pd.to_numeric(df["custo_ads_fixo"], errors="coerce").fillna(0.0)
-    return z
+        f = pd.to_numeric(df["custo_ads_fixo"], errors="coerce").fillna(0.0)
+    return v, f
+
+
+def _ads_linha_series(df: pd.DataFrame) -> pd.Series:
+    """Espelho linha-a-linha de ``_ads_total`` (soma var+fix)."""
+    a, b = _ads_var_fix_linha_series(df)
+    return a + b
 
 
 def _nf_linha_status_series(df: pd.DataFrame) -> pd.Series:
@@ -325,6 +387,15 @@ class PedidoGerencialRow:
     comissao: float
     frete_plataforma: float
     cmv: float
+    frete_tp: float
+    imposto_rateado: float
+    despesa_fixa: float
+    ads_variavel: float
+    ads_fixo: float
+    resultado_operacional: float
+    resultado_liquido: float
+    margem_operacional_pct: float
+    margem_liquida_pct: float
     resultado: float
     margem_pct: float
     status_nf: str
@@ -362,7 +433,7 @@ def compute_tabela_por_pedido(
         if "Despesas Fixas" in df.columns
         else pd.Series(0.0, index=df.index)
     )
-    ads = _ads_linha_series(df)
+    ads_v, ads_f = _ads_var_fix_linha_series(df)
     nf_lin = _nf_linha_status_series(df)
     ts_sale = pd.to_datetime(df["Data"], errors="coerce", dayfirst=True)
 
@@ -382,7 +453,8 @@ def compute_tabela_por_pedido(
             "_cmv": cmv.values,
             "_ftp": ftp.values,
             "_desp": desp.values,
-            "_ads": ads.values,
+            "_ads_v": ads_v.values,
+            "_ads_f": ads_f.values,
             "_nf": nf_lin.values,
             "_dt": ts_sale.values,
             "_plat": plat_col,
@@ -393,7 +465,7 @@ def compute_tabela_por_pedido(
     )
 
     grp = work.groupby("_pid", sort=False)
-    sums = grp[["_rec", "_com", "_fp", "_cmv", "_ftp", "_desp", "_ads"]].sum()
+    sums = grp[["_rec", "_com", "_fp", "_cmv", "_ftp", "_desp", "_ads_v", "_ads_f"]].sum()
     dt_min = grp["_dt"].min()
     plat_first = grp["_plat"].first()
     emp_first = grp["_emp"].first()
@@ -411,10 +483,13 @@ def compute_tabela_por_pedido(
         cmv_ = float(sums.loc[pid_key, "_cmv"])
         ftp_ = float(sums.loc[pid_key, "_ftp"])
         desp_ = float(sums.loc[pid_key, "_desp"])
-        ads_ = float(sums.loc[pid_key, "_ads"])
+        ads_v_ = float(sums.loc[pid_key, "_ads_v"])
+        ads_f_ = float(sums.loc[pid_key, "_ads_f"])
         imp_ = float(imp_por.get(pid_key, 0.0))
-        res = r - c - fp_ - cmv_ - ftp_ - desp_ - ads_ - imp_
-        margem = (res / r * 100.0) if r > 1e-12 else 0.0
+        res_op = r - c - fp_ - cmv_ - ftp_ - imp_ - ads_v_
+        res_liq = r - c - fp_ - cmv_ - ftp_ - imp_ - desp_ - ads_v_ - ads_f_
+        margem_op = (res_op / r * 100.0) if r > 1e-12 else 0.0
+        margem_liq = (res_liq / r * 100.0) if r > 1e-12 else 0.0
 
         m_pid = work["_pid"].astype(str).eq(pid_key)
         idx_lines = work.index[m_pid].tolist()
@@ -445,11 +520,111 @@ def compute_tabela_por_pedido(
                 comissao=c,
                 frete_plataforma=fp_,
                 cmv=cmv_,
-                resultado=res,
-                margem_pct=margem,
+                frete_tp=ftp_,
+                imposto_rateado=imp_,
+                despesa_fixa=desp_,
+                ads_variavel=ads_v_,
+                ads_fixo=ads_f_,
+                resultado_operacional=res_op,
+                resultado_liquido=res_liq,
+                margem_operacional_pct=margem_op,
+                margem_liquida_pct=margem_liq,
+                resultado=res_liq,
+                margem_pct=margem_liq,
                 status_nf=sts,
             )
         )
 
     rows.sort(key=lambda x: (x.data_venda, x.pedido_id), reverse=True)
     return rows
+
+
+@dataclass(frozen=True)
+class SkuGerencialMargem:
+    """Margens operacional/líquida por SKU (rateio fiscal igual aos KPIs por pedido)."""
+
+    sku: str
+    receita: float
+    resultado_operacional: float
+    resultado_liquido: float
+    margem_operacional_pct: float
+    margem_liquida_pct: float
+    resultado_coluna_naive: float
+
+
+def compute_sku_margens_para_saude(df: pd.DataFrame, *, fiscal_imposto_valor: float) -> list[SkuGerencialMargem]:
+    """Agrega linhas por ``SKU_Normalizado`` com os mesmos componentes que ``compute_tabela_por_pedido``."""
+    col = SKU_NORMALIZADO_COL if SKU_NORMALIZADO_COL in df.columns else "Código"
+    if df.empty or col not in df.columns:
+        return []
+
+    rec = _receita_linha_series(df)
+    com = pd.to_numeric(df["Taxa de Comissão"], errors="coerce").fillna(0.0)
+    fp = pd.to_numeric(df["Frete_Plataforma"], errors="coerce").fillna(0.0)
+    cmv = pd.to_numeric(df["Custo_Produto_Total"], errors="coerce").fillna(0.0)
+    ftp = _frete_tp_linha_series(df)
+    desp = (
+        pd.to_numeric(df["Despesas Fixas"], errors="coerce").fillna(0.0)
+        if "Despesas Fixas" in df.columns
+        else pd.Series(0.0, index=df.index)
+    )
+    ads_v, ads_f = _ads_var_fix_linha_series(df)
+    res_naive = pd.to_numeric(df["Resultado"], errors="coerce").fillna(0.0) if "Resultado" in df.columns else pd.Series(0.0, index=df.index)
+
+    sku_key = df[col].fillna("").astype(str).str.strip()
+    work = pd.DataFrame(
+        {
+            "_sku": sku_key.values,
+            "_rec": rec.values,
+            "_com": com.values,
+            "_fp": fp.values,
+            "_cmv": cmv.values,
+            "_ftp": ftp.values,
+            "_desp": desp.values,
+            "_ads_v": ads_v.values,
+            "_ads_f": ads_f.values,
+            "_naive": res_naive.values,
+        },
+        index=df.index,
+    )
+    work = work.loc[work["_sku"].ne("")].copy()
+    if work.empty:
+        return []
+
+    grp = work.groupby("_sku", sort=False)
+    sums = grp[["_rec", "_com", "_fp", "_cmv", "_ftp", "_desp", "_ads_v", "_ads_f", "_naive"]].sum()
+
+    receita_por = {str(k): float(sums.loc[k, "_rec"]) for k in sums.index}
+    keys_sorted = sorted(receita_por.keys())
+    imp_por = _allocate_imposto_total_centavos(keys_sorted, receita_por, float(fiscal_imposto_valor))
+
+    out: list[SkuGerencialMargem] = []
+    for sku_key_s in keys_sorted:
+        r = float(receita_por[sku_key_s])
+        c = float(sums.loc[sku_key_s, "_com"])
+        fp_ = float(sums.loc[sku_key_s, "_fp"])
+        cmv_ = float(sums.loc[sku_key_s, "_cmv"])
+        ftp_ = float(sums.loc[sku_key_s, "_ftp"])
+        desp_ = float(sums.loc[sku_key_s, "_desp"])
+        ads_v_ = float(sums.loc[sku_key_s, "_ads_v"])
+        ads_f_ = float(sums.loc[sku_key_s, "_ads_f"])
+        naive_ = float(sums.loc[sku_key_s, "_naive"])
+        imp_ = float(imp_por.get(sku_key_s, 0.0))
+        ro = r - c - fp_ - cmv_ - ftp_ - imp_ - ads_v_
+        rl = r - c - fp_ - cmv_ - ftp_ - imp_ - desp_ - ads_v_ - ads_f_
+        mop = (ro / r * 100.0) if r > 1e-12 else 0.0
+        mlq = (rl / r * 100.0) if r > 1e-12 else 0.0
+        out.append(
+            SkuGerencialMargem(
+                sku=str(sku_key_s),
+                receita=r,
+                resultado_operacional=ro,
+                resultado_liquido=rl,
+                margem_operacional_pct=mop,
+                margem_liquida_pct=mlq,
+                resultado_coluna_naive=naive_,
+            )
+        )
+
+    out.sort(key=lambda x: x.resultado_liquido)
+    return out

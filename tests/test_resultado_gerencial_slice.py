@@ -222,6 +222,9 @@ def test_aggregates_and_pedido_id_series() -> None:
     assert sl.stats.resultado_linhas_total == pytest.approx(18.0)
     assert sl.stats.despesa_fixa_total == pytest.approx(7.0)
     assert sl.stats.ads_total == pytest.approx(3.0)
+    assert sl.stats.ads_variavel_total == pytest.approx(0.0)
+    assert sl.stats.ads_fixo_total == pytest.approx(3.0)
+    assert sl.stats.ads_sem_split_agregado is True
 
     expected_pid = pedido_id_series(sl.df_linha).astype(str).str.strip()
     pd.testing.assert_series_equal(sl.pedido_ids, expected_pid, check_names=False)
@@ -264,6 +267,9 @@ def test_kpis_match_manual_sum() -> None:
     assert kp["margem"] == pytest.approx((200.0 - ded) / 200.0)
     assert kp["ticket_medio"] == pytest.approx(200.0)
     assert kp["pedidos"] == 1
+    ded_op = 20 + 60 + 10 + 15 + fiscal + 0.0
+    assert kp["resultado_operacional"] == pytest.approx(200.0 - ded_op)
+    assert kp["ads_sem_split_agregado"] is True
 
 
 def test_fiscal_imposto_bridge_not_recomputed() -> None:

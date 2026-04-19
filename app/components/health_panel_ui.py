@@ -8,6 +8,7 @@ blockquote e quebra as tags. Usamos ``st.html``, ``st.metric`` e callouts nativo
 from __future__ import annotations
 
 import html
+import math
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -379,10 +380,17 @@ def _metrics_block_html(health: "HealthScore") -> str:
             f'<div class="fdl-health-metric-delta {dc}">{html.escape(f"{d:+.1f} pp vs mês ant.")}</div>'
         )
 
+    margem_op_html = ""
+    if health.margem_operacional_pct is not None and not math.isnan(health.margem_operacional_pct):
+        margem_op_html = (
+            '<div style="font-size:0.75rem;font-weight:500;color:#64748b;margin-top:4px;line-height:1.2;">'
+            f'op. {health.margem_operacional_pct:.1f}%</div>'
+        )
     blocks: list[str] = [
         '<div class="fdl-health-metric-item">'
         f'<div class="fdl-health-metric-label" title="{h_margem}">Margem</div>'
         f'<div class="fdl-health-metric-value">{html.escape(f"{health.margem_pct:.1f}%")}</div>'
+        f"{margem_op_html}"
         f"{delta_html}"
         "</div>",
         '<div class="fdl-health-metric-item">'
@@ -487,7 +495,9 @@ def render_health_panel(
     st.html(_metrics_block_html(health))
     st.html(_executive_summary_html(health))
 
-    if show_details and (health.diagnosticos or health.skus_risco):
+    if show_details and (
+        health.diagnosticos or health.skus_risco or health.skus_prejuizo_real or health.skus_cobertura_parcial
+    ):
         with st.container(border=True):
             if health.diagnosticos:
                 st.html(
@@ -498,7 +508,36 @@ def render_health_panel(
                 )
                 for diag in health.diagnosticos:
                     _render_diagnostico_card(diag)
-            if health.skus_risco:
+            duas_visoes = bool(health.skus_prejuizo_real or health.skus_cobertura_parcial)
+            if duas_visoes:
+                st.html('<div class="fdl-health-skus-spacer" aria-hidden="true"></div>')
+                if health.skus_prejuizo_real:
+                    nprej = len(health.skus_prejuizo_real)
+                    preview_plain = _skus_preview_line(health.skus_prejuizo_real)
+                    with st.expander(f"🔴 Prejuízo real ({nprej} SKUs)", expanded=False):
+                        st.caption("Operacional negativo — não pagam nem os custos diretos.")
+                        if preview_plain:
+                            st.markdown(
+                                f'<p class="fdl-health-skus-preview-inline"><strong>Top 3</strong> '
+                                f"(pior operacional): {preview_plain}</p>",
+                                unsafe_allow_html=True,
+                            )
+                        _render_skus_risco(health.skus_prejuizo_real, duas_visoes=True)
+                if health.skus_cobertura_parcial:
+                    ncob = len(health.skus_cobertura_parcial)
+                    preview_cob = _skus_preview_line(health.skus_cobertura_parcial)
+                    with st.expander(f"🟡 Cobertura parcial ({ncob} SKUs)", expanded=False):
+                        st.caption(
+                            "Operacional positivo mas líquido negativo — pagam custos diretos e não a fatia de estrutura."
+                        )
+                        if preview_cob:
+                            st.markdown(
+                                f'<p class="fdl-health-skus-preview-inline"><strong>Top 3</strong> '
+                                f"(pior líquido): {preview_cob}</p>",
+                                unsafe_allow_html=True,
+                            )
+                        _render_skus_risco(health.skus_cobertura_parcial, duas_visoes=True)
+            elif health.skus_risco:
                 n = len(health.skus_risco)
                 preview_plain = _skus_preview_line(health.skus_risco)
                 st.html('<div class="fdl-health-skus-spacer" aria-hidden="true"></div>')
@@ -510,35 +549,41 @@ def render_health_panel(
                             f"(pior resultado): {preview_plain}</p>",
                             unsafe_allow_html=True,
                         )
-                    _render_skus_risco(health.skus_risco)
+                    _render_skus_risco(health.skus_risco, duas_visoes=False)
 
 
-def _render_skus_risco(skus: list[SKURisco]) -> None:
+def _render_skus_risco(skus: list[SKURisco], *, duas_visoes: bool = False) -> None:
     rows = []
     for sku in skus:
-        rows.append(
-            {
-                "SKU": sku.sku,
-                "Receita": sku.receita,
-                "Margem %": sku.margem_pct,
-                "Custo %": sku.custo_pct,
-                "Resultado": sku.resultado,
-                "Ajuste unit.": sku.ajuste_breakeven,
-                "Ajuste % lista": sku.ajuste_breakeven_pct,
-            }
-        )
+        row: dict[str, object] = {
+            "SKU": sku.sku,
+            "Receita": sku.receita,
+            "Margem %": sku.margem_pct,
+            "Custo %": sku.custo_pct,
+            "Resultado": sku.resultado,
+            "Ajuste unit.": sku.ajuste_breakeven,
+            "Ajuste % lista": sku.ajuste_breakeven_pct,
+        }
+        if duas_visoes:
+            row["Margem op. %"] = sku.margem_operacional_pct
+            row["Res. op."] = sku.resultado_operacional
+        rows.append(row)
+    cc: dict[str, Any] = {
+        "Receita": st.column_config.NumberColumn("Receita", format="R$ %,.2f"),
+        "Resultado": st.column_config.NumberColumn("Resultado", format="R$ %,.2f"),
+        "Margem %": st.column_config.NumberColumn("Margem %", format="%.1f"),
+        "Custo %": st.column_config.NumberColumn("Custo %", format="%.1f"),
+        "Ajuste unit.": st.column_config.NumberColumn("Ajuste unit.", format="R$ %,.2f"),
+        "Ajuste % lista": st.column_config.NumberColumn("Ajuste % lista", format="%.1f"),
+    }
+    if duas_visoes:
+        cc["Margem op. %"] = st.column_config.NumberColumn("Margem op. %", format="%.1f")
+        cc["Res. op."] = st.column_config.NumberColumn("Res. op.", format="R$ %,.2f")
     st.dataframe(
         pd.DataFrame(rows),
         use_container_width=True,
         hide_index=True,
-        column_config={
-            "Receita": st.column_config.NumberColumn("Receita", format="R$ %,.2f"),
-            "Resultado": st.column_config.NumberColumn("Resultado", format="R$ %,.2f"),
-            "Margem %": st.column_config.NumberColumn("Margem %", format="%.1f"),
-            "Custo %": st.column_config.NumberColumn("Custo %", format="%.1f"),
-            "Ajuste unit.": st.column_config.NumberColumn("Ajuste unit.", format="R$ %,.2f"),
-            "Ajuste % lista": st.column_config.NumberColumn("Ajuste % lista", format="%.1f"),
-        },
+        column_config=cc,
     )
     total_prejuizo = sum(s.resultado for s in skus)
     total_receita = sum(s.receita for s in skus)

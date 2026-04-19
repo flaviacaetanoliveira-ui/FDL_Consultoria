@@ -15,6 +15,7 @@ import pandas as pd
 from faturamento_dre_recorte_minimo import nf_grain_plataforma_match_key
 
 from processing.faturamento.config import STATUS_CUSTO_OK
+from processing.faturamento.resultado_gerencial_slice import SkuGerencialMargem, compute_sku_margens_para_saude
 
 
 class HealthLevel(str, Enum):
@@ -78,6 +79,8 @@ class SKURisco:
     custo_unitario: float
     ajuste_breakeven: float
     ajuste_breakeven_pct: float
+    margem_operacional_pct: float = 0.0
+    resultado_operacional: float = 0.0
 
 
 @dataclass
@@ -94,6 +97,9 @@ class HealthScore:
     vs_grupo_pp: Optional[float] = None
     diagnosticos: list[Diagnostico] = field(default_factory=list)
     skus_risco: list[SKURisco] = field(default_factory=list)
+    skus_prejuizo_real: list[SKURisco] = field(default_factory=list)
+    skus_cobertura_parcial: list[SKURisco] = field(default_factory=list)
+    margem_operacional_pct: Optional[float] = None
     periodo: str = ""
     empresa: str = ""
     total_skus: int = 0
@@ -180,6 +186,88 @@ def compute_skus_em_risco(df: pd.DataFrame) -> tuple[list[SKURisco], pd.DataFram
     return skus_risco, sku_analise, n_skus_negativos
 
 
+def compute_skus_risco_duas_visoes(
+    df: pd.DataFrame,
+    *,
+    fiscal_imposto_valor: float,
+) -> tuple[list[SKURisco], list[SKURisco], pd.DataFrame, int]:
+    """SKUs em dois grupos (operacional vs líquido), alinhado ao Resultado Gerencial."""
+    sku_analise = pd.DataFrame()
+    out_prej: list[SKURisco] = []
+    out_cob: list[SKURisco] = []
+    if "SKU_Normalizado" not in df.columns or "Quantidade" not in df.columns:
+        return out_prej, out_cob, sku_analise, 0
+
+    sku_analise = (
+        df.groupby("SKU_Normalizado", dropna=False)
+        .agg(
+            Vl_Venda=("Vl_Venda", "sum"),
+            Custo_Produto_Total=("Custo_Produto_Total", "sum"),
+            Resultado=("Resultado", "sum"),
+            Quantidade=("Quantidade", "sum"),
+        )
+        .reset_index()
+    )
+    sku_analise["margem_pct"] = sku_analise.apply(
+        lambda r: (r["Resultado"] / r["Vl_Venda"] * 100.0) if r["Vl_Venda"] else 0.0, axis=1
+    )
+    sku_analise["custo_pct"] = sku_analise.apply(
+        lambda r: (r["Custo_Produto_Total"] / r["Vl_Venda"] * 100.0) if r["Vl_Venda"] else 0.0, axis=1
+    )
+    sku_analise["preco_medio"] = sku_analise.apply(
+        lambda r: (r["Vl_Venda"] / r["Quantidade"]) if r["Quantidade"] else 0.0, axis=1
+    )
+    sku_analise["custo_unitario"] = sku_analise.apply(
+        lambda r: (r["Custo_Produto_Total"] / r["Quantidade"]) if r["Quantidade"] else 0.0, axis=1
+    )
+
+    margens = compute_sku_margens_para_saude(df, fiscal_imposto_valor=float(fiscal_imposto_valor))
+    idx = sku_analise.set_index("SKU_Normalizado", drop=False)
+
+    def _mk(gm: SkuGerencialMargem) -> SKURisco | None:
+        try:
+            row = idx.loc[gm.sku]
+            if isinstance(row, pd.DataFrame):
+                row = row.iloc[0]
+        except KeyError:
+            return None
+        q = float(row["Quantidade"]) or 1.0
+        vl = float(row["Vl_Venda"])
+        pm = float(row["preco_medio"])
+        prejuizo_unit = abs(float(gm.resultado_liquido)) / q
+        ajuste_pct = (prejuizo_unit / pm * 100.0) if pm > 0 else 0.0
+        return SKURisco(
+            sku=str(gm.sku),
+            receita=vl,
+            margem_pct=float(gm.margem_liquida_pct),
+            margem_operacional_pct=float(gm.margem_operacional_pct),
+            custo_pct=float(row["custo_pct"]),
+            resultado=float(gm.resultado_liquido),
+            resultado_operacional=float(gm.resultado_operacional),
+            quantidade=float(row["Quantidade"]),
+            preco_medio=pm,
+            custo_unitario=float(row["custo_unitario"]),
+            ajuste_breakeven=prejuizo_unit,
+            ajuste_breakeven_pct=ajuste_pct,
+        )
+
+    n_liquido_neg = 0
+    for gm in sorted(margens, key=lambda x: x.resultado_liquido):
+        sk = _mk(gm)
+        if sk is None:
+            continue
+        if gm.resultado_liquido < -1e-9:
+            n_liquido_neg += 1
+        if gm.resultado_operacional < -1e-9:
+            out_prej.append(sk)
+        elif gm.resultado_liquido < -1e-9:
+            out_cob.append(sk)
+
+    out_prej.sort(key=lambda s: s.resultado_operacional)
+    out_cob.sort(key=lambda s: s.resultado)
+    return out_prej, out_cob, sku_analise, n_liquido_neg
+
+
 def calcular_health_score(
     df: pd.DataFrame,
     org_id: str,
@@ -205,11 +293,15 @@ def calcular_health_score(
     if config:
         cfg.update(config)
 
+    margem_operacional_pct_val: Optional[float] = None
     if kpis_gerenciais is not None:
         receita = float(kpis_gerenciais["valor_venda_lista"])
         resultado = float(kpis_gerenciais["resultado"])
         m_frac = float(kpis_gerenciais["margem"])
         margem_pct = m_frac * 100.0 if not math.isnan(m_frac) else 0.0
+        mo_frac = kpis_gerenciais.get("margem_operacional")
+        if mo_frac is not None and isinstance(mo_frac, (int, float)) and not math.isnan(float(mo_frac)):
+            margem_operacional_pct_val = float(mo_frac) * 100.0
         if cmv_total_gerencial is not None:
             custo = float(cmv_total_gerencial)
         else:
@@ -378,19 +470,56 @@ def calcular_health_score(
             )
         )
 
-    skus_risco, sku_analise, n_skus_negativos = compute_skus_em_risco(df)
-    if n_skus_negativos:
-        prejuizo_skus = float(sku_analise.loc[sku_analise["Resultado"] < 0, "Resultado"].sum())
-        diagnosticos.append(
-            Diagnostico(
-                tipo="CAUSA",
-                nivel=AlertLevel.HIGH if n_skus_negativos > 10 else AlertLevel.MEDIUM,
-                titulo=f"{n_skus_negativos} SKUs com margem negativa",
-                detalhe=f"Prejuízo total desses SKUs: R$ {abs(prejuizo_skus):,.2f}",
-                acao="Rever precificação ou descontinuar produtos",
-                valor=float(n_skus_negativos),
-            )
+    skus_risco: list[SKURisco] = []
+    sku_analise = pd.DataFrame()
+    skus_prejuizo_real: list[SKURisco] = []
+    skus_cobertura_parcial: list[SKURisco] = []
+    n_skus_negativos = 0
+
+    if kpis_gerenciais is not None:
+        f_imp = float(kpis_gerenciais.get("fiscal_imposto_valor", 0.0))
+        skus_prejuizo_real, skus_cobertura_parcial, sku_analise, n_skus_negativos = compute_skus_risco_duas_visoes(
+            df, fiscal_imposto_valor=f_imp
         )
+        skus_risco = list(skus_prejuizo_real) + list(skus_cobertura_parcial)
+        prej_liq = sum(s.resultado for s in skus_prejuizo_real)
+        cob_liq = sum(s.resultado for s in skus_cobertura_parcial)
+        if skus_prejuizo_real:
+            diagnosticos.append(
+                Diagnostico(
+                    tipo="CAUSA",
+                    nivel=AlertLevel.HIGH if len(skus_prejuizo_real) > 10 else AlertLevel.MEDIUM,
+                    titulo=f"{len(skus_prejuizo_real)} SKUs em prejuízo real (operacional negativo)",
+                    detalhe=f"Prejuízo líquido nesse grupo: R$ {abs(prej_liq):,.2f}. Não cobrem custos diretos.",
+                    acao="Rever preço ou descontinuar",
+                    valor=float(len(skus_prejuizo_real)),
+                )
+            )
+        if skus_cobertura_parcial:
+            diagnosticos.append(
+                Diagnostico(
+                    tipo="CAUSA",
+                    nivel=AlertLevel.MEDIUM,
+                    titulo=f"{len(skus_cobertura_parcial)} SKUs com cobertura parcial (operacional positivo, líquido negativo)",
+                    detalhe=f"Resultado líquido somado: R$ {cob_liq:,.2f}. Pagam custos diretos mas não a fatia de estrutura rateada.",
+                    acao="Revisar volume antes de descontinuar",
+                    valor=float(len(skus_cobertura_parcial)),
+                )
+            )
+    else:
+        skus_risco, sku_analise, n_skus_negativos = compute_skus_em_risco(df)
+        if n_skus_negativos:
+            prejuizo_skus = float(sku_analise.loc[sku_analise["Resultado"] < 0, "Resultado"].sum())
+            diagnosticos.append(
+                Diagnostico(
+                    tipo="CAUSA",
+                    nivel=AlertLevel.HIGH if n_skus_negativos > 10 else AlertLevel.MEDIUM,
+                    titulo=f"{n_skus_negativos} SKUs com margem negativa",
+                    detalhe=f"Prejuízo total desses SKUs: R$ {abs(prejuizo_skus):,.2f}",
+                    acao="Rever precificação ou descontinuar produtos",
+                    valor=float(n_skus_negativos),
+                )
+            )
 
     return HealthScore(
         score=score,
@@ -405,6 +534,9 @@ def calcular_health_score(
         vs_grupo_pp=vs_grupo_pp,
         diagnosticos=diagnosticos,
         skus_risco=skus_risco,
+        skus_prejuizo_real=skus_prejuizo_real,
+        skus_cobertura_parcial=skus_cobertura_parcial,
+        margem_operacional_pct=margem_operacional_pct_val,
         periodo=(periodo_override.strip() if periodo_override else f"{mes:02d}/{ano}"),
         empresa=str(org_id),
         total_skus=int(len(sku_analise)),

@@ -9377,6 +9377,7 @@ def _render_faturamento_dre_minimal(
                 fiscal_imposto_valor=float(_imp_rg_kpis),
                 export_label=_rg_tbl_label,
                 debug_coerencia=_is_admin_mode(),
+                cliente_slug=str(_oid).strip() if _oid else None,
             )
         except Exception as _exc_tp:
             if _is_admin_mode():

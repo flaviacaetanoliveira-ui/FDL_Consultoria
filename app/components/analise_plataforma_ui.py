@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import html
+from functools import partial
 
 import pandas as pd
 import streamlit as st
 
 from processing.faturamento.analise_plataforma import AnalisePlataforma
+from processing.faturamento.formatacao_display_rg import fmt_brl_ptbr_celula, fmt_pct_um_decimal
 
 from app.components.faturamento_dre_ui import fat_dre_premium_css
 
 DEFAULT_BENCHMARK_MARGEM_LIQ_PCT = 10.0
+
+_COLOR_MLIQ_NEG = "#A32D2D"
+_COLOR_MLIQ_POS = "#0F6E56"
+_COLOR_MLIQ_NEUT = "#64748B"
 
 
 def _tier_label(m_liq_pct: float, benchmark: float) -> str:
@@ -22,13 +28,27 @@ def _tier_label(m_liq_pct: float, benchmark: float) -> str:
     return "Neutro"
 
 
-def _fmt_brl_compact(v: float) -> str:
-    av = abs(v)
-    if av >= 100_000:
-        return f"R$ {v/1000:.1f}k".replace(".", ",")
-    if av >= 1_000:
-        return f"R$ {v/1000:.1f}k".replace(".", ",")
-    return f"R$ {v:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
+def _pct_bar_text(pct_0_1: float, *, width: int = 10) -> str:
+    p = max(0.0, min(1.0, float(pct_0_1)))
+    filled = int(round(p * width))
+    bar = "█" * filled + "░" * (width - filled)
+    return f"{bar} {p * 100:.0f}%"
+
+
+def _mliq_css_col(s: pd.Series, *, benchmark: float) -> pd.Series:
+    out: list[str] = []
+    for v in s:
+        if pd.isna(v):
+            out.append("")
+            continue
+        fv = float(v)
+        if fv < 0:
+            out.append(f"color: {_COLOR_MLIQ_NEG}; font-weight: 600")
+        elif fv >= benchmark:
+            out.append(f"color: {_COLOR_MLIQ_POS}; font-weight: 600")
+        else:
+            out.append(f"color: {_COLOR_MLIQ_NEUT}")
+    return pd.Series(out, index=s.index)
 
 
 def _build_df(analise: AnalisePlataforma, benchmark: float) -> pd.DataFrame:
@@ -39,16 +59,18 @@ def _build_df(analise: AnalisePlataforma, benchmark: float) -> pd.DataFrame:
             {
                 "Plataforma": ln.plataforma,
                 "Pedidos": int(ln.pedidos),
-                "Receita (R$)": round(float(ln.receita), 2),
-                "Margem op. (%)": round(float(ln.margem_operacional_pct), 2),
-                "Margem líq. (%)": round(float(ln.margem_liquida_pct), 2),
-                "% receita (barra)": round(float(ln.pct_da_receita) * 100.0, 4),
+                "Receita": round(float(ln.receita), 2),
+                "Margem op.": round(float(ln.margem_operacional_pct), 6),
+                "Margem líq.": round(float(ln.margem_liquida_pct), 6),
+                "Participação": _pct_bar_text(ln.pct_da_receita),
                 "Nível": tier,
-                "_sort_mliq": float(ln.margem_liquida_pct),
-                "_tier_ord": 2 if tier == "Neutro" else (3 if tier == "Alto" else 1),
             }
         )
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    df = df.dropna(how="all")
+    if not df.empty:
+        df = df.loc[~df.isna().all(axis=1)].copy()
+    return df
 
 
 def render_analise_plataforma(
@@ -57,7 +79,7 @@ def render_analise_plataforma(
     benchmark_margem_liq_pct: float = DEFAULT_BENCHMARK_MARGEM_LIQ_PCT,
     debug_enabled: bool = False,
 ) -> None:
-    """Renderiza bloco HTML + ``st.dataframe`` com ordenação nativa por cabeçalho."""
+    """Renderiza bloco HTML + ``pandas.Styler`` em ``st.dataframe`` (pt-BR + cor na margem líquida)."""
     n = len(analise.linhas)
     if n == 0:
         return
@@ -80,48 +102,30 @@ def render_analise_plataforma(
     leg = (
         "<p style='font-size:0.8rem;color:#64748b;margin:0 0 8px 0'>"
         f"Legenda margem líquida (benchmark {benchmark_margem_liq_pct:.0f}%): "
-        '<span style="color:#0f6e56;font-weight:600">●</span> ≥ benchmark · '
-        '<span style="color:#64748b;font-weight:600">●</span> entre 0% e benchmark · '
-        '<span style="color:#a32d2d;font-weight:600">●</span> negativa'
+        f'<span style="color:{_COLOR_MLIQ_POS};font-weight:600">●</span> ≥ benchmark · '
+        f'<span style="color:{_COLOR_MLIQ_NEUT};font-weight:600">●</span> entre 0% e benchmark · '
+        f'<span style="color:{_COLOR_MLIQ_NEG};font-weight:600">●</span> negativa'
         "</p>"
     )
     st.markdown(leg, unsafe_allow_html=True)
 
     df = _build_df(analise, benchmark_margem_liq_pct)
-    show = df.drop(columns=["_sort_mliq", "_tier_ord"], errors="ignore")
+    if df.empty:
+        return
+
+    fn = partial(_mliq_css_col, benchmark=benchmark_margem_liq_pct)
+    sty = df.style.apply(fn, axis=0, subset=["Margem líq."]).format(
+        {
+            "Receita": lambda x: fmt_brl_ptbr_celula(x),
+            "Margem op.": lambda x: fmt_pct_um_decimal(float(x)) if pd.notna(x) else "—",
+            "Margem líq.": lambda x: fmt_pct_um_decimal(float(x)) if pd.notna(x) else "—",
+        },
+        na_rep="—",
+    )
 
     st.dataframe(
-        show,
-        column_config={
-            "Plataforma": st.column_config.TextColumn("Plataforma", width="medium"),
-            "Pedidos": st.column_config.NumberColumn("Pedidos", format="%d"),
-            "Receita (R$)": st.column_config.NumberColumn(
-                "Receita",
-                format="%.2f",
-                help="Soma da receita lista no canal",
-            ),
-            "Margem op. (%)": st.column_config.NumberColumn(
-                "Margem op.",
-                format="%.1f%%",
-            ),
-            "Margem líq. (%)": st.column_config.NumberColumn(
-                "Margem líq.",
-                format="%.1f%%",
-            ),
-            "% receita (barra)": st.column_config.ProgressColumn(
-                "% receita",
-                format="%d%%",
-                min_value=0,
-                max_value=100,
-                help="Participação na receita total do recorte",
-            ),
-            "Nível": st.column_config.TextColumn(
-                "Nível",
-                width="small",
-                help="Alto ≥ benchmark · Neutro 0%–benchmark · Risco &lt; 0%",
-            ),
-        },
+        sty,
         hide_index=True,
         width="stretch",
-        height=min(420, 56 + n * 36),
+        height=min(420, 56 + len(df) * 36),
     )

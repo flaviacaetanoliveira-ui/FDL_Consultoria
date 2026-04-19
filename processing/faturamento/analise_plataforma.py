@@ -12,6 +12,7 @@ from typing import Optional
 
 from faturamento_dre_recorte_minimo import nf_grain_plataforma_label_for_ui, nf_grain_plataforma_match_key
 
+from processing.faturamento.formatacao_display_rg import fmt_brl_ptbr_celula, fmt_pct_um_decimal
 from processing.faturamento.resultado_gerencial_slice import PedidoGerencialRow, ResultadoGerencialSlice
 
 
@@ -20,10 +21,13 @@ class LinhaPlataforma:
     plataforma: str
     pedidos: int
     receita: float
+    receita_display: str
     resultado_operacional: float
     resultado_liquido: float
     margem_operacional_pct: float
+    margem_operacional_display: str
     margem_liquida_pct: float
+    margem_liquida_display: str
     pct_da_receita: float  # 0–1
 
 
@@ -37,8 +41,23 @@ class AnalisePlataforma:
 
 
 def _norm_key(raw: object) -> str:
+    if raw is None:
+        return "__sem_plataforma__"
+    xs = str(raw).strip()
+    if xs in {"", "-", "—"} or xs.casefold() in {"nan", "none", "<na>"}:
+        return "__sem_plataforma__"
     k = nf_grain_plataforma_match_key(raw)
     return k if k else "__sem_plataforma__"
+
+
+def _normaliza_token_plataforma_bruto(raw: object) -> str | None:
+    """Normaliza texto cru antes do agrupamento (nulo / traço → None)."""
+    if raw is None:
+        return None
+    xs = str(raw).strip()
+    if xs.casefold() in {"", "-", "—", "nan", "none", "<na>"}:
+        return None
+    return xs
 
 
 def _display_label(raw_samples: list[object]) -> str:
@@ -46,13 +65,39 @@ def _display_label(raw_samples: list[object]) -> str:
     labels = [
         nf_grain_plataforma_label_for_ui(x)
         for x in raw_samples
-        if x is not None and str(x).strip() not in {"", "nan", "None"}
+        if _normaliza_token_plataforma_bruto(x) is not None
     ]
-    labels = [x for x in labels if x != "—"]
+    labels = [x for x in labels if x not in ("—", "")]
     if not labels:
-        return "—"
+        return "Não identificado"
     c = Counter(labels)
     return sorted(c.keys(), key=lambda lab: (-c[lab], lab))[0]
+
+
+def _linha_plataforma(
+    *,
+    plataforma: str,
+    pedidos: int,
+    rec: float,
+    rop: float,
+    rliq: float,
+    m_op: float,
+    m_liq: float,
+    pct: float,
+) -> LinhaPlataforma:
+    return LinhaPlataforma(
+        plataforma=plataforma,
+        pedidos=pedidos,
+        receita=rec,
+        receita_display=fmt_brl_ptbr_celula(rec),
+        resultado_operacional=rop,
+        resultado_liquido=rliq,
+        margem_operacional_pct=m_op,
+        margem_operacional_display=fmt_pct_um_decimal(m_op),
+        margem_liquida_pct=m_liq,
+        margem_liquida_display=fmt_pct_um_decimal(m_liq),
+        pct_da_receita=pct,
+    )
 
 
 def compute_analise_plataforma(
@@ -114,19 +159,19 @@ def compute_analise_plataforma(
         m_op = (rop / rec * 100.0) if rec > 1e-18 else 0.0
         m_liq = (rliq / rec * 100.0) if rec > 1e-18 else 0.0
         label = _display_label(list(raw_s))
-        if key == "__sem_plataforma__":
-            label = label if label != "—" else "Sem plataforma"
+        if key == "__sem_plataforma__" or label in ("—", "Sem plataforma"):
+            label = "Não identificado"
 
         rows_tmp.append(
-            LinhaPlataforma(
+            _linha_plataforma(
                 plataforma=label,
                 pedidos=ped_n,
-                receita=rec,
-                resultado_operacional=rop,
-                resultado_liquido=rliq,
-                margem_operacional_pct=m_op,
-                margem_liquida_pct=m_liq,
-                pct_da_receita=0.0,
+                rec=rec,
+                rop=rop,
+                rliq=rliq,
+                m_op=m_op,
+                m_liq=m_liq,
+                pct=0.0,
             )
         )
 
@@ -141,20 +186,33 @@ def compute_analise_plataforma(
             adj[i_max] = max(0.0, adj[i_max] + drift)
         for r, p in zip(rows_tmp, adj, strict=True):
             final_rows.append(
-                LinhaPlataforma(
+                _linha_plataforma(
                     plataforma=r.plataforma,
                     pedidos=r.pedidos,
-                    receita=r.receita,
-                    resultado_operacional=r.resultado_operacional,
-                    resultado_liquido=r.resultado_liquido,
-                    margem_operacional_pct=r.margem_operacional_pct,
-                    margem_liquida_pct=r.margem_liquida_pct,
-                    pct_da_receita=float(p),
+                    rec=r.receita,
+                    rop=r.resultado_operacional,
+                    rliq=r.resultado_liquido,
+                    m_op=r.margem_operacional_pct,
+                    m_liq=r.margem_liquida_pct,
+                    pct=float(p),
                 )
             )
     else:
-        final_rows = rows_tmp
+        final_rows = [
+            _linha_plataforma(
+                plataforma=r.plataforma,
+                pedidos=r.pedidos,
+                rec=r.receita,
+                rop=r.resultado_operacional,
+                rliq=r.resultado_liquido,
+                m_op=r.margem_operacional_pct,
+                m_liq=r.margem_liquida_pct,
+                pct=r.pct_da_receita,
+            )
+            for r in rows_tmp
+        ]
 
+    final_rows = [r for r in final_rows if r.pedidos > 0 and r.receita > 1e-18]
     final_rows.sort(key=lambda x: x.pct_da_receita, reverse=True)
     linhas_t = tuple(final_rows)
 

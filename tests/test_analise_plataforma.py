@@ -196,3 +196,46 @@ def test_sem_pedidos_retorna_vazio():
     kp = {"valor_venda_lista": 0.0, "resultado": 0.0}
     a = compute_analise_plataforma(slice_rg=_minimal_slice(), pedidos_tabela=tab, kp_rg=kp)
     assert a.linhas == ()
+
+
+def test_formatacao_brl_receita_display():
+    tab = [
+        _row(pid="1", plat="Canal", rec=140992.82, rop=1.0, rliq=1.0),
+        _row(pid="2", plat="Outro", rec=100.0, rop=1.0, rliq=1.0),
+    ]
+    kp = {"valor_venda_lista": 141092.82, "resultado": 2.0}
+    a = compute_analise_plataforma(slice_rg=_minimal_slice(), pedidos_tabela=tab, kp_rg=kp)
+    grande = max(a.linhas, key=lambda x: x.receita)
+    assert grande.receita_display.startswith("R$ ")
+    assert "," in grande.receita_display
+    assert "." in grande.receita_display
+
+
+def test_plataforma_vazia_agrupada_como_nao_identificado():
+    tab = [
+        _row(pid="1", plat="", rec=400.0, rop=50.0, rliq=40.0),
+        _row(pid="2", plat="Shopee", rec=600.0, rop=10.0, rliq=10.0),
+    ]
+    kp = {"valor_venda_lista": 1000.0, "resultado": 50.0}
+    a = compute_analise_plataforma(slice_rg=_minimal_slice(), pedidos_tabela=tab, kp_rg=kp)
+    labels = [x.plataforma for x in a.linhas]
+    assert "Não identificado" in labels
+
+
+def test_margem_liquida_display_formato_pct():
+    tab = [_row(pid="1", plat="ML", rec=100.0, rop=10.0, rliq=12.34)]
+    kp = {"valor_venda_lista": 100.0, "resultado": 12.34}
+    a = compute_analise_plataforma(slice_rg=_minimal_slice(), pedidos_tabela=tab, kp_rg=kp)
+    assert "%" in a.linhas[0].margem_liquida_display
+    assert "," in a.linhas[0].margem_liquida_display
+
+
+def test_linha_sem_volume_e_removida():
+    """Filtro defensivo: pedidos>0 e receita>0 (não deve gerar linha fantasma)."""
+    tab = [
+        _row(pid="1", plat="A", rec=100.0, rop=1.0, rliq=1.0),
+        _row(pid="2", plat="B", rec=200.0, rop=1.0, rliq=1.0),
+    ]
+    kp = {"valor_venda_lista": 300.0, "resultado": 2.0}
+    a = compute_analise_plataforma(slice_rg=_minimal_slice(), pedidos_tabela=tab, kp_rg=kp)
+    assert all(x.pedidos >= 1 and x.receita > 0 for x in a.linhas)

@@ -287,15 +287,15 @@ def _build_html(pace: PaceMensal) -> str:
 def render_termometro_pace(pace: PaceMensal | None) -> None:
     """
     Renderiza faixa horizontal acima dos KPIs (chamar só quando há slice válido).
+
+    O CSS vai no **mesmo** fragmento que o HTML: ``st.html`` roda em iframe isolado no
+    Streamlit moderno; estilos emitidos com ``st.markdown`` no documento principal não
+    aplicam ao conteúdo do iframe.
     """
     if pace is None or pace.modo == "recorte_parcial":
         return
 
-    if st.session_state.get("_fdl_rg_pace_css_injected") is not True:
-        st.markdown(PACE_CSS, unsafe_allow_html=True)
-        st.session_state["_fdl_rg_pace_css_injected"] = True
-
-    st.html(_build_html(pace))
+    st.html(PACE_CSS + _build_html(pace))
 
 
 def pace_html_for_tests(pace: PaceMensal | None) -> str:

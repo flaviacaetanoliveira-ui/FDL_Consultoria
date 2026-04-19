@@ -1031,6 +1031,13 @@ def _is_admin_mode() -> bool:
         return False
 
 
+def _fdl_rg_pace_debug_enabled() -> bool:
+    """Termômetro de pace: captions de diagnóstico (admin ou ``FDL_RG_PACE_DEBUG``)."""
+    return _is_admin_mode() or (
+        os.environ.get("FDL_RG_PACE_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
+    )
+
+
 def _expose_load_errors() -> bool:
     """
     Quando True, falhas em _load_data() mostram st.exception (mensagem + traceback).
@@ -9436,9 +9443,7 @@ def _render_faturamento_dre_minimal(
                 _rg_pipeline_version(),
                 str(_oid).strip() if _oid else "",
             )
-            _pace_dbg_show = _is_admin_mode() or (
-                os.environ.get("FDL_RG_PACE_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
-            )
+            _pace_dbg_show = _fdl_rg_pace_debug_enabled()
             _pace_log_motivo: str | None = None
             if ok_nf_dates and _slice_rg is not None:
                 try:
@@ -9481,7 +9486,14 @@ def _render_faturamento_dre_minimal(
                             f"ini={_nf_kpi_ini.isoformat()} · fim={_nf_kpi_fim.isoformat()}"
                         )
                     else:
+                        if _pace_dbg_show:
+                            st.caption(
+                                f"🔍 pace pré-render: modo={_pace.modo} · "
+                                f"receita={float(_pace.receita_realizada):.2f}"
+                            )
                         render_termometro_pace(_pace)
+                        if _pace_dbg_show:
+                            st.caption("🔍 pace pós-render: chamada concluída")
                         _pace_log_motivo = f"renderizado · modo={_pace.modo}"
                 except Exception as exc:
                     _pace_log_motivo = f"exceção: {type(exc).__name__}: {exc}"

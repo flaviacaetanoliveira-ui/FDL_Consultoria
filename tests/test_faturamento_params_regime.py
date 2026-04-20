@@ -7,11 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from processing.faturamento.params import (
-    EmpresaFaturamentoEntry,
-    FaturamentoParams,
-    FaturamentoParamsV2,
-)
+from processing.faturamento.params import EmpresaFaturamentoEntry, FaturamentoParams
+from tests._helpers_fiscal import v2_min_params as _v2_min
 from processing.faturamento.params_regime import (
     aliquota_configurada_para_empresas_filtradas,
     detectar_regimes_tributarios,
@@ -22,30 +19,6 @@ from processing.faturamento.params_regime import (
     load_faturamento_params_for_ui,
     resolve_faturamento_params_path_for_ui,
 )
-
-_REPO = Path(__file__).resolve().parents[1]
-
-
-def _v2_min(
-    empresas: tuple[EmpresaFaturamentoEntry, ...],
-    default_ali: float = 0.11,
-) -> FaturamentoParamsV2:
-    r = _REPO
-    return FaturamentoParamsV2(
-        cliente_root=r,
-        cliente_slug="t",
-        custo_xlsx_resolved=r / "ops" / "faturamento_params_cliente_2_gama_star_eap.json",
-        empresas=empresas,
-        aliquota_imposto=default_ali,
-        aliquota_despesas_fixas=0.05,
-        permite_faturamento_sem_nf_default=False,
-        coluna_base_imposto=("Base fiscal item",),
-        params_mensais_resolved=None,
-        notas_saida_dir="notas_saida",
-        notas_entrada_dir=None,
-        nf_panel_ads=True,
-    )
-
 
 def test_aliquota_none_params_lista_vazia_modo_desconhecido() -> None:
     empty = aliquota_configurada_para_empresas_filtradas(None, [])
@@ -254,3 +227,43 @@ def test_load_faturamento_params_for_ui_missing_returns_none(tmp_path: Path) -> 
     meta.write_text(json.dumps({}), encoding="utf-8")
     li = {"faturamento_path_final_resolved": str(fat_root / "y.parquet")}
     assert load_faturamento_params_for_ui(li) is None
+
+
+def test_get_aliquota_imposto_por_empresa_gama_home_decimal_009() -> None:
+    """
+    get_aliquota_imposto_por_empresa retorna o decimal exato
+    quando a empresa existe e tem aliquota_imposto configurada.
+    """
+    params = _v2_min(
+        (
+            EmpresaFaturamentoEntry(
+                org_id="gama_home",
+                empresa="Gama Home",
+                pedidos_dir="p",
+                permite_faturamento_sem_nf=None,
+                aliquota_imposto=0.09,
+                regime_tributario="simples_nacional",
+            ),
+        )
+    )
+    assert get_aliquota_imposto_por_empresa(params, "gama_home") == pytest.approx(0.09)
+
+
+def test_get_regime_tributario_mega_facil_lucro_presumido() -> None:
+    """
+    get_regime_tributario_por_empresa retorna 'lucro_presumido'
+    quando a empresa tem regime_tributario declarado.
+    """
+    params = _v2_min(
+        (
+            EmpresaFaturamentoEntry(
+                org_id="mega_facil",
+                empresa="Mega Fácil",
+                pedidos_dir="p",
+                permite_faturamento_sem_nf=None,
+                aliquota_imposto=0.11,
+                regime_tributario="lucro_presumido",
+            ),
+        )
+    )
+    assert get_regime_tributario_por_empresa(params, "mega_facil") == "lucro_presumido"

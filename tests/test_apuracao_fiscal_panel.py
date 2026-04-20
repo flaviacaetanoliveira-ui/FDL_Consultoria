@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import html
 
+import pytest
+
 from app.components.apuracao_fiscal_panel import (
+    _aliquota_imposto_caption_safe_html_and_divergencia_ref,
+    _build_badge_regime_fora_escopo_html,
     _build_fiscal_kpis_hero_html,
     _build_fiscal_kpis_secondary_html,
 )
+from processing.faturamento.params import EmpresaFaturamentoEntry
+from tests._helpers_fiscal import v2_min_params
 
 
 def _fmt_brl_stub(v: float) -> str:
@@ -68,6 +74,119 @@ def test_fiscal_kpis_sem_alerta_quando_aliquotas_proximas() -> None:
         fmt_brl=_fmt_brl_stub,
     )
     assert "fdl-fat-kpi-aliquota-divergencia" not in html_out
+
+
+def test_aliquota_caption_empresa_unica_mostra_nome_na_legenda() -> None:
+    """
+    Quando o filtro tem uma única empresa com alíquota configurada,
+    a caption HTML gerada por _aliquota_imposto_caption_safe_html_and_divergencia_ref
+    contém o nome de exibição e o valor formatado.
+    """
+    aliquotas_info = {
+        "modo": "unica",
+        "valor_unico_pct": 9.0,
+        "valores_por_empresa": {"gama_home": 9.0},
+        "min_pct": 9.0,
+        "max_pct": 9.0,
+    }
+    params = v2_min_params(
+        (
+            EmpresaFaturamentoEntry(
+                org_id="gama_home",
+                empresa="Gama Home",
+                pedidos_dir="p",
+                permite_faturamento_sem_nf=None,
+                aliquota_imposto=0.09,
+                regime_tributario="simples_nacional",
+            ),
+        )
+    )
+    caption_html, divergencia_ref = _aliquota_imposto_caption_safe_html_and_divergencia_ref(
+        params_union=params,
+        aliquotas_info=aliquotas_info,
+        empresas_efetivas=["gama_home"],
+        fallback_metadata_pct=11.0,
+        ok_nf_dates=True,
+    )
+    assert "Gama Home" in caption_html
+    assert "9,0%" in caption_html
+    assert divergencia_ref == pytest.approx(9.0)
+
+
+def test_aliquota_caption_multiplas_aliquotas_mostra_indicador_tooltip() -> None:
+    """
+    Quando o filtro tem múltiplas empresas com alíquotas diferentes,
+    a caption HTML mostra indicador visual (ℹ) e tooltip com lista
+    de alíquotas por empresa.
+    """
+    aliquotas_info = {
+        "modo": "multipla",
+        "valor_unico_pct": None,
+        "min_pct": 9.0,
+        "max_pct": 11.0,
+        "valores_por_empresa": {"gama_home": 9.0, "moveis_eap": 11.0},
+    }
+    params = v2_min_params(
+        (
+            EmpresaFaturamentoEntry(
+                org_id="gama_home",
+                empresa="Gama Home",
+                pedidos_dir="p",
+                permite_faturamento_sem_nf=None,
+                aliquota_imposto=0.09,
+                regime_tributario="simples_nacional",
+            ),
+            EmpresaFaturamentoEntry(
+                org_id="moveis_eap",
+                empresa="Móveis EAP",
+                pedidos_dir="p",
+                permite_faturamento_sem_nf=None,
+                aliquota_imposto=0.11,
+                regime_tributario="simples_nacional",
+            ),
+        )
+    )
+    caption_html, divergencia_ref = _aliquota_imposto_caption_safe_html_and_divergencia_ref(
+        params_union=params,
+        aliquotas_info=aliquotas_info,
+        empresas_efetivas=["gama_home", "moveis_eap"],
+        fallback_metadata_pct=11.0,
+        ok_nf_dates=True,
+    )
+    assert "múltiplas" in caption_html.lower()
+    assert "ℹ" in caption_html
+    assert "Gama Home" in caption_html
+    assert "Móveis EAP" in caption_html
+    assert divergencia_ref is None
+
+
+def test_badge_aviso_nao_aparece_filtro_so_simples() -> None:
+    """
+    Quando nenhuma empresa do filtro está fora do escopo (só Simples),
+    _build_badge_regime_fora_escopo_html retorna string vazia.
+    """
+    html_out = _build_badge_regime_fora_escopo_html(
+        empresas_fora_escopo=[],
+        regimes_nao_simples=frozenset(),
+    )
+    assert html_out == ""
+
+
+def test_badge_aviso_aparece_com_mega_facil_lucro_presumido() -> None:
+    """
+    Quando Mega Fácil está no filtro com regime Lucro Presumido,
+    _build_badge_regime_fora_escopo_html retorna HTML contendo nome,
+    Lucro Presumido, Simples Nacional e orientação ao contador.
+    """
+    html_out = _build_badge_regime_fora_escopo_html(
+        empresas_fora_escopo=["Mega Fácil"],
+        regimes_nao_simples=frozenset({"lucro_presumido"}),
+    )
+    assert "Mega Fácil" in html_out
+    assert "Lucro Presumido" in html_out
+    assert "Simples Nacional" in html_out
+    assert "contador" in html_out.lower()
+    assert "<" in html_out and ">" in html_out
 
 
 def test_fiscal_kpis_secondary_html_contem_3_cards() -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 import pandas as pd
+import pytest
 
 from processing.faturamento.pace_mensal import (
     PaceMensal,
@@ -337,6 +338,66 @@ def test_debug_log_modo_admin_expoe_motivo() -> None:
         hoje=date(2026, 3, 10),
     )
     assert "fora do mês civil" in s_mes
+
+
+def test_modo_fechado_cabecalho_com_mes_e_dias() -> None:
+    from app.components.termometro_pace import pace_html_for_tests
+
+    sl = _slice(100_000.0, date(2026, 3, 1), date(2026, 3, 31))
+    pace = compute_pace_mensal(
+        sl,
+        [80_000.0, 90_000.0, 88_000.0],
+        {"pace": {"meta_mensal": {"gama_home": 90_000.0}}},
+        ["Gama Home"],
+        date(2026, 3, 1),
+        date(2026, 3, 31),
+        date(2026, 4, 10),
+    )
+    assert pace is not None and pace.modo == "mes_fechado"
+    assert "MARÇO 2026" in (pace.cabecalho_mes_fechado_caps or "")
+    assert "31 DIAS" in (pace.cabecalho_mes_fechado_caps or "")
+    html_out = pace_html_for_tests(pace)
+    assert "MARÇO 2026" in html_out
+    assert "RITMO FINAL DO MÊS" not in html_out.upper()
+
+
+def test_modo_fechado_caption_vs_meta_com_sinal() -> None:
+    from app.components.termometro_pace import pace_html_for_tests
+
+    sl = _slice(244_700.0, date(2026, 3, 1), date(2026, 3, 31))
+    pace = compute_pace_mensal(
+        sl,
+        [80_000.0, 90_000.0, 88_000.0],
+        {"pace": {"meta_mensal": {"gama_home": 228_900.0}}},
+        ["Gama Home"],
+        date(2026, 3, 1),
+        date(2026, 3, 31),
+        date(2026, 4, 10),
+    )
+    assert pace is not None and pace.diferenca_vs_meta_absoluta is not None
+    assert pace.diferenca_vs_meta_absoluta == pytest.approx(15_800.0, rel=1e-9)
+    h = pace_html_for_tests(pace)
+    assert "+R$" in h.replace(" ", "")
+    assert "vs meta" in h
+
+
+def test_modo_fechado_caption_meta_com_base() -> None:
+    from app.components.termometro_pace import pace_html_for_tests
+
+    sl = _slice(100_000.0, date(2026, 3, 1), date(2026, 3, 31))
+    pace = compute_pace_mensal(
+        sl,
+        [80_000.0, 90_000.0, 88_000.0],
+        {"pace": {"meta_mensal": {"gama_home": 99_000.0}}},
+        ["Gama Home"],
+        date(2026, 3, 1),
+        date(2026, 3, 31),
+        date(2026, 4, 10),
+    )
+    assert pace is not None and pace.meta_origem == "yaml"
+    h = pace_html_for_tests(pace)
+    assert "Meta era" in h
+    assert "(YAML)" in h
 
 
 def test_render_recorte_parcial_vazio_em_html_aux() -> None:

@@ -14,10 +14,56 @@ from typing import Literal, Optional
 
 import pandas as pd
 
+from processing.faturamento.formatacao_display_rg import fmt_brl_ptbr_celula, fmt_pct_um_decimal
 from processing.faturamento.resultado_gerencial_slice import (
     REQUIRED_LINE_COLUMNS,
     build_resultado_gerencial_slice,
 )
+
+_MESES_ABREV = (
+    "jan",
+    "fev",
+    "mar",
+    "abr",
+    "mai",
+    "jun",
+    "jul",
+    "ago",
+    "set",
+    "out",
+    "nov",
+    "dez",
+)
+_MESES_FULL = (
+    "janeiro",
+    "fevereiro",
+    "março",
+    "abril",
+    "maio",
+    "junho",
+    "julho",
+    "agosto",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro",
+)
+
+
+def _label_mes_ano_abrev(y: int, m: int) -> str:
+    return f"{_MESES_ABREV[m - 1]}/{y}"
+
+
+def _label_mes_ano_full(y: int, m: int) -> str:
+    return f"{_MESES_FULL[m - 1]}/{y}"
+
+
+def _labels_ma3_from_keys(keys_3: list[str]) -> tuple[str, ...]:
+    out: list[str] = []
+    for k in keys_3:
+        ys, ms = k.split("-")
+        out.append(_label_mes_ano_abrev(int(ys), int(ms)))
+    return tuple(out)
 
 
 def _last_day_month(y: int, m: int) -> date:
@@ -105,6 +151,9 @@ class ComparacaoKpisTemporal:
     delta_margem_mom_pp: Optional[float]
 
     modo_comparacao: Literal["mes_cheio", "recorte_parcial", "multi_mes", "sem_historico"]
+
+    meses_ma3_labels: Optional[tuple[str, ...]] = None
+    mom_mes_label: Optional[str] = None
 
 
 def compute_trailing_monthly_metrics(
@@ -205,6 +254,47 @@ def format_caption_linha_mom(delta_pct: Optional[float], *, is_margin: bool) -> 
     return txt, cls
 
 
+def _tooltip_ma3_resultado(comp: ComparacaoKpisTemporal) -> str:
+    if not comp.tem_ma3 or comp.resultado_ma3 is None or not comp.meses_ma3_labels:
+        return ""
+    meses = ", ".join(comp.meses_ma3_labels)
+    base = fmt_brl_ptbr_celula(comp.resultado_ma3)
+    return f"Comparação com a média dos 3 meses civis anteriores ({meses}). Base: {base}."
+
+
+def _tooltip_ma3_margem(comp: ComparacaoKpisTemporal) -> str:
+    if not comp.tem_ma3 or comp.margem_ma3 is None or not comp.meses_ma3_labels:
+        return ""
+    meses = ", ".join(comp.meses_ma3_labels)
+    base = fmt_pct_um_decimal(comp.margem_ma3 * 100.0)
+    return f"Comparação com a média dos 3 meses civis anteriores ({meses}). Base: {base}."
+
+
+def _tooltip_mom_resultado(comp: ComparacaoKpisTemporal) -> str:
+    if not comp.tem_mom or comp.resultado_mom is None or not comp.mom_mes_label:
+        return ""
+    base = fmt_brl_ptbr_celula(comp.resultado_mom)
+    return f"Comparação com {comp.mom_mes_label}. Base: {base}."
+
+
+def _tooltip_mom_margem(comp: ComparacaoKpisTemporal) -> str:
+    if not comp.tem_mom or comp.margem_mom is None or not comp.mom_mes_label:
+        return ""
+    base = fmt_pct_um_decimal(comp.margem_mom * 100.0)
+    return f"Comparação com {comp.mom_mes_label}. Base: {base}."
+
+
+def _span_ma3(cls_css: str, text: str, tooltip: str) -> str:
+    tt = html.escape(tooltip) if tooltip else ""
+    if tt:
+        return f'<span class="{html.escape(cls_css)}" title="{tt}">{html.escape(text)}</span>'
+    return f'<span class="{html.escape(cls_css)}">{html.escape(text)}</span>'
+
+
+def _span_mom(cls_css: str, text: str, tooltip: str) -> str:
+    return _span_ma3(f"fdl-fat-kpi-delta-mom {cls_css}", text, tooltip)
+
+
 def build_temporal_kpi_captions_html(comp: ComparacaoKpisTemporal | None) -> tuple[str, str]:
     """Fragmentos HTML para Resultado e Margem (cards hero). Vazio se sem comparação."""
     if comp is None or comp.modo_comparacao == "multi_mes":
@@ -216,16 +306,16 @@ def build_temporal_kpi_captions_html(comp: ComparacaoKpisTemporal | None) -> tup
         tr, cr = format_caption_linha_ma3(comp.delta_resultado_ma3_pct, is_margin=False)
         tm, cm = format_caption_linha_ma3(comp.delta_margem_ma3_pp, is_margin=True)
         if tr:
-            rows_res.append(f'<span class="fdl-fat-kpi-delta-ma3 {cr}">{html.escape(tr)}</span>')
+            rows_res.append(_span_ma3(f"fdl-fat-kpi-delta-ma3 {cr}", tr, _tooltip_ma3_resultado(comp)))
         if tm:
-            rows_mg.append(f'<span class="fdl-fat-kpi-delta-ma3 {cm}">{html.escape(tm)}</span>')
+            rows_mg.append(_span_ma3(f"fdl-fat-kpi-delta-ma3 {cm}", tm, _tooltip_ma3_margem(comp)))
     if comp.tem_mom:
         tr2, cr2 = format_caption_linha_mom(comp.delta_resultado_mom_pct, is_margin=False)
         tm2, cm2 = format_caption_linha_mom(comp.delta_margem_mom_pp, is_margin=True)
         if tr2:
-            rows_res.append(f'<span class="fdl-fat-kpi-delta-mom {cr2}">{html.escape(tr2)}</span>')
+            rows_res.append(_span_mom(cr2, tr2, _tooltip_mom_resultado(comp)))
         if tm2:
-            rows_mg.append(f'<span class="fdl-fat-kpi-delta-mom {cm2}">{html.escape(tm2)}</span>')
+            rows_mg.append(_span_mom(cm2, tm2, _tooltip_mom_margem(comp)))
 
     def _wrap(parts: list[str]) -> str:
         if not parts:
@@ -343,6 +433,9 @@ def compute_comparacao_kpis_temporal(
         if not tem_ma3:
             tem_mom = tem_mom and mom_met.receita > 1e-18
 
+        meses_ma3_labels = _labels_ma3_from_keys(keys_3) if tem_ma3 else None
+        mom_mes_label = _label_mes_ano_full(py, pm)
+
         return ComparacaoKpisTemporal(
             periodo_atual_label=lab,
             resultado_atual=res_at,
@@ -359,6 +452,8 @@ def compute_comparacao_kpis_temporal(
             delta_resultado_mom_pct=d_mom_res,
             delta_margem_mom_pp=d_mom_mg,
             modo_comparacao="mes_cheio",
+            meses_ma3_labels=meses_ma3_labels,
+            mom_mes_label=mom_mes_label,
         )
 
     # —— recorte_parcial (mesmo mês civil, subperíodo): janelas de N dias desde o dia 1 em M-1, M-2, M-3
@@ -410,6 +505,11 @@ def compute_comparacao_kpis_temporal(
     d_mom_res = _pct_delta_vs_ref(res_at, mom_met.resultado)
     d_mom_mg = _delta_pp_margem(mg_at, mom_met.margem)
 
+    meses_ma3_labels = tuple(_label_mes_ano_abrev(a.year, a.month) for a, _ in wins)
+    if not tem_ma3:
+        meses_ma3_labels = None
+    mom_mes_label = _label_mes_ano_full(d0mom.year, d0mom.month)
+
     return ComparacaoKpisTemporal(
         periodo_atual_label=lab,
         resultado_atual=res_at,
@@ -426,4 +526,6 @@ def compute_comparacao_kpis_temporal(
         delta_resultado_mom_pct=d_mom_res,
         delta_margem_mom_pp=d_mom_mg,
         modo_comparacao="recorte_parcial",
+        meses_ma3_labels=meses_ma3_labels,
+        mom_mes_label=mom_mes_label,
     )

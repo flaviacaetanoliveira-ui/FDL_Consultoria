@@ -248,3 +248,49 @@ def test_cor_delta_negativo_em_indicador_maior_melhor():
     assert _delta_class_positive_good(-5.0, use_pp=False) == "fdl-fat-kpi-delta--neg"
     assert _delta_class_positive_good(5.0, use_pp=False) == "fdl-fat-kpi-delta--pos"
     assert _delta_class_positive_good(0.5, use_pp=False) == "fdl-fat-kpi-delta--neut"
+
+
+def test_tooltip_ma3_inclui_meses_e_base():
+    rows = [
+        _row(dt="2025-12-10", receita=1000.0, resultado=30_000.0, pedido="d1"),
+        _row(dt="2026-01-10", receita=1000.0, resultado=30_000.0, pedido="j1"),
+        _row(dt="2026-02-10", receita=1000.0, resultado=30_000.0, pedido="f1"),
+        _row(dt="2026-03-10", receita=5000.0, resultado=50_000.0, pedido="m1"),
+    ]
+    df = _df_from_rows(rows)
+    comp = compute_comparacao_kpis_temporal(
+        slice_rg=None,
+        df_linha=df,
+        empresas_sel=EMP,
+        plataformas_sel=PLAT,
+        data_inicio=date(2026, 3, 1),
+        data_fim=date(2026, 3, 31),
+        kp_rg={"valor_venda_lista": 5000.0, "resultado": 50_000.0},
+    )
+    assert comp.meses_ma3_labels == ("dez/2025", "jan/2026", "fev/2026")
+    assert comp.resultado_ma3 == pytest.approx(30_000.0)
+    from processing.faturamento.comparacao_temporal_kpis import build_temporal_kpi_captions_html
+
+    res_html, _mg = build_temporal_kpi_captions_html(comp)
+    assert "dez/2025" in res_html
+    assert "Base:" in res_html
+
+
+def test_tooltip_mom_inclui_mes_label():
+    rows = [
+        _row(dt="2025-12-10", receita=1000.0, resultado=30_000.0, pedido="d1"),
+        _row(dt="2026-01-10", receita=1000.0, resultado=30_000.0, pedido="j1"),
+        _row(dt="2026-02-10", receita=1000.0, resultado=30_000.0, pedido="f1"),
+        _row(dt="2026-03-10", receita=5000.0, resultado=50_000.0, pedido="m1"),
+    ]
+    df = _df_from_rows(rows)
+    comp = compute_comparacao_kpis_temporal(
+        slice_rg=None,
+        df_linha=df,
+        empresas_sel=EMP,
+        plataformas_sel=PLAT,
+        data_inicio=date(2026, 3, 1),
+        data_fim=date(2026, 3, 31),
+        kp_rg={"valor_venda_lista": 5000.0, "resultado": 50_000.0},
+    )
+    assert comp.mom_mes_label == "fevereiro/2026"

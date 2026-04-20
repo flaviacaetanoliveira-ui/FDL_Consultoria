@@ -186,9 +186,9 @@ def test_cache_invalida_com_troca_empresa():
 
 
 def test_plataforma_com_margem_negativa_classificada_vermelha():
-    from app.components.analise_plataforma_ui import _tier_label
+    from processing.faturamento.analise_plataforma import classifica_nivel_plataforma
 
-    assert _tier_label(-1.0, 10.0) == "Risco"
+    assert classifica_nivel_plataforma("Mercado Livre", -1.0, 10.0) == "Risco"
 
 
 def test_sem_pedidos_retorna_vazio():
@@ -239,3 +239,40 @@ def test_linha_sem_volume_e_removida():
     kp = {"valor_venda_lista": 300.0, "resultado": 2.0}
     a = compute_analise_plataforma(slice_rg=_minimal_slice(), pedidos_tabela=tab, kp_rg=kp)
     assert all(x.pedidos >= 1 and x.receita > 0 for x in a.linhas)
+
+
+def test_nao_identificado_nao_recebe_classificacao_alto():
+    from processing.faturamento.analise_plataforma import classifica_nivel_plataforma
+
+    assert classifica_nivel_plataforma("Não identificado", 99.0, 10.0) == "—"
+
+
+def test_participacao_usa_progresscolumn_nativa():
+    """Barra nativa Streamlit (ProgressColumn); sem coluna ASCII █/░."""
+    from pathlib import Path
+
+    p = Path(__file__).resolve().parents[1] / "app/components/analise_plataforma_ui.py"
+    src = p.read_text(encoding="utf-8")
+    assert "ProgressColumn" in src
+    assert "█" not in src
+
+
+def test_nao_identificado_cor_margem_neutra():
+    import pandas as pd
+
+    from app.components.analise_plataforma_ui import _mliq_row_style
+
+    row = pd.Series(
+        {
+            "Plataforma": "Não identificado",
+            "Pedidos": 1,
+            "Receita": 100.0,
+            "Margem op.": 10.0,
+            "Margem líq.": 25.0,
+            "participacao_pct": 50.0,
+            "Nível": "—",
+        }
+    )
+    out = _mliq_row_style(row, benchmark=10.0)
+    assert "#64748B" in str(out["Margem líq."])
+    assert "0F6E56" not in str(out["Margem líq."]).upper()

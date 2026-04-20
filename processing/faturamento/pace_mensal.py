@@ -22,6 +22,25 @@ from processing.faturamento.resultado_gerencial_slice import (
 
 _logger = logging.getLogger(__name__)
 
+_MESES_CAPS = (
+    "JANEIRO",
+    "FEVEREIRO",
+    "MARÇO",
+    "ABRIL",
+    "MAIO",
+    "JUNHO",
+    "JULHO",
+    "AGOSTO",
+    "SETEMBRO",
+    "OUTUBRO",
+    "NOVEMBRO",
+    "DEZEMBRO",
+)
+
+
+def _cabecalho_mes_fechado_caps(y: int, m: int, dias: int) -> str:
+    return f"{_MESES_CAPS[m - 1]} {y} · {int(dias)} DIAS"
+
 
 def _last_day_month(y: int, m: int) -> date:
     return date(y, m, monthrange(y, m)[1])
@@ -285,6 +304,8 @@ class PaceMensal:
     titulo_bloco: str = "Ritmo do mês"
     projecao_insuficiente: bool = False
     meta_tooltip_origens: str = ""
+    diferenca_vs_meta_absoluta: Optional[float] = None
+    cabecalho_mes_fechado_caps: str = ""
 
 
 def compute_pace_mensal(
@@ -379,6 +400,8 @@ def compute_pace_mensal(
         pct_m = (rec / meta_val) if tem_meta and meta_val else 0.0
         nv, msg = _classificar_alerta(None, tem_meta=False)
         _ = nv, msg
+        dif_abs = (rec - float(meta_val)) if tem_meta and meta_val else None
+        cab_caps = _cabecalho_mes_fechado_caps(yref, mref, dias_totais)
         return PaceMensal(
             mes_referencia=mes_rep,
             dia_atual=dias_util,
@@ -397,6 +420,8 @@ def compute_pace_mensal(
             nivel_alerta="leitura",
             mensagem_alerta=None,
             titulo_bloco="Ritmo final do mês",
+            diferenca_vs_meta_absoluta=dif_abs,
+            cabecalho_mes_fechado_caps=cab_caps,
         )
 
     # mes_corrente — termômetro ativo só quando o «hoje» calendário está no mesmo mês civil do recorte

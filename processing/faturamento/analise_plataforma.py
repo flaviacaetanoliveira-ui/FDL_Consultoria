@@ -15,6 +15,19 @@ from faturamento_dre_recorte_minimo import nf_grain_plataforma_label_for_ui, nf_
 from processing.faturamento.formatacao_display_rg import fmt_brl_ptbr_celula, fmt_pct_um_decimal
 from processing.faturamento.resultado_gerencial_slice import PedidoGerencialRow, ResultadoGerencialSlice
 
+PLATAFORMA_EXCECAO_LABEL = "Não identificado"
+
+
+def classifica_nivel_plataforma(plataforma_display: str, margem_liquida_pct: float, benchmark: float) -> str:
+    """Nível exibido na coluna «Nível»; «Não identificado» não recebe «Alto» por margem."""
+    if str(plataforma_display).strip() == PLATAFORMA_EXCECAO_LABEL:
+        return "—"
+    if float(margem_liquida_pct) < 0:
+        return "Risco"
+    if float(margem_liquida_pct) >= float(benchmark):
+        return "Alto"
+    return "Neutro"
+
 
 @dataclass(frozen=True)
 class LinhaPlataforma:

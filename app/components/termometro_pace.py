@@ -128,6 +128,39 @@ def _fmt_k(v: float) -> str:
     return s
 
 
+def _fmt_diff_vs_meta_line(dif_abs: float | None) -> str | None:
+    """±R$ compacto vs meta (valor absoluto + sinal explícito)."""
+    if dif_abs is None:
+        return None
+    d = float(dif_abs)
+    abs_v = abs(d)
+    if abs_v >= 1_000_000:
+        core = f"R$ {abs_v/1_000_000:.1f}M".replace(".", ",")
+    elif abs_v >= 10_000:
+        core = f"R$ {abs_v/1_000:.1f}k".replace(".", ",")
+    else:
+        inteiro = int(round(abs_v * 100))
+        inteiro, cent = divmod(inteiro, 100)
+        int_str = f"{inteiro:,}".replace(",", ".")
+        core = f"R$ {int_str},{cent:02d}"
+    pref = "+" if d >= 0 else "-"
+    return f"{pref}{core} vs meta"
+
+
+def _caption_meta_era(meta: float | None, origem: str) -> str | None:
+    if meta is None or float(meta) <= 0:
+        return "Sem meta configurada"
+    val = _fmt_k(float(meta))
+    om = (origem or "").strip().lower()
+    if om == "yaml":
+        return f"Meta era {val} (YAML)"
+    if om == "ma3":
+        return f"Meta era {val} (MA3)"
+    if om == "mix":
+        return f"Meta era {val} (MA3 · YAML)"
+    return f"Meta era {val}"
+
+
 def _fmt_pct(p: float) -> str:
     return f"{p * 100:.1f}%".replace(".", ",")
 
@@ -176,20 +209,23 @@ def _build_html(pace: PaceMensal) -> str:
     parts: list[str] = []
 
     if modo == "mes_fechado":
-        sub_r = (
-            _fmt_pct(pace.pct_meta_realizada) + " da meta"
-            if pace.meta_mensal
-            else f"Média/dia {_fmt_k(pace.ritmo_atual_diario)}"
-        )
-        c1_val = _fmt_pct(pace.pct_meta_realizada) if pace.meta_mensal else _fmt_k(pace.receita_realizada)
+        hdr_tit = pace.cabecalho_mes_fechado_caps or tit
+        if pace.meta_mensal:
+            c1_val = _fmt_pct(pace.pct_meta_realizada)
+            sub_l = _fmt_diff_vs_meta_line(pace.diferenca_vs_meta_absoluta)
+            sub_r = _caption_meta_era(pace.meta_mensal, pace.meta_origem)
+        else:
+            c1_val = "—"
+            sub_l = "Sem meta para comparar"
+            sub_r = "Sem meta configurada"
         grid = (
             '<div class="fdl-rg-pace-grid fdl-rg-pace-grid--2">'
-            + _html_cell("Ritmo final", c1_val, sub_r if pace.meta_mensal else "Sem meta configurada")
-            + _html_cell("Realizado", _fmt_k(pace.receita_realizada), "Total no período")
+            + _html_cell("Resultado vs meta", c1_val, sub_l)
+            + _html_cell("Valor realizado", _fmt_k(pace.receita_realizada), sub_r)
             + "</div>"
         )
         parts.append('<section class="fdl-rg-pace">')
-        parts.append(_hdr_row(tit, meta_tt))
+        parts.append(_hdr_row(hdr_tit, meta_tt))
         parts.append(grid)
         parts.append("</section>")
         return "".join(parts)

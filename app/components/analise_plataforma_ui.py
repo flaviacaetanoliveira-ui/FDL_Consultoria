@@ -8,7 +8,10 @@ from functools import partial
 import pandas as pd
 import streamlit as st
 
-from processing.faturamento.analise_plataforma import AnalisePlataforma
+from processing.faturamento.analise_plataforma import (
+    AnalisePlataforma,
+    classifica_nivel_plataforma,
+)
 from processing.faturamento.formatacao_display_rg import fmt_brl_ptbr_celula, fmt_pct_um_decimal
 
 from app.components.faturamento_dre_ui import fat_dre_premium_css
@@ -20,41 +23,29 @@ _COLOR_MLIQ_POS = "#0F6E56"
 _COLOR_MLIQ_NEUT = "#64748B"
 
 
-def _tier_label(m_liq_pct: float, benchmark: float) -> str:
-    if m_liq_pct < 0:
-        return "Risco"
-    if m_liq_pct >= benchmark:
-        return "Alto"
-    return "Neutro"
-
-
-def _pct_bar_text(pct_0_1: float, *, width: int = 10) -> str:
-    p = max(0.0, min(1.0, float(pct_0_1)))
-    filled = int(round(p * width))
-    bar = "█" * filled + "░" * (width - filled)
-    return f"{bar} {p * 100:.0f}%"
-
-
-def _mliq_css_col(s: pd.Series, *, benchmark: float) -> pd.Series:
-    out: list[str] = []
-    for v in s:
-        if pd.isna(v):
-            out.append("")
-            continue
-        fv = float(v)
-        if fv < 0:
-            out.append(f"color: {_COLOR_MLIQ_NEG}; font-weight: 600")
-        elif fv >= benchmark:
-            out.append(f"color: {_COLOR_MLIQ_POS}; font-weight: 600")
-        else:
-            out.append(f"color: {_COLOR_MLIQ_NEUT}")
-    return pd.Series(out, index=s.index)
+def _mliq_row_style(row: pd.Series, *, benchmark: float) -> pd.Series:
+    """Cor na margem líquida; «Não identificado» permanece cinza (exceção cadastral)."""
+    out = pd.Series("", index=row.index)
+    if str(row.get("Plataforma", "")).strip() == "Não identificado":
+        out["Margem líq."] = f"color: {_COLOR_MLIQ_NEUT}"
+        return out
+    v = row["Margem líq."]
+    if pd.isna(v):
+        return out
+    fv = float(v)
+    if fv < 0:
+        out["Margem líq."] = f"color: {_COLOR_MLIQ_NEG}; font-weight: 600"
+    elif fv >= benchmark:
+        out["Margem líq."] = f"color: {_COLOR_MLIQ_POS}; font-weight: 600"
+    else:
+        out["Margem líq."] = f"color: {_COLOR_MLIQ_NEUT}"
+    return out
 
 
 def _build_df(analise: AnalisePlataforma, benchmark: float) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     for ln in analise.linhas:
-        tier = _tier_label(ln.margem_liquida_pct, benchmark)
+        tier = classifica_nivel_plataforma(ln.plataforma, ln.margem_liquida_pct, benchmark)
         rows.append(
             {
                 "Plataforma": ln.plataforma,
@@ -62,7 +53,7 @@ def _build_df(analise: AnalisePlataforma, benchmark: float) -> pd.DataFrame:
                 "Receita": round(float(ln.receita), 2),
                 "Margem op.": round(float(ln.margem_operacional_pct), 6),
                 "Margem líq.": round(float(ln.margem_liquida_pct), 6),
-                "Participação": _pct_bar_text(ln.pct_da_receita),
+                "participacao_pct": round(float(ln.pct_da_receita) * 100.0, 6),
                 "Nível": tier,
             }
         )
@@ -113,8 +104,8 @@ def render_analise_plataforma(
     if df.empty:
         return
 
-    fn = partial(_mliq_css_col, benchmark=benchmark_margem_liq_pct)
-    sty = df.style.apply(fn, axis=0, subset=["Margem líq."]).format(
+    fn_row = partial(_mliq_row_style, benchmark=benchmark_margem_liq_pct)
+    sty = df.style.apply(fn_row, axis=1).format(
         {
             "Receita": lambda x: fmt_brl_ptbr_celula(x),
             "Margem op.": lambda x: fmt_pct_um_decimal(float(x)) if pd.notna(x) else "—",
@@ -128,4 +119,16 @@ def render_analise_plataforma(
         hide_index=True,
         width="stretch",
         height=min(420, 56 + len(df) * 36),
+        column_config={
+            "participacao_pct": st.column_config.ProgressColumn(
+                "Participação",
+                min_value=0,
+                max_value=100,
+                format="%d%%",
+            ),
+            "Nível": st.column_config.TextColumn(
+                "Nível",
+                help="Alto / Neutro / Risco pela margem vs benchmark; «—» = exceção (cadastro incompleto).",
+            ),
+        },
     )

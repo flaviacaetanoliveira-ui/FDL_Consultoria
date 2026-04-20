@@ -616,6 +616,28 @@ def _faturamento_period_calendar_limits(d_min: date, d_max: date) -> tuple[date,
     return cal_min, cal_max
 
 
+def _fdl_rg_recorte_parcial_um_mes_sem_mes_cheio(data_inicio: date, data_fim: date) -> bool:
+    """
+    Verdadeiro quando o filtro cobre só parte de um único mês civil (ex.: 01/03–15/03).
+
+    Mantido aqui (e não só importado de ``pace_mensal``) para o app não falhar se um deploy
+    trouxer ``app_operacional`` sem o commit que adiciona o helper em ``pace_mensal``.
+    Espelha ``recorte_parcial_mes_civil_sem_mes_cheio`` em ``processing/faturamento/pace_mensal.py``.
+    """
+    from calendar import monthrange
+
+    if data_inicio.year != data_fim.year or data_inicio.month != data_fim.month:
+        return False
+    if data_inicio.day != 1:
+        return True
+    ult = date(
+        data_inicio.year,
+        data_inicio.month,
+        monthrange(data_inicio.year, data_inicio.month)[1],
+    )
+    return data_fim != ult
+
+
 # Convenção de produto (Faturamento & DRE):
 # - Vista mínima: bloco **Conferência venda × NF** usa ``compute_comercial_conferencia_stats`` / ``compute_fiscal_nf_conferencia_stats``.
 # - Vista completa / agregados comerciais: «receita líquida» pode usar Σ ``Nota_Valor_Liquido_Rateado`` ou ``Valor total``.
@@ -9442,7 +9464,6 @@ def _render_faturamento_dre_minimal(
                 compute_pace_mensal,
                 compute_trailing_monthly_revenues,
                 explicar_motivo_pace_none,
-                recorte_parcial_mes_civil_sem_mes_cheio,
             )
             from processing.faturamento.rg_cache_keys import normalize_sorted_str_tuple
 
@@ -9500,7 +9521,7 @@ def _render_faturamento_dre_minimal(
                             "render omitido · modo=recorte_parcial · "
                             f"ini={_nf_kpi_ini.isoformat()} · fim={_nf_kpi_fim.isoformat()}"
                         )
-                        if recorte_parcial_mes_civil_sem_mes_cheio(_nf_kpi_ini, _nf_kpi_fim):
+                        if _fdl_rg_recorte_parcial_um_mes_sem_mes_cheio(_nf_kpi_ini, _nf_kpi_fim):
                             st.caption(
                                 "📊 Termômetro de pace disponível apenas para mês civil completo. "
                                 "Filtro atual abrange período parcial — use os KPIs acima para leitura."

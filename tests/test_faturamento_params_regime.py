@@ -220,6 +220,13 @@ def test_resolve_params_path_via_metadata(tmp_path: Path) -> None:
     assert resolve_faturamento_params_path_for_ui(li) == params_json.resolve()
 
 
+def test_resolve_params_path_prioriza_load_info_params_path(tmp_path: Path) -> None:
+    params_json = tmp_path / "fp2.json"
+    params_json.write_text(json.dumps({"schema_version": 1}), encoding="utf-8")
+    li = {"params_path": str(params_json)}
+    assert resolve_faturamento_params_path_for_ui(li) == params_json.resolve()
+
+
 def test_load_faturamento_params_for_ui_missing_returns_none(tmp_path: Path) -> None:
     fat_root = tmp_path / "fat2"
     fat_root.mkdir()

@@ -201,18 +201,24 @@ def resolve_faturamento_params_path_for_ui(load_info: dict[str, object]) -> Path
     Resolve o JSON de params usado na materialização: ``metadata.params_path`` quando o ficheiro existe;
     senão fallback por ``cliente`` no mesmo ``metadata.json``.
     """
+    for key in ("params_path", "faturamento_params_path"):
+        raw = str(load_info.get(key, "")).strip()
+        if raw and Path(raw).is_file():
+            return Path(raw).expanduser().resolve()
+
     path_final = load_info.get("faturamento_path_final_resolved")
-    if not path_final:
-        return None
     try:
-        meta_path = Path(str(path_final)).expanduser().resolve().parent / "metadata.json"
-        if not meta_path.is_file():
-            return None
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        pp = meta.get("params_path")
-        if pp and Path(str(pp)).is_file():
-            return Path(str(pp)).expanduser().resolve()
-        cli = str(meta.get("cliente", "")).strip()
+        cli = ""
+        if path_final:
+            meta_path = Path(str(path_final)).expanduser().resolve().parent / "metadata.json"
+            if meta_path.is_file():
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                pp = meta.get("params_path")
+                if pp and Path(str(pp)).is_file():
+                    return Path(str(pp)).expanduser().resolve()
+                cli = str(meta.get("cliente", "")).strip()
+        if not cli:
+            cli = str(load_info.get("cliente_slug", "")).strip() or str(load_info.get("cliente", "")).strip()
         if cli and cli in _FALLBACK_PARAMS_JSON:
             cand = _FALLBACK_PARAMS_JSON[cli]
             if cand.is_file():

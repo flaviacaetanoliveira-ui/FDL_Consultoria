@@ -12,6 +12,15 @@ import pandas as pd
 import streamlit as st
 
 from faturamento_dre_recorte import _BR_TZ
+from processing.faturamento.params import FaturamentoParams, FaturamentoParamsV2
+from processing.faturamento.params_regime import (
+    AliquotaConfiguradaInfo,
+    aliquota_configurada_para_empresas_filtradas,
+    detectar_regimes_tributarios,
+    enrich_aliquota_ref_pct_for_stats,
+    find_empresa_faturamento_entry,
+    load_faturamento_params_for_ui,
+)
 from faturamento_dre_recorte_minimo import (
     build_faturamento_fiscal_base_slice,
     build_nf_panel_aligned_to_fiscal_base,
@@ -124,6 +133,28 @@ FISCAL_KPIS_CSS = """<style>
 }
 </style>"""
 
+BADGE_REGIME_CSS = """<style>
+.fdl-fat-badge-regime-aviso {
+  background: #FAEEDA;
+  border-left: 3px solid #BA7517;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #412402;
+}
+.fdl-fat-badge-regime-header {
+  font-weight: 500;
+  color: #854F0B;
+  margin-bottom: 4px;
+}
+.fdl-fat-badge-regime-body {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #633806;
+}
+</style>"""
+
 
 def _fmt_pct_br(v: float) -> str:
     if v != v:  # NaN
@@ -159,41 +190,126 @@ def _diferenca_secondary_caption(valor_cancelado: float) -> str:
     return base
 
 
+def _formatar_regimes_para_aviso(regimes: frozenset[str]) -> str:
+    mapa = {
+        "lucro_presumido": "Lucro Presumido",
+        "lucro_real": "Lucro Real",
+        "mei": "MEI",
+        "simples_nacional": "Simples Nacional",
+    }
+    xs = [mapa.get(r, r) for r in sorted(regimes) if r != "simples_nacional"]
+    return ", ".join(xs) if xs else ""
+
+
+def _build_badge_regime_fora_escopo_html(
+    empresas_fora_escopo: list[str],
+    regimes_nao_simples: frozenset[str],
+) -> str:
+    if not empresas_fora_escopo:
+        return ""
+    emp_txt = html.escape(", ".join(empresas_fora_escopo))
+    reg_txt = html.escape(_formatar_regimes_para_aviso(regimes_nao_simples))
+    return (
+        '<div class="fdl-fat-badge-regime-aviso">'
+        '<div class="fdl-fat-badge-regime-header">'
+        f"⚠ Empresa(s) em regime especial: {emp_txt}"
+        "</div>"
+        '<div class="fdl-fat-badge-regime-body">'
+        "Este módulo está calibrado para <strong>Simples Nacional</strong>. "
+        f"{emp_txt} opera em <strong>{reg_txt}</strong> — os valores exibidos são "
+        "<strong>agregados</strong>. Para apuração oficial dessa(s) empresa(s), consulte o contador."
+        "</div>"
+        "</div>"
+    )
+
+
+def _aliquota_imposto_caption_safe_html_and_divergencia_ref(
+    *,
+    params_union: FaturamentoParams | FaturamentoParamsV2 | None,
+    aliquotas_info: AliquotaConfiguradaInfo,
+    empresas_efetivas: list[str],
+    fallback_metadata_pct: float,
+    ok_nf_dates: bool,
+) -> tuple[str, float | None]:
+    """HTML seguro para a legenda do cartão Imposto + referência para alerta de divergência."""
+    if not ok_nf_dates:
+        return html.escape("alíquota configurada indisponível"), None
+
+    if params_union is None:
+        fp = fallback_metadata_pct
+        return html.escape(f"alíquota configurada: {_fmt_pct_br(fp)}%"), fp if fp > 1e-9 else None
+
+    modo = aliquotas_info["modo"]
+    if modo == "desconhecida":
+        return html.escape("alíq. não declarada no params"), None
+
+    vu = aliquotas_info["valor_unico_pct"]
+
+    if modo == "unica" and vu is not None:
+        if len(empresas_efetivas) == 1 and isinstance(params_union, FaturamentoParamsV2):
+            ent = find_empresa_faturamento_entry(params_union, empresas_efetivas[0])
+            nome = ent.empresa if ent else empresas_efetivas[0]
+            cap = f"alíq. {nome}: {_fmt_pct_br(vu)}%"
+        else:
+            cap = f"alíq. configurada: {_fmt_pct_br(vu)}%"
+        return html.escape(cap), float(vu)
+
+    if modo == "multipla":
+        tip_parts: list[str] = []
+        if isinstance(params_union, FaturamentoParamsV2):
+            for oid, pct in sorted(aliquotas_info["valores_por_empresa"].items()):
+                ent = next((e for e in params_union.empresas if e.org_id == oid), None)
+                nome = ent.empresa if ent else oid
+                tip_parts.append(f"{nome}: {_fmt_pct_br(pct)}%")
+        tip_esc = html.escape(" | ".join(tip_parts))
+        inner = (
+            "alíq. múltiplas "
+            f'<span title="{tip_esc}" aria-label="Detalhe por empresa">ℹ</span>'
+        )
+        return inner, None
+
+    fp = fallback_metadata_pct
+    return html.escape(f"alíquota configurada: {_fmt_pct_br(fp)}%"), fp if fp > 1e-9 else None
+
+
 def _build_fiscal_kpis_hero_html(
     *,
     base_liquida: float,
     imposto: float,
     aliquota_efetiva_pct: float,
-    aliquota_configurada_pct: float,
+    caption_aliquota_imposto_safe_html: str,
+    divergencia_compare_pct: float | None,
     ok_nf_dates: bool,
     fmt_brl: Callable[[float], str],
 ) -> str:
     """
     Dois cartões hero: Base Tributável Líquida e Imposto Apurado (Hierarquia B, ~28px).
+    ``caption_aliquota_imposto_safe_html`` já escaped ou HTML seguro (multiselect ℹ).
     """
     dash = "—"
     if ok_nf_dates:
         v_base = html.escape(fmt_brl(float(base_liquida)))
         v_imp = html.escape(fmt_brl(float(imposto)))
         cap_ef = f"alíquota efetiva: {_fmt_pct_br(aliquota_efetiva_pct)}%"
-        cap_cfg = f"alíquota configurada: {_fmt_pct_br(aliquota_configurada_pct)}%"
+        cap_cfg_inner = caption_aliquota_imposto_safe_html
     else:
         v_base = dash
         v_imp = dash
         cap_ef = "alíquota efetiva indisponível"
-        cap_cfg = "alíquota configurada indisponível"
+        cap_cfg_inner = html.escape("alíquota configurada indisponível")
 
     alert_block = ""
     if (
         ok_nf_dates
-        and aliquota_configurada_pct > 1e-9
-        and abs(aliquota_efetiva_pct - aliquota_configurada_pct) > _ALIQUOTA_DIVERG_PP
+        and divergencia_compare_pct is not None
+        and divergencia_compare_pct > 1e-9
+        and abs(aliquota_efetiva_pct - divergencia_compare_pct) > _ALIQUOTA_DIVERG_PP
     ):
         alert_block = (
             '<div class="fdl-fat-kpi-aliquota-divergencia">'
             "⚠ Alíquota efetiva ("
             f"{html.escape(_fmt_pct_br(aliquota_efetiva_pct))}%) diverge da configurada ("
-            f"{html.escape(_fmt_pct_br(aliquota_configurada_pct))}%). Verificar composição."
+            f"{html.escape(_fmt_pct_br(divergencia_compare_pct))}%). Verificar composição."
             "</div>"
         )
 
@@ -207,7 +323,7 @@ def _build_fiscal_kpis_hero_html(
         '<div class="fdl-fat-kpi-hero-card fdl-fat-kpi-hero-card--imposto">'
         '<div class="fdl-fat-kpi-hero-label">IMPOSTO APURADO</div>'
         f'<div class="fdl-fat-kpi-hero-value">{v_imp}</div>'
-        f'<div class="fdl-fat-kpi-hero-caption">{html.escape(cap_cfg)}</div>'
+        f'<div class="fdl-fat-kpi-hero-caption">{cap_cfg_inner}</div>'
         "</div>"
         "</div>"
         f"{alert_block}"
@@ -570,18 +686,52 @@ def render_apuracao_fiscal_panel(
         )
     _kp_cards = compute_nf_panel_kpis(df_nf_commercial_kpi)
 
+    _fallback_alq_meta = _aliquota_configurada_pct_from_load_info(load_info)
+    params_union = load_faturamento_params_for_ui(load_info)
+    _emp_ef = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
+    _ali_info = aliquota_configurada_para_empresas_filtradas(params_union, _emp_ef)
+    regimes_info = detectar_regimes_tributarios(params_union, _emp_ef)
+
+    if regimes_info.get("tem_regime_fora_escopo"):
+        _badge_r = _build_badge_regime_fora_escopo_html(
+            regimes_info["empresas_fora_escopo"],
+            frozenset(r for r in regimes_info["regimes_presentes"] if r != "simples_nacional"),
+        )
+        if _badge_r:
+            st.html(BADGE_REGIME_CSS + _badge_r)
+
     _imp_num = dre_imposto_para_linha_dre_gerencial(
         _kp_cards,
         fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
         aplicar_ponte_base_liquida=bool(use_fiscal_kpi),
     )
-    _cfg_alq = _aliquota_configurada_pct_from_load_info(load_info)
+
+    _ref_enrich = _fallback_alq_meta
+    if params_union is not None and _ali_info.get("valores_por_empresa"):
+        _ref_enrich = enrich_aliquota_ref_pct_for_stats(_ali_info)
+
+    _cap_imp_html, _div_cmp = _aliquota_imposto_caption_safe_html_and_divergencia_ref(
+        params_union=params_union,
+        aliquotas_info=_ali_info,
+        empresas_efetivas=_emp_ef,
+        fallback_metadata_pct=_fallback_alq_meta,
+        ok_nf_dates=ok_nf_dates,
+    )
+
     _stats_kpi = enrich_faturamento_fiscal_base_stats(
         _fiscal_base_stats,
         imposto_apurado=float(_imp_num),
         df_nf_aligned=df_nf_commercial_kpi,
-        aliquota_configurada_pct=float(_cfg_alq),
+        aliquota_configurada_pct=float(_ref_enrich),
     )
+
+    if ao._fdl_rg_pace_debug_enabled():
+        st.caption(
+            f"🔍 fiscal regime debug: regimes_presentes={regimes_info.get('regimes_presentes')!s} · "
+            f"aliquotas_modo={_ali_info.get('modo')} · "
+            f"valor_global_metadata={_fallback_alq_meta:.2f}% · "
+            f"valores_calculados={_ali_info.get('valores_por_empresa')!s}"
+        )
 
     ao._fdl_fat_min_vsp(size="sm")
     st.html(
@@ -590,7 +740,8 @@ def render_apuracao_fiscal_panel(
             base_liquida=_stats_kpi.base_fiscal_liquida,
             imposto=float(_stats_kpi.imposto),
             aliquota_efetiva_pct=float(_stats_kpi.aliquota_efetiva_pct),
-            aliquota_configurada_pct=float(_stats_kpi.aliquota_configurada_pct),
+            caption_aliquota_imposto_safe_html=_cap_imp_html,
+            divergencia_compare_pct=_div_cmp,
             ok_nf_dates=ok_nf_dates,
             fmt_brl=ao._fmt_brl_ptbr_celula,
         )

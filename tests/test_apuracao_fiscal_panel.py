@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import html
+
 from app.components.apuracao_fiscal_panel import (
     _build_fiscal_kpis_hero_html,
     _build_fiscal_kpis_secondary_html,
@@ -31,7 +33,8 @@ def test_fiscal_kpis_hero_html_contem_labels() -> None:
         base_liquida=100000,
         imposto=6000,
         aliquota_efetiva_pct=6.0,
-        aliquota_configurada_pct=6.0,
+        caption_aliquota_imposto_safe_html=html.escape("alíquota configurada: 6,0%"),
+        divergencia_compare_pct=6.0,
         ok_nf_dates=True,
         fmt_brl=_fmt_brl_stub,
     )
@@ -45,7 +48,8 @@ def test_fiscal_kpis_alerta_divergencia_aliquota() -> None:
         base_liquida=100000,
         imposto=6600,
         aliquota_efetiva_pct=6.6,
-        aliquota_configurada_pct=6.0,
+        caption_aliquota_imposto_safe_html=html.escape("alíquota configurada: 6,0%"),
+        divergencia_compare_pct=6.0,
         ok_nf_dates=True,
         fmt_brl=_fmt_brl_stub,
     )
@@ -58,7 +62,8 @@ def test_fiscal_kpis_sem_alerta_quando_aliquotas_proximas() -> None:
         base_liquida=100000,
         imposto=6050,
         aliquota_efetiva_pct=6.05,
-        aliquota_configurada_pct=6.0,
+        caption_aliquota_imposto_safe_html=html.escape("alíquota configurada: 6,0%"),
+        divergencia_compare_pct=6.0,
         ok_nf_dates=True,
         fmt_brl=_fmt_brl_stub,
     )

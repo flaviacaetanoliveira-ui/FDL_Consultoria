@@ -12,6 +12,7 @@
     {
       "org_id": "gama_home",
       "empresa": "Gama Home",
+      "regime_tributario": "simples_nacional",
       "pedidos_dir": "Gama Home/Pedidos",
       "notas_saida_dir": "Gama Home/notas_saida",
       "notas_entrada_dir": "Gama Home/Entradas",
@@ -22,6 +23,7 @@
     {
       "org_id": "mega_star",
       "empresa": "Mega Star",
+      "regime_tributario": "simples_nacional",
       "pedidos_dir": "Mega Star/Pedidos",
       "notas_saida_dir": "Mega Star/notas_saida",
       "notas_entrada_dir": "Mega Star/Entradas",
@@ -31,6 +33,7 @@
     {
       "org_id": "moveis_eap",
       "empresa": "Móveis EAP",
+      "regime_tributario": "simples_nacional",
       "pedidos_dir": "Móveis EAP/Pedidos",
       "notas_saida_dir": "Móveis EAP/notas_saida",
       "notas_entrada_dir": "Móveis EAP/Entradas",
@@ -40,6 +43,7 @@
     {
       "org_id": "mega_facil",
       "empresa": "Mega Fácil",
+      "regime_tributario": "lucro_presumido",
       "pedidos_dir": "Mega Facil/Pedidos",
       "notas_saida_dir": "Mega Facil/notas_saida",
       "notas_entrada_dir": "Mega Facil/Entradas",

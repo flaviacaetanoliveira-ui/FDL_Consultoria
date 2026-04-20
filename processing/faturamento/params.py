@@ -37,6 +37,11 @@ class FaturamentoParams:
     permite_faturamento_sem_nf: bool
 
 
+REGIME_TRIBUTARIO_VALIDOS: frozenset[str] = frozenset(
+    {"simples_nacional", "lucro_presumido", "lucro_real", "mei"}
+)
+
+
 @dataclass(frozen=True)
 class EmpresaFaturamentoEntry:
     org_id: str
@@ -48,6 +53,7 @@ class EmpresaFaturamentoEntry:
     aliquota_imposto: float | None = None
     aliquota_despesas_fixas: float | None = None
     excluir_notas_fiscal: tuple[str, ...] = ()
+    regime_tributario: str | None = None
 
 
 @dataclass(frozen=True)
@@ -113,6 +119,20 @@ def _optional_bool(raw: Any) -> bool | None:
     if raw is None:
         return None
     return _as_bool(raw)
+
+
+def _optional_regime_tributario(name: str, raw: Any) -> str | None:
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    sl = s.lower().replace(" ", "_")
+    if sl not in REGIME_TRIBUTARIO_VALIDOS:
+        raise FaturamentoParamsError(
+            f"{name} deve ser um de {sorted(REGIME_TRIBUTARIO_VALIDOS)} (recebido: {raw!r})."
+        )
+    return sl
 
 
 def peek_faturamento_schema_version(path: Path) -> int:
@@ -210,6 +230,7 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
             )
         elif excl_raw is not None and str(excl_raw).strip():
             raise FaturamentoParamsError(f"empresas[{i}].excluir_notas_fiscal deve ser lista de números/NF (strings).")
+        reg_e = _optional_regime_tributario(f"empresas[{i}].regime_tributario", e.get("regime_tributario"))
         entries.append(
             EmpresaFaturamentoEntry(
                 org_id=_sanitize_slug_segment(oid),
@@ -221,6 +242,7 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
                 aliquota_imposto=ai_e,
                 aliquota_despesas_fixas=ad_e,
                 excluir_notas_fiscal=excl_tuple,
+                regime_tributario=reg_e,
             )
         )
 

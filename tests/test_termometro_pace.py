@@ -14,6 +14,7 @@ from processing.faturamento.pace_mensal import (
     compute_trailing_monthly_revenues,
     determinar_modo,
     explicar_motivo_pace_none,
+    recorte_parcial_mes_civil_sem_mes_cheio,
 )
 from processing.faturamento.resultado_gerencial_slice import (
     ResultadoGerencialSlice,
@@ -161,6 +162,21 @@ def test_pace_mes_corrente_apenas_quando_hoje_no_mes_filtrado() -> None:
 
 def test_modo_mes_fechado() -> None:
     assert determinar_modo(date(2026, 1, 1), date(2026, 1, 31), date(2026, 2, 5)) == "mes_fechado"
+
+
+def test_caption_contextual_aparece_em_recorte_parcial() -> None:
+    """Recorte parcial num único mês civil (não mês cheio) → UI pode exibir caption explicativa."""
+    assert recorte_parcial_mes_civil_sem_mes_cheio(date(2026, 3, 1), date(2026, 3, 15)) is True
+
+
+def test_caption_contextual_nao_aparece_em_multi_mes() -> None:
+    """Multi-mês: não é o caso «parcial dentro do mesmo mês» — sem caption desse tipo."""
+    assert recorte_parcial_mes_civil_sem_mes_cheio(date(2026, 1, 1), date(2026, 4, 17)) is False
+
+
+def test_caption_contextual_nao_aparece_em_mes_cheio() -> None:
+    """Mês civil completo: termômetro pode renderizar; flag de caption falsa."""
+    assert recorte_parcial_mes_civil_sem_mes_cheio(date(2026, 3, 1), date(2026, 3, 31)) is False
 
 
 def test_meta_origem_yaml() -> None:

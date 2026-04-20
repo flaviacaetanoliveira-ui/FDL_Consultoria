@@ -68,6 +68,18 @@ def determinar_modo(data_inicio: date, data_fim: date, hoje: date) -> str:
     return "mes_corrente"
 
 
+def recorte_parcial_mes_civil_sem_mes_cheio(data_inicio: date, data_fim: date) -> bool:
+    """
+    True quando o filtro está num único mês civil mas não cobre o mês completo (ex.: 01/03–15/03).
+
+    False para multi-mês (ex.: 01/01–17/04) ou para mês civil cheio (01/03–31/03).
+    Usado na UI para caption quando o termômetro de pace não aplica.
+    """
+    if data_inicio.year != data_fim.year or data_inicio.month != data_fim.month:
+        return False
+    return not _is_calendario_mes_cheio(data_inicio, data_fim)
+
+
 def explicar_motivo_pace_none(
     *,
     n_linhas: int,

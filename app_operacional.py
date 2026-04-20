@@ -9442,6 +9442,7 @@ def _render_faturamento_dre_minimal(
                 compute_pace_mensal,
                 compute_trailing_monthly_revenues,
                 explicar_motivo_pace_none,
+                recorte_parcial_mes_civil_sem_mes_cheio,
             )
             from processing.faturamento.rg_cache_keys import normalize_sorted_str_tuple
 
@@ -9499,6 +9500,11 @@ def _render_faturamento_dre_minimal(
                             "render omitido · modo=recorte_parcial · "
                             f"ini={_nf_kpi_ini.isoformat()} · fim={_nf_kpi_fim.isoformat()}"
                         )
+                        if recorte_parcial_mes_civil_sem_mes_cheio(_nf_kpi_ini, _nf_kpi_fim):
+                            st.caption(
+                                "📊 Termômetro de pace disponível apenas para mês civil completo. "
+                                "Filtro atual abrange período parcial — use os KPIs acima para leitura."
+                            )
                     else:
                         if _pace_dbg_show:
                             st.caption(

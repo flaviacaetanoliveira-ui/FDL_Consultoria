@@ -7,7 +7,7 @@ Universo: NFs válidas no **período de emissão**; comercial/custos nas **linha
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from typing import Any, Mapping
 
@@ -277,6 +277,12 @@ class FaturamentoFiscalBaseStats:
     total_devolvido: float = 0.0
     nfs_devolucao: int = 0
     base_fiscal_liquida: float = 0.0
+    valor_faturado_nf: float = 0.0
+    valor_cancelado: float = 0.0
+    diferenca_lista_nf: float = 0.0
+    aliquota_efetiva_pct: float = 0.0
+    aliquota_configurada_pct: float = 0.0
+    imposto: float = 0.0
 
 
 def _slice_devolucoes_fiscal_recorte(
@@ -316,6 +322,9 @@ def build_faturamento_fiscal_base_slice(
     ok_nf_dates: bool,
     situacoes_sel: tuple[str, ...] | None = None,
     df_devolucoes: pd.DataFrame | None = None,
+    imposto_apurado: float | None = None,
+    df_nf_aligned: pd.DataFrame | None = None,
+    aliquota_configurada_pct: float = 0.0,
 ) -> tuple[pd.DataFrame, FaturamentoFiscalBaseStats]:
     """
     Recorte **base fiscal** alinhado ao Bling: **empresa** + **emissão** no intervalo + NF com situação válida
@@ -345,8 +354,13 @@ def build_faturamento_fiscal_base_slice(
     if out.empty:
         return pd.DataFrame(), empty_stats
 
+    valor_cancelado = 0.0
     if "Nota_Situacao" in out.columns:
-        out = out.loc[~_nf_fiscal_situacao_invalida(out["Nota_Situacao"])].copy()
+        inv_m = _nf_fiscal_situacao_invalida(out["Nota_Situacao"])
+        valor_cancelado = float(
+            pd.to_numeric(out.loc[inv_m, "Valor_Liquido_NF"], errors="coerce").fillna(0.0).sum()
+        )
+        out = out.loc[~inv_m].copy()
     if out.empty:
         return pd.DataFrame(), empty_stats
 
@@ -391,12 +405,48 @@ def build_faturamento_fiscal_base_slice(
         ok_nf_dates=ok_nf_dates,
     )
     base_liq = max(0.0, total - td)
-    return grouped, FaturamentoFiscalBaseStats(
+    stats = FaturamentoFiscalBaseStats(
         n_nf=n_nf,
         valor_liquido_fiscal_sum=total,
         total_devolvido=td,
         nfs_devolucao=ndev,
         base_fiscal_liquida=base_liq,
+        valor_faturado_nf=total,
+        valor_cancelado=valor_cancelado,
+    )
+    if imposto_apurado is not None:
+        stats = enrich_faturamento_fiscal_base_stats(
+            stats,
+            imposto_apurado=float(imposto_apurado),
+            df_nf_aligned=df_nf_aligned,
+            aliquota_configurada_pct=float(aliquota_configurada_pct),
+        )
+    return grouped, stats
+
+
+def enrich_faturamento_fiscal_base_stats(
+    stats: FaturamentoFiscalBaseStats,
+    *,
+    imposto_apurado: float,
+    df_nf_aligned: pd.DataFrame | None = None,
+    aliquota_configurada_pct: float = 0.0,
+) -> FaturamentoFiscalBaseStats:
+    """
+    Completa totais da Apuração Fiscal com imposto (ponte), Σ ``diferenca`` do painel NF alinhado
+    e alíquota configurada (metadata / params), sem alterar o slice fiscal base.
+    """
+    diff = 0.0
+    if df_nf_aligned is not None and not df_nf_aligned.empty and "diferenca" in df_nf_aligned.columns:
+        diff = float(pd.to_numeric(df_nf_aligned["diferenca"], errors="coerce").fillna(0.0).sum())
+    imp = float(imposto_apurado)
+    base = float(stats.base_fiscal_liquida)
+    ali_eff = (imp / base * 100.0) if base > 1e-12 else 0.0
+    return replace(
+        stats,
+        diferenca_lista_nf=diff,
+        imposto=imp,
+        aliquota_efetiva_pct=ali_eff,
+        aliquota_configurada_pct=float(aliquota_configurada_pct),
     )
 
 

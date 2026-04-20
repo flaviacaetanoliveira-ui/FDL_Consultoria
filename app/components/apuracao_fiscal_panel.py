@@ -1,12 +1,12 @@
 """Painel «Apuração Fiscal» — reutiliza funções de ``app_operacional`` (import tardio)."""
 
-# TODO(fiscal-kpis): acrescentar cartões «Valor faturado (NF)» e «Diferença (lista − NF)» neste módulo quando
-# forem consolidados como indicadores exclusivamente fiscais (removidos do Resultado Gerencial).
-
 from __future__ import annotations
 
 import html
+import json
 from datetime import datetime
+from pathlib import Path
+from typing import Callable
 
 import pandas as pd
 import streamlit as st
@@ -17,6 +17,7 @@ from faturamento_dre_recorte_minimo import (
     build_nf_panel_aligned_to_fiscal_base,
     compute_nf_panel_kpis,
     dre_imposto_para_linha_dre_gerencial,
+    enrich_faturamento_fiscal_base_stats,
     faturamento_min_series_nf_emissao_bounds_dates,
     faturamento_recorte_min_state_from_session,
     _min_cal_limits,
@@ -24,6 +25,240 @@ from faturamento_dre_recorte_minimo import (
 from processing.faturamento.fiscal_materializado import fiscal_contract_dataframe_valid
 from processing.faturamento.nf_materializado import nf_first_contract_dataframe_valid
 from processing.faturamento.nf_panel_materializado import nf_panel_materializado_dataframe_valid
+
+_ALIQUOTA_DIVERG_PP = 0.5
+
+FISCAL_KPIS_CSS = """<style>
+.fdl-fat-kpi-hero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+@media (max-width: 900px) {
+  .fdl-fat-kpi-hero-grid { grid-template-columns: 1fr; }
+}
+.fdl-fat-kpi-hero-card {
+  background: var(--color-background-primary, #ffffff);
+  border: 0.5px solid var(--color-border-tertiary, #e2e8f0);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  position: relative;
+}
+.fdl-fat-kpi-hero-card--base::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #0F6E56;
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+.fdl-fat-kpi-hero-card--imposto::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #888780;
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+.fdl-fat-kpi-hero-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--color-text-tertiary, #64748b);
+  margin-bottom: 6px;
+}
+.fdl-fat-kpi-hero-value {
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--color-text-primary, #0f172a);
+  margin-bottom: 4px;
+}
+.fdl-fat-kpi-hero-caption {
+  font-size: 12px;
+  color: var(--color-text-secondary, #475569);
+}
+.fdl-fat-kpi-secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .fdl-fat-kpi-secondary-grid { grid-template-columns: 1fr; }
+}
+.fdl-fat-kpi-secondary-card {
+  background: var(--color-background-secondary, #f8fafc);
+  border-radius: 8px;
+  padding: 1rem;
+}
+.fdl-fat-kpi-secondary-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--color-text-tertiary, #64748b);
+  margin-bottom: 4px;
+}
+.fdl-fat-kpi-secondary-value {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--color-text-primary, #0f172a);
+  margin-bottom: 2px;
+}
+.fdl-fat-kpi-secondary-caption {
+  font-size: 11px;
+  color: var(--color-text-secondary, #475569);
+}
+.fdl-fat-kpi-aliquota-divergencia {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: #FAEEDA;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #854F0B;
+}
+</style>"""
+
+
+def _fmt_pct_br(v: float) -> str:
+    if v != v:  # NaN
+        return "—"
+    return f"{v:.1f}".replace(".", ",")
+
+
+def _aliquota_configurada_pct_from_load_info(load_info: dict[str, object]) -> float:
+    raw = load_info.get("faturamento_aliquota_imposto_pct")
+    if isinstance(raw, (int, float)) and float(raw) > 0:
+        x = float(raw)
+        return x * 100.0 if x <= 1.0 else x
+    path_final = load_info.get("faturamento_path_final_resolved")
+    if not path_final:
+        return 0.0
+    try:
+        meta_path = Path(str(path_final)).expanduser().resolve().parent / "metadata.json"
+        if not meta_path.is_file():
+            return 0.0
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        v = meta.get("aliquota_imposto_usada")
+        if isinstance(v, (int, float)):
+            return float(v) * 100.0
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        pass
+    return 0.0
+
+
+def _diferenca_secondary_caption(valor_cancelado: float) -> str:
+    base = "descontos/ajustes"
+    if valor_cancelado > 1e-9:
+        return f"{base} · cancelamentos fiscais"
+    return base
+
+
+def _build_fiscal_kpis_hero_html(
+    *,
+    base_liquida: float,
+    imposto: float,
+    aliquota_efetiva_pct: float,
+    aliquota_configurada_pct: float,
+    ok_nf_dates: bool,
+    fmt_brl: Callable[[float], str],
+) -> str:
+    """
+    Dois cartões hero: Base Tributável Líquida e Imposto Apurado (Hierarquia B, ~28px).
+    """
+    dash = "—"
+    if ok_nf_dates:
+        v_base = html.escape(fmt_brl(float(base_liquida)))
+        v_imp = html.escape(fmt_brl(float(imposto)))
+        cap_ef = f"alíquota efetiva: {_fmt_pct_br(aliquota_efetiva_pct)}%"
+        cap_cfg = f"alíquota configurada: {_fmt_pct_br(aliquota_configurada_pct)}%"
+    else:
+        v_base = dash
+        v_imp = dash
+        cap_ef = "alíquota efetiva indisponível"
+        cap_cfg = "alíquota configurada indisponível"
+
+    alert_block = ""
+    if (
+        ok_nf_dates
+        and aliquota_configurada_pct > 1e-9
+        and abs(aliquota_efetiva_pct - aliquota_configurada_pct) > _ALIQUOTA_DIVERG_PP
+    ):
+        alert_block = (
+            '<div class="fdl-fat-kpi-aliquota-divergencia">'
+            "⚠ Alíquota efetiva ("
+            f"{html.escape(_fmt_pct_br(aliquota_efetiva_pct))}%) diverge da configurada ("
+            f"{html.escape(_fmt_pct_br(aliquota_configurada_pct))}%). Verificar composição."
+            "</div>"
+        )
+
+    return (
+        '<div class="fdl-fat-kpi-hero-grid">'
+        '<div class="fdl-fat-kpi-hero-card fdl-fat-kpi-hero-card--base">'
+        '<div class="fdl-fat-kpi-hero-label">BASE TRIBUTÁVEL LÍQUIDA</div>'
+        f'<div class="fdl-fat-kpi-hero-value">{v_base}</div>'
+        f'<div class="fdl-fat-kpi-hero-caption">{html.escape(cap_ef)}</div>'
+        "</div>"
+        '<div class="fdl-fat-kpi-hero-card fdl-fat-kpi-hero-card--imposto">'
+        '<div class="fdl-fat-kpi-hero-label">IMPOSTO APURADO</div>'
+        f'<div class="fdl-fat-kpi-hero-value">{v_imp}</div>'
+        f'<div class="fdl-fat-kpi-hero-caption">{html.escape(cap_cfg)}</div>'
+        "</div>"
+        "</div>"
+        f"{alert_block}"
+    )
+
+
+def _build_fiscal_kpis_secondary_html(
+    *,
+    valor_faturado_nf: float,
+    n_nf: int,
+    total_devolvido: float,
+    nfs_devolucao: int,
+    diferenca_lista_nf: float,
+    valor_cancelado: float,
+    ok_nf_dates: bool,
+    fmt_brl: Callable[[float], str],
+    fmt_int: Callable[[int], str],
+) -> str:
+    """Três cartões secundários (~18px): Valor Faturado (NF), Devoluções, Diferença (lista − NF)."""
+    dash = "—"
+    if ok_nf_dates:
+        vf = html.escape(fmt_brl(float(valor_faturado_nf)))
+        dv = html.escape(fmt_brl(float(total_devolvido)))
+        df = html.escape(fmt_brl(float(diferenca_lista_nf)))
+        cap_nf = f"{fmt_int(int(n_nf))} NFs emitidas"
+        cap_dev = f"{fmt_int(int(nfs_devolucao))} NFs de entrada"
+    else:
+        vf = dv = df = dash
+        cap_nf = cap_dev = "período indisponível"
+
+    cap_dif = _diferenca_secondary_caption(float(valor_cancelado))
+
+    return (
+        '<div class="fdl-fat-kpi-secondary-grid">'
+        '<div class="fdl-fat-kpi-secondary-card">'
+        '<div class="fdl-fat-kpi-secondary-label">VALOR FATURADO (NF)</div>'
+        f'<div class="fdl-fat-kpi-secondary-value">{vf}</div>'
+        f'<div class="fdl-fat-kpi-secondary-caption">{html.escape(cap_nf)}</div>'
+        "</div>"
+        '<div class="fdl-fat-kpi-secondary-card">'
+        '<div class="fdl-fat-kpi-secondary-label">DEVOLUÇÕES DO PERÍODO</div>'
+        f'<div class="fdl-fat-kpi-secondary-value">{dv}</div>'
+        f'<div class="fdl-fat-kpi-secondary-caption">{html.escape(cap_dev)}</div>'
+        "</div>"
+        '<div class="fdl-fat-kpi-secondary-card">'
+        '<div class="fdl-fat-kpi-secondary-label">DIFERENÇA (LISTA − NF)</div>'
+        f'<div class="fdl-fat-kpi-secondary-value">{df}</div>'
+        f'<div class="fdl-fat-kpi-secondary-caption">{html.escape(cap_dif)}</div>'
+        "</div>"
+        "</div>"
+    )
 
 
 def render_apuracao_fiscal_panel(
@@ -335,26 +570,42 @@ def render_apuracao_fiscal_panel(
         )
     _kp_cards = compute_nf_panel_kpis(df_nf_commercial_kpi)
 
-    ao._fdl_fat_min_vsp(size="sm")
-    _c1, _c2, _c3, _c4 = st.columns(4)
-    _base_disp = ao._fmt_brl_ptbr_celula(_fiscal_base_stats.base_fiscal_liquida) if ok_nf_dates else "—"
-    _nf_emi = ao._fmt_int_ptbr(_fiscal_base_stats.n_nf)
-    _nf_dev_n = ao._fmt_int_ptbr(_fiscal_base_stats.nfs_devolucao)
-    _nf_dev_v = ao._fmt_brl_ptbr_celula(_fiscal_base_stats.total_devolvido) or "R$ 0,00"
     _imp_num = dre_imposto_para_linha_dre_gerencial(
         _kp_cards,
         fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
         aplicar_ponte_base_liquida=bool(use_fiscal_kpi),
     )
-    _imp_p = ao._fmt_brl_ptbr_celula(_imp_num) if ok_nf_dates else "—"
-    with _c1:
-        st.metric("Base Fiscal Líquida", _base_disp)
-    with _c2:
-        st.metric("NFs Emitidas", _nf_emi)
-    with _c3:
-        st.metric("NFs Devolução", f"{_nf_dev_n} · {_nf_dev_v}")
-    with _c4:
-        st.metric("Imposto Apurado", _imp_p)
+    _cfg_alq = _aliquota_configurada_pct_from_load_info(load_info)
+    _stats_kpi = enrich_faturamento_fiscal_base_stats(
+        _fiscal_base_stats,
+        imposto_apurado=float(_imp_num),
+        df_nf_aligned=df_nf_commercial_kpi,
+        aliquota_configurada_pct=float(_cfg_alq),
+    )
+
+    ao._fdl_fat_min_vsp(size="sm")
+    st.html(
+        FISCAL_KPIS_CSS
+        + _build_fiscal_kpis_hero_html(
+            base_liquida=_stats_kpi.base_fiscal_liquida,
+            imposto=float(_stats_kpi.imposto),
+            aliquota_efetiva_pct=float(_stats_kpi.aliquota_efetiva_pct),
+            aliquota_configurada_pct=float(_stats_kpi.aliquota_configurada_pct),
+            ok_nf_dates=ok_nf_dates,
+            fmt_brl=ao._fmt_brl_ptbr_celula,
+        )
+        + _build_fiscal_kpis_secondary_html(
+            valor_faturado_nf=float(_stats_kpi.valor_faturado_nf),
+            n_nf=int(_stats_kpi.n_nf),
+            total_devolvido=float(_stats_kpi.total_devolvido),
+            nfs_devolucao=int(_stats_kpi.nfs_devolucao),
+            diferenca_lista_nf=float(_stats_kpi.diferenca_lista_nf),
+            valor_cancelado=float(_stats_kpi.valor_cancelado),
+            ok_nf_dates=ok_nf_dates,
+            fmt_brl=ao._fmt_brl_ptbr_celula,
+            fmt_int=ao._fmt_int_ptbr,
+        )
+    )
 
     ao._fdl_fat_min_vsp(size="md")
     ao._fdl_fat_divider_simple()

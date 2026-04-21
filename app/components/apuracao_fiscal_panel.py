@@ -4,14 +4,19 @@ from __future__ import annotations
 
 import html
 import json
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import pandas as pd
 import streamlit as st
 
-from faturamento_dre_recorte import _BR_TZ
+from faturamento_dre_recorte import (
+    _BR_TZ,
+    _fdl_fr_etiquetas_empresa_recorte,
+    _fdl_fr_filtrar_por_etiquetas_empresa,
+    _fdl_fr_mask_nf_emissao_no_periodo,
+)
 from processing.faturamento.params import FaturamentoParams, FaturamentoParamsV2
 from processing.faturamento.params_regime import (
     AliquotaConfiguradaInfo,
@@ -19,7 +24,14 @@ from processing.faturamento.params_regime import (
     detectar_regimes_tributarios,
     enrich_aliquota_ref_pct_for_stats,
     find_empresa_faturamento_entry,
+    get_aliquota_imposto_por_empresa,
     load_faturamento_params_for_ui,
+)
+from processing.faturamento.simples_nacional import (
+    ResultadoAliquotaEfetivaMes,
+    ResultadoFaixaSimples,
+    agregar_simples_nacional_para_painel_fiscal,
+    texto_periodo_rbt12,
 )
 from faturamento_dre_recorte_minimo import (
     build_faturamento_fiscal_base_slice,
@@ -30,6 +42,7 @@ from faturamento_dre_recorte_minimo import (
     faturamento_min_series_nf_emissao_bounds_dates,
     faturamento_recorte_min_state_from_session,
     _min_cal_limits,
+    _nf_fiscal_situacao_invalida,
 )
 from processing.faturamento.fiscal_materializado import fiscal_contract_dataframe_valid
 from processing.faturamento.nf_materializado import nf_first_contract_dataframe_valid
@@ -130,6 +143,118 @@ FISCAL_KPIS_CSS = """<style>
   border-radius: 8px;
   font-size: 12px;
   color: #854F0B;
+}
+</style>"""
+
+COMPOSICAO_BASE_CSS = """<style>
+.fdl-fat-composicao-wrap {
+  margin-bottom: 20px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 0.5px solid var(--color-border-tertiary, #e2e8f0);
+  background: var(--color-background-primary, #ffffff);
+}
+.fdl-fat-composicao-tit {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary, #0f172a);
+  margin-bottom: 12px;
+}
+.fdl-fat-composicao-linha {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 0.5px solid var(--color-border-secondary, #f1f5f9);
+  font-size: 13px;
+  color: var(--color-text-secondary, #475569);
+}
+.fdl-fat-composicao-linha:last-child { border-bottom: none; }
+.fdl-fat-composicao-mono {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  color: var(--color-text-primary, #0f172a);
+}
+.fdl-fat-composicao-sinal-mais { color: var(--color-text-success, #0F6E56); font-weight: 600; margin-right: 6px; }
+.fdl-fat-composicao-sinal-menos { color: var(--color-text-danger, #b91c1c); font-weight: 600; margin-right: 6px; }
+.fdl-fat-composicao-sinal-igual { color: var(--color-text-secondary, #64748b); font-weight: 600; margin-right: 6px; }
+</style>"""
+
+ALIQUOTA_EFETIVA_CSS = """<style>
+.fdl-fat-sn-wrap { margin-bottom: 20px; }
+.fdl-fat-sn-tit {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary, #0f172a);
+  margin-bottom: 12px;
+}
+.fdl-fat-sn-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+@media (max-width: 900px) {
+  .fdl-fat-sn-cards { grid-template-columns: 1fr; }
+}
+.fdl-fat-sn-card {
+  background: var(--color-background-secondary, #f8fafc);
+  border: 0.5px solid var(--color-border-tertiary, #e2e8f0);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.fdl-fat-sn-card-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--color-text-tertiary, #64748b);
+  margin-bottom: 4px;
+}
+.fdl-fat-sn-card-mono {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--color-text-primary, #0f172a);
+}
+.fdl-fat-sn-card-cap { font-size: 11px; color: var(--color-text-secondary, #475569); margin-top: 4px; }
+.fdl-fat-sn-details { margin: 10px 0 14px 0; }
+.fdl-fat-sn-details > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-info, #0369a1);
+  list-style-position: outside;
+}
+.fdl-fat-sn-table-wrap { overflow-x: auto; }
+.fdl-fat-sn-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.fdl-fat-sn-table th, .fdl-fat-sn-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 0.5px solid var(--color-border-tertiary, #e2e8f0);
+}
+.fdl-fat-sn-table th {
+  color: var(--color-text-tertiary, #64748b);
+  font-weight: 500;
+}
+.fdl-fat-sn-mono { font-family: var(--font-mono, ui-monospace, monospace); }
+.fdl-fat-sn-row-lp { color: var(--color-text-secondary, #64748b); }
+.fdl-fat-sn-badge-lp {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--color-background-warning, #FEF3C7);
+  color: var(--color-text-warning, #92400e);
+}
+.fdl-fat-sn-foot {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--color-text-tertiary, #64748b);
 }
 </style>"""
 
@@ -373,6 +498,291 @@ def _build_fiscal_kpis_secondary_html(
         f'<div class="fdl-fat-kpi-secondary-value">{df}</div>'
         f'<div class="fdl-fat-kpi-secondary-caption">{html.escape(cap_dif)}</div>'
         "</div>"
+        "</div>"
+    )
+
+
+def _apuracao_org_ids_do_filtro(
+    params_union: FaturamentoParams | FaturamentoParamsV2 | None,
+    empresas_chaves: list[str],
+) -> list[str]:
+    """Resolve rótulos do multiselect para ``org_id`` quando params V2 disponível."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for ch in empresas_chaves:
+        k = str(ch).strip()
+        if not k:
+            continue
+        oid = k
+        if isinstance(params_union, FaturamentoParamsV2):
+            ent = find_empresa_faturamento_entry(params_union, k)
+            if ent is not None:
+                oid = ent.org_id
+        if oid not in seen:
+            seen.add(oid)
+            out.append(oid)
+    return out
+
+
+def _count_nf_canceladas_periodo(
+    df_fiscal: pd.DataFrame,
+    *,
+    empresas_sel: tuple[str, ...],
+    nf_d_ini: date,
+    nf_d_fim: date,
+    ok_nf_dates: bool,
+) -> int:
+    if df_fiscal.empty or not ok_nf_dates or nf_d_fim < nf_d_ini:
+        return 0
+    need = {"Nota_Data_Emissao", "Nota_Situacao", "Nota_Numero_Normalizado", "empresa"}
+    if not need.issubset(df_fiscal.columns):
+        return 0
+    out = df_fiscal.copy()
+    emp_opts = _fdl_fr_etiquetas_empresa_recorte(out)
+    if emp_opts and empresas_sel:
+        out = _fdl_fr_filtrar_por_etiquetas_empresa(out, list(empresas_sel))
+    if out.empty:
+        return 0
+    m_period = _fdl_fr_mask_nf_emissao_no_periodo(out["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
+    out = out.loc[m_period].copy()
+    if out.empty or "Nota_Situacao" not in out.columns:
+        return 0
+    inv = _nf_fiscal_situacao_invalida(out["Nota_Situacao"])
+    out = out.loc[inv].copy()
+    if out.empty:
+        return 0
+    gb_keys: list[str] = []
+    if "org_id" in out.columns:
+        gb_keys.append("org_id")
+    gb_keys.extend(["empresa", "Nota_Numero_Normalizado"])
+    return int(out.groupby(gb_keys, sort=False).ngroups)
+
+
+def _build_composicao_base_tributavel_html(
+    *,
+    valor_faturado: float,
+    nfs_emitidas: int,
+    valor_cancelado: float,
+    nfs_canceladas: int,
+    valor_devolucoes: float,
+    nfs_devolucoes: int,
+    base_liquida: float,
+    fmt_brl: Callable[[float], str],
+    fmt_int: Callable[[int], str],
+) -> str:
+    """Bloco «Composição da Base Tributável» — DRE fiscal visual."""
+    vf = html.escape(fmt_brl(float(valor_faturado)))
+    vc = html.escape(fmt_brl(float(valor_cancelado)))
+    vd = html.escape(fmt_brl(float(valor_devolucoes)))
+    bl = html.escape(fmt_brl(float(base_liquida)))
+    return (
+        '<div class="fdl-fat-composicao-wrap">'
+        '<div class="fdl-fat-composicao-tit">Composição da Base Tributável</div>'
+        '<div class="fdl-fat-composicao-linha">'
+        '<span><span class="fdl-fat-composicao-sinal-mais">(+)</span>Valor faturado (NF)</span>'
+        f'<span class="fdl-fat-composicao-mono">{vf}</span>'
+        "</div>"
+        f'<div style="font-size:11px;color:var(--color-text-tertiary,#64748b);margin:-4px 0 6px 22px;">'
+        f"{html.escape(fmt_int(int(nfs_emitidas)))} NFs emitidas"
+        "</div>"
+        '<div class="fdl-fat-composicao-linha">'
+        '<span><span class="fdl-fat-composicao-sinal-menos">(−)</span>Cancelamentos fiscais</span>'
+        f'<span class="fdl-fat-composicao-mono">{vc}</span>'
+        "</div>"
+        f'<div style="font-size:11px;color:var(--color-text-tertiary,#64748b);margin:-4px 0 6px 22px;">'
+        f"{html.escape(fmt_int(int(nfs_canceladas)))} NFs canceladas / denegadas / inutilizadas"
+        "</div>"
+        '<div class="fdl-fat-composicao-linha">'
+        '<span><span class="fdl-fat-composicao-sinal-menos">(−)</span>Devoluções do período</span>'
+        f'<span class="fdl-fat-composicao-mono">{vd}</span>'
+        "</div>"
+        f'<div style="font-size:11px;color:var(--color-text-tertiary,#64748b);margin:-4px 0 6px 22px;">'
+        f"{html.escape(fmt_int(int(nfs_devolucoes)))} NFs de entrada (devolução)"
+        "</div>"
+        '<div class="fdl-fat-composicao-linha">'
+        '<span><span class="fdl-fat-composicao-sinal-igual">(=)</span>Base tributável líquida</span>'
+        f'<span class="fdl-fat-composicao-mono">{bl}</span>'
+        "</div>"
+        "</div>"
+    )
+
+
+def _fmt_pct_br2(v: float | None) -> str:
+    if v is None or v != v:
+        return "—"
+    return f"{v:.2f}".replace(".", ",")
+
+
+def _build_calculo_detalhado_expander_html(
+    empresa_slug: str,
+    empresa_nome: str,
+    resultado: ResultadoAliquotaEfetivaMes,
+    *,
+    fmt_brl: Callable[[float], str],
+) -> str:
+    """Conteúdo do expander: passo a passo do cálculo para a competência de referência."""
+    nome = html.escape(empresa_nome)
+    slug = html.escape(empresa_slug)
+    per = texto_periodo_rbt12(resultado.competencia)
+    rbt = html.escape(fmt_brl(float(resultado.rbt12)))
+    if resultado.faixa is None or resultado.aliquota_efetiva_pct is None:
+        motivo = html.escape(resultado.motivo_indisponivel or "Indisponível")
+        return (
+            f'<div data-org="{slug}">'
+            f"<p><strong>{nome}</strong></p>"
+            f"<p>RBT12 (janela {html.escape(per)}): <span class=\"fdl-fat-sn-mono\">{rbt}</span></p>"
+            f"<p>{motivo}</p>"
+            "<p>Referência: LC 123/2006, art. 18, §1º (Simples Nacional — Anexo I).</p>"
+            "</div>"
+        )
+    fx: ResultadoFaixaSimples = resultado.faixa
+    nom_pct = html.escape(_fmt_pct_br2(fx.aliquota_nominal_pct))
+    parc = html.escape(fmt_brl(float(fx.parcela_deduzir)))
+    num = float(resultado.rbt12) * (fx.aliquota_nominal_pct / 100.0) - float(fx.parcela_deduzir)
+    num_s = html.escape(fmt_brl(float(num)))
+    ef = html.escape(_fmt_pct_br2(resultado.aliquota_efetiva_pct))
+    rbt_fmt = html.escape(fmt_brl(float(resultado.rbt12)))
+    return (
+        f'<div data-org="{slug}">'
+        f"<p><strong>{nome}</strong> · competência {html.escape(resultado.competencia.strftime('%m/%Y'))}</p>"
+        "<ol style=\"margin:0;padding-left:18px;font-size:12px;color:var(--color-text-secondary,#475569);\">"
+        f"<li>RBT12 (soma dos 12 meses anteriores: {html.escape(per)}): "
+        f'<span class="fdl-fat-sn-mono">{rbt}</span></li>'
+        f"<li>Faixa Anexo I: <strong>nº {int(fx.faixa_numero)}</strong> "
+        f"(RBT entre {html.escape(fmt_brl(fx.rbt12_min))} e {html.escape(fmt_brl(fx.rbt12_max))})</li>"
+        f"<li>Alíquota nominal: <span class=\"fdl-fat-sn-mono\">{nom_pct}%</span> · "
+        f"Parcela a deduzir: <span class=\"fdl-fat-sn-mono\">{parc}</span></li>"
+        "</ol>"
+        "<p style=\"font-size:12px;color:var(--color-text-secondary,#475569);\">Fórmula (LC 123/2006, art. 18, §1º):</p>"
+        "<p class=\"fdl-fat-sn-mono\" style=\"font-size:12px;\">"
+        f"(({rbt_fmt} × {nom_pct}%) − {parc}) ÷ {rbt_fmt} = {ef}%"
+        "</p>"
+        f"<p style=\"font-size:12px;\">Numerador (RBT12 × alíq. nominal − parcela): <span class=\"fdl-fat-sn-mono\">{num_s}</span></p>"
+        f"<p style=\"font-size:12px;\"><strong>Alíquota efetiva:</strong> <span class=\"fdl-fat-sn-mono\">{ef}%</span></p>"
+        "</div>"
+    )
+
+
+def _tem_alguma_empresa_simples_no_filtro(simples_agregado: dict[str, Any]) -> bool:
+    for v in simples_agregado.get("por_empresa", {}).values():
+        if isinstance(v, dict) and v.get("regime") == "simples_nacional":
+            return True
+    return False
+
+
+def _build_aliquota_efetiva_simples_html(
+    simples_agregado: dict[str, Any],
+    *,
+    fmt_brl: Callable[[float], str],
+) -> str:
+    """Bloco «Alíquota Efetiva por Empresa · Simples Nacional»."""
+    por: dict[str, Any] = simples_agregado.get("por_empresa", {})
+    cards: list[str] = []
+    for oid, row in por.items():
+        if not isinstance(row, dict) or row.get("regime") != "simples_nacional":
+            continue
+        nome = html.escape(str(row.get("empresa_nome", oid)))
+        ult = row.get("ultimo_mes")
+        if isinstance(ult, ResultadoAliquotaEfetivaMes) and ult.aliquota_efetiva_pct is not None:
+            pct = html.escape(_fmt_pct_br2(ult.aliquota_efetiva_pct))
+            cap = html.escape(f"Faixa {ult.faixa.faixa_numero if ult.faixa else '—'} · RBT12 {fmt_brl(float(ult.rbt12))}")
+        elif isinstance(ult, ResultadoAliquotaEfetivaMes):
+            pct = "—"
+            cap = html.escape(ult.motivo_indisponivel or "Indisponível")
+        else:
+            pct = "—"
+            cap = "—"
+        cards.append(
+            '<div class="fdl-fat-sn-card">'
+            f'<div class="fdl-fat-sn-card-label">{nome}</div>'
+            f'<div class="fdl-fat-sn-card-mono">{pct}%</div>'
+            f'<div class="fdl-fat-sn-card-cap">{cap}</div>'
+            "</div>"
+        )
+    cards_html = "".join(cards) if cards else '<div class="fdl-fat-sn-card"><div class="fdl-fat-sn-card-label">—</div></div>'
+
+    details_blocks: list[str] = []
+    for oid, row in por.items():
+        if not isinstance(row, dict) or row.get("regime") != "simples_nacional":
+            continue
+        ult = row.get("ultimo_mes")
+        if not isinstance(ult, ResultadoAliquotaEfetivaMes):
+            continue
+        inner = _build_calculo_detalhado_expander_html(
+            oid,
+            str(row.get("empresa_nome", oid)),
+            ult,
+            fmt_brl=fmt_brl,
+        )
+        details_blocks.append(
+            "<details class=\"fdl-fat-sn-details\">"
+            f"<summary>▸ Detalhamento · {html.escape(str(row.get('empresa_nome', oid)))}</summary>"
+            f"<div style=\"margin-top:8px;\">{inner}</div>"
+            "</details>"
+        )
+    expander_html = "".join(details_blocks)
+
+    rows_tb: list[str] = []
+    for oid, row in sorted(por.items(), key=lambda kv: str(kv[1].get("empresa_nome", kv[0]))):
+        if not isinstance(row, dict):
+            continue
+        nome = html.escape(str(row.get("empresa_nome", oid)))
+        reg = str(row.get("regime", ""))
+        base_l = row.get("base_liquida_periodo")
+        base_s = html.escape(fmt_brl(float(base_l))) if isinstance(base_l, (int, float)) else "—"
+        imp = row.get("imposto_calculado_periodo")
+        imp_s = html.escape(fmt_brl(float(imp))) if isinstance(imp, (int, float)) else "—"
+        ali = row.get("aliquota_media_periodo_pct")
+        ali_s = html.escape(_fmt_pct_br2(float(ali))) + "%" if isinstance(ali, (int, float)) else "—"
+        badge = ""
+        tr_cls = ""
+        if reg == "lucro_presumido":
+            tr_cls = "fdl-fat-sn-row-lp"
+            badge = '<span class="fdl-fat-sn-badge-lp">L. Presumido</span>'
+            imp_s = html.escape("cálculo em desenvolvimento")
+            ali_s = "—"
+        rows_tb.append(
+            f'<tr class="{tr_cls}">'
+            f"<td>{nome}{badge}</td>"
+            f'<td class="fdl-fat-sn-mono">{base_s}</td>'
+            f'<td class="fdl-fat-sn-mono">{imp_s}</td>'
+            f'<td class="fdl-fat-sn-mono">{ali_s}</td>'
+            "</tr>"
+        )
+
+    tot = simples_agregado.get("total_simples", {})
+    tb = float(tot.get("base_liquida", 0.0)) if isinstance(tot, dict) else 0.0
+    ti = float(tot.get("imposto_total", 0.0)) if isinstance(tot, dict) else 0.0
+    tap = tot.get("aliquota_media_ponderada_pct") if isinstance(tot, dict) else None
+    if isinstance(tap, (int, float)):
+        tap_cell = html.escape(_fmt_pct_br2(float(tap))) + "%"
+    else:
+        tap_cell = "—"
+    tot_line = (
+        "<tr>"
+        "<td><strong>Total Simples</strong></td>"
+        f'<td class="fdl-fat-sn-mono"><strong>{html.escape(fmt_brl(tb))}</strong></td>'
+        f'<td class="fdl-fat-sn-mono"><strong>{html.escape(fmt_brl(ti))}</strong></td>'
+        f'<td class="fdl-fat-sn-mono"><strong>{tap_cell}</strong></td>'
+        "</tr>"
+    )
+
+    return (
+        '<div class="fdl-fat-sn-wrap">'
+        '<div class="fdl-fat-sn-tit">Alíquota Efetiva por Empresa · Simples Nacional</div>'
+        f'<div class="fdl-fat-sn-cards">{cards_html}</div>'
+        f"{expander_html}"
+        '<div class="fdl-fat-sn-table-wrap">'
+        '<table class="fdl-fat-sn-table">'
+        "<thead><tr>"
+        "<th>Empresa</th><th>Base líquida (período)</th><th>Imposto (SN estimado)</th><th>Alíquota média</th>"
+        "</tr></thead>"
+        "<tbody>"
+        f"{''.join(rows_tb)}"
+        f"{tot_line}"
+        "</tbody></table></div>"
+        '<p class="fdl-fat-sn-foot">Alíquota efetiva conforme LC 123/2006, art. 18, §1º, com tabela do Anexo I (LC 155/2016). '
+        "Imposto estimado = soma da receita bruta mensal válida × alíquota efetiva do mês (não substitui DAS / contabilidade).</p>"
         "</div>"
     )
 
@@ -757,6 +1167,90 @@ def render_apuracao_fiscal_panel(
             fmt_int=ao._fmt_int_ptbr,
         )
     )
+
+    _emp_sel_t = tuple(_min_state.empresas) if _min_state.empresas else ()
+    _nfs_canc = 0
+    if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame):
+        _nfs_canc = _count_nf_canceladas_periodo(
+            df_fiscal_pre,
+            empresas_sel=_emp_sel_t,
+            nf_d_ini=_nf_kpi_ini,
+            nf_d_fim=_nf_kpi_fim,
+            ok_nf_dates=ok_nf_dates,
+        )
+
+    composicao_html = _build_composicao_base_tributavel_html(
+        valor_faturado=float(_stats_kpi.valor_faturado_nf),
+        nfs_emitidas=int(_stats_kpi.n_nf),
+        valor_cancelado=float(_stats_kpi.valor_cancelado),
+        nfs_canceladas=int(_nfs_canc),
+        valor_devolucoes=float(_stats_kpi.total_devolvido),
+        nfs_devolucoes=int(_stats_kpi.nfs_devolucao),
+        base_liquida=float(_stats_kpi.base_fiscal_liquida),
+        fmt_brl=ao._fmt_brl_ptbr_celula,
+        fmt_int=ao._fmt_int_ptbr,
+    )
+    ao._fdl_fat_min_vsp(size="sm")
+    st.html(COMPOSICAO_BASE_CSS + composicao_html)
+
+    if use_fiscal_parquet and ok_nf_dates and isinstance(df_fiscal_pre, pd.DataFrame):
+        _emp_chaves_list = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
+        _org_ids_ag = _apuracao_org_ids_do_filtro(params_union, _emp_chaves_list)
+        simples_agregado = agregar_simples_nacional_para_painel_fiscal(
+            _df_fiscal_base,
+            _org_ids_ag,
+            params_union,
+            _nf_kpi_ini,
+            _nf_kpi_fim,
+            df_fiscal_full=df_fiscal_pre,
+            df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
+            ok_nf_dates=ok_nf_dates,
+        )
+        if _tem_alguma_empresa_simples_no_filtro(simples_agregado):
+            aliquota_html = _build_aliquota_efetiva_simples_html(
+                simples_agregado,
+                fmt_brl=ao._fmt_brl_ptbr_celula,
+            )
+            ao._fdl_fat_min_vsp(size="sm")
+            st.html(ALIQUOTA_EFETIVA_CSS + aliquota_html)
+
+        if ao._fdl_rg_pace_debug_enabled():
+            rbt_map: dict[str, float] = {}
+            aliq_map: dict[str, float] = {}
+            meses_map: dict[str, int] = {}
+            divs: list[str] = []
+            for oid, row in simples_agregado.get("por_empresa", {}).items():
+                if not isinstance(row, dict) or row.get("regime") != "simples_nacional":
+                    continue
+                u = row.get("ultimo_mes")
+                if isinstance(u, ResultadoAliquotaEfetivaMes):
+                    rbt_map[oid] = float(u.rbt12)
+                    meses_map[oid] = int(u.meses_historico_disponiveis)
+                    if u.aliquota_efetiva_pct is not None:
+                        aliq_map[oid] = float(u.aliquota_efetiva_pct)
+                    cfg = get_aliquota_imposto_por_empresa(params_union, oid)
+                    if cfg is not None and u.aliquota_efetiva_pct is not None:
+                        cfg_pct = float(cfg) * 100.0 if float(cfg) <= 1.0 else float(cfg)
+                        d = abs(float(u.aliquota_efetiva_pct) - cfg_pct)
+                        if d > 2.0:
+                            divs.append(f"{oid}: efetiva {u.aliquota_efetiva_pct:.2f}% vs JSON {cfg_pct:.2f}% (Δ {d:.2f} pp)")
+            cr = simples_agregado.get("competencia_referencia")
+            emps_sn = [
+                k
+                for k, v in simples_agregado.get("por_empresa", {}).items()
+                if isinstance(v, dict) and v.get("regime") == "simples_nacional"
+            ]
+            dbg = (
+                "🔍 Simples Nacional debug:\n"
+                f"   competencia_referencia: {cr!s}\n"
+                f"   empresas_calculadas: {emps_sn!s}\n"
+                f"   rbt12_por_empresa: {rbt_map!s}\n"
+                f"   aliquota_efetiva_ultimo_mes: {aliq_map!s}\n"
+                f"   meses_historico_disponiveis: {meses_map!s}"
+            )
+            if divs:
+                dbg += "\n   divergencias_json: " + "; ".join(divs)
+            st.caption(dbg)
 
     ao._fdl_fat_min_vsp(size="md")
     ao._fdl_fat_divider_simple()

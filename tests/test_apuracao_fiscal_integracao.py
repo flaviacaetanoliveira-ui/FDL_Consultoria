@@ -77,3 +77,7 @@ def test_devolucoes_lidas_de_todas_empresas_configuradas() -> None:
     assert not df_dev.empty
     empresas_presentes = set(df_dev["org_id"].dropna().astype(str).tolist()) if "org_id" in df_dev.columns else set()
     assert len(empresas_presentes) >= 2, f"Só encontrou devoluções para: {sorted(empresas_presentes)}"
+    assert "mega_facil" in empresas_presentes, (
+        "Mega Fácil deve contribuir com devoluções (natureza Bling sem «de»). "
+        f"Encontradas: {sorted(empresas_presentes)}"
+    )

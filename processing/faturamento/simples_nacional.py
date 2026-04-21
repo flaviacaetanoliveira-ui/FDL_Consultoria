@@ -234,6 +234,14 @@ def calcular_aliquota_efetiva_mes(
 
 
 def _resolve_coluna_empresa(df: pd.DataFrame, coluna_empresa: str) -> str:
+    # empresa_slug só com NaN/vazio (p.ex. após concat) → usar org_id para não esvaziar o histórico.
+    if coluna_empresa == "empresa_slug" and "org_id" in df.columns:
+        if coluna_empresa not in df.columns:
+            return "org_id"
+        s = df[coluna_empresa]
+        if s.notna().any() and (s.dropna().astype(str).str.strip() != "").any():
+            return coluna_empresa
+        return "org_id"
     if coluna_empresa in df.columns:
         return coluna_empresa
     if coluna_empresa == "empresa_slug" and "org_id" in df.columns:
@@ -558,9 +566,13 @@ def agregar_simples_nacional_para_painel_fiscal(
         json_ref = _aliquota_referencia_json_pct(params_regime, oid)
 
         imposto_periodo = 0.0
+        # Imposto do período: receita mensal só do recorte (evita duplicar full+base no concat usado no RBT12).
+        df_bruta_mes = (
+            df_fiscal_base if df_fiscal_base is not None and not df_fiscal_base.empty else df_hist_src
+        )
         for m in meses_periodo:
             res_m = calcular_aliquota_efetiva_mes(oid, m, hist_emp)
-            bruta_m = _receita_bruta_mes_empresa(df_hist_src, oid, m)
+            bruta_m = _receita_bruta_mes_empresa(df_bruta_mes, oid, m)
             aliq_apl = _aliquota_pct_aplicada_imposto_mes(res_m, json_ref)
             imposto_periodo += bruta_m * (aliq_apl / 100.0)
 

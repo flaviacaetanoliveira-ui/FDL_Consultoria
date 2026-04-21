@@ -2184,6 +2184,7 @@ def _load_faturamento_data(
             "faturamento_data_layout": layout_effective,
             "faturamento_layout_classification": layout_note,
             "faturamento_path_final_resolved": path_final or (path_s or url_s).strip(),
+            "cliente_slug": str(_materialized_cliente_slug()).strip(),
             "faturamento_row_count_loaded": n_loaded,
             "linhas": int(len(df_scoped)),
             "faturamento_nf_first": False,

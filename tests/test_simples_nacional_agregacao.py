@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -348,5 +349,94 @@ def test_agregar_imposto_mes_a_mes_com_fallback_misto() -> None:
         ok_nf_dates=True,
     )
     imp = float(r["por_empresa"]["mix_org"]["imposto_calculado_periodo"])
-    # Fev: JSON 10% sobre faturamento do mês (inclui linhas de histórico no mesmo mês); Mar: fórmula 4%.
-    assert imp == pytest.approx(12_500.0, abs=1.0)
+    # Fev: JSON 10% só sobre o recorte (100k); Mar: fórmula 4% sobre 50k. Histórico no full não duplica a receita do mês.
+    assert imp == pytest.approx(12_000.0, abs=1.0)
+
+
+def test_agregar_df_full_com_empresa_slug_sem_dados_usa_org_id_para_rbt12() -> None:
+    """
+    Regression: após concat, coluna empresa_slug pode existir só com NaN; o agregador não deve
+    perder o histórico (0 meses / warm-up indevido) nem zerar a base quando org_id está correto.
+    """
+    full = _montar_df_full_rbt12_faixa1()
+    full_bad = full.copy()
+    full_bad["empresa_slug"] = np.nan
+    base = pd.DataFrame([_df_nf_linha("gama_home", date(2026, 2, 5), 100_000.0, "Fev")])
+    params = {"gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.99}}
+    r = agregar_simples_nacional_para_painel_fiscal(
+        base,
+        ["gama_home"],
+        params,
+        date(2026, 2, 1),
+        date(2026, 2, 28),
+        df_fiscal_full=full_bad,
+        ok_nf_dates=True,
+    )
+    gh = r["por_empresa"]["gama_home"]
+    assert int(gh["meses_historico_disponiveis"]) == 12
+    assert gh["origem_aliquota"] == "calculada"
+    assert gh["base_liquida_periodo"] == pytest.approx(100_000.0)
+
+
+def test_imposto_calculado_periodo_usa_apenas_receita_do_periodo() -> None:
+    """
+    Imposto do período = Σ (receita_mês no recorte base × alíquota_mês).
+    Linhas extra no full no mesmo mês não podem inflar a receita usada no imposto (regressão F · T2.2).
+    """
+    full = _montar_df_full_rbt12_faixa1()
+    ghost_same_month = pd.DataFrame(
+        [_df_nf_linha("gama_home", date(2026, 2, 15), 25_000.0, "GhostFeb")],
+    )
+    full_extra = pd.concat([full, ghost_same_month], ignore_index=True)
+    base = pd.DataFrame([_df_nf_linha("gama_home", date(2026, 2, 8), 100_000.0, "PeriodFeb")])
+    params = {"gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.10}}
+    r = agregar_simples_nacional_para_painel_fiscal(
+        base,
+        ["gama_home"],
+        params,
+        date(2026, 2, 1),
+        date(2026, 2, 28),
+        df_fiscal_full=full_extra,
+        ok_nf_dates=True,
+    )
+    imp = float(r["por_empresa"]["gama_home"]["imposto_calculado_periodo"])
+    # Só 100k no recorte; com bug antigo seria ~125k × ~4% ≈ 5000.
+    assert imp == pytest.approx(4_000.0, rel=0.03)
+
+
+def test_aliquota_ponderada_periodo_proxima_da_aliquota_de_referencia() -> None:
+    """Alíquota ponderada do período alinha à de referência quando não há distorção de receita (regressão imposto 2×)."""
+    base = pd.DataFrame([_df_nf_linha("warm_co", date(2025, 6, 15), 100_000.0, "B1")])
+    params = {"warm_co": {"regime": "simples_nacional", "aliquota_imposto": 0.09}}
+    resultado = agregar_simples_nacional_para_painel_fiscal(
+        base,
+        ["warm_co"],
+        params,
+        date(2025, 6, 1),
+        date(2025, 6, 30),
+        df_fiscal_full=None,
+        ok_nf_dates=True,
+    )
+    dados = resultado["por_empresa"]["warm_co"]
+    aliq_ref = dados.get("aliquota_efetiva_calculada_pct") or dados["aliquota_referencia_json_pct"]
+    aliq_pond = dados["aliquota_efetiva_ponderada_periodo_pct"]
+    assert aliq_ref is not None and aliq_pond is not None
+    assert abs(float(aliq_pond) - float(aliq_ref)) < 2.0
+
+
+def test_agregador_json_lookup_preserva_decimal_para_pct() -> None:
+    """params em mapping com aliquota_imposto=0.09 (decimal) → aliquota_referencia_json_pct=9,0 (%)."""
+    base = pd.DataFrame([_df_nf_linha("x", date(2026, 2, 5), 10_000.0, "P")])
+    params = {"x": {"regime": "simples_nacional", "aliquota_imposto": 0.09}}
+    r = agregar_simples_nacional_para_painel_fiscal(
+        base,
+        ["x"],
+        params,
+        date(2026, 2, 1),
+        date(2026, 2, 28),
+        df_fiscal_full=None,
+        ok_nf_dates=True,
+    )
+    row = r["por_empresa"]["x"]
+    assert row["aliquota_referencia_json_pct"] == pytest.approx(9.0)
+    assert row["origem_aliquota"] == "referencia_json"

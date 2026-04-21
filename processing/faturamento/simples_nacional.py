@@ -21,7 +21,11 @@ from faturamento_dre_recorte import (
 )
 from faturamento_dre_recorte_minimo import _nf_fiscal_situacao_invalida
 from processing.faturamento.params import FaturamentoParams, FaturamentoParamsV2
-from processing.faturamento.params_regime import find_empresa_faturamento_entry, get_regime_tributario_por_empresa
+from processing.faturamento.params_regime import (
+    find_empresa_faturamento_entry,
+    get_aliquota_imposto_por_empresa,
+    get_regime_tributario_por_empresa,
+)
 
 # Tabela oficial Anexo I (LC 155/2016)
 # Cada tupla: (rbt12_min, rbt12_max, aliquota_nominal_pct, parcela_deduzir)
@@ -314,6 +318,38 @@ def _regime_para_org(
     return "simples_nacional"
 
 
+def _aliquota_referencia_json_pct(
+    params_regime: FaturamentoParams | FaturamentoParamsV2 | Mapping[str, Any] | None,
+    org_id: str,
+) -> float:
+    """Alíquota de referência em pontos percentuais (0–100) a partir do JSON / params."""
+    if params_regime is None:
+        return 0.0
+    if isinstance(params_regime, (FaturamentoParams, FaturamentoParamsV2)):
+        r = get_aliquota_imposto_por_empresa(params_regime, org_id)
+        if r is None:
+            return 0.0
+        x = float(r)
+        return x * 100.0 if x <= 1.0 else x
+    if isinstance(params_regime, Mapping):
+        raw = params_regime.get(org_id)
+        if isinstance(raw, Mapping):
+            aq = raw.get("aliquota_imposto")
+            if isinstance(aq, (int, float)):
+                x = float(aq)
+                return x * 100.0 if x <= 1.0 else x
+    return 0.0
+
+
+def _aliquota_pct_aplicada_imposto_mes(res_m: ResultadoAliquotaEfetivaMes, json_pct: float) -> float:
+    """Alíquota (em %) aplicada ao faturamento bruto do mês para efeito de imposto estimado no painel."""
+    if res_m.rbt12_suficiente and res_m.aliquota_efetiva_pct is not None:
+        return float(res_m.aliquota_efetiva_pct)
+    if not res_m.rbt12_suficiente:
+        return float(json_pct)
+    return 0.0
+
+
 def _nome_para_org(
     params_regime: FaturamentoParams | FaturamentoParamsV2 | Mapping[str, Any] | None,
     org_id: str,
@@ -494,6 +530,7 @@ def agregar_simples_nacional_para_painel_fiscal(
 
         if regime != "simples_nacional":
             tem_fora = True
+            json_ref_lp = _aliquota_referencia_json_pct(params_regime, oid)
             por_empresa[oid] = {
                 "empresa_nome": nome,
                 "regime": regime,
@@ -502,6 +539,12 @@ def agregar_simples_nacional_para_painel_fiscal(
                 "base_liquida_periodo": float(base_liquida),
                 "imposto_calculado_periodo": None,
                 "aliquota_media_periodo_pct": None,
+                "aliquota_efetiva_calculada_pct": None,
+                "aliquota_referencia_json_pct": float(json_ref_lp) if json_ref_lp > 1e-12 else None,
+                "aliquota_efetiva_ponderada_periodo_pct": None,
+                "origem_aliquota": "fora_escopo",
+                "meses_historico_disponiveis": None,
+                "motivo_fallback": None,
                 "motivo_fora_escopo": _MOTIVO_LP if regime == "lucro_presumido" else "Regime fora do escopo Simples Nacional neste painel",
             }
             continue
@@ -512,15 +555,27 @@ def agregar_simples_nacional_para_painel_fiscal(
             calcular_aliquota_efetiva_mes(oid, m, hist_emp) for m in meses_periodo
         ]
         ultimo = calcular_aliquota_efetiva_mes(oid, competencia_ref, hist_emp)
+        json_ref = _aliquota_referencia_json_pct(params_regime, oid)
 
         imposto_periodo = 0.0
         for m in meses_periodo:
             res_m = calcular_aliquota_efetiva_mes(oid, m, hist_emp)
             bruta_m = _receita_bruta_mes_empresa(df_hist_src, oid, m)
-            if res_m.aliquota_efetiva_pct is not None:
-                imposto_periodo += bruta_m * (res_m.aliquota_efetiva_pct / 100.0)
+            aliq_apl = _aliquota_pct_aplicada_imposto_mes(res_m, json_ref)
+            imposto_periodo += bruta_m * (aliq_apl / 100.0)
 
-        ali_media = (imposto_periodo / base_liquida * 100.0) if base_liquida > 1e-9 else None
+        ali_pond = (imposto_periodo / base_liquida * 100.0) if base_liquida > 1e-9 else None
+        aliq_calc_ref = ultimo.aliquota_efetiva_pct if ultimo.rbt12_suficiente else None
+
+        if ultimo.rbt12_suficiente and ultimo.aliquota_efetiva_pct is not None:
+            origem = "calculada"
+            motivo_fb = None
+        elif not ultimo.rbt12_suficiente:
+            origem = "referencia_json"
+            motivo_fb = f"Histórico fiscal incompleto: {ultimo.meses_historico_disponiveis} de 12 meses"
+        else:
+            origem = "calculada"
+            motivo_fb = ultimo.motivo_indisponivel
 
         por_empresa[oid] = {
             "empresa_nome": nome,
@@ -529,13 +584,30 @@ def agregar_simples_nacional_para_painel_fiscal(
             "historico_mensal_no_periodo": historico_mensal,
             "base_liquida_periodo": float(base_liquida),
             "imposto_calculado_periodo": float(imposto_periodo),
-            "aliquota_media_periodo_pct": float(ali_media) if ali_media is not None else None,
+            "aliquota_media_periodo_pct": float(ali_pond) if ali_pond is not None else None,
+            "aliquota_efetiva_calculada_pct": float(aliq_calc_ref) if aliq_calc_ref is not None else None,
+            "aliquota_referencia_json_pct": float(json_ref),
+            "aliquota_efetiva_ponderada_periodo_pct": float(ali_pond) if ali_pond is not None else None,
+            "origem_aliquota": origem,
+            "meses_historico_disponiveis": int(ultimo.meses_historico_disponiveis),
+            "motivo_fallback": motivo_fb,
             "motivo_fora_escopo": None,
         }
         base_simples_total += float(base_liquida)
         imp_simples_total += float(imposto_periodo)
 
     ali_pond = (imp_simples_total / base_simples_total * 100.0) if base_simples_total > 1e-9 else None
+
+    empresas_em_warmup: list[str] = []
+    empresas_com_calculo_oficial: list[str] = []
+    for oid, row in por_empresa.items():
+        if not isinstance(row, dict) or row.get("regime") != "simples_nacional":
+            continue
+        oa = row.get("origem_aliquota")
+        if oa == "referencia_json":
+            empresas_em_warmup.append(oid)
+        elif oa == "calculada" and row.get("aliquota_efetiva_calculada_pct") is not None:
+            empresas_com_calculo_oficial.append(oid)
 
     return {
         "competencia_referencia": competencia_ref,
@@ -546,4 +618,7 @@ def agregar_simples_nacional_para_painel_fiscal(
             "aliquota_media_ponderada_pct": float(ali_pond) if ali_pond is not None else None,
         },
         "tem_empresa_fora_escopo": tem_fora,
+        "empresas_em_warmup": empresas_em_warmup,
+        "empresas_com_calculo_oficial": empresas_com_calculo_oficial,
+        "empresa_com_calculo_oficial": empresas_com_calculo_oficial,
     }

@@ -207,12 +207,151 @@ def test_aliquota_simples_html_contem_tabela_e_total() -> None:
                 "base_liquida_periodo": 50_000.0,
                 "imposto_calculado_periodo": 2_000.0,
                 "aliquota_media_periodo_pct": 4.0,
+                "origem_aliquota": "calculada",
+                "aliquota_efetiva_calculada_pct": 4.0,
+                "aliquota_referencia_json_pct": 9.0,
+                "aliquota_efetiva_ponderada_periodo_pct": 4.0,
+                "meses_historico_disponiveis": 12,
+                "motivo_fallback": None,
             }
         },
         "total_simples": {"base_liquida": 50_000.0, "imposto_total": 2_000.0, "aliquota_media_ponderada_pct": 4.0},
         "tem_empresa_fora_escopo": False,
+        "empresas_em_warmup": [],
+        "empresas_com_calculo_oficial": ["gama_home"],
     }
     html = _build_aliquota_efetiva_simples_html(ag, fmt_brl=_fmt_brl_ptbr_test)
     assert "fdl-fat-sn-table" in html
     assert "Total Simples" in html
     assert "Gama Home" in html
+    assert "[Calculado]" in html
+    assert "Ver cálculo detalhado" in html
+
+
+def test_banner_warmup_aparece_com_nomes() -> None:
+    from processing.faturamento.simples_nacional import ResultadoAliquotaEfetivaMes
+
+    ult_w = ResultadoAliquotaEfetivaMes(
+        "gh",
+        date(2026, 4, 1),
+        500_000.0,
+        None,
+        None,
+        False,
+        5,
+        "Histórico inferior a 12 meses para RBT12",
+    )
+    ag = {
+        "por_empresa": {
+            "gh": {
+                "empresa_nome": "Gama Home",
+                "regime": "simples_nacional",
+                "ultimo_mes": ult_w,
+                "historico_mensal_no_periodo": [],
+                "base_liquida_periodo": 10_000.0,
+                "imposto_calculado_periodo": 900.0,
+                "aliquota_media_periodo_pct": 9.0,
+                "origem_aliquota": "referencia_json",
+                "aliquota_efetiva_calculada_pct": None,
+                "aliquota_referencia_json_pct": 9.0,
+                "aliquota_efetiva_ponderada_periodo_pct": 9.0,
+                "meses_historico_disponiveis": 5,
+                "motivo_fallback": "Histórico fiscal incompleto: 5 de 12 meses",
+            }
+        },
+        "total_simples": {"base_liquida": 10_000.0, "imposto_total": 900.0, "aliquota_media_ponderada_pct": 9.0},
+        "tem_empresa_fora_escopo": False,
+        "empresas_em_warmup": ["gh"],
+        "empresas_com_calculo_oficial": [],
+    }
+    html = _build_aliquota_efetiva_simples_html(ag, fmt_brl=_fmt_brl_ptbr_test)
+    assert "fdl-fat-aliq-banner-warmup" in html
+    assert "Histórico fiscal incompleto para Gama Home" in html
+    assert "Quando pelo menos uma empresa tiver 12 meses de histórico" in html
+
+
+def test_tabela_badges_json_e_calculado() -> None:
+    from processing.faturamento.simples_nacional import ResultadoAliquotaEfetivaMes, ResultadoFaixaSimples
+
+    fx = ResultadoFaixaSimples(1, 0.0, 180_000.0, 4.0, 0.0)
+    ult_ok = ResultadoAliquotaEfetivaMes(
+        "eap", date(2026, 4, 1), 60_000.0, fx, 4.0, True, 12, None
+    )
+    ult_w = ResultadoAliquotaEfetivaMes(
+        "gh", date(2026, 4, 1), 100_000.0, None, None, False, 5, "x"
+    )
+    ag = {
+        "por_empresa": {
+            "gh": {
+                "empresa_nome": "Gama Home",
+                "regime": "simples_nacional",
+                "ultimo_mes": ult_w,
+                "historico_mensal_no_periodo": [],
+                "base_liquida_periodo": 10_000.0,
+                "imposto_calculado_periodo": 900.0,
+                "origem_aliquota": "referencia_json",
+                "aliquota_referencia_json_pct": 9.0,
+                "aliquota_efetiva_ponderada_periodo_pct": 9.0,
+                "aliquota_efetiva_calculada_pct": None,
+                "aliquota_media_periodo_pct": 9.0,
+                "meses_historico_disponiveis": 5,
+                "motivo_fallback": "m",
+            },
+            "eap": {
+                "empresa_nome": "Móveis EAP",
+                "regime": "simples_nacional",
+                "ultimo_mes": ult_ok,
+                "historico_mensal_no_periodo": [],
+                "base_liquida_periodo": 20_000.0,
+                "imposto_calculado_periodo": 800.0,
+                "origem_aliquota": "calculada",
+                "aliquota_referencia_json_pct": 11.0,
+                "aliquota_efetiva_ponderada_periodo_pct": 4.0,
+                "aliquota_efetiva_calculada_pct": 4.0,
+                "aliquota_media_periodo_pct": 4.0,
+                "meses_historico_disponiveis": 12,
+                "motivo_fallback": None,
+            },
+        },
+        "total_simples": {"base_liquida": 30_000.0, "imposto_total": 1_700.0, "aliquota_media_ponderada_pct": 5.67},
+        "tem_empresa_fora_escopo": False,
+        "empresas_em_warmup": ["gh"],
+        "empresas_com_calculo_oficial": ["eap"],
+    }
+    html = _build_aliquota_efetiva_simples_html(ag, fmt_brl=_fmt_brl_ptbr_test)
+    assert "[JSON]" in html
+    assert "(ref.)" in html
+    assert "[Calculado]" in html
+
+
+def test_legenda_badges_no_rodape() -> None:
+    from processing.faturamento.simples_nacional import ResultadoAliquotaEfetivaMes, ResultadoFaixaSimples
+
+    fx = ResultadoFaixaSimples(1, 0.0, 180_000.0, 4.0, 0.0)
+    ult = ResultadoAliquotaEfetivaMes("x", date(2026, 4, 1), 60_000.0, fx, 4.0, True, 12, None)
+    ag = {
+        "por_empresa": {
+            "x": {
+                "empresa_nome": "X",
+                "regime": "simples_nacional",
+                "ultimo_mes": ult,
+                "historico_mensal_no_periodo": [],
+                "base_liquida_periodo": 1.0,
+                "imposto_calculado_periodo": 0.04,
+                "origem_aliquota": "calculada",
+                "aliquota_efetiva_calculada_pct": 4.0,
+                "aliquota_referencia_json_pct": 10.0,
+                "aliquota_efetiva_ponderada_periodo_pct": 4.0,
+                "aliquota_media_periodo_pct": 4.0,
+                "meses_historico_disponiveis": 12,
+                "motivo_fallback": None,
+            }
+        },
+        "total_simples": {"base_liquida": 1.0, "imposto_total": 0.04, "aliquota_media_ponderada_pct": 4.0},
+        "tem_empresa_fora_escopo": False,
+        "empresas_em_warmup": [],
+        "empresas_com_calculo_oficial": ["x"],
+    }
+    html = _build_aliquota_efetiva_simples_html(ag, fmt_brl=_fmt_brl_ptbr_test)
+    assert "[JSON] indica alíquota de referência configurada" in html
+    assert "[Calculado] indica alíquota efetiva pela fórmula oficial LC 123/2006" in html

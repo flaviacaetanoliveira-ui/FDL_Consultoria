@@ -7,7 +7,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from processing.faturamento.simples_nacional import agregar_simples_nacional_para_painel_fiscal
+from processing.faturamento.simples_nacional import _rbt12_janela_meses, agregar_simples_nacional_para_painel_fiscal
 
 
 def _df_nf_linha(
@@ -60,9 +60,9 @@ def test_agregar_filtro_so_simples_retorna_3_empresas() -> None:
     ]
     base = pd.DataFrame(rows_periodo)
     params = {
-        "gama_home": "simples_nacional",
-        "mega_star": "simples_nacional",
-        "moveis_eap": "simples_nacional",
+        "gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.04},
+        "mega_star": {"regime": "simples_nacional", "aliquota_imposto": 0.04},
+        "moveis_eap": {"regime": "simples_nacional", "aliquota_imposto": 0.04},
     }
     r = agregar_simples_nacional_para_painel_fiscal(
         base,
@@ -84,7 +84,10 @@ def test_agregar_filtro_inclui_mega_facil_marca_fora_escopo() -> None:
         _df_nf_linha("mega_facil", date(2026, 2, 5), 30_000.0, "P2"),
     ]
     base = pd.DataFrame(rows_periodo)
-    params = {"gama_home": "simples_nacional", "mega_facil": "lucro_presumido"}
+    params = {
+        "gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.04},
+        "mega_facil": "lucro_presumido",
+    }
     resultado = agregar_simples_nacional_para_painel_fiscal(
         base,
         ["gama_home", "mega_facil"],
@@ -107,7 +110,10 @@ def test_total_simples_exclui_mega_facil() -> None:
         _df_nf_linha("mega_facil", date(2026, 2, 5), 999_999.0, "P2"),
     ]
     base = pd.DataFrame(rows_periodo)
-    params = {"gama_home": "simples_nacional", "mega_facil": "lucro_presumido"}
+    params = {
+        "gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.04},
+        "mega_facil": "lucro_presumido",
+    }
     resultado = agregar_simples_nacional_para_painel_fiscal(
         base,
         ["gama_home", "mega_facil"],
@@ -126,7 +132,7 @@ def test_historico_com_rbt12_insuficiente_em_primeiro_mes() -> None:
     rows_hist = [_df_nf_linha("gama_home", date(2025, 6, 10), 20_000.0, "H1")]
     full = pd.DataFrame(rows_hist)
     base = pd.DataFrame([_df_nf_linha("gama_home", date(2025, 6, 15), 10_000.0, "B1")])
-    params = {"gama_home": "simples_nacional"}
+    params = {"gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.09}}
     resultado = agregar_simples_nacional_para_painel_fiscal(
         base,
         ["gama_home"],
@@ -136,17 +142,21 @@ def test_historico_com_rbt12_insuficiente_em_primeiro_mes() -> None:
         df_fiscal_full=full,
         ok_nf_dates=True,
     )
-    ult = resultado["por_empresa"]["gama_home"]["ultimo_mes"]
+    gh = resultado["por_empresa"]["gama_home"]
+    ult = gh["ultimo_mes"]
     assert ult is not None
     assert ult.rbt12_suficiente is False
     assert ult.aliquota_efetiva_pct is None
+    assert gh["origem_aliquota"] == "referencia_json"
+    assert gh["aliquota_referencia_json_pct"] == pytest.approx(9.0)
+    assert gh["motivo_fallback"] is not None
 
 
 def test_aliquota_media_ponderada_do_periodo() -> None:
     """Um mês no filtro com RBT12 na faixa 1 (4%): média do período ≈ alíquota efetiva."""
     full = _montar_df_full_rbt12_faixa1()
     base = pd.DataFrame([_df_nf_linha("gama_home", date(2026, 2, 5), 100_000.0, "Fev")])
-    params = {"gama_home": "simples_nacional"}
+    params = {"gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.99}}
     resultado = agregar_simples_nacional_para_painel_fiscal(
         base,
         ["gama_home"],
@@ -156,7 +166,9 @@ def test_aliquota_media_ponderada_do_periodo() -> None:
         df_fiscal_full=full,
         ok_nf_dates=True,
     )
-    ali = resultado["por_empresa"]["gama_home"]["aliquota_media_periodo_pct"]
+    gh = resultado["por_empresa"]["gama_home"]
+    assert gh["origem_aliquota"] == "calculada"
+    ali = gh["aliquota_media_periodo_pct"]
     assert ali is not None
     assert ali == pytest.approx(4.0, abs=0.01)
 
@@ -174,7 +186,7 @@ def test_devolucoes_reduzem_base_liquida() -> None:
             }
         ]
     )
-    params = {"gama_home": "simples_nacional"}
+    params = {"gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.04}}
     resultado = agregar_simples_nacional_para_painel_fiscal(
         base,
         ["gama_home"],
@@ -198,7 +210,7 @@ def test_competencia_referencia_ultimo_mes_com_nf() -> None:
     )
     extra = pd.DataFrame([_df_nf_linha("gama_home", date(2026, 2, 10), 15_000.0, "Hfeb26")])
     full2 = pd.concat([full, extra], ignore_index=True)
-    params = {"gama_home": "simples_nacional"}
+    params = {"gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.04}}
     resultado = agregar_simples_nacional_para_painel_fiscal(
         base,
         ["gama_home"],
@@ -229,7 +241,7 @@ def test_agregar_resolve_regime_via_params_dict() -> None:
 
 def test_df_full_none_usa_base_para_extracao() -> None:
     base = pd.DataFrame([_df_nf_linha("gama_home", date(2026, 2, 5), 50_000.0, "P1")])
-    params = {"gama_home": "simples_nacional"}
+    params = {"gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.04}}
     resultado = agregar_simples_nacional_para_painel_fiscal(
         base,
         ["gama_home"],
@@ -241,3 +253,100 @@ def test_df_full_none_usa_base_para_extracao() -> None:
     )
     assert resultado["por_empresa"]["gama_home"]["ultimo_mes"] is not None
     assert resultado["por_empresa"]["gama_home"]["ultimo_mes"].rbt12_suficiente is False
+
+
+def test_agregar_empresa_warmup_usa_json_como_fallback() -> None:
+    """Empresa com poucos meses de histórico tem origem_aliquota='referencia_json'."""
+    base = pd.DataFrame([_df_nf_linha("warm_co", date(2025, 6, 15), 100_000.0, "B1")])
+    params = {"warm_co": {"regime": "simples_nacional", "aliquota_imposto": 0.09}}
+    r = agregar_simples_nacional_para_painel_fiscal(
+        base,
+        ["warm_co"],
+        params,
+        date(2025, 6, 1),
+        date(2025, 6, 30),
+        df_fiscal_full=None,
+        ok_nf_dates=True,
+    )
+    row = r["por_empresa"]["warm_co"]
+    assert row["origem_aliquota"] == "referencia_json"
+    assert row["imposto_calculado_periodo"] == pytest.approx(9_000.0)
+    assert r["empresas_em_warmup"] == ["warm_co"]
+
+
+def test_agregar_empresa_12_meses_usa_calculada() -> None:
+    """Empresa com histórico completo tem origem_aliquota='calculada'."""
+    full = _montar_df_full_rbt12_faixa1()
+    base = pd.DataFrame([_df_nf_linha("gama_home", date(2026, 2, 5), 100_000.0, "Fev")])
+    params = {"gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.99}}
+    r = agregar_simples_nacional_para_painel_fiscal(
+        base,
+        ["gama_home"],
+        params,
+        date(2026, 2, 1),
+        date(2026, 2, 28),
+        df_fiscal_full=full,
+        ok_nf_dates=True,
+    )
+    row = r["por_empresa"]["gama_home"]
+    assert row["origem_aliquota"] == "calculada"
+    assert row["aliquota_efetiva_calculada_pct"] == pytest.approx(4.0, abs=0.02)
+    assert row["imposto_calculado_periodo"] == pytest.approx(4_000.0, abs=1.0)
+    assert r["empresas_com_calculo_oficial"] == ["gama_home"]
+
+
+def test_agregar_lista_empresas_em_warmup() -> None:
+    full_a = _montar_df_full_rbt12_faixa1()
+    rows_short = [_df_nf_linha("short_co", date(2025, 8, 10), 10_000.0, "S1")]
+    full = pd.concat([pd.DataFrame(rows_short), full_a], ignore_index=True)
+    base = pd.DataFrame(
+        [
+            _df_nf_linha("short_co", date(2026, 2, 5), 5_000.0, "P0"),
+            _df_nf_linha("gama_home", date(2026, 2, 5), 10_000.0, "P1"),
+        ]
+    )
+    params = {
+        "short_co": {"regime": "simples_nacional", "aliquota_imposto": 0.08},
+        "gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.04},
+    }
+    r = agregar_simples_nacional_para_painel_fiscal(
+        base,
+        ["short_co", "gama_home"],
+        params,
+        date(2026, 2, 1),
+        date(2026, 2, 28),
+        df_fiscal_full=full,
+        ok_nf_dates=True,
+    )
+    assert set(r["empresas_em_warmup"]) == {"short_co"}
+    assert set(r["empresas_com_calculo_oficial"]) == {"gama_home"}
+
+
+def test_agregar_imposto_mes_a_mes_com_fallback_misto() -> None:
+    """Fev/2026 com janela RBT12 incompleta (falta fev/2025) usa JSON; Mar/2026 com janela completa usa fórmula."""
+    rows: list[dict] = []
+    feb25 = date(2025, 2, 1)
+    for m in _rbt12_janela_meses(date(2026, 3, 1)):
+        if m == feb25:
+            continue
+        rows.append(_df_nf_linha("mix_org", date(m.year, m.month, 9), 5_000.0, f"Hm-{m.isoformat()}"))
+    full = pd.DataFrame(rows)
+    base = pd.DataFrame(
+        [
+            _df_nf_linha("mix_org", date(2026, 2, 10), 100_000.0, "NFfeb"),
+            _df_nf_linha("mix_org", date(2026, 3, 10), 50_000.0, "NFmar"),
+        ]
+    )
+    params = {"mix_org": {"regime": "simples_nacional", "aliquota_imposto": 0.10}}
+    r = agregar_simples_nacional_para_painel_fiscal(
+        base,
+        ["mix_org"],
+        params,
+        date(2026, 2, 1),
+        date(2026, 3, 31),
+        df_fiscal_full=full,
+        ok_nf_dates=True,
+    )
+    imp = float(r["por_empresa"]["mix_org"]["imposto_calculado_periodo"])
+    # Fev: JSON 10% sobre faturamento do mês (inclui linhas de histórico no mesmo mês); Mar: fórmula 4%.
+    assert imp == pytest.approx(12_500.0, abs=1.0)

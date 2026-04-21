@@ -197,32 +197,109 @@ ALIQUOTA_EFETIVA_CSS = """<style>
 @media (max-width: 900px) {
   .fdl-fat-sn-cards { grid-template-columns: 1fr; }
 }
-.fdl-fat-sn-card {
+.fdl-fat-aliq-card {
+  position: relative;
   background: var(--color-background-secondary, #f8fafc);
   border: 0.5px solid var(--color-border-tertiary, #e2e8f0);
   border-radius: 10px;
   padding: 12px 14px;
+  min-height: 120px;
 }
-.fdl-fat-sn-card-label {
+.fdl-fat-aliq-warmup { border-color: var(--color-border-secondary, #e2e8f0); }
+.fdl-fat-aliq-indicator-warmup {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-warning, #d97706);
+}
+.fdl-fat-aliq-badge-calc {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-text-success, #0F6E56) 12%, transparent);
+  color: var(--color-text-success, #0F6E56);
+}
+.fdl-fat-aliq-nome {
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.04em;
   color: var(--color-text-tertiary, #64748b);
+  margin-bottom: 6px;
+  padding-right: 56px;
+}
+.fdl-fat-aliq-valor-warmup {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--color-text-secondary, #475569);
   margin-bottom: 4px;
 }
-.fdl-fat-sn-card-mono {
+.fdl-fat-aliq-sublabel { font-size: 12px; color: var(--color-text-secondary, #64748b); margin-bottom: 8px; }
+.fdl-fat-aliq-divider {
+  height: 1px;
+  background: var(--color-border-tertiary, #e2e8f0);
+  margin: 8px 0;
+}
+.fdl-fat-aliq-meta {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--color-text-secondary, #475569);
+}
+.fdl-fat-aliq-card-mono {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 500;
   color: var(--color-text-primary, #0f172a);
 }
-.fdl-fat-sn-card-cap { font-size: 11px; color: var(--color-text-secondary, #475569); margin-top: 4px; }
+.fdl-fat-aliq-card-cap { font-size: 11px; color: var(--color-text-secondary, #475569); margin-top: 4px; padding-right: 48px; }
+.fdl-fat-aliq-banner-warmup {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  background: var(--color-background-warning, #FEF3C7);
+  border: 0.5px solid color-mix(in srgb, var(--color-text-warning, #d97706) 35%, transparent);
+}
+.fdl-fat-aliq-banner-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-text-warning, #92400e) 15%, transparent);
+  color: var(--color-text-warning, #92400e);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fdl-fat-aliq-banner-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-primary, #422006);
+}
+.fdl-fat-aliq-banner-text strong { color: var(--color-text-warning, #92400e); }
 .fdl-fat-sn-details { margin: 10px 0 14px 0; }
 .fdl-fat-sn-details > summary {
   cursor: pointer;
   font-size: 12px;
   color: var(--color-text-info, #0369a1);
   list-style-position: outside;
+}
+.fdl-fat-aliq-sem-expander {
+  font-size: 12px;
+  color: var(--color-text-secondary, #64748b);
+  margin: 10px 0 14px 0;
+  padding: 8px 0;
 }
 .fdl-fat-sn-table-wrap { overflow-x: auto; }
 .fdl-fat-sn-table {
@@ -251,11 +328,32 @@ ALIQUOTA_EFETIVA_CSS = """<style>
   background: var(--color-background-warning, #FEF3C7);
   color: var(--color-text-warning, #92400e);
 }
+.fdl-fat-sn-badge-json {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--color-background-warning, #FEF3C7);
+  color: var(--color-text-warning, #92400e);
+}
+.fdl-fat-sn-badge-calc-inline {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--color-text-success, #0F6E56) 12%, transparent);
+  color: var(--color-text-success, #0F6E56);
+}
 .fdl-fat-sn-foot {
   margin-top: 10px;
   font-size: 11px;
   color: var(--color-text-tertiary, #64748b);
 }
+.fdl-fat-sn-foot-legend { margin-top: 6px; }
 </style>"""
 
 BADGE_REGIME_CSS = """<style>
@@ -675,55 +773,127 @@ def _build_aliquota_efetiva_simples_html(
     *,
     fmt_brl: Callable[[float], str],
 ) -> str:
-    """Bloco «Alíquota Efetiva por Empresa · Simples Nacional»."""
+    """Bloco «Alíquota Efetiva por Empresa · Simples Nacional» (calculado, warm-up JSON, L. Presumido)."""
     por: dict[str, Any] = simples_agregado.get("por_empresa", {})
     cards: list[str] = []
     for oid, row in por.items():
         if not isinstance(row, dict) or row.get("regime") != "simples_nacional":
             continue
-        nome = html.escape(str(row.get("empresa_nome", oid)))
+        nome_esc = html.escape(str(row.get("empresa_nome", oid)).upper())
+        nome_plain = str(row.get("empresa_nome", oid))
         ult = row.get("ultimo_mes")
-        if isinstance(ult, ResultadoAliquotaEfetivaMes) and ult.aliquota_efetiva_pct is not None:
+        oa = row.get("origem_aliquota")
+        json_pct = row.get("aliquota_referencia_json_pct")
+        json_s = html.escape(_fmt_pct_br2(float(json_pct))) if isinstance(json_pct, (int, float)) else "—"
+
+        if oa == "referencia_json" and isinstance(ult, ResultadoAliquotaEfetivaMes):
+            n_m = int(ult.meses_historico_disponiveis)
+            cards.append(
+                '<div class="fdl-fat-aliq-card fdl-fat-aliq-warmup">'
+                '<span class="fdl-fat-aliq-indicator-warmup" aria-hidden="true"></span>'
+                f'<div class="fdl-fat-aliq-nome">{nome_esc}</div>'
+                '<div class="fdl-fat-aliq-valor-warmup">Histórico parcial</div>'
+                f'<div class="fdl-fat-aliq-sublabel">{html.escape(str(n_m))} de 12 meses disponíveis</div>'
+                '<div class="fdl-fat-aliq-divider"></div>'
+                '<div class="fdl-fat-aliq-meta">'
+                f"RBT12 parcial: {html.escape(fmt_brl(float(ult.rbt12)))}<br/>"
+                f"Referência JSON: {json_s}%"
+                "</div>"
+                "</div>"
+            )
+        elif (
+            isinstance(ult, ResultadoAliquotaEfetivaMes)
+            and ult.rbt12_suficiente
+            and ult.aliquota_efetiva_pct is not None
+        ):
             pct = html.escape(_fmt_pct_br2(ult.aliquota_efetiva_pct))
             cap = html.escape(f"Faixa {ult.faixa.faixa_numero if ult.faixa else '—'} · RBT12 {fmt_brl(float(ult.rbt12))}")
+            cards.append(
+                '<div class="fdl-fat-aliq-card fdl-fat-aliq-card--calc">'
+                '<span class="fdl-fat-aliq-badge-calc">Calculado</span>'
+                f'<div class="fdl-fat-aliq-nome">{html.escape(nome_plain)}</div>'
+                f'<div class="fdl-fat-aliq-card-mono">{pct}%</div>'
+                f'<div class="fdl-fat-aliq-card-cap">{cap}</div>'
+                "</div>"
+            )
         elif isinstance(ult, ResultadoAliquotaEfetivaMes):
-            pct = "—"
             cap = html.escape(ult.motivo_indisponivel or "Indisponível")
+            cards.append(
+                '<div class="fdl-fat-aliq-card">'
+                f'<div class="fdl-fat-aliq-nome">{html.escape(nome_plain)}</div>'
+                '<div class="fdl-fat-aliq-valor-warmup">—</div>'
+                f'<div class="fdl-fat-aliq-card-cap">{cap}</div>'
+                "</div>"
+            )
         else:
-            pct = "—"
-            cap = "—"
-        cards.append(
-            '<div class="fdl-fat-sn-card">'
-            f'<div class="fdl-fat-sn-card-label">{nome}</div>'
-            f'<div class="fdl-fat-sn-card-mono">{pct}%</div>'
-            f'<div class="fdl-fat-sn-card-cap">{cap}</div>'
-            "</div>"
-        )
-    cards_html = "".join(cards) if cards else '<div class="fdl-fat-sn-card"><div class="fdl-fat-sn-card-label">—</div></div>'
+            cards.append(
+                '<div class="fdl-fat-aliq-card">'
+                f'<div class="fdl-fat-aliq-nome">{html.escape(nome_plain)}</div>'
+                '<div class="fdl-fat-aliq-valor-warmup">—</div>'
+                "</div>"
+            )
+    cards_html = "".join(cards) if cards else '<div class="fdl-fat-aliq-card"><div class="fdl-fat-aliq-nome">—</div></div>'
 
-    details_blocks: list[str] = []
-    for oid, row in por.items():
-        if not isinstance(row, dict) or row.get("regime") != "simples_nacional":
-            continue
-        ult = row.get("ultimo_mes")
-        if not isinstance(ult, ResultadoAliquotaEfetivaMes):
-            continue
-        inner = _build_calculo_detalhado_expander_html(
-            oid,
-            str(row.get("empresa_nome", oid)),
-            ult,
-            fmt_brl=fmt_brl,
+    warmup_slugs = list(simples_agregado.get("empresas_em_warmup") or [])
+    warmup_nomes = [
+        str(por[s].get("empresa_nome", s))
+        for s in warmup_slugs
+        if isinstance(por.get(s), dict)
+    ]
+    banner_html = ""
+    if warmup_nomes:
+        lista = html.escape(", ".join(warmup_nomes))
+        banner_html = (
+            '<div class="fdl-fat-aliq-banner-warmup">'
+            '<div class="fdl-fat-aliq-banner-icon">i</div>'
+            '<div class="fdl-fat-aliq-banner-text">'
+            f"<strong>Histórico fiscal incompleto para {lista}</strong><br/>"
+            "O cálculo da alíquota efetiva pela fórmula oficial do Simples Nacional "
+            "requer receita dos 12 meses anteriores à competência. Quando mais meses "
+            "forem materializados, a alíquota calculada aparecerá automaticamente. "
+            "No momento, estas empresas usam a alíquota de referência configurada "
+            "no arquivo de parâmetros."
+            "</div></div>"
         )
-        details_blocks.append(
-            "<details class=\"fdl-fat-sn-details\">"
-            f"<summary>▸ Detalhamento · {html.escape(str(row.get('empresa_nome', oid)))}</summary>"
-            f"<div style=\"margin-top:8px;\">{inner}</div>"
-            "</details>"
+
+    oficiais = list(simples_agregado.get("empresas_com_calculo_oficial") or [])
+    oid_exp: str | None = None
+    max_base = -1.0
+    for o in oficiais:
+        rw = por.get(o)
+        if not isinstance(rw, dict):
+            continue
+        b = rw.get("base_liquida_periodo")
+        if isinstance(b, (int, float)) and float(b) > max_base:
+            max_base = float(b)
+            oid_exp = o
+    expander_or_nota = ""
+    if oid_exp is not None:
+        row_e = por[oid_exp]
+        ult_e = row_e.get("ultimo_mes")
+        if isinstance(ult_e, ResultadoAliquotaEfetivaMes):
+            inner = _build_calculo_detalhado_expander_html(
+                oid_exp,
+                str(row_e.get("empresa_nome", oid_exp)),
+                ult_e,
+                fmt_brl=fmt_brl,
+            )
+            nome_e = html.escape(str(row_e.get("empresa_nome", oid_exp)))
+            expander_or_nota = (
+                "<details class=\"fdl-fat-sn-details\">"
+                f"<summary>▸ Ver cálculo detalhado — {nome_e}</summary>"
+                f"<div style=\"margin-top:8px;\">{inner}</div>"
+                "</details>"
+            )
+    else:
+        expander_or_nota = (
+            "<p class=\"fdl-fat-aliq-sem-expander\">"
+            "Quando pelo menos uma empresa tiver 12 meses de histórico, o passo a passo do cálculo oficial aparecerá aqui."
+            "</p>"
         )
-    expander_html = "".join(details_blocks)
 
     rows_tb: list[str] = []
-    for oid, row in sorted(por.items(), key=lambda kv: str(kv[1].get("empresa_nome", kv[0]))):
+    for oid, row in sorted(por.items(), key=lambda kv: str(kv[1].get("empresa_nome", kv[0]) if isinstance(kv[1], dict) else kv[0])):
         if not isinstance(row, dict):
             continue
         nome = html.escape(str(row.get("empresa_nome", oid)))
@@ -732,21 +902,41 @@ def _build_aliquota_efetiva_simples_html(
         base_s = html.escape(fmt_brl(float(base_l))) if isinstance(base_l, (int, float)) else "—"
         imp = row.get("imposto_calculado_periodo")
         imp_s = html.escape(fmt_brl(float(imp))) if isinstance(imp, (int, float)) else "—"
-        ali = row.get("aliquota_media_periodo_pct")
-        ali_s = html.escape(_fmt_pct_br2(float(ali))) + "%" if isinstance(ali, (int, float)) else "—"
+        oa = row.get("origem_aliquota")
+        pond = row.get("aliquota_efetiva_ponderada_periodo_pct")
+        if pond is None:
+            pond = row.get("aliquota_media_periodo_pct")
+        json_ref = row.get("aliquota_referencia_json_pct")
+
         badge = ""
         tr_cls = ""
         if reg == "lucro_presumido":
             tr_cls = "fdl-fat-sn-row-lp"
-            badge = '<span class="fdl-fat-sn-badge-lp">L. Presumido</span>'
+            badge = '<span class="fdl-fat-sn-badge-lp">[L. Presumido]</span>'
             imp_s = html.escape("cálculo em desenvolvimento")
             ali_s = "—"
+        elif oa == "referencia_json":
+            badge = '<span class="fdl-fat-sn-badge-json">[JSON]</span>'
+            jr = float(json_ref) if isinstance(json_ref, (int, float)) else None
+            if jr is not None:
+                ali_s = html.escape(_fmt_pct_br2(jr)) + "% (ref.)"
+            else:
+                ali_s = "—"
+        elif oa == "calculada" and isinstance(pond, (int, float)):
+            badge = '<span class="fdl-fat-sn-badge-calc-inline">[Calculado]</span>'
+            ali_s = html.escape(_fmt_pct_br2(float(pond))) + "%"
+        else:
+            if isinstance(pond, (int, float)):
+                ali_s = html.escape(_fmt_pct_br2(float(pond))) + "%"
+            else:
+                ali_s = "—"
+
         rows_tb.append(
             f'<tr class="{tr_cls}">'
             f"<td>{nome}{badge}</td>"
             f'<td class="fdl-fat-sn-mono">{base_s}</td>'
-            f'<td class="fdl-fat-sn-mono">{imp_s}</td>'
             f'<td class="fdl-fat-sn-mono">{ali_s}</td>'
+            f'<td class="fdl-fat-sn-mono">{imp_s}</td>'
             "</tr>"
         )
 
@@ -762,8 +952,8 @@ def _build_aliquota_efetiva_simples_html(
         "<tr>"
         "<td><strong>Total Simples</strong></td>"
         f'<td class="fdl-fat-sn-mono"><strong>{html.escape(fmt_brl(tb))}</strong></td>'
-        f'<td class="fdl-fat-sn-mono"><strong>{html.escape(fmt_brl(ti))}</strong></td>'
         f'<td class="fdl-fat-sn-mono"><strong>{tap_cell}</strong></td>'
+        f'<td class="fdl-fat-sn-mono"><strong>{html.escape(fmt_brl(ti))}</strong></td>'
         "</tr>"
     )
 
@@ -771,18 +961,23 @@ def _build_aliquota_efetiva_simples_html(
         '<div class="fdl-fat-sn-wrap">'
         '<div class="fdl-fat-sn-tit">Alíquota Efetiva por Empresa · Simples Nacional</div>'
         f'<div class="fdl-fat-sn-cards">{cards_html}</div>'
-        f"{expander_html}"
+        f"{banner_html}"
+        f"{expander_or_nota}"
         '<div class="fdl-fat-sn-table-wrap">'
         '<table class="fdl-fat-sn-table">'
         "<thead><tr>"
-        "<th>Empresa</th><th>Base líquida (período)</th><th>Imposto (SN estimado)</th><th>Alíquota média</th>"
+        "<th>Empresa</th><th>Base líquida (período)</th><th>Alíquota</th><th>Imposto (SN estimado)</th>"
         "</tr></thead>"
         "<tbody>"
         f"{''.join(rows_tb)}"
         f"{tot_line}"
         "</tbody></table></div>"
         '<p class="fdl-fat-sn-foot">Alíquota efetiva conforme LC 123/2006, art. 18, §1º, com tabela do Anexo I (LC 155/2016). '
-        "Imposto estimado = soma da receita bruta mensal válida × alíquota efetiva do mês (não substitui DAS / contabilidade).</p>"
+        "Imposto estimado = soma da receita bruta mensal válida × alíquota aplicada no mês (fórmula oficial ou referência JSON em warm-up).</p>"
+        '<p class="fdl-fat-sn-foot fdl-fat-sn-foot-legend">'
+        "[JSON] indica alíquota de referência configurada (histórico incompleto). "
+        "[Calculado] indica alíquota efetiva pela fórmula oficial LC 123/2006."
+        "</p>"
         "</div>"
     )
 
@@ -1215,38 +1410,38 @@ def render_apuracao_fiscal_panel(
             st.html(ALIQUOTA_EFETIVA_CSS + aliquota_html)
 
         if ao._fdl_rg_pace_debug_enabled():
-            rbt_map: dict[str, float] = {}
-            aliq_map: dict[str, float] = {}
-            meses_map: dict[str, int] = {}
+            rbt_dbg: dict[str, str] = {}
+            aliq_ef_dbg: dict[str, str] = {}
+            aliq_json_dbg: dict[str, float] = {}
             divs: list[str] = []
             for oid, row in simples_agregado.get("por_empresa", {}).items():
                 if not isinstance(row, dict) or row.get("regime") != "simples_nacional":
                     continue
                 u = row.get("ultimo_mes")
                 if isinstance(u, ResultadoAliquotaEfetivaMes):
-                    rbt_map[oid] = float(u.rbt12)
-                    meses_map[oid] = int(u.meses_historico_disponiveis)
+                    rbt_dbg[oid] = f"{float(u.rbt12):.0f} [{int(u.meses_historico_disponiveis)}m]"
                     if u.aliquota_efetiva_pct is not None:
-                        aliq_map[oid] = float(u.aliquota_efetiva_pct)
+                        aliq_ef_dbg[oid] = f"{float(u.aliquota_efetiva_pct):.2f} [calc]"
                     cfg = get_aliquota_imposto_por_empresa(params_union, oid)
                     if cfg is not None and u.aliquota_efetiva_pct is not None:
                         cfg_pct = float(cfg) * 100.0 if float(cfg) <= 1.0 else float(cfg)
                         d = abs(float(u.aliquota_efetiva_pct) - cfg_pct)
                         if d > 2.0:
                             divs.append(f"{oid}: efetiva {u.aliquota_efetiva_pct:.2f}% vs JSON {cfg_pct:.2f}% (Δ {d:.2f} pp)")
+                jr = row.get("aliquota_referencia_json_pct")
+                if isinstance(jr, (int, float)):
+                    aliq_json_dbg[oid] = round(float(jr), 2)
             cr = simples_agregado.get("competencia_referencia")
-            emps_sn = [
-                k
-                for k, v in simples_agregado.get("por_empresa", {}).items()
-                if isinstance(v, dict) and v.get("regime") == "simples_nacional"
-            ]
+            em_calc = list(simples_agregado.get("empresas_com_calculo_oficial") or [])
+            em_warm = list(simples_agregado.get("empresas_em_warmup") or [])
             dbg = (
                 "🔍 Simples Nacional debug:\n"
                 f"   competencia_referencia: {cr!s}\n"
-                f"   empresas_calculadas: {emps_sn!s}\n"
-                f"   rbt12_por_empresa: {rbt_map!s}\n"
-                f"   aliquota_efetiva_ultimo_mes: {aliq_map!s}\n"
-                f"   meses_historico_disponiveis: {meses_map!s}"
+                f"   empresas_calculadas: {em_calc!s}\n"
+                f"   empresas_warmup: {em_warm!s}\n"
+                f"   rbt12: {rbt_dbg!s}\n"
+                f"   aliquota_efetiva: {aliq_ef_dbg!s}\n"
+                f"   aliquota_referencia_json: {aliq_json_dbg!s}"
             )
             if divs:
                 dbg += "\n   divergencias_json: " + "; ".join(divs)

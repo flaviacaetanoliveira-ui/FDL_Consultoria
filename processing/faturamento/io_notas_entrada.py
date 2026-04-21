@@ -51,6 +51,28 @@ def _detect_col_situacao(columns: list[str]) -> str:
     return ""
 
 
+def aplicar_filtros_devolucao(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Mantém apenas linhas cuja Natureza está em ``NATUREZAS_DEVOLUCAO``
+    e cuja Situação está em ``SITUACOES_DEVOLUCAO_VALIDAS``.
+
+    Usado por ``load_notas_entrada_devolucoes_from_dir`` e por testes de regressão.
+    """
+    if df.empty:
+        return df.copy()
+    cols = list(df.columns)
+    col_nat = _detect_col_natureza(cols)
+    col_sit = _detect_col_situacao(cols)
+    if not col_nat or not col_sit:
+        return pd.DataFrame()
+
+    nat_ok = frozenset(NATUREZAS_DEVOLUCAO)
+    sit_ok = frozenset(SITUACOES_DEVOLUCAO_VALIDAS)
+    n_raw = _norm_txt(df[col_nat])
+    s_raw = _norm_txt(df[col_sit])
+    return df.loc[n_raw.isin(nat_ok) & s_raw.isin(sit_ok)].copy().reset_index(drop=True)
+
+
 def load_notas_entrada_devolucoes_from_dir(notas_dir: Path) -> pd.DataFrame:
     """
     Lê todos os CSV/XLSX sob ``notas_dir``, mantém apenas linhas com Natureza de devolução
@@ -73,23 +95,11 @@ def load_notas_entrada_devolucoes_from_dir(notas_dir: Path) -> pd.DataFrame:
         return pd.DataFrame()
 
     out = pd.concat(partes, ignore_index=True)
-    cols = list(out.columns)
-    col_nat = _detect_col_natureza(cols)
-    col_sit = _detect_col_situacao(cols)
-    if not col_nat or not col_sit:
-        return pd.DataFrame()
-
-    nat_ok = frozenset(NATUREZAS_DEVOLUCAO)
-    sit_ok = frozenset(SITUACOES_DEVOLUCAO_VALIDAS)
-
-    n_raw = _norm_txt(out[col_nat])
-    s_raw = _norm_txt(out[col_sit])
-    m_nat = n_raw.isin(nat_ok)
-    m_sit = s_raw.isin(sit_ok)
-    out = out.loc[m_nat & m_sit].copy()
+    out = aplicar_filtros_devolucao(out)
     if out.empty:
         return pd.DataFrame()
 
+    col_nat = _detect_col_natureza(list(out.columns))
     col_nf = _detect_col_numero_nf(list(out.columns))
     col_dt = detectar_col_data_emissao(list(out.columns))
     col_vl = detectar_col_valor_total_liquido(list(out.columns))

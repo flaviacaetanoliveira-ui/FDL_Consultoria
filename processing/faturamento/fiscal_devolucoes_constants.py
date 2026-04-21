@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
-# Filtros exatos validados nos exports CSV (Natureza / Situação).
-NATUREZAS_DEVOLUCAO = ("Entrada de Devolução",)
+# Variações aceitas da natureza "Entrada de Devolução".
+# Bling permite cadastro com ou sem "de" dependendo da empresa.
+# Situação "Autorizada" continua sendo o filtro de validade fiscal.
+NATUREZAS_DEVOLUCAO = (
+    "Entrada de Devolução",  # grafia padrão (Gama Home, Mega Star, Móveis EAP)
+    "Entrada Devolução",  # grafia da Mega Fácil
+)
 SITUACOES_DEVOLUCAO_VALIDAS = ("Autorizada",)
 
 TIPO_ABATIMENTO_DEVOLUCAO_VENDA = "devolucao_venda"

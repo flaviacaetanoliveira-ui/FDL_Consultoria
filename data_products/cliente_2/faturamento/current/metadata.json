@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-18T14:11:15Z",
+  "generated_at": "2026-04-20T10:36:17Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "cliente_2",
   "empresa": "_multi",
@@ -7,7 +7,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "_multi",
   "cnpj": null,
-  "row_count": 34843,
+  "row_count": 35436,
   "columns": [
     "Data",
     "Data do faturamento",
@@ -111,7 +111,7 @@
         {
           "arquivo": "Gama Home - Pedidos Abr 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2026\\Gama Home - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-17T09:27:28Z"
+          "mtime_iso": "2026-04-20T09:34:15Z"
         },
         {
           "arquivo": "Gama Home - Pedidos Fev 2026.csv",
@@ -133,8 +133,8 @@
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos",
       "mtime_iso": "2026-04-13T00:16:27Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 2922,
-      "pedidos_linhas_depois": 2921,
+      "pedidos_linhas_antes": 2957,
+      "pedidos_linhas_depois": 2956,
       "pedidos_linhas_removidas": 1
     },
     {
@@ -164,7 +164,7 @@
         {
           "arquivo": "Mega Star - Pedidos Abr 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2026\\Mega Star - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-17T09:29:50Z"
+          "mtime_iso": "2026-04-20T09:35:50Z"
         },
         {
           "arquivo": "Mega Star - Pedidos Fev 2026.csv",
@@ -186,8 +186,8 @@
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos",
       "mtime_iso": "2026-04-13T09:22:57Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 5627,
-      "pedidos_linhas_depois": 5618,
+      "pedidos_linhas_antes": 5720,
+      "pedidos_linhas_depois": 5711,
       "pedidos_linhas_removidas": 9
     },
     {
@@ -217,7 +217,7 @@
         {
           "arquivo": "Móveis EAP - Pedidos Abr 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2026\\Móveis EAP - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-17T09:37:07Z"
+          "mtime_iso": "2026-04-20T09:32:39Z"
         },
         {
           "arquivo": "Móveis EAP - Pedidos Fev 2026.csv",
@@ -239,20 +239,22 @@
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos",
       "mtime_iso": "2026-04-06T23:23:35Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 7634,
-      "pedidos_linhas_depois": 7626,
+      "pedidos_linhas_antes": 7779,
+      "pedidos_linhas_depois": 7771,
       "pedidos_linhas_removidas": 8
     },
     {
       "org_id": "mega_facil",
       "empresa": "Mega Fácil",
       "pedidos_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Pedidos",
-      "pedidos_linhas_excluidas_assistencia": 440,
+      "pedidos_linhas_excluidas_assistencia": 477,
       "arquivos": [
         "Mega Facil - Pedidos Dez1 2025.csv",
         "Mega Facil - Pedidos Dez2 2025.csv",
         "Mega Facil - Pedidos Nov1 2025.csv",
         "Mega Facil - Pedidos Nov2 2025.csv",
+        "Mega Facil - Pedidos Abr 1 2026.csv",
+        "Mega Facil - Pedidos Abr 2 2026.csv",
         "Mega Facil - Pedidos Abr 2026.csv",
         "Mega Facil - Pedidos Fev1 2026.csv",
         "Mega Facil - Pedidos Fev2 2026.csv",
@@ -282,6 +284,16 @@
           "arquivo": "Mega Facil - Pedidos Nov2 2025.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Pedidos\\2025\\Mega Facil - Pedidos Nov2 2025.csv",
           "mtime_iso": "2026-04-15T09:30:34Z"
+        },
+        {
+          "arquivo": "Mega Facil - Pedidos Abr 1 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Pedidos\\2026\\Mega Facil - Pedidos Abr 1 2026.csv",
+          "mtime_iso": "2026-04-20T09:29:51Z"
+        },
+        {
+          "arquivo": "Mega Facil - Pedidos Abr 2 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Pedidos\\2026\\Mega Facil - Pedidos Abr 2 2026.csv",
+          "mtime_iso": "2026-04-20T09:30:17Z"
         },
         {
           "arquivo": "Mega Facil - Pedidos Abr 2026.csv",
@@ -324,13 +336,13 @@
           "mtime_iso": "2026-04-15T09:35:06Z"
         }
       ],
-      "arquivo": "12 ficheiros CSV",
+      "arquivo": "14 ficheiros CSV",
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Pedidos",
       "mtime_iso": "2026-04-15T09:35:06Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 18683,
-      "pedidos_linhas_depois": 18678,
-      "pedidos_linhas_removidas": 5
+      "pedidos_linhas_antes": 20956,
+      "pedidos_linhas_depois": 18998,
+      "pedidos_linhas_removidas": 1958
     }
   ],
   "custo_fonte": {
@@ -347,7 +359,7 @@
     ],
     "custo_dedupe_by_normalized_sku_dropped_rows": 143
   },
-  "data_processamento": "2026-04-18T14:11:14Z",
+  "data_processamento": "2026-04-20T10:36:16Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,
@@ -386,7 +398,7 @@
         {
           "arquivo": "Gama Home - Pedidos Abr 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos\\2026\\Gama Home - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-17T09:27:28Z"
+          "mtime_iso": "2026-04-20T09:34:15Z"
         },
         {
           "arquivo": "Gama Home - Pedidos Fev 2026.csv",
@@ -408,8 +420,8 @@
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home\\Pedidos",
       "mtime_iso": "2026-04-13T00:16:27Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 2922,
-      "pedidos_linhas_depois": 2921,
+      "pedidos_linhas_antes": 2957,
+      "pedidos_linhas_depois": 2956,
       "pedidos_linhas_removidas": 1
     },
     {
@@ -439,7 +451,7 @@
         {
           "arquivo": "Mega Star - Pedidos Abr 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos\\2026\\Mega Star - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-17T09:29:50Z"
+          "mtime_iso": "2026-04-20T09:35:50Z"
         },
         {
           "arquivo": "Mega Star - Pedidos Fev 2026.csv",
@@ -461,8 +473,8 @@
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star\\Pedidos",
       "mtime_iso": "2026-04-13T09:22:57Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 5627,
-      "pedidos_linhas_depois": 5618,
+      "pedidos_linhas_antes": 5720,
+      "pedidos_linhas_depois": 5711,
       "pedidos_linhas_removidas": 9
     },
     {
@@ -492,7 +504,7 @@
         {
           "arquivo": "Móveis EAP - Pedidos Abr 2026.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos\\2026\\Móveis EAP - Pedidos Abr 2026.csv",
-          "mtime_iso": "2026-04-17T09:37:07Z"
+          "mtime_iso": "2026-04-20T09:32:39Z"
         },
         {
           "arquivo": "Móveis EAP - Pedidos Fev 2026.csv",
@@ -514,20 +526,22 @@
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Móveis EAP\\Pedidos",
       "mtime_iso": "2026-04-06T23:23:35Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 7634,
-      "pedidos_linhas_depois": 7626,
+      "pedidos_linhas_antes": 7779,
+      "pedidos_linhas_depois": 7771,
       "pedidos_linhas_removidas": 8
     },
     {
       "org_id": "mega_facil",
       "empresa": "Mega Fácil",
       "pedidos_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Pedidos",
-      "pedidos_linhas_excluidas_assistencia": 440,
+      "pedidos_linhas_excluidas_assistencia": 477,
       "arquivos": [
         "Mega Facil - Pedidos Dez1 2025.csv",
         "Mega Facil - Pedidos Dez2 2025.csv",
         "Mega Facil - Pedidos Nov1 2025.csv",
         "Mega Facil - Pedidos Nov2 2025.csv",
+        "Mega Facil - Pedidos Abr 1 2026.csv",
+        "Mega Facil - Pedidos Abr 2 2026.csv",
         "Mega Facil - Pedidos Abr 2026.csv",
         "Mega Facil - Pedidos Fev1 2026.csv",
         "Mega Facil - Pedidos Fev2 2026.csv",
@@ -557,6 +571,16 @@
           "arquivo": "Mega Facil - Pedidos Nov2 2025.csv",
           "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Pedidos\\2025\\Mega Facil - Pedidos Nov2 2025.csv",
           "mtime_iso": "2026-04-15T09:30:34Z"
+        },
+        {
+          "arquivo": "Mega Facil - Pedidos Abr 1 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Pedidos\\2026\\Mega Facil - Pedidos Abr 1 2026.csv",
+          "mtime_iso": "2026-04-20T09:29:51Z"
+        },
+        {
+          "arquivo": "Mega Facil - Pedidos Abr 2 2026.csv",
+          "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Pedidos\\2026\\Mega Facil - Pedidos Abr 2 2026.csv",
+          "mtime_iso": "2026-04-20T09:30:17Z"
         },
         {
           "arquivo": "Mega Facil - Pedidos Abr 2026.csv",
@@ -599,18 +623,18 @@
           "mtime_iso": "2026-04-15T09:35:06Z"
         }
       ],
-      "arquivo": "12 ficheiros CSV",
+      "arquivo": "14 ficheiros CSV",
       "path": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Facil\\Pedidos",
       "mtime_iso": "2026-04-15T09:35:06Z",
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 18683,
-      "pedidos_linhas_depois": 18678,
-      "pedidos_linhas_removidas": 5
+      "pedidos_linhas_antes": 20956,
+      "pedidos_linhas_depois": 18998,
+      "pedidos_linhas_removidas": 1958
     }
   ],
   "status_custo_counts": {
-    "CUSTO_OK": 34813,
-    "SKU_SEM_CORRESPONDENCIA": 30
+    "CUSTO_OK": 35402,
+    "SKU_SEM_CORRESPONDENCIA": 34
   },
   "params_mensais_path": null,
   "notas_saida_dir_default": "notas_saida",
@@ -621,20 +645,20 @@
       "notas_linhas_apos_filtro": 2454,
       "notas_arquivos_linhas_brutas": 2457,
       "notas_vazio": false,
-      "notas_fallback_numero_coluna_linhas": 177,
+      "notas_fallback_numero_coluna_linhas": 180,
       "notas_frete_fallback_grupos_nf": 144,
-      "notas_nf_distintas": 2395,
+      "notas_nf_distintas": 2398,
       "custo_nf_enriquecido_linhas_pedido": 0,
       "custo_nf_itens_col_codigo": "Código",
       "custo_nf_itens_col_quantidade": "Quantidade",
       "custo_nf_itens_linhas_com_custo": 2433,
       "custo_nf_itens_nf_com_total_positivo": 2407,
-      "ml_fee_rateio_grupos_comissao": 8,
+      "ml_fee_rateio_grupos_comissao": 9,
       "ml_fee_rateio_grupos_frete": 1,
-      "ml_fee_rateio_linhas_tocadas": 16,
+      "ml_fee_rateio_linhas_tocadas": 18,
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 2922,
-      "pedidos_linhas_depois": 2921,
+      "pedidos_linhas_antes": 2957,
+      "pedidos_linhas_depois": 2956,
       "pedidos_linhas_removidas": 1
     },
     {
@@ -643,20 +667,20 @@
       "notas_linhas_apos_filtro": 4843,
       "notas_arquivos_linhas_brutas": 4850,
       "notas_vazio": false,
-      "notas_fallback_numero_coluna_linhas": 227,
+      "notas_fallback_numero_coluna_linhas": 245,
       "notas_frete_fallback_grupos_nf": 291,
-      "notas_nf_distintas": 4753,
+      "notas_nf_distintas": 4775,
       "custo_nf_enriquecido_linhas_pedido": 0,
       "custo_nf_itens_col_codigo": "Código",
       "custo_nf_itens_col_quantidade": "Quantidade",
       "custo_nf_itens_linhas_com_custo": 4818,
       "custo_nf_itens_nf_com_total_positivo": 4792,
-      "ml_fee_rateio_grupos_comissao": 18,
+      "ml_fee_rateio_grupos_comissao": 19,
       "ml_fee_rateio_grupos_frete": 5,
-      "ml_fee_rateio_linhas_tocadas": 36,
+      "ml_fee_rateio_linhas_tocadas": 38,
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 5627,
-      "pedidos_linhas_depois": 5618,
+      "pedidos_linhas_antes": 5720,
+      "pedidos_linhas_depois": 5711,
       "pedidos_linhas_removidas": 9
     },
     {
@@ -665,20 +689,20 @@
       "notas_linhas_apos_filtro": 17808,
       "notas_arquivos_linhas_brutas": 17853,
       "notas_vazio": false,
-      "notas_fallback_numero_coluna_linhas": 227,
+      "notas_fallback_numero_coluna_linhas": 244,
       "notas_frete_fallback_grupos_nf": 94,
-      "notas_nf_distintas": 6157,
+      "notas_nf_distintas": 6177,
       "custo_nf_enriquecido_linhas_pedido": 0,
       "custo_nf_itens_col_codigo": "Código",
       "custo_nf_itens_col_quantidade": "Quantidade",
       "custo_nf_itens_linhas_com_custo": 17653,
       "custo_nf_itens_nf_com_total_positivo": 17575,
-      "ml_fee_rateio_grupos_comissao": 8,
+      "ml_fee_rateio_grupos_comissao": 9,
       "ml_fee_rateio_grupos_frete": 2,
-      "ml_fee_rateio_linhas_tocadas": 16,
+      "ml_fee_rateio_linhas_tocadas": 18,
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 7634,
-      "pedidos_linhas_depois": 7626,
+      "pedidos_linhas_antes": 7779,
+      "pedidos_linhas_depois": 7771,
       "pedidos_linhas_removidas": 8
     },
     {
@@ -687,25 +711,25 @@
       "notas_linhas_apos_filtro": 34018,
       "notas_arquivos_linhas_brutas": 34219,
       "notas_vazio": false,
-      "notas_fallback_numero_coluna_linhas": 14009,
-      "notas_frete_fallback_grupos_nf": 635,
-      "notas_nf_distintas": 13350,
+      "notas_fallback_numero_coluna_linhas": 15411,
+      "notas_frete_fallback_grupos_nf": 639,
+      "notas_nf_distintas": 13448,
       "custo_nf_enriquecido_linhas_pedido": 1,
       "custo_nf_itens_col_codigo": "Código",
       "custo_nf_itens_col_quantidade": "Quantidade",
       "custo_nf_itens_linhas_com_custo": 33586,
       "custo_nf_itens_nf_com_total_positivo": 31656,
-      "ml_fee_rateio_grupos_comissao": 314,
-      "ml_fee_rateio_grupos_frete": 87,
-      "ml_fee_rateio_linhas_tocadas": 704,
+      "ml_fee_rateio_grupos_comissao": 1698,
+      "ml_fee_rateio_grupos_frete": 699,
+      "ml_fee_rateio_linhas_tocadas": 3703,
       "pedidos_dedupe_multiloja_codigo": "applied",
-      "pedidos_linhas_antes": 18683,
-      "pedidos_linhas_depois": 18678,
-      "pedidos_linhas_removidas": 5
+      "pedidos_linhas_antes": 20956,
+      "pedidos_linhas_depois": 18998,
+      "pedidos_linhas_removidas": 1958
     }
   ],
   "dataset_faturamento_nf_parquet": "dataset_faturamento_nf.parquet",
-  "nf_first_row_count": 26638,
+  "nf_first_row_count": 26781,
   "schema_version_nf_first": 4,
   "dataset_faturamento_nf_panel_parquet": "dataset_faturamento_nf_panel.parquet",
   "nf_panel_row_count": 56941,
@@ -715,7 +739,7 @@
   "fiscal_row_count": 56941,
   "dataset_faturamento_devolucoes_parquet": "dataset_faturamento_devolucoes.parquet",
   "schema_version_devolucoes": 1,
-  "total_devolvido": 54129.520000000004,
-  "nfs_devolucao": 295,
+  "total_devolvido": 237581.52999999997,
+  "nfs_devolucao": 921,
   "base_fiscal_composicao": "emitidas - canceladas - devolucoes"
 }

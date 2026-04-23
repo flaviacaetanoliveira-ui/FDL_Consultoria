@@ -278,7 +278,9 @@ class FaturamentoFiscalBaseStats:
     nfs_devolucao: int = 0
     base_fiscal_liquida: float = 0.0
     valor_faturado_nf: float = 0.0
-    valor_cancelado: float = 0.0
+    valor_cancelado: float = 0.0  # inválidas no período (cancel/deneg/inutil); soma Valor_Liquido_NF
+    valor_liquido_nf_periodo_todas_situacoes: float = 0.0  # composição (+): válidas filtradas + inválidas
+    n_nf_periodo_todas_situacoes: int = 0  # NFs distintas no período, todas as situações
     diferenca_lista_nf: float = 0.0
     aliquota_efetiva_pct: float = 0.0
     aliquota_configurada_pct: float = 0.0
@@ -328,11 +330,14 @@ def build_faturamento_fiscal_base_slice(
 ) -> tuple[pd.DataFrame, FaturamentoFiscalBaseStats]:
     """
     Recorte **base fiscal** alinhado ao Bling: **empresa** + **emissão** no intervalo + NF com situação válida
-    (exclui cancelada / denegada / inutilizada). Uma linha por NF após agregação por chave canónica.
+    (exclui cancelada / denegada / inutilizada do agregado que alimenta ``valor_liquido_fiscal_sum`` e a tabela).
 
-    Usa ``dataset_faturamento_fiscal.parquet`` (contrato fiscal). **Não** aplica plataforma, produto nem resultado.
+    O Parquet fiscal (schema ≥ 2) pode incluir linhas inválidas para rastreabilidade; elas entram em
+    ``valor_cancelado`` e na composição (+) via ``valor_liquido_nf_periodo_todas_situacoes``, sem alterar
+    ``base_fiscal_liquida`` (soma só de NFs válidas no recorte, menos devoluções).
 
-    ``situacoes_sel``: quando não vazio, restringe às situações cujo texto (case-insensitive) está na lista.
+    ``situacoes_sel``: quando não vazio, restringe **as NFs válidas** às situações cujo texto (case-insensitive)
+    está na lista.
 
     Fonte única dos totais fiscais (``FaturamentoFiscalBaseStats``): o mesmo recorte alimenta a **UI da Apuração Fiscal**
     (painel base fiscal) e o **Resultado Gerencial**, que **consome** ``base_fiscal_liquida`` e ``valor_liquido_fiscal_sum``
@@ -354,49 +359,37 @@ def build_faturamento_fiscal_base_slice(
     if out.empty:
         return pd.DataFrame(), empty_stats
 
-    valor_cancelado = 0.0
-    if "Nota_Situacao" in out.columns:
-        inv_m = _nf_fiscal_situacao_invalida(out["Nota_Situacao"])
-        valor_cancelado = float(
-            pd.to_numeric(out.loc[inv_m, "Valor_Liquido_NF"], errors="coerce").fillna(0.0).sum()
-        )
-        out = out.loc[~inv_m].copy()
-    if out.empty:
-        return pd.DataFrame(), empty_stats
-
     m_period = _fdl_fr_mask_nf_emissao_no_periodo(out["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
-    out = out.loc[m_period].copy()
-    if out.empty:
+    out_p = out.loc[m_period].copy()
+    if out_p.empty:
         return pd.DataFrame(), empty_stats
-
-    _sit = situacoes_sel or ()
-    if _sit and any(str(x).strip() for x in _sit) and "Nota_Situacao" in out.columns:
-        want = {str(x).strip().casefold() for x in _sit if str(x).strip()}
-        ss = out["Nota_Situacao"].fillna("").astype(str).str.strip()
-        out = out.loc[ss.str.casefold().isin(want)].copy()
-        if out.empty:
-            return pd.DataFrame(), empty_stats
 
     gb_keys: list[str] = []
-    if "org_id" in out.columns:
+    if "org_id" in out_p.columns:
         gb_keys.append("org_id")
-    gb_keys.append("empresa")
-    gb_keys.append("Nota_Numero_Normalizado")
+    gb_keys.extend(["empresa", "Nota_Numero_Normalizado"])
 
-    agg_dict: dict[str, str] = {
-        "Nota_Data_Emissao": "min",
-        "Valor_Liquido_NF": "sum",
-    }
-    if "Nota_Situacao" in out.columns:
-        agg_dict["Nota_Situacao"] = "first"
-    for opt in ("Frete_Nota_Export", "Valor_Total_NF", "schema_version_fiscal"):
-        if opt in out.columns:
-            agg_dict[opt] = "first"
+    vl_col = pd.to_numeric(out_p["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
+    all_gb = out_p.assign(_vl=vl_col).groupby(gb_keys, sort=False)["_vl"].sum()
+    n_nf_periodo_todas_situacoes = int(len(all_gb))
 
-    grouped = out.groupby(gb_keys, sort=False).agg(agg_dict).reset_index()
-    vl = pd.to_numeric(grouped["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
-    n_nf = int(len(grouped))
-    total = float(vl.sum())
+    valor_cancelado = 0.0
+    if "Nota_Situacao" in out_p.columns:
+        inv_m = _nf_fiscal_situacao_invalida(out_p["Nota_Situacao"])
+        if bool(inv_m.any()):
+            vli = pd.to_numeric(out_p.loc[inv_m, "Valor_Liquido_NF"], errors="coerce").fillna(0.0)
+            inv_gb = out_p.loc[inv_m].assign(_vl=vli).groupby(gb_keys, sort=False)["_vl"].sum()
+            valor_cancelado = float(inv_gb.sum())
+        out_valid = out_p.loc[~inv_m].copy()
+    else:
+        out_valid = out_p.copy()
+
+    _sit = situacoes_sel or ()
+    if _sit and any(str(x).strip() for x in _sit) and "Nota_Situacao" in out_valid.columns:
+        want = {str(x).strip().casefold() for x in _sit if str(x).strip()}
+        ss = out_valid["Nota_Situacao"].fillna("").astype(str).str.strip()
+        out_valid = out_valid.loc[ss.str.casefold().isin(want)].copy()
+
     td, ndev = _slice_devolucoes_fiscal_recorte(
         df_devolucoes,
         empresas_sel=empresas_sel,
@@ -404,7 +397,48 @@ def build_faturamento_fiscal_base_slice(
         nf_d_fim=nf_d_fim,
         ok_nf_dates=ok_nf_dates,
     )
+
+    if out_valid.empty:
+        # Sem NF válida após filtros: mesmo recorte vazio de antes, exceto quando só há inválidas no período.
+        if valor_cancelado <= 1e-12:
+            return pd.DataFrame(), empty_stats
+        base_liq = max(0.0, 0.0 - td)
+        stats = FaturamentoFiscalBaseStats(
+            n_nf=0,
+            valor_liquido_fiscal_sum=0.0,
+            total_devolvido=td,
+            nfs_devolucao=ndev,
+            base_fiscal_liquida=base_liq,
+            valor_faturado_nf=0.0,
+            valor_cancelado=valor_cancelado,
+            valor_liquido_nf_periodo_todas_situacoes=float(valor_cancelado),
+            n_nf_periodo_todas_situacoes=n_nf_periodo_todas_situacoes,
+        )
+        if imposto_apurado is not None:
+            stats = enrich_faturamento_fiscal_base_stats(
+                stats,
+                imposto_apurado=float(imposto_apurado),
+                df_nf_aligned=df_nf_aligned,
+                aliquota_configurada_pct=float(aliquota_configurada_pct),
+            )
+        return pd.DataFrame(), stats
+
+    agg_dict: dict[str, str] = {
+        "Nota_Data_Emissao": "min",
+        "Valor_Liquido_NF": "sum",
+    }
+    if "Nota_Situacao" in out_valid.columns:
+        agg_dict["Nota_Situacao"] = "first"
+    for opt in ("Frete_Nota_Export", "Valor_Total_NF", "schema_version_fiscal"):
+        if opt in out_valid.columns:
+            agg_dict[opt] = "first"
+
+    grouped = out_valid.groupby(gb_keys, sort=False).agg(agg_dict).reset_index()
+    vl = pd.to_numeric(grouped["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
+    n_nf = int(len(grouped))
+    total = float(vl.sum())
     base_liq = max(0.0, total - td)
+    v_todas = float(total + valor_cancelado)
     stats = FaturamentoFiscalBaseStats(
         n_nf=n_nf,
         valor_liquido_fiscal_sum=total,
@@ -413,6 +447,8 @@ def build_faturamento_fiscal_base_slice(
         base_fiscal_liquida=base_liq,
         valor_faturado_nf=total,
         valor_cancelado=valor_cancelado,
+        valor_liquido_nf_periodo_todas_situacoes=v_todas,
+        n_nf_periodo_todas_situacoes=n_nf_periodo_todas_situacoes,
     )
     if imposto_apurado is not None:
         stats = enrich_faturamento_fiscal_base_stats(

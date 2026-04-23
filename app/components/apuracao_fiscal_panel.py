@@ -6,7 +6,7 @@ import html
 import json
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 import pandas as pd
 import streamlit as st
@@ -657,6 +657,74 @@ def _apuracao_org_ids_resolvidos_para_df(
     return out
 
 
+def _classificar_nf_invalida_por_situacao(situacao: object) -> Literal["cancel", "deneg", "inutil", "outro"]:
+    """Classifica situação inválida (já filtrada por ``_nf_fiscal_situacao_invalida``) para o expander."""
+    s = str(situacao).strip().lower()
+    if "inutil" in s:
+        return "inutil"
+    if "deneg" in s:
+        return "deneg"
+    if "cancel" in s:
+        return "cancel"
+    return "outro"
+
+
+def _agregar_invalidas_por_tipo_no_periodo(
+    df_fiscal: pd.DataFrame,
+    *,
+    empresas_sel: tuple[str, ...],
+    nf_d_ini: date,
+    nf_d_fim: date,
+    ok_nf_dates: bool,
+) -> tuple[tuple[int, float], tuple[int, float], int]:
+    """
+    Retorna ``((n_cancel, R$ cancel), (n_deneg, R$ deneg), n_inutil)`` no mesmo recorte empresa + emissão.
+    Inutilizadas: apenas contagem (valor exibido como 0 na UI).
+    """
+    z = (0, 0.0), (0, 0.0), 0
+    if df_fiscal.empty or not ok_nf_dates or nf_d_fim < nf_d_ini:
+        return z
+    need = {"Nota_Data_Emissao", "Nota_Situacao", "Nota_Numero_Normalizado", "empresa", "Valor_Liquido_NF"}
+    if not need.issubset(df_fiscal.columns):
+        return z
+    out = df_fiscal.copy()
+    emp_opts = _fdl_fr_etiquetas_empresa_recorte(out)
+    if emp_opts and empresas_sel:
+        out = _fdl_fr_filtrar_por_etiquetas_empresa(out, list(empresas_sel))
+    if out.empty:
+        return z
+    m_period = _fdl_fr_mask_nf_emissao_no_periodo(out["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
+    out = out.loc[m_period].copy()
+    if out.empty or "Nota_Situacao" not in out.columns:
+        return z
+    inv = _nf_fiscal_situacao_invalida(out["Nota_Situacao"])
+    inv_df = out.loc[inv].copy()
+    if inv_df.empty:
+        return z
+    gb_keys: list[str] = []
+    if "org_id" in inv_df.columns:
+        gb_keys.append("org_id")
+    gb_keys.extend(["empresa", "Nota_Numero_Normalizado"])
+    tip = inv_df["Nota_Situacao"].map(_classificar_nf_invalida_por_situacao)
+    inv_df = inv_df.assign(_tipo=tip)
+    vl = pd.to_numeric(inv_df["Valor_Liquido_NF"], errors="coerce").fillna(0.0)
+    inv_df = inv_df.assign(_vl=vl)
+
+    def _agg(t: str) -> tuple[int, float]:
+        sub = inv_df.loc[inv_df["_tipo"] == t]
+        if sub.empty:
+            return 0, 0.0
+        g = sub.groupby(gb_keys, sort=False)["_vl"].sum()
+        return int(len(g)), float(g.sum())
+
+    nc, vc = _agg("cancel")
+    nd, vd = _agg("deneg")
+    ni, _ = _agg("inutil")
+    no, _ = _agg("outro")
+    ni += no
+    return (nc, vc), (nd, vd), ni
+
+
 def _count_nf_canceladas_periodo(
     df_fiscal: pd.DataFrame,
     *,
@@ -716,7 +784,7 @@ def _build_composicao_base_tributavel_html(
         f'<span class="fdl-fat-composicao-mono">{vf}</span>'
         "</div>"
         f'<div style="font-size:11px;color:var(--color-text-tertiary,#64748b);margin:-4px 0 6px 22px;">'
-        f"{html.escape(fmt_int(int(nfs_emitidas)))} NFs emitidas"
+        f"{html.escape(fmt_int(int(nfs_emitidas)))} NFs no período (todas as situações)"
         "</div>"
         '<div class="fdl-fat-composicao-linha">'
         '<span><span class="fdl-fat-composicao-sinal-menos">(−)</span>Cancelamentos fiscais</span>'
@@ -1410,8 +1478,8 @@ def render_apuracao_fiscal_panel(
         )
 
     composicao_html = _build_composicao_base_tributavel_html(
-        valor_faturado=float(_stats_kpi.valor_faturado_nf),
-        nfs_emitidas=int(_stats_kpi.n_nf),
+        valor_faturado=float(_stats_kpi.valor_liquido_nf_periodo_todas_situacoes),
+        nfs_emitidas=int(_stats_kpi.n_nf_periodo_todas_situacoes),
         valor_cancelado=float(_stats_kpi.valor_cancelado),
         nfs_canceladas=int(_nfs_canc),
         valor_devolucoes=float(_stats_kpi.total_devolvido),
@@ -1424,6 +1492,27 @@ def render_apuracao_fiscal_panel(
     st.html(COMPOSICAO_BASE_CSS + composicao_html)
 
     if use_fiscal_parquet and ok_nf_dates and isinstance(df_fiscal_pre, pd.DataFrame):
+        (nc, vc), (nd, vd), ni = _agregar_invalidas_por_tipo_no_periodo(
+            df_fiscal_pre,
+            empresas_sel=_emp_sel_t,
+            nf_d_ini=_nf_kpi_ini,
+            nf_d_fim=_nf_kpi_fim,
+            ok_nf_dates=ok_nf_dates,
+        )
+        if nc + nd + ni > 0:
+            with st.expander("Detalhamento de NFs inválidas", expanded=False):
+                st.markdown(
+                    f"- **Canceladas:** {ao._fmt_int_ptbr(nc)} NFs · **{ao._fmt_brl_ptbr_celula(vc)}**"
+                )
+                st.caption("Valores em valor líquido da NF (export Bling).")
+                st.markdown(
+                    f"- **Denegadas:** {ao._fmt_int_ptbr(nd)} NFs · **{ao._fmt_brl_ptbr_celula(vd)}** "
+                    "_(não afetam a base — nunca foram válidas fiscalmente)_"
+                )
+                st.markdown(
+                    f"- **Inutilizadas:** {ao._fmt_int_ptbr(ni)} NFs _(números pulados, sem valor fiscal)_"
+                )
+
         _emp_chaves_list = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
         _org_ids_ag = _apuracao_org_ids_resolvidos_para_df(_df_fiscal_base, params_union, _emp_chaves_list)
         simples_agregado = agregar_simples_nacional_para_painel_fiscal(

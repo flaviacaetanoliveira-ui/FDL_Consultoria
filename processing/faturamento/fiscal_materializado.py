@@ -38,7 +38,7 @@ def _find_col_valor_total_bruto(columns: list[str], col_liq: str) -> str:
     return ""
 
 
-SCHEMA_VERSION_FISCAL = 1
+SCHEMA_VERSION_FISCAL = 2
 
 FISCAL_CONTRACT_COLUMNS: tuple[str, ...] = (
     "org_id",
@@ -91,19 +91,25 @@ def build_fiscal_notas_from_directory(
     org_id: str,
     empresa: str,
     excluir_nf_keys: frozenset[str] | None = None,
+    manter_invalidas: bool = True,
 ) -> pd.DataFrame:
     """
-    Lê todos os CSV/XLSX em ``notas_dir``, aplica o mesmo filtro canceladas + prep + filtro empresa
-    que o join de pedidos, e devolve 1 linha por NF.
+    Lê todos os CSV/XLSX em ``notas_dir``, aplica prep + filtro empresa e devolve 1 linha por NF.
+
+    ``manter_invalidas=True`` (padrão): **não** remove canceladas/denegadas/inutilizadas — permanecem
+    no Parquet fiscal para rastreabilidade (subtração só no cálculo da base tributável).
+
+    ``manter_invalidas=False``: aplica ``filtrar_notas_canceladas`` como no join comercial (grão linha).
     """
     notas_dir = notas_dir.expanduser().resolve()
     raw = load_notas_saida_from_dir(notas_dir)
     if raw.empty:
         return _empty_fiscal_frame()
 
-    raw = filtrar_notas_canceladas(raw)
-    if raw.empty:
-        return _empty_fiscal_frame()
+    if not manter_invalidas:
+        raw = filtrar_notas_canceladas(raw)
+        if raw.empty:
+            return _empty_fiscal_frame()
 
     cols = list(raw.columns)
     col_liq = detectar_col_valor_total_liquido(cols) or (
@@ -210,4 +216,16 @@ def build_fiscal_materializado_dataframe(params_path: Path) -> pd.DataFrame:
 
 
 def fiscal_materializado_meta_snapshot(df: pd.DataFrame) -> dict[str, Any]:
-    return {"fiscal_row_count": int(len(df))}
+    ver = int(SCHEMA_VERSION_FISCAL)
+    if not df.empty and "schema_version_fiscal" in df.columns:
+        try:
+            mx = pd.to_numeric(df["schema_version_fiscal"], errors="coerce").max()
+            if mx == mx:  # not NaN
+                ver = int(mx)
+        except (TypeError, ValueError):
+            pass
+    return {
+        "fiscal_row_count": int(len(df)),
+        "fiscal_schema_version": ver,
+        "fiscal_inclui_invalidas": ver >= 2,
+    }

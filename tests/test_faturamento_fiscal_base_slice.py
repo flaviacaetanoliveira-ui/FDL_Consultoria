@@ -67,6 +67,30 @@ class TestBuildFaturamentoFiscalBaseSlice(unittest.TestCase):
         self.assertEqual(st2.n_nf, 1)
         self.assertAlmostEqual(st2.valor_liquido_fiscal_sum, 50.0)
         self.assertAlmostEqual(st2.valor_cancelado, 100.0)
+        self.assertAlmostEqual(st2.valor_liquido_nf_periodo_todas_situacoes, 150.0)
+        self.assertEqual(st2.n_nf_periodo_todas_situacoes, 1)
+
+    def test_valor_cancelado_somente_no_periodo_de_emissao(self) -> None:
+        df = pd.DataFrame(
+            {
+                "org_id": ["o1", "o1"],
+                "empresa": ["Acme", "Acme"],
+                "Nota_Numero_Normalizado": ["A", "B"],
+                "Nota_Data_Emissao": [pd.Timestamp("2026-02-01"), pd.Timestamp("2026-03-15")],
+                "Nota_Situacao": ["Cancelada", "Autorizada"],
+                "Valor_Liquido_NF": [999.0, 10.0],
+            }
+        )
+        _, st = build_faturamento_fiscal_base_slice(
+            df,
+            empresas_sel=("Acme",),
+            nf_d_ini=date(2026, 3, 1),
+            nf_d_fim=date(2026, 3, 31),
+            ok_nf_dates=True,
+        )
+        self.assertAlmostEqual(st.valor_cancelado, 0.0)
+        self.assertAlmostEqual(st.valor_liquido_fiscal_sum, 10.0)
+        self.assertAlmostEqual(st.valor_liquido_nf_periodo_todas_situacoes, 10.0)
 
     def test_situacoes_sel_restringe_base(self) -> None:
         df = pd.DataFrame(
@@ -292,6 +316,8 @@ class TestBuildFaturamentoFiscalBaseSlice(unittest.TestCase):
         st = FaturamentoFiscalBaseStats(3, 99.5)
         self.assertEqual(st.valor_faturado_nf, 0.0)
         self.assertEqual(st.valor_cancelado, 0.0)
+        self.assertEqual(st.valor_liquido_nf_periodo_todas_situacoes, 0.0)
+        self.assertEqual(st.n_nf_periodo_todas_situacoes, 0)
         self.assertEqual(st.diferenca_lista_nf, 0.0)
         self.assertEqual(st.aliquota_efetiva_pct, 0.0)
         self.assertEqual(st.aliquota_configurada_pct, 0.0)

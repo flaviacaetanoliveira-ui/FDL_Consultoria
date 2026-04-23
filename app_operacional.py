@@ -46,6 +46,13 @@ CORES_STATUS: dict[str, str] = {
 }
 
 import streamlit as st
+import sys
+
+# Evita segundo carregamento do ficheiro quando páginas fazem ``import app_operacional`` com
+# ``streamlit run app_operacional.py`` (__name__ == "__main__"): duplicava sidebar e keys Streamlit.
+if __name__ == "__main__":
+    sys.modules.setdefault("app_operacional", sys.modules["__main__"])
+
 from streamlit.column_config import DatetimeColumn, NumberColumn, SelectboxColumn, TextColumn
 from openpyxl.styles import numbers as oxl_number_formats
 from reportlab.lib.pagesizes import A4

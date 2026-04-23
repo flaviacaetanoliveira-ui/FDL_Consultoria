@@ -12005,6 +12005,12 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
             st.session_state[_bounds_sig_key] = _bounds_sig
             st.session_state[f"op_repasse_d_pag_ini_{_rep_wk}"] = _d_min
             st.session_state[f"op_repasse_d_pag_fim_{_rep_wk}"] = _d_max
+        _rk_ini = f"op_repasse_d_pag_ini_{_rep_wk}"
+        _rk_fim = f"op_repasse_d_pag_fim_{_rep_wk}"
+        if _rk_ini not in st.session_state:
+            st.session_state[_rk_ini] = _d_min
+        if _rk_fim not in st.session_state:
+            st.session_state[_rk_fim] = _d_max
         plats = (
             nf_grain_plataforma_ui_options(base["Plataforma"])
             if "Plataforma" in base.columns
@@ -12014,7 +12020,6 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         with r2[0]:
             data_pag_ini = st.date_input(
                 "Pagamento — início",
-                value=_d_min,
                 min_value=picker_min,
                 max_value=picker_max,
                 format="DD/MM/YYYY",
@@ -12023,7 +12028,6 @@ def _painel_conciliacao_fragment(base: pd.DataFrame, ts_proc: str) -> None:
         with r2[1]:
             data_pag_fim = st.date_input(
                 "Pagamento — fim",
-                value=_d_max,
                 min_value=picker_min,
                 max_value=picker_max,
                 format="DD/MM/YYYY",

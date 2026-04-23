@@ -94,6 +94,28 @@ def detectar_col_data_emissao(columns: list[str]) -> str:
     return ""
 
 
+def detectar_col_uf_destino(columns: list[str]) -> str:
+    """Coluna «UF» do destinatário no export Bling (cabeçalho exato após normalização ASCII)."""
+    for c in columns:
+        if _strip_header_ascii_lower(c) == "uf":
+            return c
+    return ""
+
+
+def detectar_col_cfop(columns: list[str]) -> str:
+    for c in columns:
+        if _strip_header_ascii_lower(c) == "cfop":
+            return c
+    return ""
+
+
+def detectar_col_ncm(columns: list[str]) -> str:
+    for c in columns:
+        if _strip_header_ascii_lower(c) == "ncm":
+            return c
+    return ""
+
+
 def load_notas_saida_from_dir(notas_dir: Path) -> pd.DataFrame:
     """Concatena todos os CSV/XLSX sob ``notas_dir`` (rglob)."""
     notas_dir = notas_dir.expanduser().resolve()

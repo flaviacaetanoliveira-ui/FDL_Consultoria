@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-23T15:14:42Z",
+  "generated_at": "2026-04-23T18:18:13Z",
   "pipeline_revision": "faturamento-v3",
   "cliente": "cliente_2",
   "empresa": "_multi",
@@ -359,7 +359,7 @@
     ],
     "custo_dedupe_by_normalized_sku_dropped_rows": 143
   },
-  "data_processamento": "2026-04-23T15:14:42Z",
+  "data_processamento": "2026-04-23T18:18:13Z",
   "validation_ok": true,
   "app_mirror_csv": "dataset_faturamento_app.csv",
   "schema_version": 2,
@@ -735,9 +735,9 @@
   "nf_panel_row_count": 69445,
   "nf_panel_ads": true,
   "dataset_faturamento_fiscal_parquet": "dataset_faturamento_fiscal.parquet",
-  "schema_version_fiscal": 2,
+  "schema_version_fiscal": 3,
   "fiscal_row_count": 69445,
-  "fiscal_schema_version": 2,
+  "fiscal_schema_version": 3,
   "fiscal_inclui_invalidas": true,
   "dataset_faturamento_devolucoes_parquet": "dataset_faturamento_devolucoes.parquet",
   "schema_version_devolucoes": 1,

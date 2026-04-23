@@ -8,11 +8,15 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import warnings
 
 import numpy as np
 import pandas as pd
 
 from .io_notas_saida import (
+    detectar_col_cfop,
+    detectar_col_ncm,
+    detectar_col_uf_destino,
     detectar_col_valor_total_liquido,
     filtrar_notas_canceladas,
     load_notas_saida_from_dir,
@@ -38,7 +42,7 @@ def _find_col_valor_total_bruto(columns: list[str], col_liq: str) -> str:
     return ""
 
 
-SCHEMA_VERSION_FISCAL = 2
+SCHEMA_VERSION_FISCAL = 3
 
 FISCAL_CONTRACT_COLUMNS: tuple[str, ...] = (
     "org_id",
@@ -46,13 +50,24 @@ FISCAL_CONTRACT_COLUMNS: tuple[str, ...] = (
     "Nota_Numero_Normalizado",
     "Nota_Data_Emissao",
     "Nota_Situacao",
+    "Nota_UF_Destino",
+    "Nota_CFOP",
+    "Nota_NCM",
     "Valor_Liquido_NF",
     "Frete_Nota_Export",
     "Valor_Total_NF",
     "schema_version_fiscal",
 )
 
-_FISCAL_OPTIONAL_READ_COLS = frozenset({"Valor_Total_NF", "Frete_Nota_Export"})
+_FISCAL_OPTIONAL_READ_COLS = frozenset(
+    {
+        "Valor_Total_NF",
+        "Frete_Nota_Export",
+        "Nota_UF_Destino",
+        "Nota_CFOP",
+        "Nota_NCM",
+    }
+)
 FISCAL_CONTRACT_REQUIRED_READ: frozenset[str] = frozenset(
     c for c in FISCAL_CONTRACT_COLUMNS if c not in _FISCAL_OPTIONAL_READ_COLS
 )
@@ -66,6 +81,46 @@ def fiscal_contract_dataframe_valid(df: pd.DataFrame) -> bool:
 
 def _empty_fiscal_frame() -> pd.DataFrame:
     return pd.DataFrame(columns=list(FISCAL_CONTRACT_COLUMNS))
+
+
+def _warn_nf_meta_conflicts(prep_meta: pd.DataFrame) -> None:
+    """Se a mesma NF tiver CFOP ou UF distintos entre linhas, avisa (agregação usa ``first``)."""
+    if prep_meta.empty or "nf_key" not in prep_meta.columns:
+        return
+    for _, sub in prep_meta.groupby("nf_key", sort=False):
+        for col in ("Nota_CFOP", "Nota_UF_Destino"):
+            if col not in sub.columns:
+                continue
+            u = sub[col].fillna("").astype(str).str.strip()
+            u = u[u.ne("")]
+            if len(u.unique()) > 1:
+                nk = str(sub["nf_key"].iloc[0]).strip()
+                warnings.warn(
+                    f"FDL fiscal: NF {nk!r} tem valores distintos em {col}; agregação usa first.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+
+
+def _prep_meta_cols_desde_raw(prep: pd.DataFrame, raw: pd.DataFrame) -> pd.DataFrame:
+    """Anexa ``Nota_UF_Destino``, ``Nota_CFOP``, ``Nota_NCM`` a partir do CSV bruto (índice alinhado a ``prep``)."""
+    out = prep.copy()
+    cols = list(raw.columns)
+    c_uf = detectar_col_uf_destino(cols)
+    c_cfop = detectar_col_cfop(cols)
+    c_ncm = detectar_col_ncm(cols)
+    idx = prep.index
+
+    def _col_series(col_name: str) -> pd.Series:
+        if col_name and col_name in raw.columns:
+            return raw.loc[idx, col_name].fillna("").astype(str).str.strip()
+        return pd.Series("", index=out.index, dtype=object)
+
+    out["Nota_UF_Destino"] = _col_series(c_uf)
+    out["Nota_CFOP"] = _col_series(c_cfop)
+    out["Nota_NCM"] = _col_series(c_ncm)
+    _warn_nf_meta_conflicts(out)
+    return out
 
 
 def _aggregate_bruto_from_raw(
@@ -129,6 +184,8 @@ def build_fiscal_notas_from_directory(
     if prep.empty:
         return _empty_fiscal_frame()
 
+    prep = _prep_meta_cols_desde_raw(prep, raw)
+
     sit_by_nf = _situacao_por_nf_agregada(prep)
 
     bruto_by_nf = (
@@ -142,6 +199,9 @@ def build_fiscal_notas_from_directory(
         Valor_Liquido_NF=("vl_liq", "sum"),
         Frete_Nota_Export=("frete_linha", "sum"),
         Nota_Data_Emissao=("dt_emissao", "min"),
+        Nota_UF_Destino=("Nota_UF_Destino", "first"),
+        Nota_CFOP=("Nota_CFOP", "first"),
+        Nota_NCM=("Nota_NCM", "first"),
     ).reset_index()
 
     agg = agg.rename(columns={"nf_key": "Nota_Numero_Normalizado"})
@@ -205,6 +265,9 @@ def build_fiscal_materializado_dataframe(params_path: Path) -> pd.DataFrame:
             .agg(
                 Nota_Data_Emissao=("Nota_Data_Emissao", "min"),
                 Nota_Situacao=("Nota_Situacao", "first"),
+                Nota_UF_Destino=("Nota_UF_Destino", "first"),
+                Nota_CFOP=("Nota_CFOP", "first"),
+                Nota_NCM=("Nota_NCM", "first"),
                 Valor_Liquido_NF=("Valor_Liquido_NF", "sum"),
                 Frete_Nota_Export=("Frete_Nota_Export", "sum"),
                 Valor_Total_NF=("Valor_Total_NF", "sum"),

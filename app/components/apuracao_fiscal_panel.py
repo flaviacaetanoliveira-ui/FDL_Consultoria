@@ -1391,6 +1391,42 @@ def render_apuracao_fiscal_panel(
     if use_fiscal_parquet and ok_nf_dates and isinstance(df_fiscal_pre, pd.DataFrame):
         _emp_chaves_list = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
         _org_ids_ag = _apuracao_org_ids_do_filtro(params_union, _emp_chaves_list)
+        # DEBUG TEMPORARIO F.T2.3 - REMOVER APOS DIAGNOSTICO
+        with st.expander("🔍 DEBUG F.T2.3 - Estado runtime do agregador Simples Nacional", expanded=True):
+            st.write("### Inputs do agregador")
+            st.write(f"**params_union type:** `{type(params_union).__name__}`")
+            st.write(f"**params_union is None:** `{params_union is None}`")
+            if params_union is not None:
+                try:
+                    empresas_params = getattr(params_union, "empresas", None)
+                    if empresas_params:
+                        st.write("**Empresas no params_union:**")
+                        for e in empresas_params:
+                            st.write(
+                                f"- `org_id={getattr(e, 'org_id', '?')}` · "
+                                f"`aliquota_imposto={getattr(e, 'aliquota_imposto', '?')}` · "
+                                f"`regime={getattr(e, 'regime_tributario', '?')}`"
+                            )
+                    else:
+                        st.write("**params_union não tem atributo 'empresas' ou está vazio**")
+                except Exception as exc:  # noqa: BLE001
+                    st.write(f"**Erro ao inspecionar params_union:** `{type(exc).__name__}: {exc}`")
+            st.write(f"**_emp_ef (empresas efetivas legendas):** `{_emp_ef}`")
+            st.write(f"**_emp_chaves_list:** `{_emp_chaves_list}`")
+            st.write(f"**_org_ids_ag:** `{_org_ids_ag}`")
+            st.write(
+                f"**_df_fiscal_base rows:** `{len(_df_fiscal_base) if _df_fiscal_base is not None else 'None'}`"
+            )
+            st.write(
+                f"**df_fiscal_pre rows:** `{len(df_fiscal_pre) if df_fiscal_pre is not None else 'None'}`"
+            )
+            st.write(f"**Período:** `{_nf_kpi_ini}` a `{_nf_kpi_fim}`")
+            if _df_fiscal_base is not None and len(_df_fiscal_base) > 0:
+                st.write(f"**Colunas em _df_fiscal_base:** `{list(_df_fiscal_base.columns)[:15]}`")
+                if "org_id" in _df_fiscal_base.columns:
+                    st.write("**Distribuição org_id em _df_fiscal_base:**")
+                    st.write(_df_fiscal_base["org_id"].value_counts().to_dict())
+        # DEBUG TEMPORARIO F.T2.3 - REMOVER APOS DIAGNOSTICO
         simples_agregado = agregar_simples_nacional_para_painel_fiscal(
             _df_fiscal_base,
             _org_ids_ag,
@@ -1401,6 +1437,31 @@ def render_apuracao_fiscal_panel(
             df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
             ok_nf_dates=ok_nf_dates,
         )
+        # DEBUG TEMPORARIO F.T2.3 - REMOVER APOS DIAGNOSTICO
+        with st.expander("🔍 DEBUG F.T2.3 - Saída do agregador", expanded=True):
+            st.write("### Output bruto do agregador")
+            st.write(f"**Tipo:** `{type(simples_agregado).__name__}`")
+            st.write(f"**Keys top-level:** `{list(simples_agregado.keys())}`")
+            st.write(f"**empresas_em_warmup:** `{simples_agregado.get('empresas_em_warmup')}`")
+            st.write(f"**empresas_com_calculo_oficial:** `{simples_agregado.get('empresas_com_calculo_oficial')}`")
+            por_empresa_dbg = simples_agregado.get("por_empresa", {})
+            st.write("### Por empresa:")
+            for slug, dados in por_empresa_dbg.items():
+                st.write(f"**{slug}:**")
+                st.write(
+                    {
+                        "regime": dados.get("regime"),
+                        "origem_aliquota": dados.get("origem_aliquota"),
+                        "meses_historico_disponiveis": dados.get("meses_historico_disponiveis"),
+                        "aliquota_referencia_json_pct": dados.get("aliquota_referencia_json_pct"),
+                        "aliquota_efetiva_calculada_pct": dados.get("aliquota_efetiva_calculada_pct"),
+                        "base_liquida_periodo": dados.get("base_liquida_periodo"),
+                        "imposto_calculado_periodo": dados.get("imposto_calculado_periodo"),
+                    }
+                )
+            st.write("### Total Simples:")
+            st.write(simples_agregado.get("total_simples"))
+        # DEBUG TEMPORARIO F.T2.3 - REMOVER APOS DIAGNOSTICO
         if _tem_alguma_empresa_simples_no_filtro(simples_agregado):
             aliquota_html = _build_aliquota_efetiva_simples_html(
                 simples_agregado,

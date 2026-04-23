@@ -201,6 +201,16 @@ def _write_parquet(df: Any, path: Path) -> None:
                 pass
 
 
+def _params_path_str_for_metadata(params_path: Path) -> str:
+    """Grava ``params_path`` relativo à raiz do repositório quando o JSON está no repo (portabilidade Linux/Cloud)."""
+    resolved = params_path.expanduser().resolve()
+    try:
+        rel = resolved.relative_to(REPO_ROOT.resolve())
+        return str(rel).replace("\\", "/")
+    except (ValueError, OSError):
+        return str(resolved)
+
+
 def _write_metadata(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -573,7 +583,7 @@ def _materialize_faturamento(
         "cnpj": cnpj,
         "row_count": int(len(df_out)),
         "columns": [str(c) for c in df_out.columns],
-        "params_path": str(params_path.resolve()),
+        "params_path": _params_path_str_for_metadata(params_path),
         "aliquota_imposto_usada": loader_meta.get("aliquota_imposto"),
         "aliquota_despesas_fixas_usada": loader_meta.get("aliquota_despesas_fixas"),
         "permite_faturamento_sem_nf": loader_meta.get("permite_faturamento_sem_nf")

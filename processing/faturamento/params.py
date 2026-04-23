@@ -173,12 +173,12 @@ def _coluna_base_tuple(raw: Any) -> tuple[str, ...]:
     raise FaturamentoParamsError("coluna_base_imposto deve ser string ou lista de strings.")
 
 
-def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
+def _load_v2(path: Path, raw: dict[str, Any], *, validate_fs: bool = True) -> FaturamentoParamsV2:
     root_s = raw.get("cliente_root")
     if not root_s or not str(root_s).strip():
         raise FaturamentoParamsError("schema_version 2 exige cliente_root.")
     cliente_root = Path(str(root_s).strip()).expanduser().resolve()
-    if not cliente_root.is_dir():
+    if validate_fs and not cliente_root.is_dir():
         raise FaturamentoParamsError(f"cliente_root não é pasta: {cliente_root}")
 
     slug = str(raw.get("cliente_slug", "")).strip()
@@ -194,7 +194,7 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
         custo_xlsx_resolved = p_cx.resolve()
     else:
         custo_xlsx_resolved = (cliente_root / p_cx).resolve()
-    if not custo_xlsx_resolved.is_file():
+    if validate_fs and not custo_xlsx_resolved.is_file():
         raise FaturamentoParamsError(f"Tabela de custo não encontrada: {custo_xlsx_resolved}")
 
     emp_raw = raw.get("empresas")
@@ -212,7 +212,7 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
         if not oid or not ename or not pdir:
             raise FaturamentoParamsError(f"empresas[{i}]: org_id, empresa e pedidos_dir são obrigatórios.")
         ped_path = (cliente_root / pdir).resolve()
-        if not ped_path.is_dir():
+        if validate_fs and not ped_path.is_dir():
             raise FaturamentoParamsError(f"Pasta de pedidos não existe: {ped_path}")
         ns_emp = e.get("notas_saida_dir")
         ns_emp_s = str(ns_emp).strip() if ns_emp is not None and str(ns_emp).strip() else None
@@ -263,15 +263,16 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
 
     nf_panel_ads = _as_bool(raw.get("nf_panel_ads", True))
 
-    root_digits = set(re.findall(r"\d+", cliente_root.name))
-    slug_digits = set(re.findall(r"\d+", slug))
-    if root_digits and slug_digits and root_digits.isdisjoint(slug_digits):
-        warnings.warn(
-            f"cliente_root (…«{cliente_root.name}») e cliente_slug («{slug}») têm números distintos. "
-            "Confirmar alinhamento com data_products / Streamlit.",
-            UserWarning,
-            stacklevel=1,
-        )
+    if validate_fs:
+        root_digits = set(re.findall(r"\d+", cliente_root.name))
+        slug_digits = set(re.findall(r"\d+", slug))
+        if root_digits and slug_digits and root_digits.isdisjoint(slug_digits):
+            warnings.warn(
+                f"cliente_root (…«{cliente_root.name}») e cliente_slug («{slug}») têm números distintos. "
+                "Confirmar alinhamento com data_products / Streamlit.",
+                UserWarning,
+                stacklevel=1,
+            )
 
     return FaturamentoParamsV2(
         cliente_root=cliente_root,
@@ -289,8 +290,14 @@ def _load_v2(path: Path, raw: dict[str, Any]) -> FaturamentoParamsV2:
     )
 
 
-def load_faturamento_params(path: Path) -> FaturamentoParams | FaturamentoParamsV2:
-    """Carrega V2 se ``schema_version >= 2``; caso contrário devolve ``FaturamentoParams`` (V1 legado)."""
+def load_faturamento_params(
+    path: Path, *, validate_fs_layout: bool = True
+) -> FaturamentoParams | FaturamentoParamsV2:
+    """Carrega V2 se ``schema_version >= 2``; caso contrário devolve ``FaturamentoParams`` (V1 legado).
+
+    ``validate_fs_layout=False``: só para UI em hosts sem pastas Windows do JSON (ex.: Streamlit Cloud);
+    ainda exige JSON válido e empresas bem formadas — não usar para pipeline ao vivo.
+    """
     path = path.expanduser().resolve()
     if not path.is_file():
         raise FaturamentoParamsError(f"Arquivo de parâmetros não encontrado: {path}")
@@ -305,7 +312,7 @@ def load_faturamento_params(path: Path) -> FaturamentoParams | FaturamentoParams
         ver_int = 1
 
     if ver_int >= 2:
-        return _load_v2(path, raw)
+        return _load_v2(path, raw, validate_fs=validate_fs_layout)
 
     ai = _as_float("aliquota_imposto", raw.get("aliquota_imposto"))
     ad = _as_float("aliquota_despesas_fixas", raw.get("aliquota_despesas_fixas"))

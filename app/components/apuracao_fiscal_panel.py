@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import html
 import json
-import os
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -620,6 +619,41 @@ def _apuracao_org_ids_do_filtro(
         if oid not in seen:
             seen.add(oid)
             out.append(oid)
+    return out
+
+
+def _apuracao_org_ids_resolvidos_para_df(
+    df: pd.DataFrame,
+    params_union: FaturamentoParams | FaturamentoParamsV2 | None,
+    empresas_chaves: list[str],
+) -> list[str]:
+    """Mapeia rótulos de UI para ``org_id`` da base fiscal quando ``params_union`` não resolve (ex.: Cloud)."""
+    base = _apuracao_org_ids_do_filtro(params_union, empresas_chaves)
+    if df is None or getattr(df, "empty", True) or "org_id" not in df.columns:
+        return base
+    known = {str(x).strip() for x in df["org_id"].dropna().unique().tolist() if str(x).strip()}
+    label_to_oid: dict[str, str] = {}
+    if "empresa" in df.columns:
+        sub = df[["empresa", "org_id"]].dropna()
+        sub = sub.assign(
+            _e=sub["empresa"].astype(str).str.strip(),
+            _o=sub["org_id"].astype(str).str.strip(),
+        )
+        for _, row in sub.drop_duplicates(subset=["_e"]).iterrows():
+            lab = str(row["_e"]).strip()
+            oid = str(row["_o"]).strip()
+            if lab and oid and lab not in label_to_oid:
+                label_to_oid[lab] = oid
+    out: list[str] = []
+    seen: set[str] = set()
+    for oid in base:
+        k = str(oid).strip()
+        if not k:
+            continue
+        resolved = k if k in known else label_to_oid.get(k, k)
+        if resolved not in seen:
+            seen.add(resolved)
+            out.append(resolved)
     return out
 
 
@@ -1391,56 +1425,7 @@ def render_apuracao_fiscal_panel(
 
     if use_fiscal_parquet and ok_nf_dates and isinstance(df_fiscal_pre, pd.DataFrame):
         _emp_chaves_list = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
-        _org_ids_ag = _apuracao_org_ids_do_filtro(params_union, _emp_chaves_list)
-        # DEBUG CLOUD F.T2.3 - REMOVER APOS DIAGNOSTICO
-        with st.expander("🔍 DEBUG CLOUD - Estado runtime", expanded=True):
-            st.write("### Environment")
-            st.write(
-                f"**FDL_MATERIALIZED_CLIENTE_SLUG (env):** `{os.environ.get('FDL_MATERIALIZED_CLIENTE_SLUG', 'NÃO DEFINIDO')}`"
-            )
-            st.write(
-                f"**FDL_DATA_PRODUCTS_ROOT (env):** `{os.environ.get('FDL_DATA_PRODUCTS_ROOT', 'NÃO DEFINIDO')}`"
-            )
-
-            st.write("### load_info recebido")
-            try:
-                st.write(f"**Keys:** `{list(load_info.keys())}`")
-                st.write(f"**cliente_slug:** `{load_info.get('cliente_slug', 'AUSENTE')}`")
-                st.write(
-                    f"**faturamento_path_final_resolved:** `{load_info.get('faturamento_path_final_resolved', 'AUSENTE')}`"
-                )
-            except Exception as exc:
-                st.write(f"**Erro ao inspecionar load_info:** `{exc}`")
-
-            st.write("### params_union")
-            st.write(f"**Tipo:** `{type(params_union).__name__}`")
-            st.write(f"**É None:** `{params_union is None}`")
-            if params_union is not None:
-                try:
-                    emps = getattr(params_union, "empresas", [])
-                    st.write(f"**Empresas carregadas:** `{len(emps)}`")
-                    for e in emps:
-                        st.write(
-                            f"  - `{getattr(e, 'org_id', '?')}` · aliq=`{getattr(e, 'aliquota_imposto', '?')}` · "
-                            f"regime=`{getattr(e, 'regime_tributario', '?')}`"
-                        )
-                except Exception as exc:
-                    st.write(f"**Erro ao inspecionar params_union:** `{exc}`")
-
-            st.write("### _df_fiscal_base")
-            try:
-                if _df_fiscal_base is not None and not _df_fiscal_base.empty:
-                    st.write(f"**Linhas:** `{len(_df_fiscal_base)}`")
-                    if "org_id" in _df_fiscal_base.columns:
-                        st.write(f"**org_id counts:** `{_df_fiscal_base['org_id'].value_counts().to_dict()}`")
-                else:
-                    st.write("**VAZIO OU NONE**")
-            except Exception as exc:
-                st.write(f"**Erro:** `{exc}`")
-
-            st.write("### _org_ids_ag")
-            st.write(f"`{_org_ids_ag}`")
-
+        _org_ids_ag = _apuracao_org_ids_resolvidos_para_df(_df_fiscal_base, params_union, _emp_chaves_list)
         simples_agregado = agregar_simples_nacional_para_painel_fiscal(
             _df_fiscal_base,
             _org_ids_ag,

@@ -7,20 +7,45 @@ Usado pela Apuração Fiscal para legendas e avisos — **não** substitui o cá
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import TypedDict
 
 from .params import (
     FaturamentoParams,
+    FaturamentoParamsError,
     FaturamentoParamsV2,
     load_faturamento_params,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
+_LOG = logging.getLogger(__name__)
+
 _FALLBACK_PARAMS_JSON: dict[str, Path] = {
-    "cliente_2": _REPO_ROOT / "ops" / "faturamento_params_cliente_2_gama_star_eap.json",
+    "cliente_2": (_REPO_ROOT / "ops" / "faturamento_params_cliente_2_gama_star_eap.json").resolve(),
 }
+
+
+def _resolve_existing_params_json_path(raw: str) -> Path | None:
+    """Resolve caminho para JSON de params: absoluto, cwd-relativo, ou relativo à raiz do repositório."""
+    s = str(raw).strip()
+    if not s:
+        return None
+    cand = Path(s).expanduser()
+    try:
+        if cand.is_file():
+            return cand.resolve()
+    except OSError:
+        pass
+    try:
+        if not cand.is_absolute():
+            alt = (_REPO_ROOT / cand).resolve()
+            if alt.is_file():
+                return alt
+    except OSError:
+        pass
+    return None
 
 
 class AliquotaConfiguradaInfo(TypedDict):
@@ -203,8 +228,9 @@ def resolve_faturamento_params_path_for_ui(load_info: dict[str, object]) -> Path
     """
     for key in ("params_path", "faturamento_params_path"):
         raw = str(load_info.get(key, "")).strip()
-        if raw and Path(raw).is_file():
-            return Path(raw).expanduser().resolve()
+        p0 = _resolve_existing_params_json_path(raw)
+        if p0 is not None:
+            return p0
 
     path_final = load_info.get("faturamento_path_final_resolved")
     try:
@@ -214,8 +240,10 @@ def resolve_faturamento_params_path_for_ui(load_info: dict[str, object]) -> Path
             if meta_path.is_file():
                 meta = json.loads(meta_path.read_text(encoding="utf-8"))
                 pp = meta.get("params_path")
-                if pp and Path(str(pp)).is_file():
-                    return Path(str(pp)).expanduser().resolve()
+                if pp:
+                    p_meta = _resolve_existing_params_json_path(str(pp))
+                    if p_meta is not None:
+                        return p_meta
                 cli = str(meta.get("cliente", "")).strip()
         if not cli:
             cli = str(load_info.get("cliente_slug", "")).strip() or str(load_info.get("cliente", "")).strip()
@@ -223,8 +251,8 @@ def resolve_faturamento_params_path_for_ui(load_info: dict[str, object]) -> Path
             cand = _FALLBACK_PARAMS_JSON[cli]
             if cand.is_file():
                 return cand.resolve()
-    except (OSError, json.JSONDecodeError, TypeError, ValueError):
-        pass
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        _LOG.warning("resolve_faturamento_params_path_for_ui falhou: %s", exc, exc_info=True)
     return None
 
 
@@ -234,7 +262,32 @@ def load_faturamento_params_for_ui(load_info: dict[str, object]) -> FaturamentoP
         return None
     try:
         return load_faturamento_params(p)
-    except Exception:
+    except FaturamentoParamsError as exc:
+        _LOG.warning(
+            "load_faturamento_params layout inválido em %s (%s: %s) — nova tentativa só para UI (sem validar pastas).",
+            p,
+            type(exc).__name__,
+            exc,
+        )
+        try:
+            return load_faturamento_params(p, validate_fs_layout=False)
+        except Exception as exc2:
+            _LOG.error(
+                "Falha ao carregar params JSON (UI relaxada) de %s: %s: %s",
+                p,
+                type(exc2).__name__,
+                exc2,
+                exc_info=True,
+            )
+            return None
+    except Exception as exc:
+        _LOG.error(
+            "Falha ao carregar params JSON de %s: %s: %s",
+            p,
+            type(exc).__name__,
+            exc,
+            exc_info=True,
+        )
         return None
 
 

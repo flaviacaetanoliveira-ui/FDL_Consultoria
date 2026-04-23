@@ -1,0 +1,52 @@
+{
+  "schema_version": 2,
+  "cliente_root": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2",
+  "cliente_slug": "cliente_2",
+  "custo_xlsx": "Custos.xlsx",
+  "aliquota_imposto": 0.11,
+  "aliquota_despesas_fixas": 0.05,
+  "permite_faturamento_sem_nf": false,
+  "coluna_base_imposto": [
+    "Base fiscal item",
+    "Valor total"
+  ],
+  "notas_saida_dir": "notas_saida",
+  "empresas": [
+    {
+      "org_id": "gama_home",
+      "empresa": "Gama Home",
+      "pedidos_dir": "Gama Home/Pedidos",
+      "notas_saida_dir": "Gama Home/notas_saida",
+      "aliquota_imposto": 0.09,
+      "aliquota_despesas_fixas": 0.05,
+      "excluir_notas_fiscal": [
+        "10032",
+        "010032"
+      ]
+    },
+    {
+      "org_id": "mega_star",
+      "empresa": "Mega Star",
+      "pedidos_dir": "Mega Star/Pedidos",
+      "notas_saida_dir": "Mega Star/notas_saida",
+      "aliquota_imposto": 0.095,
+      "aliquota_despesas_fixas": 0.05
+    },
+    {
+      "org_id": "moveis_eap",
+      "empresa": "Móveis EAP",
+      "pedidos_dir": "Móveis EAP/Pedidos",
+      "notas_saida_dir": "Móveis EAP/notas_saida",
+      "aliquota_imposto": 0.11,
+      "aliquota_despesas_fixas": 0.05
+    },
+    {
+      "org_id": "mega_facil",
+      "empresa": "Mega Fácil",
+      "pedidos_dir": "Mega Facil/Pedidos",
+      "notas_saida_dir": "Mega Facil/notas_saida",
+      "aliquota_imposto": 0.11,
+      "aliquota_despesas_fixas": 0.05
+    }
+  ]
+}

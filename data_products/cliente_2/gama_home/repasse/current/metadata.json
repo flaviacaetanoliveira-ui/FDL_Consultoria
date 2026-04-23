@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-19T11:01:10Z",
-  "source_signature": "dd4a4bbba7fb02a1232b127462417bd7",
+  "generated_at": "2026-04-23T11:15:10Z",
+  "source_signature": "71762cb8408e0ff52da2965bf511859c",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "gama_home",
@@ -9,7 +9,7 @@
   "empresa_id": "gama_home",
   "cnpj": null,
   "repasse_empresa_label": "Gama Home",
-  "row_count": 1973,
+  "row_count": 2009,
   "columns": [
     "N° de venda",
     "ID do pedido",
@@ -35,7 +35,7 @@
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home",
   "loader_info": {
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home",
-    "linhas": 1973,
+    "linhas": 2009,
     "arquivos_contas_lidos": 5,
     "col_situacao": "Situação",
     "col_numero": "Número"

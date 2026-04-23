@@ -1,0 +1,141 @@
+======================================================================
+PROVA DOS 9 - ORG WOOD - MES 03/2026 (emisso NF, BR)
+======================================================================
+
+Linhas totais (NF no mes):       931
+Linhas com CUSTO_OK:             929
+Linhas sem custo OK:             2
+Cobertura custo (CUSTO_OK/linhas): 99.79%
+
+======================================================================
+RECONSTRUCAO DA DRE (linhas CUSTO_OK)
+======================================================================
+
+(+) Receita (Vl_Venda):                   R$ 276,258.09  (100.0%)
+
+DEDUCOES:
+(-) Frete_Plataforma                    R$ 67,642.25  ( 24.5%)
+(-) Taxa de Comissao                    R$ 34,042.80  ( 12.3%)
+(-) Custo_Produto_Total                R$ 119,851.72  ( 43.4%)
+(-) Outras_Despesas                          R$ 0.00  (  0.0%)
+(-) Imposto                             R$ 24,755.38  (  9.0%)
+(-) Despesas_Fixas                      R$ 13,812.90  (  5.0%)
+
+    Total deducoes                     R$ 260,105.06  ( 94.2%)
+
+----------------------------------------------------------------------
+(=) RESULTADO CALCULADO:                   R$ 16,153.03  (  5.8%)
+(=) RESULTADO NO DATASET (soma):           R$ 16,153.03
+
+    Diferenca (calc - dataset):                  R$ -0.00
+    [OK] Validado - diferenca < R$ 10
+
+======================================================================
+ANALISE POR SKU (CUSTO_OK)
+======================================================================
+
+>>> TOP 15 SKUs com PIOR Resultado (soma) <<<
+
+SKU                     Receita        Custo       Result    Marg%   Custo%
+--------------------------------------------------------------------------------
+3160                   5,374.53     2,940.82    -1,531.55   -28.5%    54.7%
+-                      3,032.99     1,639.96      -440.18   -14.5%    54.1%
+3164                   2,600.45     1,238.24      -349.27   -13.4%    47.6%
+1686                   1,713.00       699.51      -161.08    -9.4%    40.8%
+2851                   1,480.00       850.00      -158.95   -10.7%    57.4%
+3163                   2,348.25     1,083.46       -95.19    -4.1%    46.1%
+94034674                 804.95       471.00       -89.78   -11.2%    58.5%
+4041                     145.05        79.00       -86.90   -59.9%    54.5%
+1347                     631.50       220.00       -81.64   -12.9%    34.8%
+2935                     462.84       268.00       -66.24   -14.3%    57.9%
+2915                     253.11       147.00       -61.83   -24.4%    58.1%
+2925                   1,734.99       936.00       -42.17    -2.4%    53.9%
+2945                     338.00       173.00       -34.73   -10.3%    51.2%
+976                      297.90       162.00       -14.31    -4.8%    54.4%
+1890                     278.00       115.83         1.80     0.6%    41.7%
+
+Prejuizo total TOP 15 (soma Resultado): R$ -3,212.00
+
+>>> SKUs com Custo > 60% da receita <<<
+Total SKUs: 0
+Receita agregada: R$ 0.00
+Resultado agregado: R$ 0.00
+
+
+>>> TOP 10 SKUs com melhor Margem % (Receita > 500) <<<
+901                   R$ 1,511.00       R$ 493.21  marg%=32.6
+879                   R$ 2,311.10       R$ 619.18  marg%=26.8
+3998                    R$ 575.20        R$ 95.38  marg%=16.6
+2831                 R$ 11,357.53     R$ 1,699.18  marg%=15.0
+2701                 R$ 13,427.98     R$ 1,863.03  marg%=13.9
+2905                  R$ 1,426.91       R$ 196.34  marg%=13.8
+147                   R$ 1,767.15       R$ 240.51  marg%=13.6
+2841                 R$ 10,690.77     R$ 1,405.95  marg%=13.2
+2721                  R$ 1,839.92       R$ 234.25  marg%=12.7
+1691                  R$ 3,529.16       R$ 443.81  marg%=12.6
+
+======================================================================
+COMPARACAO ENTRE EMPRESAS - MES 03/2026 (NF, CUSTO_OK)
+======================================================================
+
+org_id                 Receita           Custo       Resultado    Marg%   Custo%
+-------------------------------------------------------------------------------------
+esquilo             548,170.24      227,740.71       51,485.25     9.4%    41.5% [+]
+wood                276,258.09      119,851.72       16,153.03     5.8%    43.4% [+]
+-------------------------------------------------------------------------------------
+TOTAL               824,428.33      347,592.43       67,638.27     8.2%    42.2%
+
+Media Custo % (entre orgs no mes): 42.5%
+Custo % desta org (wood):        43.4%
+Desvio (esta org - media):       +0.9 p.p.
+
+======================================================================
+CONSISTENCIA - CSV PEDIDOS (Data no mes) vs DATASET (Vl_Venda, NF no mes)
+======================================================================
+Pedidos dir: C:\Users\diieg\OneDrive - FDL Consultoria\Cursor\Flavio\Cliente_4\Wood\Pedidos\2026
+CSV linhas (Data no mes):      1006
+Dataset linhas (NF no mes):    931
+Receita CSV (lista x qtd):     R$ 306,245.61
+Receita dataset (NF no mes):   R$ 276,730.24
+Diferenca (CSV - dataset NF):  R$ 29,515.37
+(Nota: CSV por competencia pedido; dataset por emissao NF.)
+
+======================================================================
+CHECKLIST DE VALIDACAO
+======================================================================
+
+  [OK] Cobertura custo: 99.79% (meta >= 95%)
+  [OK] Prova dos 9: |diff| < R$ 10  =>  0.00
+  [OK] Duplicados (chave NF+SKU+Qtd+Pedido): 0
+  [OK] Nulos em Vl_Venda/Custo/Resultado (CUSTO_OK): 0
+  [OK] SKUs com Custo pct > 100: 0
+  [OK] Margem resultado: 5.8% (alerta se < -10%)
+  [i] Ultima materializacao: 2026-04-16T22:53:11Z
+
+  Aprovados: 6  |  Alertas: 0
+
+======================================================================
+RELATORIO EXECUTIVO (rascunho - org wood)
+======================================================================
+
+Periodo: emissao de NF em 03/2026 (fuso America/Sao_Paulo).
+Ultima materializacao dataset: 2026-04-16T22:53:11Z
+
+Resumo financeiro (apenas linhas CUSTO_OK):
+  Receita (Vl_Venda):           R$ 276,258.09
+  Custo produto (total):       -R$ 119,851.72  (43.4% da receita)
+  Demais deducoes (soma):      -R$ 140,253.34  (50.8% da receita)
+  Resultado (dataset):          R$ 16,153.03  (5.8% margem)
+
+Validacao interna:
+  - Coluna de custo esperada: coluna de custo conforme empresa no XLSX
+  - Cobertura CUSTO_OK: 99.79%.
+  - Prova dos 9 vs soma Resultado: OK (diff -0.00).
+
+Diagnostico quantitativo:
+  - SKUs com resultado negativo: 14 (soma dos negativos: R$ -3,213.80).
+
+Recomendacoes (genericas):
+  1. Rever precificacao dos SKUs com resultado negativo recorrente.
+  2. Rever mix e custo de fornecimento nos itens com Custo % elevado.
+  3. Manter alinhamento DRE com criterio NF-first ja usado no painel.

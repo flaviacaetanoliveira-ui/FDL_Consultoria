@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "cliente_root": "C:/Users/diieg/OneDrive - FDL Consultoria/Cursor/Flavio/Cliente_4",
+  "cliente_slug": "cliente_5",
+  "custo_xlsx": "Custo.xlsx",
+  "aliquota_imposto": 0.12,
+  "aliquota_despesas_fixas": 0.05,
+  "permite_faturamento_sem_nf": false,
+  "coluna_base_imposto": ["Base fiscal item", "Valor total"],
+  "empresas": [
+    {
+      "org_id": "esquilo",
+      "empresa": "Esquilo",
+      "pedidos_dir": "Esquilo/Pedidos/2026",
+      "notas_saida_dir": "Esquilo/notas_saida",
+      "permite_faturamento_sem_nf": true
+    },
+    {
+      "org_id": "wood",
+      "empresa": "Wood",
+      "pedidos_dir": "Wood/Pedidos/2026",
+      "notas_saida_dir": "Wood/notas_saida"
+    }
+  ]
+}

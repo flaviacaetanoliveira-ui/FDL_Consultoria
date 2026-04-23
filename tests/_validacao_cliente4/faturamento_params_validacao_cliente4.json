@@ -1,0 +1,29 @@
+{
+  "schema_version": 2,
+  "cliente_root": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Flavio\\Cliente_4",
+  "cliente_slug": "cliente_4_validacao",
+  "custo_xlsx": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\V2\\tests\\_validacao_cliente4\\Custo_validacao.xlsx",
+  "aliquota_imposto": 0.11,
+  "aliquota_despesas_fixas": 0.06,
+  "permite_faturamento_sem_nf": true,
+  "coluna_base_imposto": [
+    "Valor total"
+  ],
+  "params_mensais": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\V2\\tests\\_validacao_cliente4\\params_mensais_validacao.csv",
+  "notas_saida_dir": "notas_saida",
+  "empresas": [
+    {
+      "org_id": "esquilo",
+      "empresa": "Esquilo",
+      "pedidos_dir": "Esquilo/Pedidos/2026",
+      "notas_saida_dir": "Esquilo/notas_saida",
+      "permite_faturamento_sem_nf": true
+    },
+    {
+      "org_id": "wood",
+      "empresa": "Wood",
+      "pedidos_dir": "Wood/Pedidos/2026",
+      "notas_saida_dir": "Wood/notas_saida"
+    }
+  ]
+}

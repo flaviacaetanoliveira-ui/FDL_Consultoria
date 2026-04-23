@@ -1,0 +1,30 @@
+# Benchmarks e thresholds do Resultado Gerencial (ficha pedido / diagnóstico).
+# Sobrescreva em config/<org_id>.yaml (mesmo formato ou chave resultado_gerencial).
+
+resultado_gerencial:
+  # Termômetro de pace (Ciclo D): metas mensais por slug de empresa (YAML > MA3 > sem meta).
+  # Exemplo (comentar / ajustar no YAML do cliente):
+  # pace:
+  #   meta_mensal:
+  #     gama_home: 170000
+  #     mega_star: 95000
+  #   # meta_mensal_padrao: 150000   # quando não há chave por empresa
+
+  benchmarks:
+    margem_operacional_saudavel: 0.20
+    margem_liquida_saudavel: 0.15
+    cmv_pct_max_aceitavel: 0.50
+    cmv_alert_above_empresa_pp: 3.0
+    comissao_alert_above_pp: 1.0
+    frete_plat_alert_above_sku_pp: 2.0
+
+  comissao_categoria:
+    mercado_livre:
+      casa: 0.065
+      moveis: 0.14
+      eletronicos: 0.12
+      padrao: 0.14
+    shopee:
+      padrao: 0.20
+    padrao:
+      padrao: 0.12

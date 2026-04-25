@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-19T11:23:06Z",
-  "source_signature": "96303ef742482931277a2e2e9d02b410",
+  "generated_at": "2026-04-25T12:59:21Z",
+  "source_signature": "d5f38c23b0a1dc1c41c7b5c4b872f4a2",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "default",
@@ -9,7 +9,7 @@
   "cliente_id": "default",
   "empresa_id": "antomoveis",
   "cnpj": null,
-  "row_count": 488,
+  "row_count": 491,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -107,15 +107,15 @@
     "org_id": "antomoveis",
     "dataset_empresa": "antomoveis",
     "cliente_id": "default",
-    "row_count_pre_filtro_devolucao": 498,
-    "row_count_excluidas_cancel_comercial": 10,
-    "row_count_candidatas": 488,
-    "row_count_vendas_total": 5117,
-    "row_count_liberacoes": 3768,
-    "sales_from_lib_financial": 164,
+    "row_count_pre_filtro_devolucao": 502,
+    "row_count_excluidas_cancel_comercial": 11,
+    "row_count_candidatas": 491,
+    "row_count_vendas_total": 5168,
+    "row_count_liberacoes": 3862,
+    "sales_from_lib_financial": 167,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 5117,
-  "row_count_liberacoes": 3768,
-  "sales_from_lib_financial": 164
+  "row_count_vendas_total": 5168,
+  "row_count_liberacoes": 3862,
+  "sales_from_lib_financial": 167
 }

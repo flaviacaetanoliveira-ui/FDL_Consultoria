@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-19T11:16:25Z",
-  "source_signature": "6836fe3278cd69b17e360bfe76559c08",
+  "generated_at": "2026-04-25T12:49:48Z",
+  "source_signature": "7ef6562d5567103e2b77455b618aac3e",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_thiago",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "bp_ramiro",
   "cnpj": null,
-  "row_count": 211,
+  "row_count": 217,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -42,7 +42,6 @@
     "Tipo de contribuinte",
     "Inscrição estadual",
     "Comprador",
-    "Negócio",
     "CPF",
     "Endereço.1",
     "Cidade",
@@ -73,6 +72,7 @@
     "Em mediação",
     "arquivo_origem_venda",
     "Custo de envio com base nas medidas e peso declarados",
+    "Negócio",
     "candidato_motivo",
     "status_ml_texto",
     "lib_n_eventos",
@@ -106,15 +106,15 @@
     "org_id": "bp_ramiro",
     "dataset_empresa": "bp_ramiro",
     "cliente_id": "cliente_thiago",
-    "row_count_pre_filtro_devolucao": 233,
+    "row_count_pre_filtro_devolucao": 239,
     "row_count_excluidas_cancel_comercial": 22,
-    "row_count_candidatas": 211,
-    "row_count_vendas_total": 5135,
-    "row_count_liberacoes": 4133,
-    "sales_from_lib_financial": 172,
+    "row_count_candidatas": 217,
+    "row_count_vendas_total": 5249,
+    "row_count_liberacoes": 4515,
+    "sales_from_lib_financial": 178,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 5135,
-  "row_count_liberacoes": 4133,
-  "sales_from_lib_financial": 172
+  "row_count_vendas_total": 5249,
+  "row_count_liberacoes": 4515,
+  "sales_from_lib_financial": 178
 }

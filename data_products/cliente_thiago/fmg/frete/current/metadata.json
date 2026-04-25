@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-20T09:40:32Z",
-  "source_signature": "8b176b792f4aa5a33b958367cdc88dd6",
+  "generated_at": "2026-04-25T12:52:40Z",
+  "source_signature": "241c0af640f7fb2912123cb10c035495",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "fmg",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "fmg",
   "cnpj": null,
-  "row_count": 8856,
+  "row_count": 9125,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -42,7 +42,6 @@
     "Tipo de contribuinte",
     "Inscrição estadual",
     "Comprador",
-    "Negócio",
     "CPF",
     "Endereço.1",
     "Cidade",
@@ -68,11 +67,12 @@
     "Resultado",
     "Destino",
     "Motivo do resultado",
+    "Unidades.2",
     "Reclamação aberta",
     "Reclamação encerrada",
     "Em mediação",
     "Custo do envio (BRL)",
-    "Unidades.2",
+    "Negócio",
     "Frete cobrado",
     "Qtd × preço unit. produto (ML)",
     "_data_venda_dt",
@@ -101,7 +101,7 @@
     "vendas_arquivo": "FMG - Vendas ML 2026.xlsx, FMG - Vendas ML 2025.xlsx",
     "frete_arquivo": "FMG - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 8856,
+    "linhas": 9125,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

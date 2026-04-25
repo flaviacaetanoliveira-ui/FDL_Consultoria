@@ -48,7 +48,59 @@
       "notas_saida_dir": "Mega Facil/notas_saida",
       "notas_entrada_dir": "Mega Facil/Entradas",
       "aliquota_imposto": 0.11,
-      "aliquota_despesas_fixas": 0.05
+      "aliquota_despesas_fixas": 0.05,
+      "lucro_presumido_params": {
+        "ativo": true,
+        "limite_receita_majoracao_anual": 5000000.0,
+        "presuncao_irpj_ate_limite": 0.08,
+        "presuncao_irpj_acima_limite": 0.088,
+        "presuncao_csll_ate_limite": 0.12,
+        "presuncao_csll_acima_limite": 0.132,
+        "aliquota_irpj": 0.15,
+        "limite_adicional_irpj_trimestral": 60000.0,
+        "aliquota_adicional_irpj": 0.1,
+        "aliquota_csll": 0.09,
+        "pis": 0.0065,
+        "cofins": 0.03,
+        "aplicar_majoracao_lc_224": true
+      },
+      "icms_params": {
+        "icms_interno_moveis_9403_completos": 0.133,
+        "icms_interno_moveis_9403_partes_pecas": 0.18,
+        "icms_interestadual_origem_sp": {
+          "AC": 0.07,
+          "AL": 0.07,
+          "AM": 0.07,
+          "AP": 0.07,
+          "BA": 0.07,
+          "CE": 0.07,
+          "DF": 0.07,
+          "ES": 0.07,
+          "GO": 0.07,
+          "MA": 0.07,
+          "MG": 0.12,
+          "MS": 0.07,
+          "MT": 0.07,
+          "PA": 0.07,
+          "PB": 0.07,
+          "PE": 0.07,
+          "PI": 0.07,
+          "PR": 0.12,
+          "RJ": 0.12,
+          "RN": 0.07,
+          "RO": 0.07,
+          "RR": 0.07,
+          "RS": 0.12,
+          "SC": 0.12,
+          "SE": 0.07,
+          "TO": 0.07
+        },
+        "aliquota_destino_generica_difal": 0.18,
+        "fcp_destino": {
+          "RJ": 0.02
+        },
+        "fcp_default": 0.0
+      }
     }
   ]
 }

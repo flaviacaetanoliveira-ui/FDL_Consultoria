@@ -26,6 +26,7 @@ from processing.faturamento.params_regime import (
     find_empresa_faturamento_entry,
     get_aliquota_imposto_por_empresa,
     load_faturamento_params_for_ui,
+    resolve_faturamento_params_path_for_ui,
 )
 from processing.faturamento.simples_nacional import (
     ResultadoAliquotaEfetivaMes,
@@ -47,6 +48,7 @@ from faturamento_dre_recorte_minimo import (
 from processing.faturamento.fiscal_materializado import fiscal_contract_dataframe_valid
 from processing.faturamento.nf_materializado import nf_first_contract_dataframe_valid
 from processing.faturamento.nf_panel_materializado import nf_panel_materializado_dataframe_valid
+from app.components.lucro_presumido_card import render_lucro_presumido_card
 
 _ALIQUOTA_DIVERG_PP = 0.5
 
@@ -875,6 +877,7 @@ def _build_aliquota_efetiva_simples_html(
     simples_agregado: dict[str, Any],
     *,
     fmt_brl: Callable[[float], str],
+    lp_breakdowns: dict[str, dict[str, float]] | None = None,
 ) -> str:
     """Bloco «Alíquota Efetiva por Empresa · Simples Nacional» (calculado, warm-up JSON, L. Presumido)."""
     por: dict[str, Any] = simples_agregado.get("por_empresa", {})
@@ -1016,8 +1019,14 @@ def _build_aliquota_efetiva_simples_html(
         if reg == "lucro_presumido":
             tr_cls = "fdl-fat-sn-row-lp"
             badge = '<span class="fdl-fat-sn-badge-lp">[L. Presumido]</span>'
-            imp_s = html.escape("cálculo em desenvolvimento")
-            ali_s = "—"
+            lp_row = (lp_breakdowns or {}).get(oid) if lp_breakdowns else None
+            if lp_row:
+                imp_s = html.escape(fmt_brl(float(lp_row["imposto_total"])))
+                ali_s = html.escape(_fmt_pct_br2(float(lp_row["aliquota_efetiva_pct"]))) + "%"
+                badge += '<span class="fdl-fat-sn-badge-calc-inline">[Calculado]</span>'
+            else:
+                imp_s = html.escape("cálculo em desenvolvimento")
+                ali_s = "—"
         elif oa == "referencia_json":
             badge = '<span class="fdl-fat-sn-badge-json">[JSON]</span>'
             jr = float(json_ref) if isinstance(json_ref, (int, float)) else None
@@ -1525,10 +1534,37 @@ def render_apuracao_fiscal_panel(
             df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
             ok_nf_dates=ok_nf_dates,
         )
+        lp_breakdowns_table: dict[str, dict[str, float]] = {}
+        params_path = resolve_faturamento_params_path_for_ui(load_info)
+        if params_path is not None and isinstance(params_union, FaturamentoParamsV2):
+            lp_orgs: list[tuple[str, str]] = []
+            sel_orgs = set(_org_ids_ag)
+            for e in params_union.empresas:
+                if e.regime_tributario != "lucro_presumido":
+                    continue
+                if sel_orgs and e.org_id not in sel_orgs:
+                    continue
+                lp_orgs.append((e.org_id, e.empresa))
+            for lp_org_id, lp_nome in lp_orgs:
+                br = render_lucro_presumido_card(
+                    df_fiscal=df_fiscal_pre,
+                    df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
+                    org_id=lp_org_id,
+                    empresa_nome=lp_nome,
+                    nf_d_ini=pd.Timestamp(_nf_kpi_ini),
+                    nf_d_fim=pd.Timestamp(_nf_kpi_fim),
+                    json_params_path=params_path,
+                )
+                if br is not None:
+                    lp_breakdowns_table[lp_org_id] = {
+                        "imposto_total": float(br.total_imposto),
+                        "aliquota_efetiva_pct": float(br.aliquota_efetiva * 100.0),
+                    }
         if _tem_alguma_empresa_simples_no_filtro(simples_agregado):
             aliquota_html = _build_aliquota_efetiva_simples_html(
                 simples_agregado,
                 fmt_brl=ao._fmt_brl_ptbr_celula,
+                lp_breakdowns=lp_breakdowns_table,
             )
             ao._fdl_fat_min_vsp(size="sm")
             st.html(ALIQUOTA_EFETIVA_CSS + aliquota_html)

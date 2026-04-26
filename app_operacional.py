@@ -6,7 +6,6 @@ from email.utils import parsedate_to_datetime
 from io import BytesIO
 import base64
 import json
-import logging
 import hashlib
 import math
 import numbers
@@ -7958,9 +7957,6 @@ def _build_faturamento_dre_page_header_html(
     )
 
 
-_LOG_NF = logging.getLogger("apuracao_fiscal_nf_table")
-
-
 def _render_faturamento_dre_nf_table_section(
     *,
     df_nf_pre: pd.DataFrame,
@@ -8436,17 +8432,6 @@ def _render_faturamento_dre_nf_table_section(
     _disp_nf_full = pd.DataFrame()
     _disp_nf_ui = pd.DataFrame()
     if not _df_nf_table.empty:
-        _LOG_NF.warning(
-            "nf_table guard: ui_fiscal=%s aliquotas_mensais_sn=%s breakdowns_lp_keys=%s org_ids_lp=%s",
-            _ui_fiscal,
-            "None" if aliquotas_mensais_sn is None else f"keys={list(aliquotas_mensais_sn.keys())[:5]}",
-            "None" if breakdowns_lp is None else f"keys={list(breakdowns_lp.keys())[:5]}",
-            "None" if org_ids_lp is None else f"set={sorted(org_ids_lp)[:5]}",
-        )
-        _LOG_NF.warning(
-            "nf_table colunas df_nf_table: %s",
-            sorted(_df_nf_table.columns.tolist())[:30],
-        )
         # Enriquecimento ativa se há SN ou LP (qualquer um); parâmetros vazios viram {} / set() no motor
         _tem_sn_para_enriquecer = (
             aliquotas_mensais_sn is not None and len(aliquotas_mensais_sn) > 0
@@ -8475,11 +8460,6 @@ def _render_faturamento_dre_nf_table_section(
                 if "Valor_Liquido_NF" not in _df_nf_table.columns:
                     _df_nf_table = _df_nf_table.copy()
                     _df_nf_table["Valor_Liquido_NF"] = _df_nf_table["valor_faturado_nf"]
-                _LOG_NF.warning(
-                    "nf_table enriquecimento ATIVADO: linhas=%d colunas_req_presentes=%s",
-                    len(_df_nf_table),
-                    True,
-                )
                 _df_nf_table = enriquecer_nfs_com_imposto_calculado(
                     _df_nf_table,
                     aliquotas_mensais_sn=aliquotas_mensais_sn or {},
@@ -9101,6 +9081,22 @@ def _render_faturamento_dre_nf_table_section(
                     "</div>"
                     "</div>"
                     "</div>",
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    """
+    <div class="fdl-metodologia">
+      <div class="fdl-metodologia-titulo">METODOLOGIA E PREMISSAS</div>
+      <ul class="fdl-metodologia-lista">
+        <li><strong>Simples Nacional:</strong> alíquota efetiva conforme LC 123/2006, art. 18, §1º, com tabela do Anexo I (LC 155/2016).
+        Imposto por NF aplica alíquota efetiva do mês de emissão.</li>
+        <li><strong>Lucro Presumido:</strong> tributos federais (PIS, COFINS, IRPJ + adicional, CSLL — incluindo majoração LC 224/2025)
+        rateados por NF; tributos estaduais (ICMS interno, ICMS interestadual, DIFAL, FCP) calculados individualmente por CFOP, NCM e UF de destino.</li>
+        <li><strong>Imposto por NF é estimativa gerencial.</strong> A apuração oficial é feita por período (mensal/trimestral).
+        Para cumprimento de obrigações fiscais, sempre consultar contador.</li>
+      </ul>
+    </div>
+    """,
                     unsafe_allow_html=True,
                 )
 

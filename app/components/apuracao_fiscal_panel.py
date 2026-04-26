@@ -55,7 +55,6 @@ from processing.faturamento.nf_panel_materializado import nf_panel_materializado
 
 _ALIQUOTA_DIVERG_PP = 0.5
 _LOG_AP = logging.getLogger(__name__)
-_LOG_PANEL = logging.getLogger("apuracao_fiscal_panel")
 
 FISCAL_KPIS_CSS = """<style>
 .fdl-fat-kpi-hero-grid {
@@ -299,6 +298,47 @@ APURACAO_PREMIUM_PANEL_CSS = """<style>
 .fdl-tabela-totais-geral .fdl-tabela-totais-item-value {
   color: #047857;
   font-weight: 700;
+}
+.fdl-metodologia {
+  margin-top: 1.5rem;
+  padding: 1rem 1.5rem;
+  background-color: #FAFAF9;
+  border-left: 3px solid #D4D4D8;
+  border-radius: 0.25rem;
+}
+.fdl-metodologia-titulo {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.75rem;
+}
+.fdl-metodologia-lista {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+.fdl-metodologia-lista li {
+  font-size: 0.875rem;
+  color: #4B5563;
+  line-height: 1.6;
+  margin-bottom: 0.625rem;
+  padding-left: 1rem;
+  position: relative;
+}
+.fdl-metodologia-lista li:last-child {
+  margin-bottom: 0;
+}
+.fdl-metodologia-lista li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #9CA3AF;
+}
+.fdl-metodologia-lista strong {
+  color: #1F2937;
+  font-weight: 600;
 }
 </style>"""
 
@@ -2060,13 +2100,6 @@ def render_apuracao_fiscal_panel(
     if isinstance(lp_prefetched, dict) and lp_prefetched:
         _breakdowns_lp_kw = lp_prefetched
         _org_ids_lp_kw = set(lp_prefetched.keys())
-
-    _LOG_PANEL.warning(
-        "nf_table chamada (final): aliq_sn_kw=%s breakdowns_lp_kw=%s org_ids_lp_kw=%s",
-        "None" if _aliq_sn_kw is None else f"keys={list(_aliq_sn_kw.keys())[:5]}",
-        "None" if _breakdowns_lp_kw is None else f"keys={list(_breakdowns_lp_kw.keys())[:5]}",
-        "None" if _org_ids_lp_kw is None else f"set={sorted(_org_ids_lp_kw)[:5]}",
-    )
 
     ao._render_faturamento_dre_nf_table_section(
         df_nf_pre=df_nf_pre,

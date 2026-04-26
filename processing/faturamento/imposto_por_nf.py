@@ -19,7 +19,6 @@ import pandas as pd
 from processing.faturamento.lucro_presumido import LucroPresumidoBreakdown
 
 logger = logging.getLogger(__name__)
-_LOG_IMP_NF = logging.getLogger("imposto_por_nf")
 
 _LP_TRIB_COLS = (
     "pis_nf",
@@ -152,51 +151,14 @@ def enriquecer_nfs_com_imposto_calculado(
                 out.at[orig_idx, "aliquota_mensal_nf"] = 0.0
 
     # --- Lucro Presumido ---
-    _LOG_IMP_NF.warning(
-        "imposto_por_nf merge LP: org_ids_lp=%s breakdowns_keys=%s",
-        sorted(str(x) for x in org_ids_lp)[:5],
-        sorted(str(k) for k in breakdowns_lp.keys())[:5] if hasattr(breakdowns_lp, "keys") else [],
-    )
     trib_parts: list[pd.DataFrame] = []
     for oid_lp in org_lp_norm:
         bd = breakdowns_lp.get(oid_lp)
         if bd is None:
-            _LOG_IMP_NF.warning("imposto_por_nf: oid_lp %s nao esta em breakdowns_lp", oid_lp)
             continue
         t = getattr(bd, "tributos_por_nf", None)
         if t is None or getattr(t, "empty", True):
-            _LOG_IMP_NF.warning("imposto_por_nf: tributos_por_nf vazio para %s", oid_lp)
             continue
-        df_trib = t
-        mask_lp_oid = (
-            (out["regime_nf"] == "LP")
-            & (out["org_id"].astype(str).str.strip() == str(oid_lp).strip())
-            & out["imposto_calculavel_nf"]
-        )
-        n_linhas_alvo = int(mask_lp_oid.sum())
-        n_linhas_trib = len(df_trib)
-        _LOG_IMP_NF.warning(
-            "imposto_por_nf %s: linhas_target_no_df_nf=%d linhas_no_breakdown=%d",
-            oid_lp,
-            n_linhas_alvo,
-            n_linhas_trib,
-        )
-        chaves_df_nf = (
-            out.loc[mask_lp_oid, "Nota_Numero_Normalizado"].astype(str).str.strip().unique()
-        )
-        chaves_breakdown = df_trib["Nota_Numero_Normalizado"].astype(str).str.strip().unique()
-        intersecao = set(chaves_df_nf) & set(chaves_breakdown)
-        _df_nf_sample = list(chaves_df_nf[:3]) if len(chaves_df_nf) else []
-        _bd_sample = list(chaves_breakdown[:3]) if len(chaves_breakdown) else []
-        _LOG_IMP_NF.warning(
-            "imposto_por_nf %s: chaves df_nf=%d chaves breakdown=%d intersecao=%d sample_df_nf=%s sample_breakdown=%s",
-            oid_lp,
-            len(chaves_df_nf),
-            len(chaves_breakdown),
-            len(intersecao),
-            _df_nf_sample,
-            _bd_sample,
-        )
         tt = t.copy()
         tt["_org_lp"] = str(oid_lp).strip()
         tt["_nf_k"] = tt["Nota_Numero_Normalizado"].astype(str).str.strip()

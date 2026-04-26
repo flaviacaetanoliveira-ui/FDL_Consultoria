@@ -207,13 +207,24 @@ def render_lucro_presumido_card(
     nf_d_fim: pd.Timestamp,
     json_params_path: Path,
     receita_anual_estimada: float | None = None,
+    breakdown: LucroPresumidoBreakdown | None = None,
 ) -> LucroPresumidoBreakdown | None:
     """
     Renderiza bloco de Apuração Lucro Presumido para a empresa indicada.
 
+    Quando ``breakdown`` é informado, evita recalcular (uso no painel após cálculo único).
+
     Retorna o breakdown quando renderizado com sucesso; retorna ``None`` para
     empresa não-LP, ausência de dados no período ou falha de carregamento.
     """
+    if breakdown is not None:
+        st.markdown(_LP_CARD_CSS, unsafe_allow_html=True)
+        _render_header(empresa_nome, nf_d_ini, nf_d_fim)
+        _render_kpis_principais(breakdown)
+        _render_breakdown_detalhado(breakdown)
+        _render_expander_transparencia(breakdown)
+        _render_disclaimer()
+        return breakdown
     try:
         lp_params, icms_params = load_lucro_presumido_params_from_json(json_params_path, org_id)
     except Exception as exc:  # noqa: BLE001

@@ -13,6 +13,8 @@ import pandas as pd
 import streamlit as st
 
 from app.components.lucro_presumido_card import render_lucro_presumido_card
+from processing.faturamento.lucro_presumido import LucroPresumidoBreakdown, calcular_lucro_presumido
+from processing.faturamento.lucro_presumido_loader import load_lucro_presumido_params_from_json
 from faturamento_dre_recorte import (
     _BR_TZ,
     _fdl_fr_etiquetas_empresa_recorte,
@@ -147,6 +149,119 @@ FISCAL_KPIS_CSS = """<style>
   border-radius: 8px;
   font-size: 12px;
   color: #854F0B;
+}
+</style>"""
+
+APURACAO_PREMIUM_PANEL_CSS = """<style>
+.fdl-apu-hero-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+@media (max-width: 900px) {
+  .fdl-apu-hero-grid { grid-template-columns: 1fr; }
+}
+.fdl-apu-hero-card {
+  background: #ffffff;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  min-height: 140px;
+  box-sizing: border-box;
+}
+.fdl-kpi-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+.fdl-kpi-value {
+  font-size: 1.875rem;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.2;
+  margin-bottom: 0.25rem;
+}
+.fdl-kpi-sublabel {
+  font-size: 0.875rem;
+  color: #9CA3AF;
+  font-weight: 400;
+}
+.fdl-section-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111827;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #E5E7EB;
+}
+.fdl-subsection-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.fdl-tabela-regime {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.fdl-tabela-regime th {
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6B7280;
+  text-transform: uppercase;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #E5E7EB;
+}
+.fdl-tabela-regime td {
+  padding: 0.75rem;
+  color: #1F2937;
+  border-bottom: 1px solid #F3F4F6;
+}
+.fdl-tabela-regime tr.subtotal td {
+  font-weight: 600;
+  background-color: #F9FAFB;
+  border-top: 2px solid #E5E7EB;
+}
+.fdl-total-geral {
+  background: linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%);
+  border: 1px solid #E5E7EB;
+  border-radius: 0.75rem;
+  padding: 1.5rem 2rem;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}
+.fdl-total-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 1rem;
+}
+.fdl-total-row {
+  display: flex;
+  gap: 3rem;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+.fdl-total-item-label {
+  font-size: 0.75rem;
+  color: #9CA3AF;
+  margin-bottom: 0.25rem;
+}
+.fdl-total-item-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
 }
 </style>"""
 
@@ -782,6 +897,244 @@ def _fmt_pct_br2(v: float | None) -> str:
     return f"{v:.2f}".replace(".", ",")
 
 
+def _fmt_brl_curto(v: float, fmt_brl: Callable[[float], str]) -> str:
+    x = float(v)
+    av = abs(x)
+    neg = x < 0
+    prefix = "−" if neg else ""
+    if av < 1000:
+        return prefix + fmt_brl(x)
+    if av < 1_000_000:
+        k = av / 1000.0
+        ks = f"{k:.0f}k" if k >= 10 else f"{k:.1f}".replace(".", ",") + "k"
+        return f"{prefix}R$ {ks}"
+    if av < 1_000_000_000:
+        m = av / 1_000_000.0
+        ms = f"{m:.1f}".replace(".", ",") + "M"
+        return f"{prefix}R$ {ms}"
+    return prefix + fmt_brl(x)
+
+
+def _build_apuracao_premium_hero_tres_html(
+    *,
+    base_total: float,
+    nfs_total: int,
+    imposto_total: float,
+    imposto_sn: float,
+    imposto_lp: float,
+    carga_efetiva_pct: float,
+    aliquota_efetiva_stats_pct: float,
+    ok_nf_dates: bool,
+    fmt_brl: Callable[[float], str],
+    divergencia_compare_pct: float | None,
+) -> str:
+    dash = "—"
+    if ok_nf_dates:
+        v_base = html.escape(fmt_brl(float(base_total)))
+        v_imp = html.escape(fmt_brl(float(imposto_total)))
+        carga_s = html.escape(_fmt_pct_br2(float(carga_efetiva_pct))) + "%"
+        sub_imp = (
+            f"SN {_fmt_brl_curto(float(imposto_sn), fmt_brl)} + LP {_fmt_brl_curto(float(imposto_lp), fmt_brl)}"
+        )
+        sub_imp_esc = html.escape(sub_imp)
+        nfs_s = html.escape(f"{int(nfs_total):,}".replace(",", "."))
+    else:
+        v_base = v_imp = carga_s = dash
+        sub_imp_esc = html.escape("—")
+        nfs_s = dash
+
+    alert_block = ""
+    if (
+        ok_nf_dates
+        and divergencia_compare_pct is not None
+        and divergencia_compare_pct > 1e-9
+        and abs(float(aliquota_efetiva_stats_pct) - float(divergencia_compare_pct)) > _ALIQUOTA_DIVERG_PP
+    ):
+        alert_block = (
+            '<div class="fdl-fat-kpi-aliquota-divergencia">'
+            "⚠ Alíquota efetiva ("
+            f"{html.escape(_fmt_pct_br2(float(aliquota_efetiva_stats_pct)))}%) diverge da configurada ("
+            f"{html.escape(_fmt_pct_br2(float(divergencia_compare_pct)))}%). Verificar composição."
+            "</div>"
+        )
+
+    return (
+        '<div class="fdl-apu-hero-grid">'
+        '<div class="fdl-apu-hero-card">'
+        '<div class="fdl-kpi-label">Base Tributável</div>'
+        f'<div class="fdl-kpi-value">{v_base}</div>'
+        f'<div class="fdl-kpi-sublabel">{nfs_s} NFs</div>'
+        "</div>"
+        '<div class="fdl-apu-hero-card">'
+        '<div class="fdl-kpi-label">Imposto Apurado</div>'
+        f'<div class="fdl-kpi-value">{v_imp}</div>'
+        f'<div class="fdl-kpi-sublabel">{sub_imp_esc}</div>'
+        "</div>"
+        '<div class="fdl-apu-hero-card">'
+        '<div class="fdl-kpi-label">Carga Efetiva</div>'
+        f'<div class="fdl-kpi-value">{carga_s}</div>'
+        '<div class="fdl-kpi-sublabel">imposto / base</div>'
+        "</div>"
+        "</div>"
+        f"{alert_block}"
+    )
+
+
+def _sn_aliquota_celula_tabela(row: dict[str, Any]) -> str:
+    oa = row.get("origem_aliquota")
+    pond = row.get("aliquota_efetiva_ponderada_periodo_pct")
+    if pond is None:
+        pond = row.get("aliquota_media_periodo_pct")
+    json_ref = row.get("aliquota_referencia_json_pct")
+    if oa == "referencia_json":
+        jr = float(json_ref) if isinstance(json_ref, (int, float)) else None
+        if jr is not None:
+            return html.escape(_fmt_pct_br2(jr)) + "% (ref.)"
+        return "—"
+    if oa == "calculada" and isinstance(pond, (int, float)):
+        return html.escape(_fmt_pct_br2(float(pond))) + "%"
+    if isinstance(pond, (int, float)):
+        return html.escape(_fmt_pct_br2(float(pond))) + "%"
+    return "—"
+
+
+def _build_tributacao_por_empresa_unificado_html(
+    simples_agregado: dict[str, Any],
+    *,
+    lp_breakdowns: dict[str, dict[str, float]] | None,
+    fmt_brl: Callable[[float], str],
+) -> str:
+    por: dict[str, Any] = simples_agregado.get("por_empresa", {})
+    lp_b = lp_breakdowns or {}
+    parts: list[str] = []
+    sn_body: list[str] = []
+    for oid, row in sorted(
+        por.items(),
+        key=lambda kv: str(kv[1].get("empresa_nome", kv[0]) if isinstance(kv[1], dict) else kv[0]),
+    ):
+        if not isinstance(row, dict) or row.get("regime") != "simples_nacional":
+            continue
+        nome = html.escape(str(row.get("empresa_nome", oid)))
+        base_l = row.get("base_liquida_periodo")
+        base_s = html.escape(fmt_brl(float(base_l))) if isinstance(base_l, (int, float)) else "—"
+        imp = row.get("imposto_calculado_periodo")
+        imp_s = html.escape(fmt_brl(float(imp))) if isinstance(imp, (int, float)) else "—"
+        ali_s = _sn_aliquota_celula_tabela(row)
+        sn_body.append(
+            "<tr>"
+            f"<td>{nome}</td><td>{base_s}</td><td>{ali_s}</td><td>{imp_s}</td>"
+            "</tr>"
+        )
+
+    if sn_body:
+        tot = simples_agregado.get("total_simples", {})
+        tb = float(tot.get("base_liquida", 0.0)) if isinstance(tot, dict) else 0.0
+        ti = float(tot.get("imposto_total", 0.0)) if isinstance(tot, dict) else 0.0
+        tap = tot.get("aliquota_media_ponderada_pct") if isinstance(tot, dict) else None
+        tap_cell = html.escape(_fmt_pct_br2(float(tap))) + "%" if isinstance(tap, (int, float)) else "—"
+        sub_sn = (
+            '<tr class="subtotal">'
+            "<td>Subtotal SN</td>"
+            f"<td>{html.escape(fmt_brl(tb))}</td>"
+            f"<td>{tap_cell}</td>"
+            f"<td>{html.escape(fmt_brl(ti))}</td>"
+            "</tr>"
+        )
+        parts.append('<h3 class="fdl-subsection-title">Simples Nacional</h3>')
+        parts.append(
+            '<table class="fdl-tabela-regime"><thead><tr>'
+            "<th>Empresa</th><th>Base Líquida</th><th>Alíquota Efetiva</th><th>Imposto</th>"
+            "</tr></thead><tbody>"
+            + "".join(sn_body)
+            + sub_sn
+            + "</tbody></table>"
+        )
+
+    lp_body: list[str] = []
+    sum_base_lp = 0.0
+    sum_imp_lp = 0.0
+    for oid, row in sorted(
+        por.items(),
+        key=lambda kv: str(kv[1].get("empresa_nome", kv[0]) if isinstance(kv[1], dict) else kv[0]),
+    ):
+        if not isinstance(row, dict) or row.get("regime") != "lucro_presumido":
+            continue
+        nome = html.escape(str(row.get("empresa_nome", oid)))
+        base_l = row.get("base_liquida_periodo")
+        base_f = float(base_l) if isinstance(base_l, (int, float)) else 0.0
+        base_s = html.escape(fmt_brl(base_f)) if isinstance(base_l, (int, float)) else "—"
+        lp_row = lp_b.get(oid)
+        if lp_row:
+            imp_f = float(lp_row["imposto_total"])
+            ali_pct = float(lp_row["aliquota_efetiva_pct"])
+            imp_s = html.escape(fmt_brl(imp_f))
+            ali_s = html.escape(_fmt_pct_br2(ali_pct)) + "%"
+            sum_base_lp += base_f
+            sum_imp_lp += imp_f
+        else:
+            imp_s = html.escape("—")
+            ali_s = "—"
+        lp_body.append(
+            "<tr>"
+            f"<td>{nome}</td><td>{base_s}</td><td>{ali_s}</td><td>{imp_s}</td>"
+            "</tr>"
+        )
+
+    if lp_body:
+        ali_sub = (
+            html.escape(_fmt_pct_br2((sum_imp_lp / sum_base_lp * 100.0) if sum_base_lp > 1e-9 else 0.0)) + "%"
+        )
+        sub_lp = (
+            '<tr class="subtotal">'
+            "<td>Subtotal LP</td>"
+            f"<td>{html.escape(fmt_brl(sum_base_lp))}</td>"
+            f"<td>{ali_sub}</td>"
+            f"<td>{html.escape(fmt_brl(sum_imp_lp))}</td>"
+            "</tr>"
+        )
+        parts.append('<h3 class="fdl-subsection-title">Lucro Presumido</h3>')
+        parts.append(
+            '<table class="fdl-tabela-regime"><thead><tr>'
+            "<th>Empresa</th><th>Base Líquida</th><th>Alíquota Efetiva</th><th>Imposto</th>"
+            "</tr></thead><tbody>"
+            + "".join(lp_body)
+            + sub_lp
+            + "</tbody></table>"
+        )
+
+    if not parts:
+        return ""
+    return '<h2 class="fdl-section-title">Tributação por Empresa</h2>' + "".join(parts)
+
+
+def _build_total_geral_apuracao_html(
+    *,
+    base_geral: float,
+    imp_geral: float,
+    carga_geral_pct: float,
+    fmt_brl: Callable[[float], str],
+) -> str:
+    return (
+        '<div class="fdl-total-geral">'
+        '<div class="fdl-total-label">TOTAL GERAL</div>'
+        '<div class="fdl-total-row">'
+        "<div>"
+        '<div class="fdl-total-item-label">Base</div>'
+        f'<div class="fdl-total-item-value">{html.escape(fmt_brl(float(base_geral)))}</div>'
+        "</div>"
+        "<div>"
+        '<div class="fdl-total-item-label">Imposto</div>'
+        f'<div class="fdl-total-item-value">{html.escape(fmt_brl(float(imp_geral)))}</div>'
+        "</div>"
+        "<div>"
+        '<div class="fdl-total-item-label">Carga Efetiva</div>'
+        f'<div class="fdl-total-item-value">{html.escape(_fmt_pct_br2(float(carga_geral_pct)))}%</div>'
+        "</div>"
+        "</div>"
+        "</div>"
+    )
+
+
 def _build_calculo_detalhado_expander_html(
     empresa_slug: str,
     empresa_nome: str,
@@ -1077,6 +1430,7 @@ def render_apuracao_fiscal_panel(
     import app_operacional as ao
 
     ao._fdl_fat_min_inject_ui_styles()
+    st.markdown(APURACAO_PREMIUM_PANEL_CSS, unsafe_allow_html=True)
 
     use_nf_panel_baked = bool(load_info.get("faturamento_nf_panel_baked"))
     _df_nf_panel = load_info.get("faturamento_nf_panel_df")
@@ -1345,16 +1699,17 @@ def render_apuracao_fiscal_panel(
         situacoes_sel=_min_state.situacoes_nf,
         df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
     )
-    ao._render_faturamento_dre_fiscal_base_top(
-        stats=_fiscal_base_stats,
-        ok_nf_dates=ok_nf_dates,
-        empresas_sel=_min_state.empresas,
-        emp_opts=emp_opts,
-        nf_d_ini=_nf_kpi_ini,
-        nf_d_fim=_nf_kpi_fim,
-        fiscal_parquet_ok=use_fiscal_parquet,
-        situacoes_nf_sel=_min_state.situacoes_nf,
-    )
+    if not (use_fiscal_parquet and ok_nf_dates):
+        ao._render_faturamento_dre_fiscal_base_top(
+            stats=_fiscal_base_stats,
+            ok_nf_dates=ok_nf_dates,
+            empresas_sel=_min_state.empresas,
+            emp_opts=emp_opts,
+            nf_d_ini=_nf_kpi_ini,
+            nf_d_fim=_nf_kpi_fim,
+            fiscal_parquet_ok=use_fiscal_parquet,
+            situacoes_nf_sel=_min_state.situacoes_nf,
+        )
 
     df_nf_scope_emissao = ao._faturamento_nf_apply_minimal_recorte(
         df_nf_pre,
@@ -1396,6 +1751,8 @@ def render_apuracao_fiscal_panel(
         aplicar_ponte_base_liquida=bool(use_fiscal_kpi),
     )
     _imp_num = float(_imp_simples_ponte)
+    _imp_sn_para_hero = float(_imp_simples_ponte)
+    _imp_lp_para_hero = 0.0
     try:
         from processing.faturamento.imposto_consolidado import calcular_imposto_total_painel_fiscal
 
@@ -1421,6 +1778,8 @@ def render_apuracao_fiscal_panel(
                 json_params_path=_json_path,
             )
             _imp_num = float(_cons.imposto_total)
+            _imp_sn_para_hero = float(_cons.imposto_simples_ponte)
+            _imp_lp_para_hero = float(_cons.imposto_lucro_presumido)
     except Exception as exc:
         _LOG_AP.warning("consolidação imposto fiscal (painel): %s", exc, exc_info=True)
 
@@ -1428,7 +1787,7 @@ def render_apuracao_fiscal_panel(
     if params_union is not None and _ali_info.get("valores_por_empresa"):
         _ref_enrich = enrich_aliquota_ref_pct_for_stats(_ali_info)
 
-    _cap_imp_html, _div_cmp = _aliquota_imposto_caption_safe_html_and_divergencia_ref(
+    _, _div_cmp = _aliquota_imposto_caption_safe_html_and_divergencia_ref(
         params_union=params_union,
         aliquotas_info=_ali_info,
         empresas_efetivas=_emp_ef,
@@ -1452,27 +1811,23 @@ def render_apuracao_fiscal_panel(
         )
 
     ao._fdl_fat_min_vsp(size="sm")
+    _carga_hero_pct = (
+        (float(_imp_num) / float(_stats_kpi.base_fiscal_liquida) * 100.0)
+        if ok_nf_dates and float(_stats_kpi.base_fiscal_liquida) > 1e-9
+        else 0.0
+    )
     st.html(
-        FISCAL_KPIS_CSS
-        + _build_fiscal_kpis_hero_html(
-            base_liquida=_stats_kpi.base_fiscal_liquida,
-            imposto=float(_stats_kpi.imposto),
-            aliquota_efetiva_pct=float(_stats_kpi.aliquota_efetiva_pct),
-            caption_aliquota_imposto_safe_html=_cap_imp_html,
+        _build_apuracao_premium_hero_tres_html(
+            base_total=float(_stats_kpi.base_fiscal_liquida),
+            nfs_total=int(_stats_kpi.n_nf),
+            imposto_total=float(_imp_num),
+            imposto_sn=float(_imp_sn_para_hero),
+            imposto_lp=float(_imp_lp_para_hero),
+            carga_efetiva_pct=_carga_hero_pct,
+            aliquota_efetiva_stats_pct=float(_stats_kpi.aliquota_efetiva_pct),
+            ok_nf_dates=ok_nf_dates,
+            fmt_brl=ao._fmt_brl_ptbr_celula,
             divergencia_compare_pct=_div_cmp,
-            ok_nf_dates=ok_nf_dates,
-            fmt_brl=ao._fmt_brl_ptbr_celula,
-        )
-        + _build_fiscal_kpis_secondary_html(
-            valor_faturado_nf=float(_stats_kpi.valor_faturado_nf),
-            n_nf=int(_stats_kpi.n_nf),
-            total_devolvido=float(_stats_kpi.total_devolvido),
-            nfs_devolucao=int(_stats_kpi.nfs_devolucao),
-            diferenca_lista_nf=float(_stats_kpi.diferenca_lista_nf),
-            valor_cancelado=float(_stats_kpi.valor_cancelado),
-            ok_nf_dates=ok_nf_dates,
-            fmt_brl=ao._fmt_brl_ptbr_celula,
-            fmt_int=ao._fmt_int_ptbr,
         )
     )
 
@@ -1536,18 +1891,57 @@ def render_apuracao_fiscal_panel(
             ok_nf_dates=ok_nf_dates,
         )
         lp_breakdowns_table: dict[str, dict[str, float]] = {}
+        lp_prefetched: dict[str, LucroPresumidoBreakdown] = {}
+        lp_orgs_ordered: list[tuple[str, str]] = []
         params_path = resolve_faturamento_params_path_for_ui(load_info)
         if params_path is not None and isinstance(params_union, FaturamentoParamsV2):
-            lp_orgs: list[tuple[str, str]] = []
             sel_orgs = set(_org_ids_ag)
             for e in params_union.empresas:
                 if e.regime_tributario != "lucro_presumido":
                     continue
                 if sel_orgs and e.org_id not in sel_orgs:
                     continue
-                lp_orgs.append((e.org_id, e.empresa))
-            for lp_org_id, lp_nome in lp_orgs:
-                br = render_lucro_presumido_card(
+                lp_orgs_ordered.append((e.org_id, e.empresa))
+            for lp_org_id, _lp_nome in lp_orgs_ordered:
+                try:
+                    lp_params, icms_params = load_lucro_presumido_params_from_json(params_path, lp_org_id)
+                except Exception:
+                    continue
+                if lp_params is None or icms_params is None:
+                    continue
+                try:
+                    bd = calcular_lucro_presumido(
+                        df_fiscal=df_fiscal_pre,
+                        df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
+                        org_id=lp_org_id,
+                        nf_d_ini=pd.Timestamp(_nf_kpi_ini),
+                        nf_d_fim=pd.Timestamp(_nf_kpi_fim),
+                        params=lp_params,
+                        icms_params=icms_params,
+                    )
+                except Exception:
+                    continue
+                lp_prefetched[lp_org_id] = bd
+                lp_breakdowns_table[lp_org_id] = {
+                    "imposto_total": float(bd.total_imposto),
+                    "aliquota_efetiva_pct": float(bd.aliquota_efetiva * 100.0),
+                }
+
+        trib_html = _build_tributacao_por_empresa_unificado_html(
+            simples_agregado,
+            lp_breakdowns=lp_breakdowns_table if lp_breakdowns_table else None,
+            fmt_brl=ao._fmt_brl_ptbr_celula,
+        )
+        if trib_html:
+            ao._fdl_fat_min_vsp(size="sm")
+            st.markdown(trib_html, unsafe_allow_html=True)
+
+        for lp_org_id, lp_nome in lp_orgs_ordered:
+            bd_lp = lp_prefetched.get(lp_org_id)
+            if bd_lp is None or params_path is None:
+                continue
+            with st.expander(f"Detalhamento Lucro Presumido — {lp_nome}", expanded=False):
+                render_lucro_presumido_card(
                     df_fiscal=df_fiscal_pre,
                     df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
                     org_id=lp_org_id,
@@ -1555,22 +1949,21 @@ def render_apuracao_fiscal_panel(
                     nf_d_ini=pd.Timestamp(_nf_kpi_ini),
                     nf_d_fim=pd.Timestamp(_nf_kpi_fim),
                     json_params_path=params_path,
+                    breakdown=bd_lp,
                 )
-                if br is not None:
-                    lp_breakdowns_table[lp_org_id] = {
-                        "imposto_total": float(br.total_imposto),
-                        "aliquota_efetiva_pct": float(br.aliquota_efetiva * 100.0),
-                    }
-        if _tem_alguma_empresa_simples_no_filtro(simples_agregado) or _tem_alguma_empresa_lp_no_agregado(
-            simples_agregado
-        ):
-            aliquota_html = _build_aliquota_efetiva_simples_html(
-                simples_agregado,
-                fmt_brl=ao._fmt_brl_ptbr_celula,
-                lp_breakdowns=lp_breakdowns_table,
-            )
+
+        if ok_nf_dates and float(_stats_kpi.base_fiscal_liquida) > 1e-9:
+            _carga_tot_pct = float(_imp_num) / float(_stats_kpi.base_fiscal_liquida) * 100.0
             ao._fdl_fat_min_vsp(size="sm")
-            st.html(ALIQUOTA_EFETIVA_CSS + aliquota_html)
+            st.markdown(
+                _build_total_geral_apuracao_html(
+                    base_geral=float(_stats_kpi.base_fiscal_liquida),
+                    imp_geral=float(_imp_num),
+                    carga_geral_pct=_carga_tot_pct,
+                    fmt_brl=ao._fmt_brl_ptbr_celula,
+                ),
+                unsafe_allow_html=True,
+            )
 
         if ao._fdl_rg_pace_debug_enabled():
             rbt_dbg: dict[str, str] = {}

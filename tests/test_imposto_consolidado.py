@@ -1,4 +1,9 @@
-"""Testes de ``calcular_imposto_total_painel_fiscal`` (imposto consolidado SN + LP)."""
+"""Testes de ``calcular_imposto_total_painel_fiscal`` (imposto consolidado SN + LP).
+
+O argumento ``imposto_simples_total`` representa o imposto **só** das empresas SN
+(``agregar_simples_nacional_para_painel_fiscal`` → ``total_simples["imposto_total"]``),
+não a ponte fiscal DRE.
+"""
 
 from __future__ import annotations
 
@@ -49,7 +54,7 @@ def test_consolidacao_so_simples_nacional() -> None:
         org_ids_filtro=oids or None,
         periodo_inicio=pd.Timestamp("2026-01-01"),
         periodo_fim=pd.Timestamp("2026-03-31"),
-        imposto_simples_ponte=100.0,
+        imposto_simples_total=100.0,
         json_params_path=_JSON_C2,
     )
     assert r.imposto_lucro_presumido == 0.0
@@ -67,10 +72,10 @@ def test_consolidacao_inclui_lucro_presumido() -> None:
         org_ids_filtro=oids or None,
         periodo_inicio=pd.Timestamp("2026-01-01"),
         periodo_fim=pd.Timestamp("2026-03-31"),
-        imposto_simples_ponte=10_000.0,
+        imposto_simples_total=10_000.0,
         json_params_path=_JSON_C2,
     )
-    assert r.imposto_simples_ponte == pytest.approx(10_000.0)
+    assert r.imposto_simples_total == pytest.approx(10_000.0)
     assert r.imposto_lucro_presumido > 0.0
     assert r.imposto_total == pytest.approx(10_000.0 + r.imposto_lucro_presumido)
     assert "mega_facil" in r.breakdown_lp_por_empresa
@@ -95,10 +100,10 @@ def test_consolidacao_filtro_so_lp() -> None:
         org_ids_filtro=["mega_facil"],
         periodo_inicio=pd.Timestamp("2026-01-01"),
         periodo_fim=pd.Timestamp("2026-03-31"),
-        imposto_simples_ponte=0.0,
+        imposto_simples_total=0.0,
         json_params_path=_JSON_C2,
     )
-    assert r.imposto_simples_ponte == 0.0
+    assert r.imposto_simples_total == 0.0
     assert r.imposto_lucro_presumido > 0.0
     assert r.imposto_total == pytest.approx(r.imposto_lucro_presumido)
     assert r.empresas_lp_calculadas == ("mega_facil",)
@@ -114,7 +119,7 @@ def test_consolidacao_lp_sem_dados_no_periodo() -> None:
         org_ids_filtro=["mega_facil"],
         periodo_inicio=pd.Timestamp("2026-01-01"),
         periodo_fim=pd.Timestamp("2026-03-31"),
-        imposto_simples_ponte=50.0,
+        imposto_simples_total=50.0,
         json_params_path=_JSON_C2,
     )
     assert r.imposto_lucro_presumido == 0.0
@@ -137,7 +142,7 @@ def test_consolidacao_lp_sem_params_no_json(monkeypatch: pytest.MonkeyPatch) -> 
         org_ids_filtro=["mega_facil"],
         periodo_inicio=pd.Timestamp("2026-01-01"),
         periodo_fim=pd.Timestamp("2026-03-31"),
-        imposto_simples_ponte=77.0,
+        imposto_simples_total=77.0,
         json_params_path=_JSON_C2,
     )
     assert r.imposto_lucro_presumido == 0.0
@@ -165,11 +170,11 @@ def test_consolidacao_filtro_none_pega_todas_empresas() -> None:
         org_ids_filtro=None,
         periodo_inicio=pd.Timestamp("2026-01-01"),
         periodo_fim=pd.Timestamp("2026-03-31"),
-        imposto_simples_ponte=1.0,
+        imposto_simples_total=1.0,
         json_params_path=_JSON_C2,
     )
     assert "mega_facil" in r.empresas_lp_calculadas
-    assert r.imposto_total >= r.imposto_simples_ponte + r.imposto_lucro_presumido - 1e-6
+    assert r.imposto_total >= r.imposto_simples_total + r.imposto_lucro_presumido - 1e-6
 
 
 def test_consolidador_funciona_sem_cliente_root_valido_no_fs(tmp_path: Path) -> None:
@@ -197,7 +202,7 @@ def test_consolidador_funciona_sem_cliente_root_valido_no_fs(tmp_path: Path) -> 
         org_ids_filtro=None,
         periodo_inicio=pd.Timestamp("2026-01-01"),
         periodo_fim=pd.Timestamp("2026-03-31"),
-        imposto_simples_ponte=1_000.0,
+        imposto_simples_total=1_000.0,
         json_params_path=json_path,
     )
     assert "mega_facil" in r.empresas_lp_calculadas
@@ -213,7 +218,7 @@ def test_consolidacao_breakdown_por_empresa() -> None:
         org_ids_filtro=["mega_facil"],
         periodo_inicio=pd.Timestamp("2026-01-01"),
         periodo_fim=pd.Timestamp("2026-03-31"),
-        imposto_simples_ponte=0.0,
+        imposto_simples_total=0.0,
         json_params_path=_JSON_C2,
     )
     bd = r.breakdown_lp_por_empresa["mega_facil"]

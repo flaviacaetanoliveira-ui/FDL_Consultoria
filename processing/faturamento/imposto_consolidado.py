@@ -5,7 +5,7 @@ Fonte única de verdade para imposto agregado no projeto.
 Usado por: painel Apuração Fiscal (KPI Imposto Apurado), DRE Gerencial.
 
 Princípio: cada empresa contribui com seu imposto conforme regime.
-- Empresas SN: imposto via ponte fiscal (valor já calculado por ``dre_imposto_para_linha_dre_gerencial``)
+- Empresas SN: imposto total já calculado pelo agregador SN (``agregar_simples_nacional_para_painel_fiscal``)
 - Empresas LP: imposto via motor ``calcular_lucro_presumido``
 """
 
@@ -98,7 +98,7 @@ def _regime_eh_lucro_presumido(reg: str | None) -> bool:
 class ImpostoConsolidado:
     """Resultado da consolidação de imposto entre regimes."""
 
-    imposto_simples_ponte: float
+    imposto_simples_total: float
     imposto_lucro_presumido: float
     imposto_total: float
     breakdown_lp_por_empresa: Mapping[str, LucroPresumidoBreakdown]
@@ -223,7 +223,7 @@ def calcular_imposto_total_painel_fiscal(
     org_ids_filtro: Sequence[str] | None,
     periodo_inicio: pd.Timestamp,
     periodo_fim: pd.Timestamp,
-    imposto_simples_ponte: float,
+    imposto_simples_total: float,
     json_params_path: Path,
     receita_anual_estimada_por_empresa: Mapping[str, float] | None = None,
 ) -> ImpostoConsolidado:
@@ -235,19 +235,23 @@ def calcular_imposto_total_painel_fiscal(
         df_devolucoes: DataFrame de devoluções ou ``None``.
         org_ids_filtro: ``org_id`` selecionados na UI; ``None`` = todas as empresas presentes no fiscal.
         periodo_inicio, periodo_fim: limites do recorte (``pd.Timestamp``).
-        imposto_simples_ponte: imposto já calculado pela ponte SN / comercial (entrada).
+        imposto_simples_total: imposto total das empresas **Simples Nacional** no período,
+            típico de ``agregar_simples_nacional_para_painel_fiscal`` →
+            ``total_simples["imposto_total"]`` (exclui LP). **Não** usar a ponte fiscal
+            DRE aqui: ela reprojeta imposto comercial sobre toda a base fiscal e inclui
+            receita de empresas LP, o que duplicaria o LP quando somado ao motor.
         json_params_path: caminho do JSON de params do cliente.
         receita_anual_estimada_por_empresa: opcional ``org_id`` → receita anual para LC 224.
 
     Returns:
         ``ImpostoConsolidado`` com totais e breakdown LP por empresa.
     """
-    ponte = float(imposto_simples_ponte)
+    sn_total = float(imposto_simples_total)
     if not json_params_path.is_file():
         return ImpostoConsolidado(
-            imposto_simples_ponte=ponte,
+            imposto_simples_total=sn_total,
             imposto_lucro_presumido=0.0,
-            imposto_total=ponte,
+            imposto_total=sn_total,
             breakdown_lp_por_empresa=MappingProxyType({}),
             empresas_lp_calculadas=(),
             empresas_lp_sem_params=(),
@@ -280,9 +284,9 @@ def calcular_imposto_total_painel_fiscal(
         breakdown[oid] = bd
         total_lp += float(bd.total_imposto)
 
-    total = ponte + total_lp
+    total = sn_total + total_lp
     return ImpostoConsolidado(
-        imposto_simples_ponte=ponte,
+        imposto_simples_total=sn_total,
         imposto_lucro_presumido=total_lp,
         imposto_total=total,
         breakdown_lp_por_empresa=MappingProxyType(dict(breakdown)),

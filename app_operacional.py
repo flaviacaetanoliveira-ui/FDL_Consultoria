@@ -9447,6 +9447,7 @@ def _render_faturamento_dre_minimal(
             calcular_imposto_total_painel_fiscal,
             resolver_org_ids_para_consolidacao_imposto,
         )
+        from processing.faturamento.simples_nacional import agregar_simples_nacional_para_painel_fiscal
 
         _jp_rg = resolve_faturamento_params_path_for_ui(load_info)
         _pu_rg = load_faturamento_params_for_ui(load_info)
@@ -9461,13 +9462,24 @@ def _render_faturamento_dre_minimal(
             _oids_rg = resolver_org_ids_para_consolidacao_imposto(
                 _df_fiscal_base, _pu_rg, _emp_ch_rg
             )
+            _simples_rg = agregar_simples_nacional_para_painel_fiscal(
+                _df_fiscal_base,
+                _oids_rg,
+                _pu_rg,
+                _nf_kpi_ini,
+                _nf_kpi_fim,
+                df_fiscal_full=df_fiscal_pre,
+                df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
+                ok_nf_dates=ok_nf_dates,
+            )
+            _imp_sn_total_rg = float(_simples_rg.get("total_simples", {}).get("imposto_total", 0.0))
             _cons_rg = calcular_imposto_total_painel_fiscal(
                 df_fiscal=df_fiscal_pre,
                 df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
                 org_ids_filtro=_oids_rg or None,
                 periodo_inicio=pd.Timestamp(_nf_kpi_ini),
                 periodo_fim=pd.Timestamp(_nf_kpi_fim),
-                imposto_simples_ponte=float(_imp_ponte_rg),
+                imposto_simples_total=_imp_sn_total_rg,
                 json_params_path=_jp_rg,
             )
             _imp_rg_kpis = float(_cons_rg.imposto_total)

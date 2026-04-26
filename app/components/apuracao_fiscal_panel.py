@@ -1745,6 +1745,24 @@ def render_apuracao_fiscal_panel(
         if _badge_r:
             st.html(BADGE_REGIME_CSS + _badge_r)
 
+    # Agregador SN antes do hero/consolidador — mesmo ``total_simples`` da tabela tributação.
+    # ``imposto_total`` soma só empresas SN (LP fica fora), evitando dupla contagem com o motor LP.
+    simples_agregado: dict[str, Any] | None = None
+    _emp_chaves_list = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
+    _org_ids_ag: list[str] = []
+    if use_fiscal_parquet and ok_nf_dates and isinstance(df_fiscal_pre, pd.DataFrame):
+        _org_ids_ag = _apuracao_org_ids_resolvidos_para_df(_df_fiscal_base, params_union, _emp_chaves_list)
+        simples_agregado = agregar_simples_nacional_para_painel_fiscal(
+            _df_fiscal_base,
+            _org_ids_ag,
+            params_union,
+            _nf_kpi_ini,
+            _nf_kpi_fim,
+            df_fiscal_full=df_fiscal_pre,
+            df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
+            ok_nf_dates=ok_nf_dates,
+        )
+
     _imp_simples_ponte = dre_imposto_para_linha_dre_gerencial(
         _kp_cards,
         fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
@@ -1764,21 +1782,19 @@ def render_apuracao_fiscal_panel(
             and isinstance(df_fiscal_pre, pd.DataFrame)
             and not df_fiscal_pre.empty
         ):
-            _emp_chaves_ag = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
-            _org_ids_con = _apuracao_org_ids_resolvidos_para_df(
-                _df_fiscal_base, params_union, _emp_chaves_ag
-            )
+            _total_sn_dict = (simples_agregado or {}).get("total_simples", {})
+            _imp_sn_total = float(_total_sn_dict.get("imposto_total", 0.0))
             _cons = calcular_imposto_total_painel_fiscal(
                 df_fiscal=df_fiscal_pre,
                 df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
-                org_ids_filtro=_org_ids_con or None,
+                org_ids_filtro=_org_ids_ag or None,
                 periodo_inicio=pd.Timestamp(_nf_kpi_ini),
                 periodo_fim=pd.Timestamp(_nf_kpi_fim),
-                imposto_simples_ponte=float(_imp_simples_ponte),
+                imposto_simples_total=_imp_sn_total,
                 json_params_path=_json_path,
             )
             _imp_num = float(_cons.imposto_total)
-            _imp_sn_para_hero = float(_cons.imposto_simples_ponte)
+            _imp_sn_para_hero = float(_cons.imposto_simples_total)
             _imp_lp_para_hero = float(_cons.imposto_lucro_presumido)
     except Exception as exc:
         _LOG_AP.warning("consolidação imposto fiscal (painel): %s", exc, exc_info=True)
@@ -1878,18 +1894,6 @@ def render_apuracao_fiscal_panel(
                     f"- **Inutilizadas:** {ao._fmt_int_ptbr(ni)} NFs _(números pulados, sem valor fiscal)_"
                 )
 
-        _emp_chaves_list = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
-        _org_ids_ag = _apuracao_org_ids_resolvidos_para_df(_df_fiscal_base, params_union, _emp_chaves_list)
-        simples_agregado = agregar_simples_nacional_para_painel_fiscal(
-            _df_fiscal_base,
-            _org_ids_ag,
-            params_union,
-            _nf_kpi_ini,
-            _nf_kpi_fim,
-            df_fiscal_full=df_fiscal_pre,
-            df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
-            ok_nf_dates=ok_nf_dates,
-        )
         lp_breakdowns_table: dict[str, dict[str, float]] = {}
         lp_prefetched: dict[str, LucroPresumidoBreakdown] = {}
         lp_orgs_ordered: list[tuple[str, str]] = []

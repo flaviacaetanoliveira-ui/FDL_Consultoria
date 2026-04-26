@@ -7,7 +7,7 @@ import json
 import logging
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, Mapping
 
 import pandas as pd
 import streamlit as st
@@ -2048,16 +2048,24 @@ def render_apuracao_fiscal_panel(
     ao._fdl_fat_divider_simple()
     ao._fdl_fat_min_vsp(size="sm")
 
-    if simples_agregado is None:
-        _sa_log = "None"
-    else:
-        _ts = simples_agregado.get("total_simples") if isinstance(simples_agregado, dict) else None
-        _imp_ts = _ts.get("imposto_total", "N/A") if isinstance(_ts, dict) else "N/A"
-        _sa_log = f"presente_total_simples={_imp_ts}"
-    _LOG_PANEL.info(
-        "nf_table chamada: simples_agregado=%s lp_prefetched_keys=%s",
-        _sa_log,
-        list(lp_prefetched.keys()) if isinstance(lp_prefetched, dict) else "nao_dict",
+    # Cada parâmetro independente — enriquecimento parcial é melhor que nenhum
+    _aliq_sn_kw: dict[str, Mapping[str, float]] | None = None
+    if isinstance(simples_agregado, dict):
+        _aliq_dict = simples_agregado.get("aliquotas_mensais_por_empresa")
+        if isinstance(_aliq_dict, dict) and _aliq_dict:
+            _aliq_sn_kw = _aliq_dict
+
+    _breakdowns_lp_kw: dict[str, LucroPresumidoBreakdown] | None = None
+    _org_ids_lp_kw: set[str] | None = None
+    if isinstance(lp_prefetched, dict) and lp_prefetched:
+        _breakdowns_lp_kw = lp_prefetched
+        _org_ids_lp_kw = set(lp_prefetched.keys())
+
+    _LOG_PANEL.warning(
+        "nf_table chamada (final): aliq_sn_kw=%s breakdowns_lp_kw=%s org_ids_lp_kw=%s",
+        "None" if _aliq_sn_kw is None else f"keys={list(_aliq_sn_kw.keys())[:5]}",
+        "None" if _breakdowns_lp_kw is None else f"keys={list(_breakdowns_lp_kw.keys())[:5]}",
+        "None" if _org_ids_lp_kw is None else f"set={sorted(_org_ids_lp_kw)[:5]}",
     )
 
     ao._render_faturamento_dre_nf_table_section(
@@ -2082,9 +2090,7 @@ def render_apuracao_fiscal_panel(
         csv_file_name="apuracao_fiscal_nf.csv",
         table_heading="### Tabela de NFs (visão fiscal)",
         nf_table_ui_mode="fiscal",
-        aliquotas_mensais_sn=(
-            (simples_agregado or {}).get("aliquotas_mensais_por_empresa") if simples_agregado else None
-        ),
-        breakdowns_lp=lp_prefetched if simples_agregado else None,
-        org_ids_lp=set(lp_prefetched.keys()) if simples_agregado else None,
+        aliquotas_mensais_sn=_aliq_sn_kw,
+        breakdowns_lp=_breakdowns_lp_kw,
+        org_ids_lp=_org_ids_lp_kw,
     )

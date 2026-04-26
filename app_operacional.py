@@ -8436,22 +8436,29 @@ def _render_faturamento_dre_nf_table_section(
     _disp_nf_full = pd.DataFrame()
     _disp_nf_ui = pd.DataFrame()
     if not _df_nf_table.empty:
-        _LOG_NF.info(
+        _LOG_NF.warning(
             "nf_table guard: ui_fiscal=%s aliquotas_mensais_sn=%s breakdowns_lp_keys=%s org_ids_lp=%s",
             _ui_fiscal,
             "None" if aliquotas_mensais_sn is None else f"keys={list(aliquotas_mensais_sn.keys())[:5]}",
             "None" if breakdowns_lp is None else f"keys={list(breakdowns_lp.keys())[:5]}",
             "None" if org_ids_lp is None else f"set={sorted(org_ids_lp)[:5]}",
         )
-        _LOG_NF.info(
+        _LOG_NF.warning(
             "nf_table colunas df_nf_table: %s",
             sorted(_df_nf_table.columns.tolist())[:30],
         )
-        _nf_imposto_fiscal_enriquecido = (
-            _ui_fiscal
-            and aliquotas_mensais_sn is not None
-            and breakdowns_lp is not None
+        # Enriquecimento ativa se há SN ou LP (qualquer um); parâmetros vazios viram {} / set() no motor
+        _tem_sn_para_enriquecer = (
+            aliquotas_mensais_sn is not None and len(aliquotas_mensais_sn) > 0
+        )
+        _tem_lp_para_enriquecer = (
+            breakdowns_lp is not None
             and org_ids_lp is not None
+            and len(breakdowns_lp) > 0
+            and len(org_ids_lp) > 0
+        )
+        _nf_imposto_fiscal_enriquecido = _ui_fiscal and (
+            _tem_sn_para_enriquecer or _tem_lp_para_enriquecer
         )
         if _nf_imposto_fiscal_enriquecido:
             _req_nf_imp = {
@@ -8462,16 +8469,16 @@ def _render_faturamento_dre_nf_table_section(
                 "Nota_Situacao",
             }
             if _req_nf_imp.issubset(set(_df_nf_table.columns)):
-                _LOG_NF.info(
+                _LOG_NF.warning(
                     "nf_table enriquecimento ATIVADO: linhas=%d colunas_req_presentes=%s",
                     len(_df_nf_table),
                     _req_nf_imp.issubset(set(_df_nf_table.columns)),
                 )
                 _df_nf_table = enriquecer_nfs_com_imposto_calculado(
                     _df_nf_table,
-                    aliquotas_mensais_sn=aliquotas_mensais_sn,
-                    breakdowns_lp=breakdowns_lp,
-                    org_ids_lp=set(org_ids_lp),
+                    aliquotas_mensais_sn=aliquotas_mensais_sn or {},
+                    breakdowns_lp=breakdowns_lp or {},
+                    org_ids_lp=set(org_ids_lp) if org_ids_lp else set(),
                 )
                 _filt_fiscal_reg = st.radio(
                     "Filtrar por regime",

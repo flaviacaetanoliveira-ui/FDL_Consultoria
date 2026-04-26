@@ -76,6 +76,10 @@ from processing.faturamento.normalize import (
     normalize_nf_fiscal_commercial_join_key,
 )
 from processing.faturamento.nf_table_display_filters import nf_table_filter_mask as _fdl_nf_table_filter_mask
+from processing.faturamento.params_regime import (
+    load_faturamento_params_for_ui,
+    resolve_faturamento_params_path_for_ui,
+)
 from processing.repasse_contract import REPASSE_ARTIFACT_FILENAME
 from processing.repasse_load import (
     postprocess_repasse_parquet_dataframe,
@@ -5517,10 +5521,12 @@ def _render_fdl_fat_dre_nf_gerencial(
     periodo_label: str = "",
     nf_panel_ads: bool = True,
     fiscal_base_stats: FaturamentoFiscalBaseStats | None = None,
+    imposto_fiscal_total: float | None = None,
 ) -> None:
     """DRE gerencial (totais de ``compute_nf_panel_kpis``), layout demonstração financeira.
 
-    Linha Imposto: ver ``dre_imposto_para_linha_dre_gerencial`` (ponte fiscal única).
+    Linha Imposto: ``imposto_fiscal_total`` consolidado (SN ponte + LP) quando informado;
+    caso contrário ``dre_imposto_para_linha_dre_gerencial`` (ponte apenas).
     """
     if not _FAT_DRE_UI_V2 or build_dre_gerencial_premium_html is None:
         st.subheader("DRE gerencial")
@@ -5536,14 +5542,16 @@ def _render_fdl_fat_dre_nf_gerencial(
     vv = float(kp["valor_venda"])
     res = float(kp["resultado"])
     imp_raw = float(kp["imposto"])
-    # Ponte entre módulos: ver ``dre_imposto_para_linha_dre_gerencial`` em ``faturamento_dre_recorte_minimo``.
-    imp_nf = dre_imposto_para_linha_dre_gerencial(
-        kp,
-        fiscal_base_stats=fiscal_base_stats,
-        aplicar_ponte_base_liquida=(
-            fiscal_base_stats is not None and valor_faturado_from_fiscal_parquet
-        ),
-    )
+    if imposto_fiscal_total is not None:
+        imp_nf = float(imposto_fiscal_total)
+    else:
+        imp_nf = dre_imposto_para_linha_dre_gerencial(
+            kp,
+            fiscal_base_stats=fiscal_base_stats,
+            aplicar_ponte_base_liquida=(
+                fiscal_base_stats is not None and valor_faturado_from_fiscal_parquet
+            ),
+        )
     res_nf = res + (imp_raw - imp_nf)
     rec_frete_num = float(kp.get("receita_frete_tp", 0.0))
     rec_venda = _fmt_brl_ptbr_celula(kp["valor_venda"]) or "R$ 0,00"
@@ -9426,13 +9434,45 @@ def _render_faturamento_dre_minimal(
         )
     _commercial_coverage = compute_commercial_coverage_stats(df_nf_commercial_kpi)
     _kp_cards = compute_nf_panel_kpis(df_nf_commercial_kpi)
-    _imp_rg_kpis = dre_imposto_para_linha_dre_gerencial(
+    _imp_ponte_rg = dre_imposto_para_linha_dre_gerencial(
         _kp_cards,
         fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
         aplicar_ponte_base_liquida=(
             (_fiscal_base_stats if use_fiscal_parquet else None) is not None and use_fiscal_kpi
         ),
     )
+    _imp_rg_kpis = float(_imp_ponte_rg)
+    try:
+        from processing.faturamento.imposto_consolidado import (
+            calcular_imposto_total_painel_fiscal,
+            resolver_org_ids_para_consolidacao_imposto,
+        )
+
+        _jp_rg = resolve_faturamento_params_path_for_ui(load_info)
+        _pu_rg = load_faturamento_params_for_ui(load_info)
+        if (
+            _jp_rg is not None
+            and _pu_rg is not None
+            and use_fiscal_parquet
+            and isinstance(df_fiscal_pre, pd.DataFrame)
+            and not df_fiscal_pre.empty
+        ):
+            _emp_ch_rg = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
+            _oids_rg = resolver_org_ids_para_consolidacao_imposto(
+                _df_fiscal_base, _pu_rg, _emp_ch_rg
+            )
+            _cons_rg = calcular_imposto_total_painel_fiscal(
+                df_fiscal=df_fiscal_pre,
+                df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
+                org_ids_filtro=_oids_rg or None,
+                periodo_inicio=pd.Timestamp(_nf_kpi_ini),
+                periodo_fim=pd.Timestamp(_nf_kpi_fim),
+                imposto_simples_ponte=float(_imp_ponte_rg),
+                json_params_path=_jp_rg,
+            )
+            _imp_rg_kpis = float(_cons_rg.imposto_total)
+    except Exception:
+        pass
 
     with st.expander("Cobertura comercial", expanded=False):
         _render_faturamento_dre_commercial_complement_banner(
@@ -9667,6 +9707,7 @@ def _render_faturamento_dre_minimal(
                 periodo_label=_periodo_dre_lbl,
                 nf_panel_ads=_nf_panel_ads_ui,
                 fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
+                imposto_fiscal_total=float(_imp_rg_kpis),
             )
     with _col_hp:
         st.markdown(

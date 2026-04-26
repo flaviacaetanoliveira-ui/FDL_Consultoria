@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import logging
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Callable, Literal
@@ -26,6 +27,7 @@ from processing.faturamento.params_regime import (
     find_empresa_faturamento_entry,
     get_aliquota_imposto_por_empresa,
     load_faturamento_params_for_ui,
+    resolve_faturamento_params_path_for_ui,
 )
 from processing.faturamento.simples_nacional import (
     ResultadoAliquotaEfetivaMes,
@@ -49,6 +51,7 @@ from processing.faturamento.nf_materializado import nf_first_contract_dataframe_
 from processing.faturamento.nf_panel_materializado import nf_panel_materializado_dataframe_valid
 
 _ALIQUOTA_DIVERG_PP = 0.5
+_LOG_AP = logging.getLogger(__name__)
 
 FISCAL_KPIS_CSS = """<style>
 .fdl-fat-kpi-hero-grid {
@@ -605,21 +608,9 @@ def _apuracao_org_ids_do_filtro(
     empresas_chaves: list[str],
 ) -> list[str]:
     """Resolve rótulos do multiselect para ``org_id`` quando params V2 disponível."""
-    out: list[str] = []
-    seen: set[str] = set()
-    for ch in empresas_chaves:
-        k = str(ch).strip()
-        if not k:
-            continue
-        oid = k
-        if isinstance(params_union, FaturamentoParamsV2):
-            ent = find_empresa_faturamento_entry(params_union, k)
-            if ent is not None:
-                oid = ent.org_id
-        if oid not in seen:
-            seen.add(oid)
-            out.append(oid)
-    return out
+    from processing.faturamento.imposto_consolidado import org_ids_do_filtro_ui
+
+    return org_ids_do_filtro_ui(params_union, empresas_chaves)
 
 
 def _apuracao_org_ids_resolvidos_para_df(
@@ -628,33 +619,9 @@ def _apuracao_org_ids_resolvidos_para_df(
     empresas_chaves: list[str],
 ) -> list[str]:
     """Mapeia rótulos de UI para ``org_id`` da base fiscal quando ``params_union`` não resolve (ex.: Cloud)."""
-    base = _apuracao_org_ids_do_filtro(params_union, empresas_chaves)
-    if df is None or getattr(df, "empty", True) or "org_id" not in df.columns:
-        return base
-    known = {str(x).strip() for x in df["org_id"].dropna().unique().tolist() if str(x).strip()}
-    label_to_oid: dict[str, str] = {}
-    if "empresa" in df.columns:
-        sub = df[["empresa", "org_id"]].dropna()
-        sub = sub.assign(
-            _e=sub["empresa"].astype(str).str.strip(),
-            _o=sub["org_id"].astype(str).str.strip(),
-        )
-        for _, row in sub.drop_duplicates(subset=["_e"]).iterrows():
-            lab = str(row["_e"]).strip()
-            oid = str(row["_o"]).strip()
-            if lab and oid and lab not in label_to_oid:
-                label_to_oid[lab] = oid
-    out: list[str] = []
-    seen: set[str] = set()
-    for oid in base:
-        k = str(oid).strip()
-        if not k:
-            continue
-        resolved = k if k in known else label_to_oid.get(k, k)
-        if resolved not in seen:
-            seen.add(resolved)
-            out.append(resolved)
-    return out
+    from processing.faturamento.imposto_consolidado import resolver_org_ids_para_consolidacao_imposto
+
+    return resolver_org_ids_para_consolidacao_imposto(df, params_union, empresas_chaves)
 
 
 def _classificar_nf_invalida_por_situacao(situacao: object) -> Literal["cancel", "deneg", "inutil", "outro"]:
@@ -1408,11 +1375,39 @@ def render_apuracao_fiscal_panel(
         if _badge_r:
             st.html(BADGE_REGIME_CSS + _badge_r)
 
-    _imp_num = dre_imposto_para_linha_dre_gerencial(
+    _imp_simples_ponte = dre_imposto_para_linha_dre_gerencial(
         _kp_cards,
         fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
         aplicar_ponte_base_liquida=bool(use_fiscal_kpi),
     )
+    _imp_num = float(_imp_simples_ponte)
+    try:
+        from processing.faturamento.imposto_consolidado import calcular_imposto_total_painel_fiscal
+
+        _json_path = resolve_faturamento_params_path_for_ui(load_info)
+        if (
+            _json_path is not None
+            and _json_path.is_file()
+            and use_fiscal_parquet
+            and isinstance(df_fiscal_pre, pd.DataFrame)
+            and not df_fiscal_pre.empty
+        ):
+            _emp_chaves_ag = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
+            _org_ids_con = _apuracao_org_ids_resolvidos_para_df(
+                _df_fiscal_base, params_union, _emp_chaves_ag
+            )
+            _cons = calcular_imposto_total_painel_fiscal(
+                df_fiscal=df_fiscal_pre,
+                df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
+                org_ids_filtro=_org_ids_con or None,
+                periodo_inicio=pd.Timestamp(_nf_kpi_ini),
+                periodo_fim=pd.Timestamp(_nf_kpi_fim),
+                imposto_simples_ponte=float(_imp_simples_ponte),
+                json_params_path=_json_path,
+            )
+            _imp_num = float(_cons.imposto_total)
+    except Exception as exc:
+        _LOG_AP.warning("consolidação imposto fiscal (painel): %s", exc, exc_info=True)
 
     _ref_enrich = _fallback_alq_meta
     if params_union is not None and _ali_info.get("valores_por_empresa"):

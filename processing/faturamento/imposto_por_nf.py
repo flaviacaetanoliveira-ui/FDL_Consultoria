@@ -62,12 +62,19 @@ def enriquecer_nfs_com_imposto_calculado(
         return df_nf.copy()
 
     out = df_nf.copy()
+    # Painel NF materializado usa ``valor_faturado_nf``; motor fiscal usa ``Valor_Liquido_NF``.
+    if "Valor_Liquido_NF" not in out.columns and "valor_faturado_nf" in out.columns:
+        out["Valor_Liquido_NF"] = out["valor_faturado_nf"]
+
     if "org_id" not in out.columns:
         raise ValueError("enriquecer_nfs_com_imposto_calculado: coluna org_id ausente.")
     if "Nota_Data_Emissao" not in out.columns:
         raise ValueError("enriquecer_nfs_com_imposto_calculado: coluna Nota_Data_Emissao ausente.")
     if "Valor_Liquido_NF" not in out.columns:
-        raise ValueError("enriquecer_nfs_com_imposto_calculado: coluna Valor_Liquido_NF ausente.")
+        raise ValueError(
+            "enriquecer_nfs_com_imposto_calculado: coluna Valor_Liquido_NF ausente "
+            "(nem alias valor_faturado_nf)."
+        )
     if "Nota_Numero_Normalizado" not in out.columns:
         raise ValueError("enriquecer_nfs_com_imposto_calculado: coluna Nota_Numero_Normalizado ausente.")
 

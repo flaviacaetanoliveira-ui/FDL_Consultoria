@@ -8461,18 +8461,24 @@ def _render_faturamento_dre_nf_table_section(
             _tem_sn_para_enriquecer or _tem_lp_para_enriquecer
         )
         if _nf_imposto_fiscal_enriquecido:
-            _req_nf_imp = {
+            _req_base = {
                 "org_id",
                 "Nota_Data_Emissao",
-                "Valor_Liquido_NF",
                 "Nota_Numero_Normalizado",
                 "Nota_Situacao",
             }
-            if _req_nf_imp.issubset(set(_df_nf_table.columns)):
+            _tem_coluna_valor = (
+                "Valor_Liquido_NF" in _df_nf_table.columns
+                or "valor_faturado_nf" in _df_nf_table.columns
+            )
+            if _req_base.issubset(set(_df_nf_table.columns)) and _tem_coluna_valor:
+                if "Valor_Liquido_NF" not in _df_nf_table.columns:
+                    _df_nf_table = _df_nf_table.copy()
+                    _df_nf_table["Valor_Liquido_NF"] = _df_nf_table["valor_faturado_nf"]
                 _LOG_NF.warning(
                     "nf_table enriquecimento ATIVADO: linhas=%d colunas_req_presentes=%s",
                     len(_df_nf_table),
-                    _req_nf_imp.issubset(set(_df_nf_table.columns)),
+                    True,
                 )
                 _df_nf_table = enriquecer_nfs_com_imposto_calculado(
                     _df_nf_table,

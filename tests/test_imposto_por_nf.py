@@ -193,3 +193,29 @@ def test_dataframe_resultado_preserva_index_e_ordem_original() -> None:
     )
     assert list(out.index) == [31, 7]
     assert list(out["Nota_Numero_Normalizado"]) == ["B", "A"]
+
+
+def test_aceita_valor_faturado_nf_como_alias() -> None:
+    """Aceita ``valor_faturado_nf`` como alias de ``Valor_Liquido_NF`` (painel NF materializado)."""
+    df_nf = pd.DataFrame(
+        {
+            "org_id": ["mega_star"],
+            "empresa": ["Mega Star"],
+            "Nota_Numero_Normalizado": ["020148"],
+            "Nota_Data_Emissao": [pd.Timestamp("2026-04-23")],
+            "Nota_Situacao": ["Autorizada"],
+            "valor_faturado_nf": [135.01],
+        }
+    )
+    aliq = {"mega_star": {"2026-04": 0.0991}}
+    result = enriquecer_nfs_com_imposto_calculado(
+        df_nf,
+        aliquotas_mensais_sn=aliq,
+        breakdowns_lp={},
+        org_ids_lp=set(),
+    )
+    assert "regime_nf" in result.columns
+    assert result.loc[0, "regime_nf"] == "SN"
+    assert bool(result.loc[0, "imposto_calculavel_nf"])
+    expected_imposto = 135.01 * 0.0991
+    assert abs(float(result.loc[0, "imposto_estimado_nf"]) - expected_imposto) < 0.01

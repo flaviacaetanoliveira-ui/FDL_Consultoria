@@ -10,7 +10,7 @@ Premissas e fontes de negócio: docs/pesquisa_fcp_lucro_presumido_2026.md.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping, Optional
+from typing import Any, Mapping, Optional
 
 import pandas as pd
 
@@ -139,6 +139,8 @@ class LucroPresumidoBreakdown:
     aplicou_majoracao_lc_224: bool
     receita_anual_referencia: float
     cfops_outros_base: float
+    # Tributos por NF (federais rateados por Valor_Liquido_NF; estaduais por linha).
+    tributos_por_nf: pd.DataFrame
     avisos: tuple[str, ...] = ()
 
 
@@ -373,6 +375,121 @@ def _calcular_icms_interestadual_e_difal(
     }
 
 
+TRIBUTOS_POR_NF_COLUMNS: tuple[str, ...] = (
+    "Nota_Numero_Normalizado",
+    "Nota_Data_Emissao",
+    "Valor_Liquido_NF",
+    "pis_nf",
+    "cofins_nf",
+    "irpj_nf",
+    "csll_nf",
+    "icms_interno_nf",
+    "icms_interestadual_nf",
+    "difal_nf",
+    "fcp_nf",
+    "imposto_total_nf",
+)
+
+
+def _empty_tributos_por_nf() -> pd.DataFrame:
+    return pd.DataFrame(columns=list(TRIBUTOS_POR_NF_COLUMNS))
+
+
+def _tributos_estaduais_por_linha(
+    row: pd.Series,
+    icms_params: IcmsParams,
+    uf_origem: str,
+) -> tuple[float, float, float, float]:
+    """ICMS interno (5102) ou bloco interestadual (6108 + CFOPs tratados como interestadual)."""
+    cfop = str(row.get("Nota_CFOP") or "").strip()
+    vl = float(pd.to_numeric(row.get("Valor_Liquido_NF"), errors="coerce"))
+    uf = str(row.get("Nota_UF_Destino") or "").strip().upper()
+    ncm = row.get("Nota_NCM")
+    if cfop == CFOP_INTERNO_VENDA:
+        aliq, _ = _aliquota_icms_interno_por_ncm(ncm, icms_params)
+        return (vl * aliq, 0.0, 0.0, 0.0)
+    aliq_inter = _aliquota_interestadual_por_uf_destino(uf, icms_params, uf_origem)
+    aliq_dest = float(icms_params.aliquota_destino_generica_difal)
+    aliq_difal = max(0.0, aliq_dest - aliq_inter)
+    aliq_fcp = float(icms_params.fcp_destino.get(uf, icms_params.fcp_default))
+    return (0.0, vl * aliq_inter, vl * aliq_difal, vl * aliq_fcp)
+
+
+def _construir_tributos_por_nf(
+    df_validas: pd.DataFrame,
+    *,
+    receita_nf_soma: float,
+    pis_valor: float,
+    cofins_valor: float,
+    irpj_valor: float,
+    irpj_adicional_valor: float,
+    csll_valor: float,
+    icms_params: IcmsParams,
+    uf_origem: str,
+) -> pd.DataFrame:
+    if df_validas.empty:
+        return _empty_tributos_por_nf()
+    denom = max(float(receita_nf_soma), 1e-12)
+    irpj_total = float(irpj_valor) + float(irpj_adicional_valor)
+    rows: list[dict[str, Any]] = []
+    for _, row in df_validas.iterrows():
+        vl = float(pd.to_numeric(row.get("Valor_Liquido_NF"), errors="coerce"))
+        peso = vl / denom
+        ic_i, ic_e, dif, fcp = _tributos_estaduais_por_linha(row, icms_params, uf_origem)
+        pis_n = float(pis_valor) * peso
+        cof_n = float(cofins_valor) * peso
+        irpj_n = irpj_total * peso
+        csll_n = float(csll_valor) * peso
+        tot = pis_n + cof_n + irpj_n + csll_n + ic_i + ic_e + dif + fcp
+        emi = row.get("Nota_Data_Emissao")
+        rows.append(
+            {
+                "Nota_Numero_Normalizado": str(row.get("Nota_Numero_Normalizado") or "").strip(),
+                "Nota_Data_Emissao": pd.Timestamp(emi) if emi is not None and not (isinstance(emi, float) and pd.isna(emi)) else pd.NaT,
+                "Valor_Liquido_NF": vl,
+                "pis_nf": pis_n,
+                "cofins_nf": cof_n,
+                "irpj_nf": irpj_n,
+                "csll_nf": csll_n,
+                "icms_interno_nf": ic_i,
+                "icms_interestadual_nf": ic_e,
+                "difal_nf": dif,
+                "fcp_nf": fcp,
+                "imposto_total_nf": tot,
+            }
+        )
+    return pd.DataFrame(rows, columns=list(TRIBUTOS_POR_NF_COLUMNS))
+
+
+def _validar_consistencia_tributos_por_nf(bd: LucroPresumidoBreakdown, df_nf: pd.DataFrame) -> None:
+    """Garante soma por NF ≈ totais agregados e linha = soma dos 8 tributos."""
+    if df_nf.empty:
+        return
+    tol = 0.10
+    if abs(float(df_nf["pis_nf"].sum()) - float(bd.pis_valor)) > tol:
+        raise ValueError("Soma pis_nf diverge do pis_valor agregado.")
+    if abs(float(df_nf["cofins_nf"].sum()) - float(bd.cofins_valor)) > tol:
+        raise ValueError("Soma cofins_nf diverge do cofins_valor agregado.")
+    if abs(float(df_nf["irpj_nf"].sum()) - (float(bd.irpj_valor) + float(bd.irpj_adicional_valor))) > tol:
+        raise ValueError("Soma irpj_nf diverge de irpj_valor + irpj_adicional_valor.")
+    if abs(float(df_nf["csll_nf"].sum()) - float(bd.csll_valor)) > tol:
+        raise ValueError("Soma csll_nf diverge do csll_valor agregado.")
+    if abs(float(df_nf["icms_interno_nf"].sum()) - float(bd.icms_interno_valor)) > tol:
+        raise ValueError("Soma icms_interno_nf diverge do icms_interno_valor agregado.")
+    if abs(float(df_nf["icms_interestadual_nf"].sum()) - float(bd.icms_interestadual_valor)) > tol:
+        raise ValueError("Soma icms_interestadual_nf diverge do icms_interestadual_valor agregado.")
+    if abs(float(df_nf["difal_nf"].sum()) - float(bd.difal_valor)) > tol:
+        raise ValueError("Soma difal_nf diverge do difal_valor agregado.")
+    if abs(float(df_nf["fcp_nf"].sum()) - float(bd.fcp_valor)) > tol:
+        raise ValueError("Soma fcp_nf diverge do fcp_valor agregado.")
+    if abs(float(df_nf["imposto_total_nf"].sum()) - float(bd.total_imposto)) > tol:
+        raise ValueError("Soma imposto_total_nf diverge do total_imposto agregado.")
+    partes = df_nf[["pis_nf", "cofins_nf", "irpj_nf", "csll_nf", "icms_interno_nf", "icms_interestadual_nf", "difal_nf", "fcp_nf"]]
+    linha = partes.sum(axis=1)
+    if (linha - df_nf["imposto_total_nf"].astype(float)).abs().max() > 1e-4:
+        raise ValueError("imposto_total_nf não bate com a soma dos 8 tributos por linha.")
+
+
 def calcular_lucro_presumido(
     df_fiscal: pd.DataFrame,
     df_devolucoes: pd.DataFrame | None = None,
@@ -467,7 +584,18 @@ def calcular_lucro_presumido(
     total_imposto = total_federal + total_estadual
     aliquota_efetiva = (total_imposto / receita_bruta) if receita_bruta > 1e-12 else 0.0
 
-    return LucroPresumidoBreakdown(
+    tributos_por_nf = _construir_tributos_por_nf(
+        df_validas,
+        receita_nf_soma=receita_nf,
+        pis_valor=float(fed["pis_valor"]),
+        cofins_valor=float(fed["cofins_valor"]),
+        irpj_valor=float(fed["irpj_valor"]),
+        irpj_adicional_valor=float(fed["irpj_adicional_valor"]),
+        csll_valor=float(fed["csll_valor"]),
+        icms_params=ip,
+        uf_origem=uf_origem,
+    )
+    bd = LucroPresumidoBreakdown(
         receita_bruta=receita_bruta,
         nfs=int(len(df_validas)),
         receita_devolucoes=receita_devolucoes,
@@ -497,5 +625,8 @@ def calcular_lucro_presumido(
         aplicou_majoracao_lc_224=bool(fed["aplicou_majoracao_lc_224"]),
         receita_anual_referencia=receita_anual_ref,
         cfops_outros_base=base_outros,
+        tributos_por_nf=tributos_por_nf,
         avisos=tuple(avisos),
     )
+    _validar_consistencia_tributos_por_nf(bd, tributos_por_nf)
+    return bd

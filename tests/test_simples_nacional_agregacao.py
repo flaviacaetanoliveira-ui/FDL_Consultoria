@@ -8,7 +8,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from processing.faturamento.simples_nacional import _rbt12_janela_meses, agregar_simples_nacional_para_painel_fiscal
+from processing.faturamento.simples_nacional import (
+    _aliquota_pct_aplicada_imposto_mes,
+    _rbt12_janela_meses,
+    agregar_simples_nacional_para_painel_fiscal,
+    calcular_aliquota_efetiva_mes,
+    extrair_historico_receita_mensal_por_empresa,
+)
 
 
 def _df_nf_linha(
@@ -440,3 +446,54 @@ def test_agregador_json_lookup_preserva_decimal_para_pct() -> None:
     row = r["por_empresa"]["x"]
     assert row["aliquota_referencia_json_pct"] == pytest.approx(9.0)
     assert row["origem_aliquota"] == "referencia_json"
+
+
+def test_aliquotas_mensais_calculadas_por_mes_de_emissao() -> None:
+    full = _montar_df_full_rbt12_faixa1()
+    base = pd.DataFrame(
+        [
+            _df_nf_linha("gama_home", date(2026, 2, 10), 50_000.0, "A"),
+            _df_nf_linha("gama_home", date(2026, 3, 5), 30_000.0, "B"),
+        ]
+    )
+    params = {"gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.04}}
+    r = agregar_simples_nacional_para_painel_fiscal(
+        base,
+        ["gama_home"],
+        params,
+        date(2026, 2, 1),
+        date(2026, 3, 31),
+        df_fiscal_full=full,
+        ok_nf_dates=True,
+    )
+    assert "aliquotas_mensais_por_empresa" in r
+    am = r["aliquotas_mensais_por_empresa"]["gama_home"]
+    assert "2026-02" in am and "2026-03" in am
+    for v in am.values():
+        assert 0.0 <= float(v) <= 1.0
+
+
+def test_aliquota_mensal_usa_rbt12_inicio_do_mes() -> None:
+    """Valor mensal exposto = mesma regra do cálculo por competência (RBT12 na virada do mês)."""
+    full = _montar_df_full_rbt12_faixa1()
+    base = pd.DataFrame([_df_nf_linha("gama_home", date(2026, 2, 5), 100_000.0, "P1")])
+    params = {"gama_home": {"regime": "simples_nacional", "aliquota_imposto": 0.04}}
+    r = agregar_simples_nacional_para_painel_fiscal(
+        base,
+        ["gama_home"],
+        params,
+        date(2026, 2, 1),
+        date(2026, 2, 28),
+        df_fiscal_full=full,
+        ok_nf_dates=True,
+    )
+    hist_global = extrair_historico_receita_mensal_por_empresa(
+        full,
+        coluna_empresa="empresa_slug",
+        coluna_valor="Valor_Liquido_NF",
+    )
+    hist_emp = dict(hist_global.get("gama_home", {}))
+    json_ref = float(r["por_empresa"]["gama_home"]["aliquota_referencia_json_pct"])
+    res_m = calcular_aliquota_efetiva_mes("gama_home", date(2026, 2, 1), hist_emp)
+    esperado = _aliquota_pct_aplicada_imposto_mes(res_m, json_ref) / 100.0
+    assert r["aliquotas_mensais_por_empresa"]["gama_home"]["2026-02"] == pytest.approx(esperado)

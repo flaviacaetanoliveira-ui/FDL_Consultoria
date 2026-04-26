@@ -269,3 +269,87 @@ def test_breakdown_inclui_fcp_base_zero_e_aplicado() -> None:
     assert out.fcp_ufs_aplicadas == ("RJ",)
     assert "MG" in out.fcp_ufs_zeradas
 
+
+def test_tributos_por_nf_contem_uma_linha_por_nf_valida() -> None:
+    df = _df_fiscal(
+        [
+            _base_row(Nota_Numero_Normalizado="A1", Valor_Liquido_NF=100.0),
+            _base_row(Nota_Numero_Normalizado="A2", Valor_Liquido_NF=200.0),
+        ]
+    )
+    out = _run(df)
+    assert len(out.tributos_por_nf) == 2
+
+
+def test_tributos_por_nf_soma_federais_bate_com_breakdown() -> None:
+    df = _df_fiscal([_base_row(Valor_Liquido_NF=10_000.0)])
+    out = _run(df, receita_anual_estimada=4_000_000.0)
+    t = out.tributos_por_nf
+    assert t["pis_nf"].sum() == pytest.approx(out.pis_valor, abs=0.05)
+    assert t["cofins_nf"].sum() == pytest.approx(out.cofins_valor, abs=0.05)
+    assert t["irpj_nf"].sum() == pytest.approx(out.irpj_valor + out.irpj_adicional_valor, abs=0.05)
+    assert t["csll_nf"].sum() == pytest.approx(out.csll_valor, abs=0.05)
+
+
+def test_tributos_por_nf_soma_estaduais_bate_com_breakdown() -> None:
+    df = _df_fiscal(
+        [
+            _base_row(Nota_Numero_Normalizado="I1", Nota_CFOP=CFOP_INTERNO_VENDA, Nota_NCM="9403.10.00", Valor_Liquido_NF=500.0),
+            _base_row(
+                Nota_Numero_Normalizado="E1",
+                Nota_CFOP=CFOP_INTERESTADUAL_NAO_CONTRIBUINTE,
+                Nota_UF_Destino="BA",
+                Valor_Liquido_NF=300.0,
+            ),
+        ]
+    )
+    out = _run(df)
+    t = out.tributos_por_nf
+    assert t["icms_interno_nf"].sum() == pytest.approx(out.icms_interno_valor, abs=0.05)
+    assert t["icms_interestadual_nf"].sum() == pytest.approx(out.icms_interestadual_valor, abs=0.05)
+    assert t["difal_nf"].sum() == pytest.approx(out.difal_valor, abs=0.05)
+    assert t["fcp_nf"].sum() == pytest.approx(out.fcp_valor, abs=0.05)
+
+
+def test_tributos_por_nf_icms_interno_correto_para_nf_sp_cap94() -> None:
+    df = _df_fiscal([_base_row(Nota_CFOP=CFOP_INTERNO_VENDA, Nota_NCM="9403.30.00", Valor_Liquido_NF=1000.0)])
+    out = _run(df)
+    assert out.tributos_por_nf.iloc[0]["icms_interno_nf"] == pytest.approx(133.0)
+    assert out.tributos_por_nf.iloc[0]["icms_interestadual_nf"] == pytest.approx(0.0)
+
+
+def test_tributos_por_nf_icms_interestadual_correto_para_nf_outra_uf() -> None:
+    df = _df_fiscal(
+        [_base_row(Nota_CFOP=CFOP_INTERESTADUAL_NAO_CONTRIBUINTE, Nota_UF_Destino="BA", Valor_Liquido_NF=1000.0)]
+    )
+    out = _run(df)
+    row = out.tributos_por_nf.iloc[0]
+    assert row["icms_interestadual_nf"] == pytest.approx(70.0)
+    assert row["difal_nf"] == pytest.approx(110.0)
+
+
+def test_tributos_por_nf_fcp_aplicado_apenas_em_rj() -> None:
+    df = _df_fiscal(
+        [
+            _base_row(Nota_Numero_Normalizado="R1", Nota_CFOP=CFOP_INTERESTADUAL_NAO_CONTRIBUINTE, Nota_UF_Destino="RJ", Valor_Liquido_NF=1000.0),
+            _base_row(Nota_Numero_Normalizado="M1", Nota_CFOP=CFOP_INTERESTADUAL_NAO_CONTRIBUINTE, Nota_UF_Destino="MG", Valor_Liquido_NF=500.0),
+        ]
+    )
+    out = _run(df)
+    t = out.tributos_por_nf.set_index("Nota_Numero_Normalizado")
+    assert t.loc["R1", "fcp_nf"] == pytest.approx(20.0)
+    assert t.loc["M1", "fcp_nf"] == pytest.approx(0.0)
+
+
+def test_tributos_por_nf_canceladas_excluidas() -> None:
+    df = _df_fiscal(
+        [
+            _base_row(Nota_Numero_Normalizado="OK1", Nota_Situacao="Autorizada", Valor_Liquido_NF=1000.0),
+            _base_row(Nota_Numero_Normalizado="CX1", Nota_Situacao="Cancelada", Valor_Liquido_NF=999_000.0),
+        ]
+    )
+    out = _run(df)
+    assert len(out.tributos_por_nf) == 1
+    assert out.nfs == 1
+    assert out.tributos_por_nf.iloc[0]["Nota_Numero_Normalizado"] == "OK1"
+

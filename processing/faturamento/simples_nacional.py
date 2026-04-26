@@ -519,6 +519,7 @@ def agregar_simples_nacional_para_painel_fiscal(
     competencia_ref = _ultima_competencia_com_nf_no_periodo(historico_global, org_ids, periodo_inicio, periodo_fim)
 
     por_empresa: dict[str, Any] = {}
+    aliquotas_mensais_por_empresa: dict[str, dict[str, float]] = {}
     tem_fora = False
     base_simples_total = 0.0
     imp_simples_total = 0.0
@@ -565,13 +566,18 @@ def agregar_simples_nacional_para_painel_fiscal(
         ultimo = calcular_aliquota_efetiva_mes(oid, competencia_ref, hist_emp)
         json_ref = _aliquota_referencia_json_pct(params_regime, oid)
 
+        al_m: dict[str, float] = {}
+        for m, res_m in zip(meses_periodo, historico_mensal, strict=True):
+            pct_apl = _aliquota_pct_aplicada_imposto_mes(res_m, json_ref)
+            al_m[f"{int(m.year):04d}-{int(m.month):02d}"] = float(pct_apl) / 100.0
+        aliquotas_mensais_por_empresa[oid] = al_m
+
         imposto_periodo = 0.0
         # Imposto do período: receita mensal só do recorte (evita duplicar full+base no concat usado no RBT12).
         df_bruta_mes = (
             df_fiscal_base if df_fiscal_base is not None and not df_fiscal_base.empty else df_hist_src
         )
-        for m in meses_periodo:
-            res_m = calcular_aliquota_efetiva_mes(oid, m, hist_emp)
+        for m, res_m in zip(meses_periodo, historico_mensal, strict=True):
             bruta_m = _receita_bruta_mes_empresa(df_bruta_mes, oid, m)
             aliq_apl = _aliquota_pct_aplicada_imposto_mes(res_m, json_ref)
             imposto_periodo += bruta_m * (aliq_apl / 100.0)
@@ -624,6 +630,7 @@ def agregar_simples_nacional_para_painel_fiscal(
     return {
         "competencia_referencia": competencia_ref,
         "por_empresa": por_empresa,
+        "aliquotas_mensais_por_empresa": aliquotas_mensais_por_empresa,
         "total_simples": {
             "base_liquida": float(base_simples_total),
             "imposto_total": float(imp_simples_total),

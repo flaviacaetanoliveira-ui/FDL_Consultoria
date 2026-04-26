@@ -263,6 +263,42 @@ APURACAO_PREMIUM_PANEL_CSS = """<style>
   color: #111827;
   font-variant-numeric: tabular-nums;
 }
+.fdl-tabela-totais {
+  background: linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%);
+  border: 1px solid #E5E7EB;
+  border-radius: 0.5rem;
+  padding: 1rem 1.5rem;
+  margin-top: 1rem;
+}
+.fdl-tabela-totais-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.75rem;
+}
+.fdl-tabela-totais-rows {
+  display: flex;
+  gap: 2rem;
+  align-items: baseline;
+}
+.fdl-tabela-totais-item-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #6B7280;
+}
+.fdl-tabela-totais-item-value {
+  display: block;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+.fdl-tabela-totais-geral .fdl-tabela-totais-item-value {
+  color: #047857;
+  font-weight: 700;
+}
 </style>"""
 
 COMPOSICAO_BASE_CSS = """<style>
@@ -1872,6 +1908,7 @@ def render_apuracao_fiscal_panel(
     ao._fdl_fat_min_vsp(size="sm")
     st.html(COMPOSICAO_BASE_CSS + composicao_html)
 
+    lp_prefetched: dict[str, LucroPresumidoBreakdown] = {}
     if use_fiscal_parquet and ok_nf_dates and isinstance(df_fiscal_pre, pd.DataFrame):
         (nc, vc), (nd, vd), ni = _agregar_invalidas_por_tipo_no_periodo(
             df_fiscal_pre,
@@ -1895,7 +1932,6 @@ def render_apuracao_fiscal_panel(
                 )
 
         lp_breakdowns_table: dict[str, dict[str, float]] = {}
-        lp_prefetched: dict[str, LucroPresumidoBreakdown] = {}
         lp_orgs_ordered: list[tuple[str, str]] = []
         params_path = resolve_faturamento_params_path_for_ui(load_info)
         if params_path is not None and isinstance(params_union, FaturamentoParamsV2):
@@ -2033,4 +2069,9 @@ def render_apuracao_fiscal_panel(
         csv_file_name="apuracao_fiscal_nf.csv",
         table_heading="### Tabela de NFs (visão fiscal)",
         nf_table_ui_mode="fiscal",
+        aliquotas_mensais_sn=(
+            (simples_agregado or {}).get("aliquotas_mensais_por_empresa") if simples_agregado else None
+        ),
+        breakdowns_lp=lp_prefetched if simples_agregado else None,
+        org_ids_lp=set(lp_prefetched.keys()) if simples_agregado else None,
     )

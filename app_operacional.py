@@ -15,7 +15,7 @@ from pathlib import Path
 import shutil
 import time
 import unicodedata
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, Mapping
 from textwrap import dedent
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse, urljoin
 from urllib.error import HTTPError, URLError
@@ -68,6 +68,8 @@ from faturamento_dre_recorte import (
     faturamento_recorte_state_from_session,
 )
 from processing.faturamento.fiscal_commercial_nf_merge import merge_fiscal_base_with_commercial_nf_dataframe
+from processing.faturamento.imposto_por_nf import enriquecer_nfs_com_imposto_calculado
+from processing.faturamento.lucro_presumido import LucroPresumidoBreakdown
 from processing.faturamento.fiscal_materializado import fiscal_contract_dataframe_valid
 from processing.faturamento.nf_materializado import nf_first_contract_dataframe_valid
 from processing.faturamento.nf_panel_materializado import nf_panel_materializado_dataframe_valid
@@ -7978,6 +7980,9 @@ def _render_faturamento_dre_nf_table_section(
     csv_file_name: str = "faturamento_recorte_minimo_nf.csv",
     table_heading: str = "### Tabela por NF",
     nf_table_ui_mode: Literal["gerencial", "fiscal"] = "gerencial",
+    aliquotas_mensais_sn: Mapping[str, Mapping[str, float]] | None = None,
+    breakdowns_lp: Mapping[str, LucroPresumidoBreakdown] | None = None,
+    org_ids_lp: set[str] | None = None,
 ) -> None:
     """Tabela por NF (filtros inline, CSV, paginação).
 
@@ -7986,6 +7991,7 @@ def _render_faturamento_dre_nf_table_section(
     """
     _oid = str(org_id)
     _ui_fiscal = nf_table_ui_mode == "fiscal"
+    _nf_imposto_fiscal_enriquecido = False
     # Só chegamos aqui com painel materializado válido: recorte = filtrar linhas já agregadas (sem recomputar DRE).
     df_nf_lines = _faturamento_nf_apply_minimal_recorte(
         df_nf_pre,
@@ -8354,6 +8360,7 @@ def _render_faturamento_dre_nf_table_section(
             "Emissão",
             "Situação",
             "Empresa",
+            "Regime",
             "NF",
         ]
         if _nat_ok:
@@ -8425,6 +8432,41 @@ def _render_faturamento_dre_nf_table_section(
     _disp_nf_full = pd.DataFrame()
     _disp_nf_ui = pd.DataFrame()
     if not _df_nf_table.empty:
+        _nf_imposto_fiscal_enriquecido = (
+            _ui_fiscal
+            and aliquotas_mensais_sn is not None
+            and breakdowns_lp is not None
+            and org_ids_lp is not None
+        )
+        if _nf_imposto_fiscal_enriquecido:
+            _req_nf_imp = {
+                "org_id",
+                "Nota_Data_Emissao",
+                "Valor_Liquido_NF",
+                "Nota_Numero_Normalizado",
+                "Nota_Situacao",
+            }
+            if _req_nf_imp.issubset(set(_df_nf_table.columns)):
+                _df_nf_table = enriquecer_nfs_com_imposto_calculado(
+                    _df_nf_table,
+                    aliquotas_mensais_sn=aliquotas_mensais_sn,
+                    breakdowns_lp=breakdowns_lp,
+                    org_ids_lp=set(org_ids_lp),
+                )
+                _filt_fiscal_reg = st.radio(
+                    "Filtrar por regime",
+                    options=["Todos", "Simples Nacional", "Lucro Presumido"],
+                    horizontal=True,
+                    label_visibility="visible",
+                    key=f"{prefix_main}_filtro_regime_nf",
+                )
+                if _filt_fiscal_reg == "Simples Nacional":
+                    _df_nf_table = _df_nf_table.loc[_df_nf_table["regime_nf"] == "SN"].reset_index(drop=True)
+                elif _filt_fiscal_reg == "Lucro Presumido":
+                    _df_nf_table = _df_nf_table.loc[_df_nf_table["regime_nf"] == "LP"].reset_index(drop=True)
+            else:
+                _nf_imposto_fiscal_enriquecido = False
+
         _plat_s = _faturamento_nf_platform_display_series(_df_nf_table).astype(str)
         _marg_ratio = _nf_row_margem_resultado_venda_ratio(
             _df_nf_table["valor_venda"],
@@ -8454,6 +8496,20 @@ def _render_faturamento_dre_nf_table_section(
         _vv_num = pd.to_numeric(_df_nf_table["valor_venda"], errors="coerce").fillna(0.0)
         _cm_num = pd.to_numeric(_df_nf_table["comissao"], errors="coerce").fillna(0.0)
         _imp_num = pd.to_numeric(_df_nf_table["imposto"], errors="coerce").fillna(0.0)
+        if "imposto_estimado_nf" in _df_nf_table.columns and "imposto_calculavel_nf" in _df_nf_table.columns:
+            _imp_list: list[float] = []
+            for _i in range(len(_df_nf_table)):
+                if not bool(_df_nf_table["imposto_calculavel_nf"].iloc[_i]):
+                    _imp_list.append(float("nan"))
+                else:
+                    _raw_iv = pd.to_numeric(
+                        _df_nf_table["imposto_estimado_nf"].iloc[_i],
+                        errors="coerce",
+                    )
+                    _imp_list.append(float(_raw_iv) if pd.notna(_raw_iv) else float("nan"))
+            _imp_for_disp = pd.Series(_imp_list, index=_df_nf_table.index, dtype=float)
+        else:
+            _imp_for_disp = _imp_num
         _cp_num = pd.to_numeric(_custo_s, errors="coerce").fillna(0.0)
         _eps_z = 1e-6
         _sem_mov = (
@@ -8541,7 +8597,7 @@ def _render_faturamento_dre_nf_table_section(
                 )
                 if "tarifa_custo_envio" in _df_nf_table.columns
                 else pd.Series(0.0, index=_df_nf_table.index),
-                "Imposto": pd.to_numeric(_df_nf_table["imposto"], errors="coerce"),
+                "Imposto": _imp_for_disp,
                 "Despesa fixa": pd.to_numeric(_df_nf_table["despesa_fixa"], errors="coerce"),
                 "ADS 3,5%": _ads_v_s,
                 "ADS fixo": _ads_f_s,
@@ -8556,6 +8612,12 @@ def _render_faturamento_dre_nf_table_section(
         )
         if _nat_col_tb:
             _disp_nf_full["Natureza"] = _series_empty_str_to_dash(_df_nf_table[_nat_col_tb])
+        if _ui_fiscal:
+            _disp_nf_full["Regime"] = (
+                _df_nf_table["regime_nf"].astype(str)
+                if "regime_nf" in _df_nf_table.columns
+                else pd.Series("—", index=_df_nf_table.index, dtype=str)
+            )
         if _ui_fiscal and "Faturado (NF)" in _disp_nf_full.columns:
             _disp_nf_full = _disp_nf_full.rename(columns={"Faturado (NF)": "Valor Fiscal"})
             _disp_nf_full["Base tributável"] = _disp_nf_full["Valor Fiscal"]
@@ -8660,6 +8722,8 @@ def _render_faturamento_dre_nf_table_section(
         )
         _disp_nf_full = _disp_nf_full.loc[_nf_tbl_mask].reset_index(drop=True)
         _disp_nf_ui = _disp_nf_ui.loc[_nf_tbl_mask].reset_index(drop=True)
+        if _nf_imposto_fiscal_enriquecido and "imposto_estimado_nf" in _df_nf_table.columns:
+            _df_nf_table = _df_nf_table.loc[_nf_tbl_mask].reset_index(drop=True)
     else:
         _nf_tbl_n_antes_extra = 0
 
@@ -8668,6 +8732,11 @@ def _render_faturamento_dre_nf_table_section(
         "Emissão": None,
         "Status": "Lucro, prejuízo ou neutro (resultado ~0) conforme o resultado consolidado da NF.",
         "Empresa": None,
+        "Regime": (
+            "Regime tributário da empresa: SN (Simples Nacional) ou LP (Lucro Presumido)."
+            if _ui_fiscal
+            else None
+        ),
         "Plataforma": "«—» = NF sem canal comercial associado neste recorte.",
         "NF": None,
         "Situação": (
@@ -8738,9 +8807,17 @@ def _render_faturamento_dre_nf_table_section(
             else "Σ frete no pedido."
         ),
         "Imposto": (
-            "Imposto alocado a esta NF no materializado; total do período alinha-se à Apuração Fiscal via **base fiscal líquida** × taxa efetiva."
-            if _ui_fiscal
-            else ("Comercial: soma do imposto das linhas de pedido ligadas à NF." if use_fiscal_kpi else None)
+            (
+                "Estimativa por NF: SN aplica alíquota efetiva do mês de emissão; "
+                "LP soma tributos federais (rateio proporcional) e estaduais "
+                "(cálculo por CFOP/NCM/UF). Apuração oficial é por período."
+            )
+            if _ui_fiscal and _nf_imposto_fiscal_enriquecido
+            else (
+                "Imposto alocado a esta NF no materializado; total do período alinha-se à Apuração Fiscal via **base fiscal líquida** × taxa efetiva."
+                if _ui_fiscal
+                else ("Comercial: soma do imposto das linhas de pedido ligadas à NF." if use_fiscal_kpi else None)
+            )
         ),
         "Despesa fixa": (
             "Comercial: 5% sobre valor da venda (lista) agregado à NF."
@@ -8772,6 +8849,7 @@ def _render_faturamento_dre_nf_table_section(
         "Emissão": "small",
         "Status": "small",
         "Empresa": "medium",
+        "Regime": "small",
         "Plataforma": "small",
         "NF": "small",
         "Situação": "small",
@@ -8806,6 +8884,14 @@ def _render_faturamento_dre_nf_table_section(
         _h = _nf_col_help.get(_cn)
         _cfg_nf[_cn] = (
             TextColumn(_cn, width=_w, help=_h) if _h else TextColumn(_cn, width=_w)
+        )
+
+    if _ui_fiscal and _nf_imposto_fiscal_enriquecido and "Imposto" in _cfg_nf:
+        _h_imp = _nf_col_help.get("Imposto")
+        _cfg_nf["Imposto"] = (
+            TextColumn("Imposto estimado", width="small", help=_h_imp)
+            if _h_imp
+            else TextColumn("Imposto estimado", width="small")
         )
 
     _nf_dl_n = len(_disp_nf_ui)
@@ -8938,6 +9024,52 @@ def _render_faturamento_dre_nf_table_section(
                 height=_h_tbl,
                 column_config=_cfg_nf,
             )
+            if (
+                _ui_fiscal
+                and _nf_imposto_fiscal_enriquecido
+                and not _df_nf_table.empty
+                and "imposto_estimado_nf" in _df_nf_table.columns
+            ):
+                dfc = _df_nf_table.loc[_df_nf_table["imposto_calculavel_nf"]].copy()
+                total_sn = float(
+                    pd.to_numeric(
+                        dfc.loc[dfc["regime_nf"] == "SN", "imposto_estimado_nf"],
+                        errors="coerce",
+                    ).fillna(0.0).sum()
+                )
+                total_lp = float(
+                    pd.to_numeric(
+                        dfc.loc[dfc["regime_nf"] == "LP", "imposto_estimado_nf"],
+                        errors="coerce",
+                    ).fillna(0.0).sum()
+                )
+                n_sn = int((dfc["regime_nf"] == "SN").sum())
+                n_lp = int((dfc["regime_nf"] == "LP").sum())
+                n_tot = n_sn + n_lp
+                tot_geral = total_sn + total_lp
+                _ft_sn = html.escape(_fmt_brl_ptbr_celula(total_sn))
+                _ft_lp = html.escape(_fmt_brl_ptbr_celula(total_lp))
+                _ft_g = html.escape(_fmt_brl_ptbr_celula(tot_geral))
+                st.markdown(
+                    '<div class="fdl-tabela-totais">'
+                    '<div class="fdl-tabela-totais-label">TOTAIS DA SELEÇÃO ATUAL</div>'
+                    '<div class="fdl-tabela-totais-rows">'
+                    "<div>"
+                    '<span class="fdl-tabela-totais-item-label">Simples Nacional</span>'
+                    f'<span class="fdl-tabela-totais-item-value">{n_sn:,} NFs · {_ft_sn}</span>'
+                    "</div>"
+                    "<div>"
+                    '<span class="fdl-tabela-totais-item-label">Lucro Presumido</span>'
+                    f'<span class="fdl-tabela-totais-item-value">{n_lp:,} NFs · {_ft_lp}</span>'
+                    "</div>"
+                    '<div class="fdl-tabela-totais-geral">'
+                    '<span class="fdl-tabela-totais-item-label">Total Geral</span>'
+                    f'<span class="fdl-tabela-totais-item-value">{n_tot:,} NFs · {_ft_g}</span>'
+                    "</div>"
+                    "</div>"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
 
     _fdl_fat_min_vsp(size="md")
 

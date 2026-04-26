@@ -12,6 +12,7 @@ from typing import Any, Callable, Literal
 import pandas as pd
 import streamlit as st
 
+from app.components.lucro_presumido_card import render_lucro_presumido_card
 from faturamento_dre_recorte import (
     _BR_TZ,
     _fdl_fr_etiquetas_empresa_recorte,
@@ -838,10 +839,18 @@ def _tem_alguma_empresa_simples_no_filtro(simples_agregado: dict[str, Any]) -> b
     return False
 
 
+def _tem_alguma_empresa_lp_no_agregado(simples_agregado: dict[str, Any]) -> bool:
+    for v in simples_agregado.get("por_empresa", {}).values():
+        if isinstance(v, dict) and v.get("regime") == "lucro_presumido":
+            return True
+    return False
+
+
 def _build_aliquota_efetiva_simples_html(
     simples_agregado: dict[str, Any],
     *,
     fmt_brl: Callable[[float], str],
+    lp_breakdowns: dict[str, dict[str, float]] | None = None,
 ) -> str:
     """Bloco «Alíquota Efetiva por Empresa · Simples Nacional» (calculado, warm-up JSON, L. Presumido)."""
     por: dict[str, Any] = simples_agregado.get("por_empresa", {})
@@ -983,8 +992,14 @@ def _build_aliquota_efetiva_simples_html(
         if reg == "lucro_presumido":
             tr_cls = "fdl-fat-sn-row-lp"
             badge = '<span class="fdl-fat-sn-badge-lp">[L. Presumido]</span>'
-            imp_s = html.escape("cálculo em desenvolvimento")
-            ali_s = "—"
+            lp_row = (lp_breakdowns or {}).get(oid) if lp_breakdowns else None
+            if lp_row:
+                imp_s = html.escape(fmt_brl(float(lp_row["imposto_total"])))
+                ali_s = html.escape(_fmt_pct_br2(float(lp_row["aliquota_efetiva_pct"]))) + "%"
+                badge += '<span class="fdl-fat-sn-badge-calc-inline">[Calculado]</span>'
+            else:
+                imp_s = html.escape("cálculo em desenvolvimento")
+                ali_s = "—"
         elif oa == "referencia_json":
             badge = '<span class="fdl-fat-sn-badge-json">[JSON]</span>'
             jr = float(json_ref) if isinstance(json_ref, (int, float)) else None
@@ -1520,10 +1535,39 @@ def render_apuracao_fiscal_panel(
             df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
             ok_nf_dates=ok_nf_dates,
         )
-        if _tem_alguma_empresa_simples_no_filtro(simples_agregado):
+        lp_breakdowns_table: dict[str, dict[str, float]] = {}
+        params_path = resolve_faturamento_params_path_for_ui(load_info)
+        if params_path is not None and isinstance(params_union, FaturamentoParamsV2):
+            lp_orgs: list[tuple[str, str]] = []
+            sel_orgs = set(_org_ids_ag)
+            for e in params_union.empresas:
+                if e.regime_tributario != "lucro_presumido":
+                    continue
+                if sel_orgs and e.org_id not in sel_orgs:
+                    continue
+                lp_orgs.append((e.org_id, e.empresa))
+            for lp_org_id, lp_nome in lp_orgs:
+                br = render_lucro_presumido_card(
+                    df_fiscal=df_fiscal_pre,
+                    df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
+                    org_id=lp_org_id,
+                    empresa_nome=lp_nome,
+                    nf_d_ini=pd.Timestamp(_nf_kpi_ini),
+                    nf_d_fim=pd.Timestamp(_nf_kpi_fim),
+                    json_params_path=params_path,
+                )
+                if br is not None:
+                    lp_breakdowns_table[lp_org_id] = {
+                        "imposto_total": float(br.total_imposto),
+                        "aliquota_efetiva_pct": float(br.aliquota_efetiva * 100.0),
+                    }
+        if _tem_alguma_empresa_simples_no_filtro(simples_agregado) or _tem_alguma_empresa_lp_no_agregado(
+            simples_agregado
+        ):
             aliquota_html = _build_aliquota_efetiva_simples_html(
                 simples_agregado,
                 fmt_brl=ao._fmt_brl_ptbr_celula,
+                lp_breakdowns=lp_breakdowns_table,
             )
             ao._fdl_fat_min_vsp(size="sm")
             st.html(ALIQUOTA_EFETIVA_CSS + aliquota_html)

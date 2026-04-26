@@ -11,6 +11,7 @@ Princípio: cada empresa contribui com seu imposto conforme regime.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,16 +22,8 @@ import pandas as pd
 
 from processing.faturamento.lucro_presumido import LucroPresumidoBreakdown, calcular_lucro_presumido
 from processing.faturamento.lucro_presumido_loader import load_lucro_presumido_params_from_json
-from processing.faturamento.params import (
-    FaturamentoParams,
-    FaturamentoParamsError,
-    FaturamentoParamsV2,
-    load_faturamento_params,
-)
-from processing.faturamento.params_regime import (
-    find_empresa_faturamento_entry,
-    get_regime_tributario_por_empresa,
-)
+from processing.faturamento.params import FaturamentoParams, FaturamentoParamsV2
+from processing.faturamento.params_regime import find_empresa_faturamento_entry
 
 logger = logging.getLogger(__name__)
 
@@ -123,16 +116,40 @@ def _identificar_empresas_lp_no_recorte(
     - aparecem em ``df_fiscal`` (quando há coluna ``org_id``);
     - estão no filtro (ou todos os presentes no DF se filtro ``None``);
     - são Lucro Presumido segundo o JSON de params.
+
+    Lê só o necessário do JSON (``empresas`` + regime), **sem** validar ``cliente_root``
+    nem paths de disco — compatível com Cloud Linux quando o JSON traz paths Windows.
     """
     if not json_params_path.is_file():
         return []
     try:
-        params = load_faturamento_params(json_params_path)
-    except (FaturamentoParamsError, OSError, ValueError) as exc:
-        logger.warning("imposto_consolidado: falha ao ler params %s: %s", json_params_path, exc)
+        with json_params_path.open(encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        logger.warning("imposto_consolidado: falha ao ler JSON %s: %s", json_params_path, exc)
+        return []
+    if not isinstance(data, dict):
         return []
 
-    if isinstance(params, FaturamentoParams):
+    empresas_json = data.get("empresas")
+    if not isinstance(empresas_json, list) or not empresas_json:
+        return []
+
+    lp_from_json: set[str] = set()
+    for emp in empresas_json:
+        if not isinstance(emp, dict):
+            continue
+        oid = str(emp.get("org_id") or emp.get("slug") or "").strip()
+        if not oid:
+            continue
+        reg_raw = emp.get("regime_tributario")
+        if reg_raw is None:
+            reg_raw = emp.get("regime")
+        if not _regime_eh_lucro_presumido(str(reg_raw) if reg_raw is not None else None):
+            continue
+        lp_from_json.add(oid)
+
+    if not lp_from_json:
         return []
 
     if df_fiscal is None or df_fiscal.empty or "org_id" not in df_fiscal.columns:
@@ -154,8 +171,7 @@ def _identificar_empresas_lp_no_recorte(
     out: list[str] = []
     seen: set[str] = set()
     for oid in sorted(present):
-        reg = get_regime_tributario_por_empresa(params, oid)
-        if _regime_eh_lucro_presumido(reg) and oid not in seen:
+        if oid in lp_from_json and oid not in seen:
             seen.add(oid)
             out.append(oid)
     return out

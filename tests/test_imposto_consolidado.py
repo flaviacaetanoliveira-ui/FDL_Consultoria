@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -169,6 +170,39 @@ def test_consolidacao_filtro_none_pega_todas_empresas() -> None:
     )
     assert "mega_facil" in r.empresas_lp_calculadas
     assert r.imposto_total >= r.imposto_simples_ponte + r.imposto_lucro_presumido - 1e-6
+
+
+def test_consolidador_funciona_sem_cliente_root_valido_no_fs(tmp_path: Path) -> None:
+    """
+    Regressão Cloud/Linux: JSON com cliente_root inexistente não deve impedir o consolidador.
+
+    Antes: ``load_faturamento_params`` validava ``cliente_root`` no disco e levantava
+    ``FaturamentoParamsError``; o painel capturava e o hero ficava com defaults.
+    """
+    raw = json.loads(_JSON_C2.read_text(encoding="utf-8"))
+    mega = next(e for e in raw["empresas"] if e.get("org_id") == "mega_facil")
+    stub = {
+        "schema_version": 2,
+        "cliente_root": "/path/que/nao/existe/em/lugar/nenhum",
+        "cliente_slug": "cliente_2",
+        "empresas": [mega],
+    }
+    json_path = tmp_path / "params_lp_only.json"
+    json_path.write_text(json.dumps(stub), encoding="utf-8")
+
+    df = pd.DataFrame([_row_mega()])
+    r = calcular_imposto_total_painel_fiscal(
+        df_fiscal=df,
+        df_devolucoes=None,
+        org_ids_filtro=None,
+        periodo_inicio=pd.Timestamp("2026-01-01"),
+        periodo_fim=pd.Timestamp("2026-03-31"),
+        imposto_simples_ponte=1_000.0,
+        json_params_path=json_path,
+    )
+    assert "mega_facil" in r.empresas_lp_calculadas
+    assert r.imposto_lucro_presumido > 0.0
+    assert r.imposto_total == pytest.approx(1_000.0 + r.imposto_lucro_presumido)
 
 
 def test_consolidacao_breakdown_por_empresa() -> None:

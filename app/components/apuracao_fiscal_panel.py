@@ -55,6 +55,7 @@ from processing.faturamento.nf_panel_materializado import nf_panel_materializado
 
 _ALIQUOTA_DIVERG_PP = 0.5
 _LOG_AP = logging.getLogger(__name__)
+_LOG_PANEL = logging.getLogger("apuracao_fiscal_panel")
 
 FISCAL_KPIS_CSS = """<style>
 .fdl-fat-kpi-hero-grid {
@@ -2046,6 +2047,18 @@ def render_apuracao_fiscal_panel(
     ao._fdl_fat_min_vsp(size="md")
     ao._fdl_fat_divider_simple()
     ao._fdl_fat_min_vsp(size="sm")
+
+    if simples_agregado is None:
+        _sa_log = "None"
+    else:
+        _ts = simples_agregado.get("total_simples") if isinstance(simples_agregado, dict) else None
+        _imp_ts = _ts.get("imposto_total", "N/A") if isinstance(_ts, dict) else "N/A"
+        _sa_log = f"presente_total_simples={_imp_ts}"
+    _LOG_PANEL.info(
+        "nf_table chamada: simples_agregado=%s lp_prefetched_keys=%s",
+        _sa_log,
+        list(lp_prefetched.keys()) if isinstance(lp_prefetched, dict) else "nao_dict",
+    )
 
     ao._render_faturamento_dre_nf_table_section(
         df_nf_pre=df_nf_pre,

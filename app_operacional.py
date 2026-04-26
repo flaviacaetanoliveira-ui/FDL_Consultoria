@@ -6,6 +6,7 @@ from email.utils import parsedate_to_datetime
 from io import BytesIO
 import base64
 import json
+import logging
 import hashlib
 import math
 import numbers
@@ -7957,6 +7958,9 @@ def _build_faturamento_dre_page_header_html(
     )
 
 
+_LOG_NF = logging.getLogger("apuracao_fiscal_nf_table")
+
+
 def _render_faturamento_dre_nf_table_section(
     *,
     df_nf_pre: pd.DataFrame,
@@ -8432,6 +8436,17 @@ def _render_faturamento_dre_nf_table_section(
     _disp_nf_full = pd.DataFrame()
     _disp_nf_ui = pd.DataFrame()
     if not _df_nf_table.empty:
+        _LOG_NF.info(
+            "nf_table guard: ui_fiscal=%s aliquotas_mensais_sn=%s breakdowns_lp_keys=%s org_ids_lp=%s",
+            _ui_fiscal,
+            "None" if aliquotas_mensais_sn is None else f"keys={list(aliquotas_mensais_sn.keys())[:5]}",
+            "None" if breakdowns_lp is None else f"keys={list(breakdowns_lp.keys())[:5]}",
+            "None" if org_ids_lp is None else f"set={sorted(org_ids_lp)[:5]}",
+        )
+        _LOG_NF.info(
+            "nf_table colunas df_nf_table: %s",
+            sorted(_df_nf_table.columns.tolist())[:30],
+        )
         _nf_imposto_fiscal_enriquecido = (
             _ui_fiscal
             and aliquotas_mensais_sn is not None
@@ -8447,6 +8462,11 @@ def _render_faturamento_dre_nf_table_section(
                 "Nota_Situacao",
             }
             if _req_nf_imp.issubset(set(_df_nf_table.columns)):
+                _LOG_NF.info(
+                    "nf_table enriquecimento ATIVADO: linhas=%d colunas_req_presentes=%s",
+                    len(_df_nf_table),
+                    _req_nf_imp.issubset(set(_df_nf_table.columns)),
+                )
                 _df_nf_table = enriquecer_nfs_com_imposto_calculado(
                     _df_nf_table,
                     aliquotas_mensais_sn=aliquotas_mensais_sn,

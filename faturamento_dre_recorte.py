@@ -79,6 +79,94 @@ def _fdl_fr_mask_nf_emissao_no_periodo(s: pd.Series, d_ini: date, d_fim: date) -
     return ok & ge & le
 
 
+def mask_nf_emissao_no_periodo(
+    serie_data: pd.Series,
+    periodo_inicio: date,
+    periodo_fim: date,
+) -> pd.Series:
+    """
+    Máscara booleana para NFs com data de emissão no período (inclusivo).
+
+    Compara por dia civil, ignora componente de hora.
+    Garante que NFs emitidas em qualquer hora do ``periodo_fim`` sejam incluídas.
+
+    Fonte única de verdade para recorte temporal de NFs no projeto.
+    Usado por: slice fiscal, agregador SN, motor Lucro Presumido.
+
+    Args:
+        serie_data: Series com datas de emissão (datetime ou string)
+        periodo_inicio, periodo_fim: limites do recorte como ``date``
+
+    Returns:
+        Series booleana com o mesmo índice de ``serie_data``.
+    """
+    return _fdl_fr_mask_nf_emissao_no_periodo(serie_data, periodo_inicio, periodo_fim)
+
+
+def calcular_devolucoes_fiscais_no_periodo(
+    df_devolucoes: pd.DataFrame | None,
+    *,
+    chave_empresa: str,
+    periodo_inicio: date,
+    periodo_fim: date,
+    ok_nf_dates: bool = True,
+) -> float:
+    """
+    Calcula valor total de devoluções fiscais no período por empresa.
+
+    Critério unificado: filtra devoluções por Nota_Data_Emissao da NF de devolução
+    dentro do período. Empresa identificada por org_id (preferencial) ou empresa.
+
+    Esta é a fonte única de verdade para devoluções fiscais no projeto.
+    Usado por: motor Lucro Presumido, agregador Simples Nacional (futuro),
+    slice fiscal do painel.
+
+    Args:
+        df_devolucoes: DataFrame com colunas Nota_Data_Emissao,
+            Valor_Liquido_Devolucao, e org_id ou empresa
+        chave_empresa: identificador da empresa (slug org_id ou rótulo empresa)
+        periodo_inicio, periodo_fim: limites do recorte
+        ok_nf_dates: flag de validação de datas (True por padrão)
+
+    Returns:
+        Soma das devoluções no período (float). Zero se DataFrame inválido,
+        empresa não encontrada, ou período inválido.
+    """
+    if df_devolucoes is None or df_devolucoes.empty or not ok_nf_dates:
+        return 0.0
+    if periodo_fim < periodo_inicio:
+        return 0.0
+
+    need = {"Nota_Data_Emissao", "Valor_Liquido_Devolucao"}
+    if not need.issubset(df_devolucoes.columns):
+        return 0.0
+
+    if "org_id" in df_devolucoes.columns:
+        key_col = "org_id"
+    elif "empresa" in df_devolucoes.columns:
+        key_col = "empresa"
+    else:
+        return 0.0
+
+    chave_str = str(chave_empresa).strip()
+    d = df_devolucoes.loc[
+        df_devolucoes[key_col].astype(str).str.strip() == chave_str
+    ].copy()
+    if d.empty:
+        return 0.0
+
+    m_period = mask_nf_emissao_no_periodo(
+        d["Nota_Data_Emissao"], periodo_inicio, periodo_fim
+    )
+    d = d.loc[m_period]
+    if d.empty:
+        return 0.0
+
+    return float(
+        pd.to_numeric(d["Valor_Liquido_Devolucao"], errors="coerce").fillna(0.0).sum()
+    )
+
+
 def _fdl_fr_ts_pedido_para_dia_civil(s: pd.Series) -> pd.Series:
     ts = pd.to_datetime(s, errors="coerce", dayfirst=True)
     if ts.empty:

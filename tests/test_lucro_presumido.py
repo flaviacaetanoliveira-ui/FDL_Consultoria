@@ -181,13 +181,79 @@ def test_devolucoes_abatem_receita_bruta() -> None:
     devol = pd.DataFrame(
         {
             "org_id": ["mega_facil"],
-            "Data_Entrada": [pd.Timestamp("2026-02-15")],
+            "Nota_Data_Emissao": [pd.Timestamp("2026-02-15")],
             "Valor_Liquido_Devolucao": [100_000.0],
         }
     )
     out = _run(df, df_devolucoes=devol, receita_anual_estimada=4_000_000.0)
     assert out.receita_devolucoes == pytest.approx(100_000.0)
     assert out.receita_bruta == pytest.approx(900_000.0)
+
+
+def test_devolucoes_filtradas_por_data_emissao_nao_data_entrada() -> None:
+    """Emissão da NF de devolução define o período; Data_Entrada não substitui."""
+    df = _df_fiscal([_base_row(Valor_Liquido_NF=1_000_000.0)])
+    devol = pd.DataFrame(
+        {
+            "org_id": ["mega_facil", "mega_facil"],
+            "Nota_Data_Emissao": [
+                pd.Timestamp("2026-01-15"),
+                pd.Timestamp("2026-03-10"),
+            ],
+            "Data_Entrada": [
+                pd.Timestamp("2026-03-20"),
+                pd.Timestamp("2026-01-20"),
+            ],
+            "Valor_Liquido_Devolucao": [1000.0, 2000.0],
+        }
+    )
+    out = calcular_lucro_presumido(
+        df,
+        df_devolucoes=devol,
+        org_id="mega_facil",
+        nf_d_ini=pd.Timestamp("2026-01-01"),
+        nf_d_fim=pd.Timestamp("2026-01-31"),
+        receita_anual_estimada=4_000_000.0,
+    )
+    assert out.receita_devolucoes == pytest.approx(1000.0)
+    assert out.receita_bruta == pytest.approx(999_000.0)
+
+
+def test_nfs_no_ultimo_dia_apos_meia_noite_sao_incluidas() -> None:
+    """NFs do último dia do período com hora > 00:00 entram (recorte por dia civil)."""
+    df_fiscal = pd.DataFrame(
+        {
+            "org_id": ["mega_facil"] * 3,
+            "empresa": ["Mega Fácil"] * 3,
+            "Nota_Numero_Normalizado": ["001", "002", "003"],
+            "Nota_Data_Emissao": [
+                pd.Timestamp("2026-03-15 09:00:00"),
+                pd.Timestamp("2026-03-31 14:30:00"),
+                pd.Timestamp("2026-04-01 08:00:00"),
+            ],
+            "Nota_Situacao": ["Emitida DANFE"] * 3,
+            "Valor_Liquido_NF": [1000.0, 2000.0, 3000.0],
+            "Valor_Total_NF": [1000.0, 2000.0, 3000.0],
+            "Frete_Nota_Export": [0.0] * 3,
+            "Nota_CFOP": ["5102"] * 3,
+            "Nota_NCM": ["9403.30.00"] * 3,
+            "Nota_UF_Destino": ["SP"] * 3,
+            "schema_version_fiscal": [3] * 3,
+        }
+    )
+    breakdown = calcular_lucro_presumido(
+        df_fiscal,
+        df_devolucoes=None,
+        org_id="mega_facil",
+        nf_d_ini=pd.Timestamp("2026-03-01"),
+        nf_d_fim=pd.Timestamp("2026-03-31"),
+        params=LucroPresumidoParams(),
+        icms_params=IcmsParams(),
+    )
+    assert breakdown.nfs == 2, f"Esperava 2 NFs, recebeu {breakdown.nfs}"
+    assert abs(breakdown.receita_bruta - 3000.0) < 0.01, (
+        f"Esperava receita 3000, recebeu {breakdown.receita_bruta}"
+    )
 
 
 def test_breakdown_inclui_fcp_base_zero_e_aplicado() -> None:

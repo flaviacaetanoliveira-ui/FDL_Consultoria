@@ -14,6 +14,10 @@ from typing import Mapping, Optional
 
 import pandas as pd
 
+from faturamento_dre_recorte import (
+    calcular_devolucoes_fiscais_no_periodo,
+    mask_nf_emissao_no_periodo,
+)
 from faturamento_dre_recorte_minimo import _nf_fiscal_situacao_invalida
 
 PIS_DEFAULT = 0.0065
@@ -153,13 +157,25 @@ def _filtrar_nfs_validas_periodo(
     nf_d_ini: pd.Timestamp,
     nf_d_fim: pd.Timestamp,
 ) -> pd.DataFrame:
+    """
+    Recorte por ``org_id`` + emissão no intervalo + situações válidas.
+
+    O filtro de datas usa ``mask_nf_emissao_no_periodo`` (dia civil, como o slice
+    fiscal e o agregador SN), evitando excluir NFs do último dia após 00:00 quando
+    ``nf_d_fim`` é meia-noite desse dia.
+    """
     if df_fiscal.empty:
         return df_fiscal.copy()
     out = df_fiscal.copy()
     out["org_id"] = out.get("org_id", "").astype(str)
     out = out[out["org_id"] == str(org_id).strip()]
     out["Nota_Data_Emissao"] = pd.to_datetime(out.get("Nota_Data_Emissao"), errors="coerce")
-    out = out[(out["Nota_Data_Emissao"] >= pd.Timestamp(nf_d_ini)) & (out["Nota_Data_Emissao"] <= pd.Timestamp(nf_d_fim))]
+    periodo_ini_d = pd.Timestamp(nf_d_ini).date()
+    periodo_fim_d = pd.Timestamp(nf_d_fim).date()
+    m_period = mask_nf_emissao_no_periodo(
+        out["Nota_Data_Emissao"], periodo_ini_d, periodo_fim_d
+    )
+    out = out.loc[m_period].copy()
     situacao = out.get("Nota_Situacao", "").fillna("").astype(str).str.strip().str.lower()
     if not situacao.empty:
         out = out[situacao.isin(SITUACOES_VALIDAS_PADRAO) & (~_nf_fiscal_situacao_invalida(situacao))]
@@ -357,30 +373,6 @@ def _calcular_icms_interestadual_e_difal(
     }
 
 
-def _calcular_devolucoes_periodo(
-    df_devolucoes: pd.DataFrame | None,
-    *,
-    org_id: str,
-    nf_d_ini: pd.Timestamp,
-    nf_d_fim: pd.Timestamp,
-) -> float:
-    if df_devolucoes is None or df_devolucoes.empty:
-        return 0.0
-    df = df_devolucoes.copy()
-    if "org_id" in df.columns:
-        df = df[df["org_id"].fillna("").astype(str).str.strip() == str(org_id).strip()]
-    if "Data_Entrada" in df.columns:
-        dt = pd.to_datetime(df["Data_Entrada"], errors="coerce")
-        df = df[(dt >= pd.Timestamp(nf_d_ini)) & (dt <= pd.Timestamp(nf_d_fim))]
-    elif "Nota_Data_Entrada" in df.columns:
-        dt = pd.to_datetime(df["Nota_Data_Entrada"], errors="coerce")
-        df = df[(dt >= pd.Timestamp(nf_d_ini)) & (dt <= pd.Timestamp(nf_d_fim))]
-    valor_col = "Valor_Liquido_Devolucao" if "Valor_Liquido_Devolucao" in df.columns else None
-    if valor_col is None:
-        return 0.0
-    return float(pd.to_numeric(df[valor_col], errors="coerce").fillna(0.0).sum())
-
-
 def calcular_lucro_presumido(
     df_fiscal: pd.DataFrame,
     df_devolucoes: pd.DataFrame | None = None,
@@ -398,7 +390,8 @@ def calcular_lucro_presumido(
 
     Args:
         df_fiscal: DataFrame fiscal v3 (com CFOP/NCM/UF).
-        df_devolucoes: DataFrame opcional de devoluções (coluna ``Valor_Liquido_Devolucao``).
+        df_devolucoes: DataFrame opcional com ``Nota_Data_Emissao``, ``Valor_Liquido_Devolucao``
+            e ``org_id`` ou ``empresa`` (critério fiscal de período = emissão da NF de devolução).
         org_id: empresa alvo.
         nf_d_ini: data inicial (inclusive).
         nf_d_fim: data final (inclusive).
@@ -431,11 +424,14 @@ def calcular_lucro_presumido(
     df_inter_full = pd.concat([df_inter, df_outros], ignore_index=True) if (not df_inter.empty or not df_outros.empty) else df_inter.copy()
 
     receita_nf = float(pd.to_numeric(df_validas.get("Valor_Liquido_NF"), errors="coerce").fillna(0.0).sum())
-    receita_devolucoes = _calcular_devolucoes_periodo(
+    periodo_ini = pd.Timestamp(nf_d_ini).date()
+    periodo_fim_d = pd.Timestamp(nf_d_fim).date()
+    receita_devolucoes = calcular_devolucoes_fiscais_no_periodo(
         df_devolucoes,
-        org_id=org_id,
-        nf_d_ini=nf_d_ini,
-        nf_d_fim=nf_d_fim,
+        chave_empresa=org_id,
+        periodo_inicio=periodo_ini,
+        periodo_fim=periodo_fim_d,
+        ok_nf_dates=True,
     )
     receita_bruta = max(0.0, receita_nf - receita_devolucoes)
 

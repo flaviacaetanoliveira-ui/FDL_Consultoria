@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-25T12:49:05Z",
-  "source_signature": "fb784dc80902a78e66e4cb9206e611d5",
+  "generated_at": "2026-04-27T10:13:48Z",
+  "source_signature": "f75f96d72882d0225686a7536f53352b",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_thiago",
   "empresa": "bp_ramiro",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "bp_ramiro",
   "cnpj": null,
-  "row_count": 5249,
+  "row_count": 5305,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -99,7 +99,7 @@
     "vendas_arquivo": "BP Ramiro - Vendas ML 2026.xlsx, BP Ramiro - Vendas ML 2025.xlsx",
     "frete_arquivo": "BP Ramiro - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 5249,
+    "linhas": 5305,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"

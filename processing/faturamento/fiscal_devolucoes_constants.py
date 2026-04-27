@@ -1,15 +1,26 @@
-"""Constantes para identificação de NF de devolução (entrada Bling) na base fiscal."""
+"""
+Regras fiscais de inclusão/exclusão de notas para apuração.
+
+PRINCÍPIO: estas constantes são a fonte única da verdade sobre quais
+notas de entrada entram na base fiscal. Toda mudança aqui afeta
+Apuração Fiscal e a ponte do imposto na DRE Gerencial.
+"""
 
 from __future__ import annotations
 
-# Variações aceitas da natureza "Entrada de Devolução".
-# Bling permite cadastro com ou sem "de" dependendo da empresa.
-# Situação "Autorizada" continua sendo o filtro de validade fiscal.
 NATUREZAS_DEVOLUCAO = (
-    "Entrada de Devolução",  # grafia padrão (Gama Home, Mega Star, Móveis EAP)
-    "Entrada Devolução",  # grafia da Mega Fácil
+    "Entrada de Devolução",
+    "Entrada Devolução",
 )
-SITUACOES_DEVOLUCAO_VALIDAS = ("Autorizada",)
+
+# Situações fiscalmente válidas — NFs nestes status entram na base.
+# Regra de negócio: 'Autorizada' e 'Emitida DANFE' são fiscalmente
+# computáveis. Status como 'Cancelada', 'Denegada', 'Inutilizada' e
+# 'Em digitação' são excluídos.
+SITUACOES_DEVOLUCAO_VALIDAS = (
+    "Autorizada",
+    "Emitida DANFE",
+)
 
 TIPO_ABATIMENTO_DEVOLUCAO_VENDA = "devolucao_venda"
 COL_TIPO_ABATIMENTO = "_tipo_abatimento"

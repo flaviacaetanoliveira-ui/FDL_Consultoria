@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-25T12:58:41Z",
-  "source_signature": "0c172d363fced902f81e5c5225356950",
+  "generated_at": "2026-04-27T11:09:17Z",
+  "source_signature": "1622e1a6560b8452ded4ad6fa4a4cde5",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_thiago",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "tb_paio",
   "cnpj": null,
-  "row_count": 611,
+  "row_count": 612,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -108,15 +108,15 @@
     "org_id": "tb_paio",
     "dataset_empresa": "tb_paio",
     "cliente_id": "cliente_thiago",
-    "row_count_pre_filtro_devolucao": 764,
-    "row_count_excluidas_cancel_comercial": 153,
-    "row_count_candidatas": 611,
-    "row_count_vendas_total": 13990,
-    "row_count_liberacoes": 23002,
-    "sales_from_lib_financial": 1308,
+    "row_count_pre_filtro_devolucao": 767,
+    "row_count_excluidas_cancel_comercial": 155,
+    "row_count_candidatas": 612,
+    "row_count_vendas_total": 14091,
+    "row_count_liberacoes": 23210,
+    "sales_from_lib_financial": 1318,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 13990,
-  "row_count_liberacoes": 23002,
-  "sales_from_lib_financial": 1308
+  "row_count_vendas_total": 14091,
+  "row_count_liberacoes": 23210,
+  "sales_from_lib_financial": 1318
 }

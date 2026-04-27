@@ -1,0 +1,12 @@
+{
+  "schema_version_devolucoes": 1,
+  "pipeline_revision_devolucoes": null,
+  "filtros_aplicados": null,
+  "cobertura": null,
+  "warnings": null,
+  "total_devolvido": 300489.93000000005,
+  "nfs_devolucao": 1198,
+  "base_fiscal_composicao": "emitidas - canceladas - devolucoes",
+  "dataset_faturamento_devolucoes_parquet": "dataset_faturamento_devolucoes.parquet",
+  "archived_at": "2026-04-27T10:24:41Z"
+}

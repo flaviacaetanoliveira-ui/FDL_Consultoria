@@ -31,6 +31,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 import unicodedata
 from datetime import datetime, timezone
@@ -223,6 +224,38 @@ def _write_metadata(path: Path, payload: dict[str, Any]) -> None:
                 tmp.unlink()
             except OSError:
                 pass
+
+
+def _archive_current_se_existe(out_dir: Path) -> None:
+    current = out_dir / "current"
+    curr_dev = current / "dataset_faturamento_devolucoes.parquet"
+    if not current.exists() or not curr_dev.is_file():
+        return
+    archive_root = out_dir / "archive"
+    archive_meta: dict[str, Any] = {}
+    try:
+        prev_meta = json.loads((current / "metadata.json").read_text(encoding="utf-8"))
+        prev_version = prev_meta.get("schema_version_devolucoes", "unknown")
+        archive_meta = {
+            "schema_version_devolucoes": prev_meta.get("schema_version_devolucoes"),
+            "pipeline_revision_devolucoes": prev_meta.get("pipeline_revision_devolucoes"),
+            "filtros_aplicados": prev_meta.get("filtros_aplicados"),
+            "cobertura": prev_meta.get("cobertura"),
+            "warnings": prev_meta.get("warnings"),
+            "total_devolvido": prev_meta.get("total_devolvido"),
+            "nfs_devolucao": prev_meta.get("nfs_devolucao"),
+            "base_fiscal_composicao": prev_meta.get("base_fiscal_composicao"),
+            "dataset_faturamento_devolucoes_parquet": "dataset_faturamento_devolucoes.parquet",
+            "archived_at": _utc_now_iso(),
+        }
+    except Exception:
+        prev_version = "unknown"
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    archive_dir = archive_root / f"v{prev_version}_{ts}"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(curr_dev), str(archive_dir / curr_dev.name))
+    if archive_meta:
+        _write_metadata(archive_dir / "metadata.json", archive_meta)
 
 
 def _write_repasse_app_mirror_csv(df: Any, path: Path) -> None:
@@ -623,8 +656,7 @@ def _materialize_faturamento(
     )
     from processing.faturamento.fiscal_devolucoes_materializado import (
         SCHEMA_VERSION_DEVOLUCOES,
-        build_devolucoes_fiscal_dataframe,
-        devolucoes_materializado_meta_snapshot,
+        build_devolucoes_fiscal_dataframe_with_audit,
     )
 
     df_nf = build_nf_materializado_dataframe(df)
@@ -651,11 +683,14 @@ def _materialize_faturamento(
     meta["schema_version_fiscal"] = SCHEMA_VERSION_FISCAL
     meta.update(fiscal_materializado_meta_snapshot(df_fiscal))
 
-    df_devolucoes = build_devolucoes_fiscal_dataframe(params_path)
+    # Archive específico da devolução fiscal antes de sobrescrever o snapshot current.
+    _archive_current_se_existe(out_dir.parent)
+
+    df_devolucoes, devolucoes_meta = build_devolucoes_fiscal_dataframe_with_audit(params_path)
     _write_parquet(_dataframe_safe_for_parquet(df_devolucoes), out_dir / "dataset_faturamento_devolucoes.parquet")
     meta["dataset_faturamento_devolucoes_parquet"] = "dataset_faturamento_devolucoes.parquet"
     meta["schema_version_devolucoes"] = SCHEMA_VERSION_DEVOLUCOES
-    meta.update(devolucoes_materializado_meta_snapshot(df_devolucoes))
+    meta.update(devolucoes_meta)
 
     _write_metadata(out_dir / "metadata.json", meta)
 

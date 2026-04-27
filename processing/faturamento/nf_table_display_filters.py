@@ -26,7 +26,21 @@ def nf_table_filter_mask(
     q = str(busca).strip()
     if q:
         ql = q.lower()
-        nf_s = df["NF"].astype(str).str.lower()
-        ped_s = df["Pedido"].astype(str).str.lower()
-        m &= nf_s.str.contains(re.escape(ql), na=False) | ped_s.str.contains(re.escape(ql), na=False)
+        if "NF" in df.columns:
+            nf_s = df["NF"].astype(str).str.lower()
+        elif "Nº NF entrada" in df.columns:
+            nf_s = df["Nº NF entrada"].astype(str).str.lower()
+        else:
+            nf_s = pd.Series("", index=df.index, dtype=str)
+        busca_m = nf_s.str.contains(re.escape(ql), na=False)
+        if "Pedido" in df.columns:
+            ped_s = df["Pedido"].astype(str).str.lower()
+            busca_m |= ped_s.str.contains(re.escape(ql), na=False)
+        if "CPF/CNPJ destinatário" in df.columns:
+            doc_s = df["CPF/CNPJ destinatário"].astype(str).str.lower()
+            busca_m |= doc_s.str.contains(re.escape(ql), na=False)
+        if "Nome destinatário" in df.columns:
+            nome_s = df["Nome destinatário"].astype(str).str.lower()
+            busca_m |= nome_s.str.contains(re.escape(ql), na=False)
+        m &= busca_m
     return m

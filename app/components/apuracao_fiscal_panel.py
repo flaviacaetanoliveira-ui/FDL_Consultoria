@@ -1677,6 +1677,8 @@ def render_apuracao_fiscal_panel(
         "fdl_apu_nf_tbl_plataforma",
         "fdl_apu_nf_tbl_busca",
         "fdl_apu_nf_pg",
+        "fdl_apu_nf_devolucao_tbl_busca",
+        "fdl_apu_nf_pg_devolucao",
     )
 
     with st.container(border=True):
@@ -2126,4 +2128,37 @@ def render_apuracao_fiscal_panel(
         aliquotas_mensais_sn=_aliq_sn_kw,
         breakdowns_lp=_breakdowns_lp_kw,
         org_ids_lp=_org_ids_lp_kw,
+    )
+
+    _df_devolucoes_periodo = ao._carregar_devolucoes_fiscais_para_painel(
+        load_info,
+        nf_d_ini=_nf_kpi_ini,
+        nf_d_fim=_nf_kpi_fim,
+        ok_nf_dates=ok_nf_dates,
+    )
+
+    ao._fdl_fat_min_vsp(size="sm")
+    ao._render_faturamento_dre_nf_table_section(
+        df_nf_pre=df_nf_pre,
+        df=df,
+        df_fiscal_pre=df_fiscal_pre,
+        load_info=load_info,
+        _min_state=_min_state,
+        _nf_kpi_ini=_nf_kpi_ini,
+        _nf_kpi_fim=_nf_kpi_fim,
+        ok_nf_dates=ok_nf_dates,
+        use_fiscal_kpi=use_fiscal_kpi,
+        use_nf_materializado=use_nf_materializado,
+        use_fiscal_parquet=use_fiscal_parquet,
+        _nf_panel_ads_ui=_nf_panel_ads_ui,
+        _df_fiscal_base=_df_fiscal_base,
+        _fiscal_base_stats=_fiscal_base_stats,
+        _kp_cards=_kp_cards,
+        org_id=org_id,
+        prefix_main="fdl_apu",
+        prefix_nf="fdl_apu_nf_devolucao",
+        csv_file_name="apuracao_fiscal_nf_devolucoes.csv",
+        table_heading="### Tabela de NFs de Devolução",
+        nf_table_ui_mode="devolucao",
+        df_source=_df_devolucoes_periodo,
     )

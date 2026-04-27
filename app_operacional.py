@@ -2083,6 +2083,29 @@ def _faturamento_devolucoes_parquet_resolve(path_s: str) -> tuple[Path | None, s
     return (cand if cand.is_file() else None), how
 
 
+def _carregar_devolucoes_fiscais_para_painel(
+    load_info: Mapping[str, object],
+    *,
+    nf_d_ini: date,
+    nf_d_fim: date,
+    ok_nf_dates: bool,
+) -> pd.DataFrame:
+    """Devoluções fiscais para a UI: dados já publicados em ``load_info`` + janela de emissão do recorte.
+
+    Usa ``faturamento_devolucoes_df`` (lido de ``dataset_faturamento_devolucoes.parquet`` em
+    ``_load_faturamento_data``). **Sem** regras fiscais ou transformações — apenas filtro temporal
+    em ``Nota_Data_Emissao`` quando o recorte tem datas válidas.
+    """
+    raw = load_info.get("faturamento_devolucoes_df")
+    if not isinstance(raw, pd.DataFrame) or raw.empty:
+        return pd.DataFrame()
+    out = raw.copy()
+    if ok_nf_dates and nf_d_fim >= nf_d_ini and "Nota_Data_Emissao" in out.columns:
+        m = _fdl_fr_mask_nf_emissao_no_periodo(out["Nota_Data_Emissao"], nf_d_ini, nf_d_fim)
+        out = out.loc[m].copy()
+    return out.reset_index(drop=True)
+
+
 def _faturamento_nf_parquet_stat_token(path_s: str) -> str:
     nf = _faturamento_nf_parquet_path_from_materialized_path(path_s)
     if nf is None:
@@ -7957,6 +7980,257 @@ def _build_faturamento_dre_page_header_html(
     )
 
 
+def _render_faturamento_dre_nf_table_section_devolucao(
+    *,
+    df_source: pd.DataFrame | None,
+    _min_state: FaturamentoRecorteMinState,
+    _nf_kpi_ini: object,
+    _nf_kpi_fim: object,
+    ok_nf_dates: bool,
+    org_id: str,
+    prefix_main: str,
+    prefix_nf: str,
+    csv_file_name: str,
+) -> None:
+    """Tabela NF de devolução (entrada): colunas fixas; paginação / busca / CSV iguais ao modo fiscal."""
+    # TODO roadmap P1: vínculo devolução↔venda original (matching CPF+SKU); metadados destinatário já vêm do materializado.
+    _oid = str(org_id)
+    df_in = df_source if isinstance(df_source, pd.DataFrame) else pd.DataFrame()
+    df_tbl = _faturamento_nf_apply_minimal_recorte(
+        df_in,
+        empresas_sel=_min_state.empresas,
+        plataformas_sel=(),
+        nf_d_ini=_nf_kpi_ini,
+        nf_d_fim=_nf_kpi_fim,
+        ok_nf_dates=False,
+    )
+
+    st.markdown(
+        """
+    <style>
+    .tabela-nf-contador {
+    color: #64748b;
+    font-size: 0.85rem;
+    margin: 8px 0 16px 0;
+    }
+    </style>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    _col_tit, _col_acoes = st.columns([3, 1])
+    with _col_tit:
+        st.markdown("### Tabela de NFs de Devolução")
+    with _col_acoes:
+        _col_csv = st.columns([1])
+        with _col_csv[0]:
+            _nf_dl_hdr_slot = st.empty()
+
+    st.text_input(
+        "Buscar",
+        key=f"{prefix_nf}_tbl_busca",
+        placeholder="🔍 Buscar NF ou documento…",
+        label_visibility="collapsed",
+    )
+
+    _nf_vis = [
+        "Nº NF entrada",
+        "Emissão",
+        "Natureza",
+        "Situação",
+        "Valor total",
+        "CPF/CNPJ destinatário",
+        "Nome destinatário",
+    ]
+
+    _df_nf_table = df_tbl
+    if not df_tbl.empty and "Nota_Data_Emissao" in df_tbl.columns:
+        _tmp_sort = df_tbl.copy()
+        _tmp_sort["_fdl_nf_emi_ord"] = pd.to_datetime(
+            _df_get_series_column(_tmp_sort, "Nota_Data_Emissao"),
+            errors="coerce",
+            dayfirst=False,
+        )
+        _df_nf_table = (
+            _tmp_sort.sort_values("_fdl_nf_emi_ord", ascending=False, na_position="last")
+            .drop(columns=["_fdl_nf_emi_ord"], errors="ignore")
+            .reset_index(drop=True)
+        )
+
+    _disp_nf_full = pd.DataFrame()
+    _disp_nf_ui = pd.DataFrame()
+    _nf_tbl_n_antes_extra = 0
+
+    if not _df_nf_table.empty:
+        _nat_col = "Natureza" if "Natureza" in _df_nf_table.columns else None
+        _vals = (
+            pd.to_numeric(_df_nf_table["Valor_Liquido_Devolucao"], errors="coerce")
+            if "Valor_Liquido_Devolucao" in _df_nf_table.columns
+            else pd.Series(0.0, index=_df_nf_table.index)
+        )
+        _disp_nf_full = pd.DataFrame(
+            {
+                "Nº NF entrada": _df_get_series_column(_df_nf_table, "Nota_Numero_Normalizado")
+                .fillna("")
+                .map(lambda v: str(v).strip()),
+                "Emissão": _series_nf_emissao_pt_br(
+                    _df_get_series_column(_df_nf_table, "Nota_Data_Emissao")
+                ),
+                "Natureza": (
+                    _series_empty_str_to_dash(_df_nf_table[_nat_col])
+                    if _nat_col
+                    else pd.Series("—", index=_df_nf_table.index)
+                ),
+                "Situação": _series_empty_str_to_dash(
+                    _df_get_series_column(_df_nf_table, "Nota_Situacao")
+                ),
+                "Valor total": _vals,
+                "CPF/CNPJ destinatário": (
+                    _series_empty_str_to_dash(
+                        _df_get_series_column(_df_nf_table, "Nota_Destinatario_Documento").map(
+                            lambda v: str(v).strip()
+                        )
+                    )
+                    if "Nota_Destinatario_Documento" in _df_nf_table.columns
+                    else pd.Series("—", index=_df_nf_table.index, dtype=object)
+                ),
+                "Nome destinatário": (
+                    _series_empty_str_to_dash(
+                        _df_get_series_column(_df_nf_table, "Nota_Destinatario_Nome").map(
+                            lambda v: str(v).strip()
+                        )
+                    )
+                    if "Nota_Destinatario_Nome" in _df_nf_table.columns
+                    else pd.Series("—", index=_df_nf_table.index, dtype=object)
+                ),
+            }
+        )
+        _disp_nf_full = _disp_nf_full[_nf_vis].copy()
+
+        def _nf_tbl_money_str(x: object) -> str:
+            if x is None:
+                return "—"
+            try:
+                if pd.isna(x):
+                    return "—"
+            except TypeError:
+                pass
+            s = _fmt_brl_ptbr_celula(x)
+            return s if s else "—"
+
+        _disp_nf_ui = _disp_nf_full.copy()
+        _disp_nf_ui["Valor total"] = _disp_nf_ui["Valor total"].map(_nf_tbl_money_str)
+
+        _plat_filt = st.session_state.get(f"{prefix_nf}_tbl_plataforma") or []
+        if not isinstance(_plat_filt, list):
+            _plat_filt = []
+        _busca_filt = str(st.session_state.get(f"{prefix_nf}_tbl_busca") or "")
+        _nf_tbl_n_antes_extra = len(_disp_nf_full)
+        _nf_tbl_mask = _fdl_nf_table_filter_mask(
+            _disp_nf_full,
+            plataformas_sel=_plat_filt,
+            busca=_busca_filt,
+        )
+        _disp_nf_full = _disp_nf_full.loc[_nf_tbl_mask].reset_index(drop=True)
+        _disp_nf_ui = _disp_nf_ui.loc[_nf_tbl_mask].reset_index(drop=True)
+
+    _cfg_nf: dict[str, TextColumn] = {}
+    _nf_col_help: dict[str, str | None] = {
+        "Nº NF entrada": None,
+        "Emissão": None,
+        "Natureza": None,
+        "Situação": None,
+        "Valor total": "Valor líquido da NF de entrada (devolução), conforme materializado.",
+        "CPF/CNPJ destinatário": "Documento do destinatário (somente dígitos, conforme materializado).",
+        "Nome destinatário": "Nome no export de entrada (metadado descritivo).",
+    }
+    _nf_col_width: dict[str, str] = {
+        "Nº NF entrada": "small",
+        "Emissão": "small",
+        "Natureza": "medium",
+        "Situação": "small",
+        "Valor total": "medium",
+        "CPF/CNPJ destinatário": "medium",
+        "Nome destinatário": "large",
+    }
+    for _cn in _nf_vis:
+        if _cn not in _disp_nf_ui.columns:
+            continue
+        _w = _nf_col_width.get(_cn, "medium")
+        _h = _nf_col_help.get(_cn)
+        _cfg_nf[_cn] = (
+            TextColumn(_cn, width=_w, help=_h) if _h else TextColumn(_cn, width=_w)
+        )
+
+    _nf_dl_n = len(_disp_nf_ui)
+    _nf_dl_scope = _nf_tbl_n_antes_extra if _nf_tbl_n_antes_extra else _nf_dl_n
+    _nf_dl_hdr_slot.download_button(
+        "📥 CSV",
+        _disp_nf_full.to_csv(index=False).encode("utf-8-sig") if not _disp_nf_full.empty else b"",
+        file_name=csv_file_name,
+        mime="text/csv",
+        key=f"{prefix_main}_dl_hdr_devolucao_{_oid}",
+        disabled=_disp_nf_full.empty,
+    )
+
+    with st.container(border=True):
+        _nf_cap_txt = ""
+        if _nf_dl_scope and _nf_dl_n == _nf_dl_scope:
+            _nf_cap_txt = (
+                f"{_nf_dl_scope:,} notas de devolução · emissão em ordem decrescente · CSV alinhado às colunas."
+            )
+        elif _nf_dl_scope:
+            _nf_cap_txt = f"Mostrando {_nf_dl_n:,} de {_nf_dl_scope:,} notas · emissão decrescente."
+        else:
+            _nf_cap_txt = "Sem linhas para exibir com os filtros atuais."
+        st.markdown(f"<p class='tabela-nf-contador'>{html.escape(_nf_cap_txt)}</p>", unsafe_allow_html=True)
+        if _disp_nf_ui.empty:
+            st.info(
+                "Sem linhas na **tabela de devoluções** com os filtros atuais. "
+                "Confira **período de emissão** e **empresa** nos filtros acima."
+            )
+        else:
+            _nf_page_sz = 25
+            _nf_total_rows = len(_disp_nf_ui)
+            _nf_pages = max(1, (_nf_total_rows + _nf_page_sz - 1) // _nf_page_sz)
+            _pg_sel = 1
+            if _nf_pages > 1:
+                _pg_a, _pg_b = st.columns((1, 2))
+                with _pg_a:
+                    _pg_sel = int(
+                        st.number_input(
+                            "Página",
+                            min_value=1,
+                            max_value=int(_nf_pages),
+                            value=1,
+                            step=1,
+                            key=f"{prefix_main}_nf_pg_devolucao",
+                        )
+                    )
+                with _pg_b:
+                    _i0p = (int(_pg_sel) - 1) * _nf_page_sz
+                    _i1p = min(_i0p + _nf_page_sz, _nf_total_rows)
+                    st.caption(
+                        f"Mostrando **{_i0p + 1}**–**{_i1p}** de **{_nf_total_rows}** notas. "
+                        "Use o cabeçalho da tabela para ordenar a página atual."
+                    )
+            else:
+                st.caption(f"**{_nf_total_rows}** nota(s) no recorte (ordenar pelo cabeçalho da coluna).")
+            _i0 = (int(_pg_sel) - 1) * _nf_page_sz
+            _slice_ui = _disp_nf_ui.iloc[_i0 : _i0 + _nf_page_sz].copy()
+            _slice_ui_r = _slice_ui.reset_index(drop=True)
+            _h_tbl = min(440, 132 + 34 * min(len(_slice_ui_r), 14))
+            st.dataframe(
+                _slice_ui_r,
+                use_container_width=True,
+                hide_index=True,
+                height=_h_tbl,
+                column_config=_cfg_nf,
+            )
+
+    _fdl_fat_min_vsp(size="md")
+
+
 def _render_faturamento_dre_nf_table_section(
     *,
     df_nf_pre: pd.DataFrame,
@@ -7979,7 +8253,8 @@ def _render_faturamento_dre_nf_table_section(
     prefix_nf: str,
     csv_file_name: str = "faturamento_recorte_minimo_nf.csv",
     table_heading: str = "### Tabela por NF",
-    nf_table_ui_mode: Literal["gerencial", "fiscal"] = "gerencial",
+    nf_table_ui_mode: Literal["gerencial", "fiscal", "devolucao"] = "gerencial",
+    df_source: pd.DataFrame | None = None,
     aliquotas_mensais_sn: Mapping[str, Mapping[str, float]] | None = None,
     breakdowns_lp: Mapping[str, LucroPresumidoBreakdown] | None = None,
     org_ids_lp: set[str] | None = None,
@@ -7988,13 +8263,29 @@ def _render_faturamento_dre_nf_table_section(
 
     ``nf_table_ui_mode='fiscal'`` — colunas e filtros orientados à Apuração Fiscal (prefixos ``prefix_main`` / ``prefix_nf``).
     ``'gerencial'`` — vista completa para o Resultado Gerencial (quando essa função voltar a ser chamada de lá).
+    ``'devolucao'`` — NF de entrada (devolução); use ``df_source`` + prefixos exclusivos para não colidir com a tabela fiscal.
     """
     _oid = str(org_id)
+    if nf_table_ui_mode == "devolucao":
+        _render_faturamento_dre_nf_table_section_devolucao(
+            df_source=df_source,
+            _min_state=_min_state,
+            _nf_kpi_ini=_nf_kpi_ini,
+            _nf_kpi_fim=_nf_kpi_fim,
+            ok_nf_dates=ok_nf_dates,
+            org_id=org_id,
+            prefix_main=prefix_main,
+            prefix_nf=prefix_nf,
+            csv_file_name=csv_file_name,
+        )
+        return
+
+    df_nf_pre_eff = df_nf_pre if df_source is None else df_source
     _ui_fiscal = nf_table_ui_mode == "fiscal"
     _nf_imposto_fiscal_enriquecido = False
     # Só chegamos aqui com painel materializado válido: recorte = filtrar linhas já agregadas (sem recomputar DRE).
     df_nf_lines = _faturamento_nf_apply_minimal_recorte(
-        df_nf_pre,
+        df_nf_pre_eff,
         empresas_sel=_min_state.empresas,
         plataformas_sel=_min_state.plataformas,
         nf_d_ini=_nf_kpi_ini,

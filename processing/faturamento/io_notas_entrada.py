@@ -51,6 +51,48 @@ def _detect_col_situacao(columns: list[str]) -> str:
     return ""
 
 
+def _detect_col_cpf_cnpj(columns: list[str]) -> str:
+    """Coluna de documento do destinatário no export Bling (ex.: «CNPJ/CPF»)."""
+    for c in columns:
+        if str(c).strip() == "CNPJ/CPF":
+            return c
+    for c in columns:
+        cl = str(c).strip().lower().replace(" ", "")
+        if cl in {"cpf/cnpj", "cnpj/cpf"}:
+            return c
+        if "cnpj" in cl and "cpf" in cl:
+            return c
+    for c in columns:
+        cl = str(c).strip().lower()
+        if ("cnpj" in cl or "cpf" in cl) and "emitente" not in cl:
+            return c
+    return ""
+
+
+def _detect_col_nome_destinatario(columns: list[str]) -> str:
+    """Nome do destinatário no bruto (ex.: «Nome» no export analisado)."""
+    for prefer in ("Nome", "Nome / Razão Social"):
+        if prefer in columns:
+            return prefer
+    for c in columns:
+        if str(c).strip().casefold() == "nome":
+            return c
+    return ""
+
+
+def normalizar_cpf_cnpj_somente_digitos(v: object) -> str:
+    """Remove pontuação; mantém apenas dígitos (armazenamento como texto)."""
+    if v is None:
+        return ""
+    try:
+        if pd.isna(v):
+            return ""
+    except TypeError:
+        pass
+    s = str(v).strip()
+    return "".join(ch for ch in s if ch.isdigit())
+
+
 def aplicar_filtros_devolucao(df: pd.DataFrame) -> pd.DataFrame:
     """
     Mantém apenas linhas cuja Natureza está em ``NATUREZAS_DEVOLUCAO``
@@ -73,11 +115,8 @@ def aplicar_filtros_devolucao(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[n_raw.isin(nat_ok) & s_raw.isin(sit_ok)].copy().reset_index(drop=True)
 
 
-def load_notas_entrada_devolucoes_from_dir(notas_dir: Path) -> pd.DataFrame:
-    """
-    Lê todos os CSV/XLSX sob ``notas_dir``, mantém apenas linhas com Natureza de devolução
-    e situação autorizada; deduplica e marca ``_tipo_abatimento``.
-    """
+def load_notas_entrada_brutas_from_dir(notas_dir: Path) -> pd.DataFrame:
+    """Lê e concatena CSV/XLSX de notas de entrada sem filtro fiscal."""
     notas_dir = notas_dir.expanduser().resolve()
     if not notas_dir.is_dir():
         return pd.DataFrame()
@@ -86,6 +125,7 @@ def load_notas_entrada_devolucoes_from_dir(notas_dir: Path) -> pd.DataFrame:
     for ptn in ("*.csv", "*.xlsx", "*.xls"):
         files.extend(p for p in notas_dir.rglob(ptn) if p.is_file())
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
     partes: list[pd.DataFrame] = []
     for f in files:
         df = _read_notas_file(f).dropna(axis=1, how="all").copy()
@@ -93,8 +133,17 @@ def load_notas_entrada_devolucoes_from_dir(notas_dir: Path) -> pd.DataFrame:
         partes.append(df)
     if not partes:
         return pd.DataFrame()
+    return pd.concat(partes, ignore_index=True)
 
-    out = pd.concat(partes, ignore_index=True)
+
+def load_notas_entrada_devolucoes_from_dir(notas_dir: Path) -> pd.DataFrame:
+    """
+    Lê todos os CSV/XLSX sob ``notas_dir``, mantém apenas linhas com Natureza de devolução
+    e situação autorizada; deduplica e marca ``_tipo_abatimento``.
+    """
+    out = load_notas_entrada_brutas_from_dir(notas_dir)
+    if out.empty:
+        return pd.DataFrame()
     out = aplicar_filtros_devolucao(out)
     if out.empty:
         return pd.DataFrame()

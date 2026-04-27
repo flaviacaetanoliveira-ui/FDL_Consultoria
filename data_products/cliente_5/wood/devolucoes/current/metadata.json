@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-25T12:47:03Z",
-  "source_signature": "9dff2acef21ee26ba2afdd65d4d45773",
+  "generated_at": "2026-04-27T11:06:35Z",
+  "source_signature": "c702762dbf28bd57e1fc722a5dad6e5d",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_5",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "wood",
   "cnpj": null,
-  "row_count": 2068,
+  "row_count": 2076,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -108,15 +108,15 @@
     "org_id": "wood",
     "dataset_empresa": "wood",
     "cliente_id": "cliente_5",
-    "row_count_pre_filtro_devolucao": 2346,
-    "row_count_excluidas_cancel_comercial": 278,
-    "row_count_candidatas": 2068,
-    "row_count_vendas_total": 16380,
-    "row_count_liberacoes": 29385,
-    "sales_from_lib_financial": 2812,
+    "row_count_pre_filtro_devolucao": 2359,
+    "row_count_excluidas_cancel_comercial": 283,
+    "row_count_candidatas": 2076,
+    "row_count_vendas_total": 16475,
+    "row_count_liberacoes": 29605,
+    "sales_from_lib_financial": 2830,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 16380,
-  "row_count_liberacoes": 29385,
-  "sales_from_lib_financial": 2812
+  "row_count_vendas_total": 16475,
+  "row_count_liberacoes": 29605,
+  "sales_from_lib_financial": 2830
 }

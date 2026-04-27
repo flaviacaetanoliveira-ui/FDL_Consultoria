@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-19T11:13:06Z",
-  "source_signature": "e2254a892e025c5b5c58912c0571a152",
+  "generated_at": "2026-04-27T11:05:41Z",
+  "source_signature": "bf7029699294fd45c3001696a724d299",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_5",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_5",
   "empresa_id": "esquilo",
   "cnpj": null,
-  "row_count": 2293,
+  "row_count": 2382,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -44,7 +44,6 @@
     "Tipo de contribuinte",
     "Inscrição estadual",
     "Comprador",
-    "Negócio",
     "CPF",
     "Endereço.1",
     "Cidade",
@@ -75,6 +74,7 @@
     "Reclamação encerrada",
     "Em mediação",
     "arquivo_origem_venda",
+    "Negócio",
     "candidato_motivo",
     "status_ml_texto",
     "lib_n_eventos",
@@ -108,15 +108,15 @@
     "org_id": "esquilo",
     "dataset_empresa": "esquilo",
     "cliente_id": "cliente_5",
-    "row_count_pre_filtro_devolucao": 2621,
-    "row_count_excluidas_cancel_comercial": 328,
-    "row_count_candidatas": 2293,
-    "row_count_vendas_total": 18862,
-    "row_count_liberacoes": 38804,
-    "sales_from_lib_financial": 3368,
+    "row_count_pre_filtro_devolucao": 2720,
+    "row_count_excluidas_cancel_comercial": 338,
+    "row_count_candidatas": 2382,
+    "row_count_vendas_total": 19525,
+    "row_count_liberacoes": 39800,
+    "sales_from_lib_financial": 3447,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 18862,
-  "row_count_liberacoes": 38804,
-  "sales_from_lib_financial": 3368
+  "row_count_vendas_total": 19525,
+  "row_count_liberacoes": 39800,
+  "sales_from_lib_financial": 3447
 }

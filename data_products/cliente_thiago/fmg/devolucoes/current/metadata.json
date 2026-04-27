@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-25T12:53:28Z",
-  "source_signature": "2ba4f2923d3ae42b242f86e500b41e05",
+  "generated_at": "2026-04-27T11:07:39Z",
+  "source_signature": "4be5b4d6cf1d32d87cf41b8c4857b0d7",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_thiago",
@@ -9,7 +9,7 @@
   "cliente_id": "cliente_thiago",
   "empresa_id": "fmg",
   "cnpj": null,
-  "row_count": 571,
+  "row_count": 573,
   "columns": [
     "N° de venda",
     "Data da venda",
@@ -108,15 +108,15 @@
     "org_id": "fmg",
     "dataset_empresa": "fmg",
     "cliente_id": "cliente_thiago",
-    "row_count_pre_filtro_devolucao": 676,
+    "row_count_pre_filtro_devolucao": 678,
     "row_count_excluidas_cancel_comercial": 105,
-    "row_count_candidatas": 571,
-    "row_count_vendas_total": 9125,
-    "row_count_liberacoes": 15217,
-    "sales_from_lib_financial": 884,
+    "row_count_candidatas": 573,
+    "row_count_vendas_total": 9218,
+    "row_count_liberacoes": 15648,
+    "sales_from_lib_financial": 889,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 9125,
-  "row_count_liberacoes": 15217,
-  "sales_from_lib_financial": 884
+  "row_count_vendas_total": 9218,
+  "row_count_liberacoes": 15648,
+  "sales_from_lib_financial": 889
 }

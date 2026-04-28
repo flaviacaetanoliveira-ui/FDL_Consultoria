@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-27T11:07:39Z",
+  "generated_at": "2026-04-28T00:56:10Z",
   "source_signature": "4be5b4d6cf1d32d87cf41b8c4857b0d7",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
@@ -100,13 +100,13 @@
   "source_mode": "local_folder",
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
   "org_id": "fmg",
-  "dataset_empresa": "fmg",
+  "dataset_empresa": "FMG",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\FMG",
     "org_id": "fmg",
-    "dataset_empresa": "fmg",
+    "dataset_empresa": "FMG",
     "cliente_id": "cliente_thiago",
     "row_count_pre_filtro_devolucao": 678,
     "row_count_excluidas_cancel_comercial": 105,

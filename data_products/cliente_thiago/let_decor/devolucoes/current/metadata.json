@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-27T11:08:26Z",
+  "generated_at": "2026-04-28T01:03:00Z",
   "source_signature": "f18146c7ef7b74ef88c33758d0bdf316",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
@@ -100,13 +100,13 @@
   "source_mode": "local_folder",
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
   "org_id": "let_decor",
-  "dataset_empresa": "let_decor",
+  "dataset_empresa": "Let Decor",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\Let Decor",
     "org_id": "let_decor",
-    "dataset_empresa": "let_decor",
+    "dataset_empresa": "Let Decor",
     "cliente_id": "cliente_thiago",
     "row_count_pre_filtro_devolucao": 928,
     "row_count_excluidas_cancel_comercial": 182,

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-27T11:09:17Z",
+  "generated_at": "2026-04-28T01:04:20Z",
   "source_signature": "1622e1a6560b8452ded4ad6fa4a4cde5",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
@@ -100,13 +100,13 @@
   "source_mode": "local_folder",
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
   "org_id": "tb_paio",
-  "dataset_empresa": "tb_paio",
+  "dataset_empresa": "TB Paio",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Thiago\\Cliente_3\\TB Paio",
     "org_id": "tb_paio",
-    "dataset_empresa": "tb_paio",
+    "dataset_empresa": "TB Paio",
     "cliente_id": "cliente_thiago",
     "row_count_pre_filtro_devolucao": 767,
     "row_count_excluidas_cancel_comercial": 155,

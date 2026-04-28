@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-27T11:03:47Z",
+  "generated_at": "2026-04-28T00:52:56Z",
   "source_signature": "3c2013849d7772e39cccda135d523809",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
@@ -96,13 +96,13 @@
   "source_mode": "local_folder",
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
   "org_id": "mega_star",
-  "dataset_empresa": "mega_star",
+  "dataset_empresa": "Mega Star",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Mega Star",
     "org_id": "mega_star",
-    "dataset_empresa": "mega_star",
+    "dataset_empresa": "Mega Star",
     "cliente_id": "cliente_2",
     "row_count_pre_filtro_devolucao": 100,
     "row_count_excluidas_cancel_comercial": 38,

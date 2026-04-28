@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-27T11:01:40Z",
-  "source_signature": "dd32665d4699467c594af906262e3d2c",
+  "generated_at": "2026-04-28T00:49:39Z",
+  "source_signature": "5eb7a4104a600bb2d52f339474614160",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "mega_facil",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "mega_facil",
   "cnpj": null,
-  "repasse_empresa_label": "Mega Fácil",
+  "repasse_empresa_label": "Mega Facil",
   "row_count": 26292,
   "columns": [
     "N° de venda",

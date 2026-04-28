@@ -13,13 +13,15 @@
       "empresa": "Esquilo",
       "pedidos_dir": "Esquilo/Pedidos/2026",
       "notas_saida_dir": "Esquilo/notas_saida",
+      "notas_entrada_dir": "Esquilo/Entradas",
       "permite_faturamento_sem_nf": true
     },
     {
       "org_id": "wood",
       "empresa": "Wood",
       "pedidos_dir": "Wood/Pedidos/2026",
-      "notas_saida_dir": "Wood/notas_saida"
+      "notas_saida_dir": "Wood/notas_saida",
+      "notas_entrada_dir": "Wood/Entrada/2026"
     }
   ]
 }

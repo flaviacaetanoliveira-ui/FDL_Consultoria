@@ -11,6 +11,9 @@ from __future__ import annotations
 NATUREZAS_DEVOLUCAO = (
     "Entrada de Devolução",
     "Entrada Devolução",
+    # Export Bling (Cliente 5 / variantes): natureza textual distinta das entradas «Entrada …»
+    "Devolução de venda",
+    "Devolução de venda mercadoria adquirida recebida terceiros",
 )
 
 # Situações fiscalmente válidas — NFs nestes status entram na base.

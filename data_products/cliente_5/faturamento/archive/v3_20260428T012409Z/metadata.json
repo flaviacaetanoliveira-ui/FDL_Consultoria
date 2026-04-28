@@ -1,0 +1,23 @@
+{
+  "schema_version_devolucoes": 3,
+  "pipeline_revision_devolucoes": "devolucoes-fiscais-v3",
+  "filtros_aplicados": {
+    "naturezas": [
+      "Entrada de Devolução",
+      "Entrada Devolução"
+    ],
+    "situacoes_validas": [
+      "Autorizada",
+      "Emitida DANFE"
+    ]
+  },
+  "cobertura": {
+    "por_empresa": {}
+  },
+  "warnings": [],
+  "total_devolvido": 0.0,
+  "nfs_devolucao": 0,
+  "base_fiscal_composicao": "emitidas - canceladas - devolucoes",
+  "dataset_faturamento_devolucoes_parquet": "dataset_faturamento_devolucoes.parquet",
+  "archived_at": "2026-04-28T01:24:09Z"
+}

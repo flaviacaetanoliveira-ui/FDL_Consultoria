@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import json
 import logging
+import traceback
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Callable, Literal, Mapping
@@ -55,6 +56,25 @@ from processing.faturamento.nf_panel_materializado import nf_panel_materializado
 
 _ALIQUOTA_DIVERG_PP = 0.5
 _LOG_AP = logging.getLogger(__name__)
+
+_DEBUG_BUFFER: list[str] = []
+
+
+class _StreamlitDebugHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            _DEBUG_BUFFER.append(self.format(record))
+            if len(_DEBUG_BUFFER) > 100:
+                _DEBUG_BUFFER.pop(0)
+        except Exception:
+            pass
+
+
+if not any(isinstance(h, _StreamlitDebugHandler) for h in _LOG_AP.handlers):
+    _h = _StreamlitDebugHandler()
+    _h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    _LOG_AP.addHandler(_h)
+    _LOG_AP.setLevel(logging.DEBUG)
 
 FISCAL_KPIS_CSS = """<style>
 .fdl-fat-kpi-hero-grid {
@@ -1504,661 +1524,693 @@ def render_apuracao_fiscal_panel(
     *,
     org_id: str,
 ) -> None:
-    import app_operacional as ao
-
-    ao._fdl_fat_min_inject_ui_styles()
-    st.markdown(APURACAO_PREMIUM_PANEL_CSS, unsafe_allow_html=True)
-
-    use_nf_panel_baked = bool(load_info.get("faturamento_nf_panel_baked"))
-    _df_nf_panel = load_info.get("faturamento_nf_panel_df")
-    _df_nf_contract = load_info.get("faturamento_nf_df")
-    use_nf_panel_baked_effective = (
-        use_nf_panel_baked
-        and isinstance(_df_nf_panel, pd.DataFrame)
-        and nf_panel_materializado_dataframe_valid(_df_nf_panel)
-    )
-    df_nf_pre = _df_nf_panel if use_nf_panel_baked_effective else _df_nf_contract
-    use_nf_materializado = False
-    if use_nf_panel_baked_effective:
-        use_nf_materializado = isinstance(df_nf_pre, pd.DataFrame) and not df_nf_pre.empty
-    elif (
-        bool(load_info.get("faturamento_nf_first"))
-        and isinstance(df_nf_pre, pd.DataFrame)
-        and nf_first_contract_dataframe_valid(df_nf_pre)
-    ):
-        use_nf_materializado = True
-    if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame) and df_nf_pre.empty and not df.empty:
-        use_nf_materializado = False
-
-    _nf_panel_ads_ui = bool(load_info.get("faturamento_nf_panel_ads", True))
-
-    df_fiscal_pre = load_info.get("faturamento_fiscal_df")
-    df_devolucoes_pre = load_info.get("faturamento_devolucoes_df")
-    _df_dev_ok = isinstance(df_devolucoes_pre, pd.DataFrame)
-    use_fiscal_parquet = (
-        bool(load_info.get("faturamento_fiscal_first"))
-        and isinstance(df_fiscal_pre, pd.DataFrame)
-        and fiscal_contract_dataframe_valid(df_fiscal_pre)
-    )
-    use_fiscal_kpi = bool(
-        use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame) and fiscal_contract_dataframe_valid(df_fiscal_pre)
-    )
-
-    if not use_nf_panel_baked_effective:
-        st.error(
-            "**Dados por nota fiscal indisponíveis.** "
-            "Esta área usa a base consolidada **já publicada** para a sua organização."
-        )
-        st.caption(
-            "Peça a atualização pelo processo habitual de fecho ou aguarde a próxima publicação de dados."
-        )
-        _pe = load_info.get("faturamento_nf_panel_error")
-        if _pe:
-            _pe_line = (
-                f"Erro técnico: `{html.escape(str(_pe))}`"
-                if ao._is_admin_mode()
-                else "Não foi possível carregar a base consolidada. Tente novamente mais tarde ou contacte o suporte."
-            )
-            st.caption(_pe_line)
-        elif not use_nf_panel_baked:
-            st.caption(
-                "A base consolidada ainda não está disponível neste ambiente ou não foi encontrada. "
-                "Volte mais tarde ou contacte o suporte."
-            )
-        elif not isinstance(_df_nf_panel, pd.DataFrame):
-            st.caption("Não foi possível preparar a tabela neste momento. Recarregue a página ou tente mais tarde.")
-        elif _df_nf_panel.empty:
-            st.info(
-                "Não há linhas para o período e empresa selecionados. "
-                "Verifique filtros ou o escopo na barra lateral."
-            )
-        elif ao._is_admin_mode():
-            st.warning(
-                "Contrato do painel incompleto (faltam colunas obrigatórias). "
-                "Rematerialize o faturamento com a versão atual do pipeline."
-            )
-        return
-
-    if df.empty and not use_nf_materializado:
-        st.info(
-            "Sem dados de faturamento para este escopo. Confirme **materialização**, **slug** do cliente "
-            "e o **escopo** (empresa ativa / consolidado) na barra lateral."
-        )
-        return
-
-    _bounds_parts: list[pd.DataFrame] = []
-    _base_bounds = df_nf_pre if use_nf_materializado else df
-    if isinstance(_base_bounds, pd.DataFrame) and not _base_bounds.empty:
-        _bounds_parts.append(_base_bounds)
-    if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame) and not df_fiscal_pre.empty:
-        _bounds_parts.append(df_fiscal_pre)
-    _df_bounds = (
-        pd.concat(_bounds_parts, ignore_index=True)
-        if len(_bounds_parts) > 1
-        else (_bounds_parts[0] if _bounds_parts else pd.DataFrame())
-    )
-    if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame) and df_nf_pre.empty:
-        st.info(
-            "Sem notas fiscais neste recorte. Confirme filtros de data, empresa e consolidado na barra lateral "
-            "e que a base consolidada está atualizada."
-        )
-        return
-    nf_min, nf_max, ok_nf_dates = faturamento_min_series_nf_emissao_bounds_dates(_df_bounds)
-    _emit_floor = ao._FDL_FAT_DRE_MIN_PANEL_NF_EMISSAO_DESDE
-    if ok_nf_dates:
-        nf_cal_min, nf_cal_max = _min_cal_limits(nf_min, nf_max)
-        nf_cal_min = max(nf_cal_min, _emit_floor)
-        if nf_max >= _emit_floor:
-            nf_min = max(nf_min, _emit_floor)
-        else:
-            nf_min, nf_max = _emit_floor, _emit_floor
-        nf_cal_max = max(nf_cal_max, nf_max, nf_min, nf_cal_min)
-    else:
-        nf_cal_min, nf_cal_max = (nf_min, nf_max)
-
-    _nf_sig_k = "fdl_apu_nf_bounds_sig"
-    _today = datetime.now(_BR_TZ).date()
-    if ok_nf_dates:
-        _nf_bs = (nf_min.isoformat(), nf_max.isoformat())
-        if st.session_state.get(_nf_sig_k) != _nf_bs:
-            st.session_state[_nf_sig_k] = _nf_bs
-            _nfi = nf_min
-            _nff = min(nf_max, _today)
-            _nfi = min(max(_nfi, nf_cal_min), nf_cal_max)
-            _nff = min(max(_nff, nf_cal_min), nf_cal_max)
-            if _nff < _nfi:
-                _nff = _nfi
-            st.session_state["fdl_apu_nf_d_ini"] = _nfi
-            st.session_state["fdl_apu_nf_d_fim"] = _nff
-        if "fdl_apu_nf_d_ini" not in st.session_state:
-            _nfi = nf_min
-            _nff = min(nf_max, _today)
-            _nfi = min(max(_nfi, nf_cal_min), nf_cal_max)
-            _nff = min(max(_nff, nf_cal_min), nf_cal_max)
-            if _nff < _nfi:
-                _nff = _nfi
-            st.session_state["fdl_apu_nf_d_ini"] = _nfi
-            st.session_state["fdl_apu_nf_d_fim"] = _nff
-        st.session_state["fdl_apu_nf_d_ini"] = min(
-            max(ao._safe_streamlit_date(st.session_state["fdl_apu_nf_d_ini"], nf_min), nf_cal_min),
-            nf_cal_max,
-        )
-        st.session_state["fdl_apu_nf_d_fim"] = min(
-            max(ao._safe_streamlit_date(st.session_state["fdl_apu_nf_d_fim"], nf_max), nf_cal_min),
-            nf_cal_max,
-        )
-
-    emp_opts = ao._faturamento_dre_etiquetas_empresa_recorte(_df_bounds)
-
-    _FDL_APURACAO_RESET_KEYS = (
-        "fdl_apu_emp",
-        "fdl_apu_plat",
-        "fdl_apu_nf_sit",
-        "fdl_apu_nf_d_ini",
-        "fdl_apu_nf_d_fim",
-        "fdl_apu_nf_bounds_sig",
-        "fdl_apu_prod",
-        "fdl_apu_venda_sinal",
-        "fdl_apu_sinal_resultado",
-        "fdl_apu_sinais_resultado",
-        "fdl_apu_nf_show_diferenca",
-        "fdl_apu_nf_opt_plat",
-        "fdl_apu_nf_opt_sit",
-        "fdl_apu_nf_opt_ped",
-        "fdl_apu_nf_opt_linhas",
-        "fdl_apu_nf_opt_qtd",
-        "fdl_apu_nf_opt_vf",
-        "fdl_apu_nf_opt_rf",
-        "fdl_apu_nf_opt_rp",
-        "fdl_apu_nf_opt_tar",
-        "fdl_apu_nf_opt_df",
-        "fdl_apu_nf_opt_ads",
-        "fdl_apu_nf_opt_alert",
-        "fdl_apu_nf_tbl_plataforma",
-        "fdl_apu_nf_tbl_busca",
-        "fdl_apu_nf_pg",
-        "fdl_apu_nf_devolucao_tbl_busca",
-        "fdl_apu_nf_pg_devolucao",
-    )
-
-    with st.container(border=True):
-        _fh_t, _fh_b = st.columns((4, 1))
-        with _fh_t:
-            st.markdown("**Filtros**")
-        with _fh_b:
-            if st.button(
-                "Limpar filtros",
-                key="fdl_apu_reset",
-                type="secondary",
-                use_container_width=True,
-                help="Repor empresa, datas de emissão NF e filtros da tabela ao padrão (independentes do Resultado Gerencial).",
-            ):
-                for _k in _FDL_APURACAO_RESET_KEYS:
-                    st.session_state.pop(_k, None)
-                st.rerun()
-        _fc1, _fc2 = st.columns(2)
-        with _fc1:
-            if emp_opts:
-                if "fdl_apu_emp" not in st.session_state:
-                    st.session_state["fdl_apu_emp"] = []
-                else:
-                    prev_e = st.session_state["fdl_apu_emp"]
-                    if isinstance(prev_e, list):
-                        st.session_state["fdl_apu_emp"] = [x for x in prev_e if x in emp_opts]
-                    else:
-                        st.session_state["fdl_apu_emp"] = []
-                st.multiselect(
-                    "Empresa",
-                    emp_opts,
-                    key="fdl_apu_emp",
-                    help="**Vazio** = todas as empresas neste carregamento. Estado **independente** do módulo Resultado Gerencial.",
-                    placeholder="Todas",
-                )
-            else:
-                st.caption("Empresa: sem opções distintas no recorte atual.")
-        with _fc2:
-            st.caption(
-                "Período de emissão abaixo aplica-se ao **recorte fiscal** e à **tabela**. "
-                "Filtros deste módulo não alteram o Resultado Gerencial."
-            )
-        if ok_nf_dates:
-            st.markdown(
-                '<p class="fdl-fat-filtros-periodo-tit">Período de emissão</p>',
-                unsafe_allow_html=True,
-            )
-            r_nf = st.columns((1, 1))
-            with r_nf[0]:
-                st.date_input(
-                    "Início",
-                    min_value=nf_cal_min,
-                    max_value=nf_cal_max,
-                    format="DD/MM/YYYY",
-                    key="fdl_apu_nf_d_ini",
-                    help=ao._FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN,
-                )
-            with r_nf[1]:
-                st.date_input(
-                    "Fim",
-                    min_value=nf_cal_min,
-                    max_value=nf_cal_max,
-                    format="DD/MM/YYYY",
-                    key="fdl_apu_nf_d_fim",
-                    help=ao._FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN,
-                )
-        elif "Nota_Data_Emissao" in _df_bounds.columns:
-            st.caption("Período de emissão indisponível (datas não utilizáveis em Nota_Data_Emissao).")
-        else:
-            st.caption("Período de emissão indisponível (sem coluna Nota_Data_Emissao).")
-
-    ao._fdl_ui_gap_section()
-    ao._fdl_fat_min_vsp(size="md")
-
-    _min_state = faturamento_recorte_min_state_from_session(
-        st.session_state,
-        key_emp="fdl_apu_emp",
-        key_plat="fdl_apu_plat",
-        key_sit="fdl_apu_nf_sit",
-    )
-    _nf_kpi_ini = ao._safe_streamlit_date(st.session_state.get("fdl_apu_nf_d_ini"), nf_min)
-    _nf_kpi_fim = ao._safe_streamlit_date(st.session_state.get("fdl_apu_nf_d_fim"), nf_max)
-    if ok_nf_dates:
-        _nf_kpi_ini = min(max(_nf_kpi_ini, nf_cal_min), nf_cal_max)
-        _nf_kpi_fim = min(max(_nf_kpi_fim, nf_cal_min), nf_cal_max)
-        if _nf_kpi_fim < _nf_kpi_ini:
-            _nf_kpi_fim = _nf_kpi_ini
-
-    _df_fiscal_base, _fiscal_base_stats = build_faturamento_fiscal_base_slice(
-        df_fiscal_pre
-        if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame)
-        else pd.DataFrame(),
-        empresas_sel=_min_state.empresas,
-        nf_d_ini=_nf_kpi_ini,
-        nf_d_fim=_nf_kpi_fim,
-        ok_nf_dates=ok_nf_dates,
-        situacoes_sel=_min_state.situacoes_nf,
-        df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
-    )
-    if not (use_fiscal_parquet and ok_nf_dates):
-        ao._render_faturamento_dre_fiscal_base_top(
-            stats=_fiscal_base_stats,
-            ok_nf_dates=ok_nf_dates,
-            empresas_sel=_min_state.empresas,
-            emp_opts=emp_opts,
-            nf_d_ini=_nf_kpi_ini,
-            nf_d_fim=_nf_kpi_fim,
-            fiscal_parquet_ok=use_fiscal_parquet,
-            situacoes_nf_sel=_min_state.situacoes_nf,
-        )
-
-    df_nf_scope_emissao = ao._faturamento_nf_apply_minimal_recorte(
-        df_nf_pre,
-        empresas_sel=_min_state.empresas,
-        plataformas_sel=(),
-        nf_d_ini=_nf_kpi_ini,
-        nf_d_fim=_nf_kpi_fim,
-        ok_nf_dates=ok_nf_dates,
-    )
-    df_nf_scope_emissao = ao._faturamento_nf_filter_by_situacao(df_nf_scope_emissao, _min_state.situacoes_nf)
-    _aligned_fiscal = bool(not _df_fiscal_base.empty)
-    if _aligned_fiscal:
-        df_nf_commercial_kpi = build_nf_panel_aligned_to_fiscal_base(_df_fiscal_base, df_nf_scope_emissao)
-    else:
-        df_nf_commercial_kpi = df_nf_scope_emissao.copy()
-    if _min_state.plataformas:
-        df_nf_commercial_kpi = ao._nf_panel_filter_merged_fiscal_by_plataforma_resumo(
-            df_nf_commercial_kpi, _min_state.plataformas
-        )
-    _kp_cards = compute_nf_panel_kpis(df_nf_commercial_kpi)
-
-    _fallback_alq_meta = _aliquota_configurada_pct_from_load_info(load_info)
-    params_union = load_faturamento_params_for_ui(load_info)
-    _emp_ef = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
-    _ali_info = aliquota_configurada_para_empresas_filtradas(params_union, _emp_ef)
-    regimes_info = detectar_regimes_tributarios(params_union, _emp_ef)
-
-    if regimes_info.get("tem_regime_fora_escopo"):
-        _badge_r = _build_badge_regime_fora_escopo_html(
-            regimes_info["empresas_fora_escopo"],
-            frozenset(r for r in regimes_info["regimes_presentes"] if r != "simples_nacional"),
-        )
-        if _badge_r:
-            st.html(BADGE_REGIME_CSS + _badge_r)
-
-    # Agregador SN antes do hero/consolidador — mesmo ``total_simples`` da tabela tributação.
-    # ``imposto_total`` soma só empresas SN (LP fica fora), evitando dupla contagem com o motor LP.
-    simples_agregado: dict[str, Any] | None = None
-    _emp_chaves_list = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
-    _org_ids_ag: list[str] = []
-    if use_fiscal_parquet and ok_nf_dates and isinstance(df_fiscal_pre, pd.DataFrame):
-        _org_ids_ag = _apuracao_org_ids_resolvidos_para_df(_df_fiscal_base, params_union, _emp_chaves_list)
-        simples_agregado = agregar_simples_nacional_para_painel_fiscal(
-            _df_fiscal_base,
-            _org_ids_ag,
-            params_union,
-            _nf_kpi_ini,
-            _nf_kpi_fim,
-            df_fiscal_full=df_fiscal_pre,
-            df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
-            ok_nf_dates=ok_nf_dates,
-        )
-
-    _imp_simples_ponte = dre_imposto_para_linha_dre_gerencial(
-        _kp_cards,
-        fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
-        aplicar_ponte_base_liquida=bool(use_fiscal_kpi),
-    )
-    _imp_num = float(_imp_simples_ponte)
-    _imp_sn_para_hero = float(_imp_simples_ponte)
-    _imp_lp_para_hero = 0.0
     try:
-        from processing.faturamento.imposto_consolidado import calcular_imposto_total_painel_fiscal
+        import app_operacional as ao
 
-        _json_path = resolve_faturamento_params_path_for_ui(load_info)
-        if (
-            _json_path is not None
-            and _json_path.is_file()
-            and use_fiscal_parquet
-            and isinstance(df_fiscal_pre, pd.DataFrame)
-            and not df_fiscal_pre.empty
+        ao._fdl_fat_min_inject_ui_styles()
+        st.markdown(APURACAO_PREMIUM_PANEL_CSS, unsafe_allow_html=True)
+
+        _LOG_AP.info(
+            "render apuracao fiscal: empresas_sel=%s, plataformas_sel=%s, nf_emissao_ini=%s, nf_emissao_fim=%s",
+            st.session_state.get("fdl_apu_emp"),
+            st.session_state.get("fdl_apu_plat"),
+            st.session_state.get("fdl_apu_nf_d_ini"),
+            st.session_state.get("fdl_apu_nf_d_fim"),
+        )
+
+        use_nf_panel_baked = bool(load_info.get("faturamento_nf_panel_baked"))
+        _df_nf_panel = load_info.get("faturamento_nf_panel_df")
+        _df_nf_contract = load_info.get("faturamento_nf_df")
+        use_nf_panel_baked_effective = (
+            use_nf_panel_baked
+            and isinstance(_df_nf_panel, pd.DataFrame)
+            and nf_panel_materializado_dataframe_valid(_df_nf_panel)
+        )
+        df_nf_pre = _df_nf_panel if use_nf_panel_baked_effective else _df_nf_contract
+        use_nf_materializado = False
+        if use_nf_panel_baked_effective:
+            use_nf_materializado = isinstance(df_nf_pre, pd.DataFrame) and not df_nf_pre.empty
+        elif (
+            bool(load_info.get("faturamento_nf_first"))
+            and isinstance(df_nf_pre, pd.DataFrame)
+            and nf_first_contract_dataframe_valid(df_nf_pre)
         ):
-            _total_sn_dict = (simples_agregado or {}).get("total_simples", {})
-            _imp_sn_total = float(_total_sn_dict.get("imposto_total", 0.0))
-            _cons = calcular_imposto_total_painel_fiscal(
-                df_fiscal=df_fiscal_pre,
-                df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
-                org_ids_filtro=_org_ids_ag or None,
-                periodo_inicio=pd.Timestamp(_nf_kpi_ini),
-                periodo_fim=pd.Timestamp(_nf_kpi_fim),
-                imposto_simples_total=_imp_sn_total,
-                json_params_path=_json_path,
+            use_nf_materializado = True
+        if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame) and df_nf_pre.empty and not df.empty:
+            use_nf_materializado = False
+    
+        _nf_panel_ads_ui = bool(load_info.get("faturamento_nf_panel_ads", True))
+    
+        df_fiscal_pre = load_info.get("faturamento_fiscal_df")
+        df_devolucoes_pre = load_info.get("faturamento_devolucoes_df")
+        _df_dev_ok = isinstance(df_devolucoes_pre, pd.DataFrame)
+        use_fiscal_parquet = (
+            bool(load_info.get("faturamento_fiscal_first"))
+            and isinstance(df_fiscal_pre, pd.DataFrame)
+            and fiscal_contract_dataframe_valid(df_fiscal_pre)
+        )
+        use_fiscal_kpi = bool(
+            use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame) and fiscal_contract_dataframe_valid(df_fiscal_pre)
+        )
+    
+        if not use_nf_panel_baked_effective:
+            st.error(
+                "**Dados por nota fiscal indisponíveis.** "
+                "Esta área usa a base consolidada **já publicada** para a sua organização."
             )
-            _imp_num = float(_cons.imposto_total)
-            _imp_sn_para_hero = float(_cons.imposto_simples_total)
-            _imp_lp_para_hero = float(_cons.imposto_lucro_presumido)
-    except Exception as exc:
-        _LOG_AP.warning("consolidação imposto fiscal (painel): %s", exc, exc_info=True)
-
-    _ref_enrich = _fallback_alq_meta
-    if params_union is not None and _ali_info.get("valores_por_empresa"):
-        _ref_enrich = enrich_aliquota_ref_pct_for_stats(_ali_info)
-
-    _, _div_cmp = _aliquota_imposto_caption_safe_html_and_divergencia_ref(
-        params_union=params_union,
-        aliquotas_info=_ali_info,
-        empresas_efetivas=_emp_ef,
-        fallback_metadata_pct=_fallback_alq_meta,
-        ok_nf_dates=ok_nf_dates,
-    )
-
-    _stats_kpi = enrich_faturamento_fiscal_base_stats(
-        _fiscal_base_stats,
-        imposto_apurado=float(_imp_num),
-        df_nf_aligned=df_nf_commercial_kpi,
-        aliquota_configurada_pct=float(_ref_enrich),
-    )
-
-    if ao._fdl_rg_pace_debug_enabled():
-        st.caption(
-            f"🔍 fiscal regime debug: regimes_presentes={regimes_info.get('regimes_presentes')!s} · "
-            f"aliquotas_modo={_ali_info.get('modo')} · "
-            f"valor_global_metadata={_fallback_alq_meta:.2f}% · "
-            f"valores_calculados={_ali_info.get('valores_por_empresa')!s}"
+            st.caption(
+                "Peça a atualização pelo processo habitual de fecho ou aguarde a próxima publicação de dados."
+            )
+            _pe = load_info.get("faturamento_nf_panel_error")
+            if _pe:
+                _pe_line = (
+                    f"Erro técnico: `{html.escape(str(_pe))}`"
+                    if ao._is_admin_mode()
+                    else "Não foi possível carregar a base consolidada. Tente novamente mais tarde ou contacte o suporte."
+                )
+                st.caption(_pe_line)
+            elif not use_nf_panel_baked:
+                st.caption(
+                    "A base consolidada ainda não está disponível neste ambiente ou não foi encontrada. "
+                    "Volte mais tarde ou contacte o suporte."
+                )
+            elif not isinstance(_df_nf_panel, pd.DataFrame):
+                st.caption("Não foi possível preparar a tabela neste momento. Recarregue a página ou tente mais tarde.")
+            elif _df_nf_panel.empty:
+                st.info(
+                    "Não há linhas para o período e empresa selecionados. "
+                    "Verifique filtros ou o escopo na barra lateral."
+                )
+            elif ao._is_admin_mode():
+                st.warning(
+                    "Contrato do painel incompleto (faltam colunas obrigatórias). "
+                    "Rematerialize o faturamento com a versão atual do pipeline."
+                )
+            return
+    
+        if df.empty and not use_nf_materializado:
+            st.info(
+                "Sem dados de faturamento para este escopo. Confirme **materialização**, **slug** do cliente "
+                "e o **escopo** (empresa ativa / consolidado) na barra lateral."
+            )
+            return
+    
+        _bounds_parts: list[pd.DataFrame] = []
+        _base_bounds = df_nf_pre if use_nf_materializado else df
+        if isinstance(_base_bounds, pd.DataFrame) and not _base_bounds.empty:
+            _bounds_parts.append(_base_bounds)
+        if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame) and not df_fiscal_pre.empty:
+            _bounds_parts.append(df_fiscal_pre)
+        _df_bounds = (
+            pd.concat(_bounds_parts, ignore_index=True)
+            if len(_bounds_parts) > 1
+            else (_bounds_parts[0] if _bounds_parts else pd.DataFrame())
         )
-
-    ao._fdl_fat_min_vsp(size="sm")
-    _carga_hero_pct = (
-        (float(_imp_num) / float(_stats_kpi.base_fiscal_liquida) * 100.0)
-        if ok_nf_dates and float(_stats_kpi.base_fiscal_liquida) > 1e-9
-        else 0.0
-    )
-    st.html(
-        _build_apuracao_premium_hero_tres_html(
-            base_total=float(_stats_kpi.base_fiscal_liquida),
-            nfs_total=int(_stats_kpi.n_nf),
-            imposto_total=float(_imp_num),
-            imposto_sn=float(_imp_sn_para_hero),
-            imposto_lp=float(_imp_lp_para_hero),
-            carga_efetiva_pct=_carga_hero_pct,
-            aliquota_efetiva_stats_pct=float(_stats_kpi.aliquota_efetiva_pct),
+        if use_nf_materializado and isinstance(df_nf_pre, pd.DataFrame) and df_nf_pre.empty:
+            st.info(
+                "Sem notas fiscais neste recorte. Confirme filtros de data, empresa e consolidado na barra lateral "
+                "e que a base consolidada está atualizada."
+            )
+            return
+        nf_min, nf_max, ok_nf_dates = faturamento_min_series_nf_emissao_bounds_dates(_df_bounds)
+        _emit_floor = ao._FDL_FAT_DRE_MIN_PANEL_NF_EMISSAO_DESDE
+        if ok_nf_dates:
+            nf_cal_min, nf_cal_max = _min_cal_limits(nf_min, nf_max)
+            nf_cal_min = max(nf_cal_min, _emit_floor)
+            if nf_max >= _emit_floor:
+                nf_min = max(nf_min, _emit_floor)
+            else:
+                nf_min, nf_max = _emit_floor, _emit_floor
+            nf_cal_max = max(nf_cal_max, nf_max, nf_min, nf_cal_min)
+        else:
+            nf_cal_min, nf_cal_max = (nf_min, nf_max)
+    
+        _nf_sig_k = "fdl_apu_nf_bounds_sig"
+        _today = datetime.now(_BR_TZ).date()
+        if ok_nf_dates:
+            _nf_bs = (nf_min.isoformat(), nf_max.isoformat())
+            if st.session_state.get(_nf_sig_k) != _nf_bs:
+                st.session_state[_nf_sig_k] = _nf_bs
+                _nfi = nf_min
+                _nff = min(nf_max, _today)
+                _nfi = min(max(_nfi, nf_cal_min), nf_cal_max)
+                _nff = min(max(_nff, nf_cal_min), nf_cal_max)
+                if _nff < _nfi:
+                    _nff = _nfi
+                st.session_state["fdl_apu_nf_d_ini"] = _nfi
+                st.session_state["fdl_apu_nf_d_fim"] = _nff
+            if "fdl_apu_nf_d_ini" not in st.session_state:
+                _nfi = nf_min
+                _nff = min(nf_max, _today)
+                _nfi = min(max(_nfi, nf_cal_min), nf_cal_max)
+                _nff = min(max(_nff, nf_cal_min), nf_cal_max)
+                if _nff < _nfi:
+                    _nff = _nfi
+                st.session_state["fdl_apu_nf_d_ini"] = _nfi
+                st.session_state["fdl_apu_nf_d_fim"] = _nff
+            st.session_state["fdl_apu_nf_d_ini"] = min(
+                max(ao._safe_streamlit_date(st.session_state["fdl_apu_nf_d_ini"], nf_min), nf_cal_min),
+                nf_cal_max,
+            )
+            st.session_state["fdl_apu_nf_d_fim"] = min(
+                max(ao._safe_streamlit_date(st.session_state["fdl_apu_nf_d_fim"], nf_max), nf_cal_min),
+                nf_cal_max,
+            )
+    
+        emp_opts = ao._faturamento_dre_etiquetas_empresa_recorte(_df_bounds)
+    
+        _FDL_APURACAO_RESET_KEYS = (
+            "fdl_apu_emp",
+            "fdl_apu_plat",
+            "fdl_apu_nf_sit",
+            "fdl_apu_nf_d_ini",
+            "fdl_apu_nf_d_fim",
+            "fdl_apu_nf_bounds_sig",
+            "fdl_apu_prod",
+            "fdl_apu_venda_sinal",
+            "fdl_apu_sinal_resultado",
+            "fdl_apu_sinais_resultado",
+            "fdl_apu_nf_show_diferenca",
+            "fdl_apu_nf_opt_plat",
+            "fdl_apu_nf_opt_sit",
+            "fdl_apu_nf_opt_ped",
+            "fdl_apu_nf_opt_linhas",
+            "fdl_apu_nf_opt_qtd",
+            "fdl_apu_nf_opt_vf",
+            "fdl_apu_nf_opt_rf",
+            "fdl_apu_nf_opt_rp",
+            "fdl_apu_nf_opt_tar",
+            "fdl_apu_nf_opt_df",
+            "fdl_apu_nf_opt_ads",
+            "fdl_apu_nf_opt_alert",
+            "fdl_apu_nf_tbl_plataforma",
+            "fdl_apu_nf_tbl_busca",
+            "fdl_apu_nf_pg",
+            "fdl_apu_nf_devolucao_tbl_busca",
+            "fdl_apu_nf_pg_devolucao",
+        )
+    
+        with st.container(border=True):
+            _fh_t, _fh_b = st.columns((4, 1))
+            with _fh_t:
+                st.markdown("**Filtros**")
+            with _fh_b:
+                if st.button(
+                    "Limpar filtros",
+                    key="fdl_apu_reset",
+                    type="secondary",
+                    use_container_width=True,
+                    help="Repor empresa, datas de emissão NF e filtros da tabela ao padrão (independentes do Resultado Gerencial).",
+                ):
+                    for _k in _FDL_APURACAO_RESET_KEYS:
+                        st.session_state.pop(_k, None)
+                    st.rerun()
+            _fc1, _fc2 = st.columns(2)
+            with _fc1:
+                if emp_opts:
+                    if "fdl_apu_emp" not in st.session_state:
+                        st.session_state["fdl_apu_emp"] = []
+                    else:
+                        prev_e = st.session_state["fdl_apu_emp"]
+                        if isinstance(prev_e, list):
+                            st.session_state["fdl_apu_emp"] = [x for x in prev_e if x in emp_opts]
+                        else:
+                            st.session_state["fdl_apu_emp"] = []
+                    st.multiselect(
+                        "Empresa",
+                        emp_opts,
+                        key="fdl_apu_emp",
+                        help="**Vazio** = todas as empresas neste carregamento. Estado **independente** do módulo Resultado Gerencial.",
+                        placeholder="Todas",
+                    )
+                else:
+                    st.caption("Empresa: sem opções distintas no recorte atual.")
+            with _fc2:
+                st.caption(
+                    "Período de emissão abaixo aplica-se ao **recorte fiscal** e à **tabela**. "
+                    "Filtros deste módulo não alteram o Resultado Gerencial."
+                )
+            if ok_nf_dates:
+                st.markdown(
+                    '<p class="fdl-fat-filtros-periodo-tit">Período de emissão</p>',
+                    unsafe_allow_html=True,
+                )
+                r_nf = st.columns((1, 1))
+                with r_nf[0]:
+                    st.date_input(
+                        "Início",
+                        min_value=nf_cal_min,
+                        max_value=nf_cal_max,
+                        format="DD/MM/YYYY",
+                        key="fdl_apu_nf_d_ini",
+                        help=ao._FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN,
+                    )
+                with r_nf[1]:
+                    st.date_input(
+                        "Fim",
+                        min_value=nf_cal_min,
+                        max_value=nf_cal_max,
+                        format="DD/MM/YYYY",
+                        key="fdl_apu_nf_d_fim",
+                        help=ao._FATURAMENTO_HELP_PERIODO_NF_EMISSAO_MIN,
+                    )
+            elif "Nota_Data_Emissao" in _df_bounds.columns:
+                st.caption("Período de emissão indisponível (datas não utilizáveis em Nota_Data_Emissao).")
+            else:
+                st.caption("Período de emissão indisponível (sem coluna Nota_Data_Emissao).")
+    
+        ao._fdl_ui_gap_section()
+        ao._fdl_fat_min_vsp(size="md")
+    
+        _min_state = faturamento_recorte_min_state_from_session(
+            st.session_state,
+            key_emp="fdl_apu_emp",
+            key_plat="fdl_apu_plat",
+            key_sit="fdl_apu_nf_sit",
+        )
+        _nf_kpi_ini = ao._safe_streamlit_date(st.session_state.get("fdl_apu_nf_d_ini"), nf_min)
+        _nf_kpi_fim = ao._safe_streamlit_date(st.session_state.get("fdl_apu_nf_d_fim"), nf_max)
+        if ok_nf_dates:
+            _nf_kpi_ini = min(max(_nf_kpi_ini, nf_cal_min), nf_cal_max)
+            _nf_kpi_fim = min(max(_nf_kpi_fim, nf_cal_min), nf_cal_max)
+            if _nf_kpi_fim < _nf_kpi_ini:
+                _nf_kpi_fim = _nf_kpi_ini
+    
+        _df_fiscal_base, _fiscal_base_stats = build_faturamento_fiscal_base_slice(
+            df_fiscal_pre
+            if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame)
+            else pd.DataFrame(),
+            empresas_sel=_min_state.empresas,
+            nf_d_ini=_nf_kpi_ini,
+            nf_d_fim=_nf_kpi_fim,
             ok_nf_dates=ok_nf_dates,
+            situacoes_sel=_min_state.situacoes_nf,
+            df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
+        )
+        if not (use_fiscal_parquet and ok_nf_dates):
+            ao._render_faturamento_dre_fiscal_base_top(
+                stats=_fiscal_base_stats,
+                ok_nf_dates=ok_nf_dates,
+                empresas_sel=_min_state.empresas,
+                emp_opts=emp_opts,
+                nf_d_ini=_nf_kpi_ini,
+                nf_d_fim=_nf_kpi_fim,
+                fiscal_parquet_ok=use_fiscal_parquet,
+                situacoes_nf_sel=_min_state.situacoes_nf,
+            )
+    
+        df_nf_scope_emissao = ao._faturamento_nf_apply_minimal_recorte(
+            df_nf_pre,
+            empresas_sel=_min_state.empresas,
+            plataformas_sel=(),
+            nf_d_ini=_nf_kpi_ini,
+            nf_d_fim=_nf_kpi_fim,
+            ok_nf_dates=ok_nf_dates,
+        )
+        df_nf_scope_emissao = ao._faturamento_nf_filter_by_situacao(df_nf_scope_emissao, _min_state.situacoes_nf)
+        _aligned_fiscal = bool(not _df_fiscal_base.empty)
+        if _aligned_fiscal:
+            df_nf_commercial_kpi = build_nf_panel_aligned_to_fiscal_base(_df_fiscal_base, df_nf_scope_emissao)
+        else:
+            df_nf_commercial_kpi = df_nf_scope_emissao.copy()
+        if _min_state.plataformas:
+            df_nf_commercial_kpi = ao._nf_panel_filter_merged_fiscal_by_plataforma_resumo(
+                df_nf_commercial_kpi, _min_state.plataformas
+            )
+        _kp_cards = compute_nf_panel_kpis(df_nf_commercial_kpi)
+    
+        _fallback_alq_meta = _aliquota_configurada_pct_from_load_info(load_info)
+        params_union = load_faturamento_params_for_ui(load_info)
+        _emp_ef = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
+        _ali_info = aliquota_configurada_para_empresas_filtradas(params_union, _emp_ef)
+        regimes_info = detectar_regimes_tributarios(params_union, _emp_ef)
+    
+        if regimes_info.get("tem_regime_fora_escopo"):
+            _badge_r = _build_badge_regime_fora_escopo_html(
+                regimes_info["empresas_fora_escopo"],
+                frozenset(r for r in regimes_info["regimes_presentes"] if r != "simples_nacional"),
+            )
+            if _badge_r:
+                st.html(BADGE_REGIME_CSS + _badge_r)
+    
+        # Agregador SN antes do hero/consolidador — mesmo ``total_simples`` da tabela tributação.
+        # ``imposto_total`` soma só empresas SN (LP fica fora), evitando dupla contagem com o motor LP.
+        simples_agregado: dict[str, Any] | None = None
+        _emp_chaves_list = list(_min_state.empresas) if _min_state.empresas else list(emp_opts)
+        _org_ids_ag: list[str] = []
+        if use_fiscal_parquet and ok_nf_dates and isinstance(df_fiscal_pre, pd.DataFrame):
+            _org_ids_ag = _apuracao_org_ids_resolvidos_para_df(_df_fiscal_base, params_union, _emp_chaves_list)
+            simples_agregado = agregar_simples_nacional_para_painel_fiscal(
+                _df_fiscal_base,
+                _org_ids_ag,
+                params_union,
+                _nf_kpi_ini,
+                _nf_kpi_fim,
+                df_fiscal_full=df_fiscal_pre,
+                df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
+                ok_nf_dates=ok_nf_dates,
+            )
+    
+        _imp_simples_ponte = dre_imposto_para_linha_dre_gerencial(
+            _kp_cards,
+            fiscal_base_stats=_fiscal_base_stats if use_fiscal_parquet else None,
+            aplicar_ponte_base_liquida=bool(use_fiscal_kpi),
+        )
+        _imp_num = float(_imp_simples_ponte)
+        _imp_sn_para_hero = float(_imp_simples_ponte)
+        _imp_lp_para_hero = 0.0
+        try:
+            from processing.faturamento.imposto_consolidado import calcular_imposto_total_painel_fiscal
+    
+            _json_path = resolve_faturamento_params_path_for_ui(load_info)
+            if (
+                _json_path is not None
+                and _json_path.is_file()
+                and use_fiscal_parquet
+                and isinstance(df_fiscal_pre, pd.DataFrame)
+                and not df_fiscal_pre.empty
+            ):
+                _total_sn_dict = (simples_agregado or {}).get("total_simples", {})
+                _imp_sn_total = float(_total_sn_dict.get("imposto_total", 0.0))
+                _cons = calcular_imposto_total_painel_fiscal(
+                    df_fiscal=df_fiscal_pre,
+                    df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
+                    org_ids_filtro=_org_ids_ag or None,
+                    periodo_inicio=pd.Timestamp(_nf_kpi_ini),
+                    periodo_fim=pd.Timestamp(_nf_kpi_fim),
+                    imposto_simples_total=_imp_sn_total,
+                    json_params_path=_json_path,
+                )
+                _imp_num = float(_cons.imposto_total)
+                _imp_sn_para_hero = float(_cons.imposto_simples_total)
+                _imp_lp_para_hero = float(_cons.imposto_lucro_presumido)
+        except Exception as exc:
+            _LOG_AP.warning("consolidação imposto fiscal (painel): %s", exc, exc_info=True)
+            _imp_num = float(_imp_simples_ponte)
+            _imp_sn_para_hero = float(_imp_simples_ponte)
+            _imp_lp_para_hero = 0.0
+    
+        _ref_enrich = _fallback_alq_meta
+        if params_union is not None and _ali_info.get("valores_por_empresa"):
+            _ref_enrich = enrich_aliquota_ref_pct_for_stats(_ali_info)
+    
+        _, _div_cmp = _aliquota_imposto_caption_safe_html_and_divergencia_ref(
+            params_union=params_union,
+            aliquotas_info=_ali_info,
+            empresas_efetivas=_emp_ef,
+            fallback_metadata_pct=_fallback_alq_meta,
+            ok_nf_dates=ok_nf_dates,
+        )
+    
+        _stats_kpi = enrich_faturamento_fiscal_base_stats(
+            _fiscal_base_stats,
+            imposto_apurado=float(_imp_num),
+            df_nf_aligned=df_nf_commercial_kpi,
+            aliquota_configurada_pct=float(_ref_enrich),
+        )
+    
+        if ao._fdl_rg_pace_debug_enabled():
+            st.caption(
+                f"🔍 fiscal regime debug: regimes_presentes={regimes_info.get('regimes_presentes')!s} · "
+                f"aliquotas_modo={_ali_info.get('modo')} · "
+                f"valor_global_metadata={_fallback_alq_meta:.2f}% · "
+                f"valores_calculados={_ali_info.get('valores_por_empresa')!s}"
+            )
+    
+        ao._fdl_fat_min_vsp(size="sm")
+        _carga_hero_pct = (
+            (float(_imp_num) / float(_stats_kpi.base_fiscal_liquida) * 100.0)
+            if ok_nf_dates and float(_stats_kpi.base_fiscal_liquida) > 1e-9
+            else 0.0
+        )
+        st.html(
+            _build_apuracao_premium_hero_tres_html(
+                base_total=float(_stats_kpi.base_fiscal_liquida),
+                nfs_total=int(_stats_kpi.n_nf),
+                imposto_total=float(_imp_num),
+                imposto_sn=float(_imp_sn_para_hero),
+                imposto_lp=float(_imp_lp_para_hero),
+                carga_efetiva_pct=_carga_hero_pct,
+                aliquota_efetiva_stats_pct=float(_stats_kpi.aliquota_efetiva_pct),
+                ok_nf_dates=ok_nf_dates,
+                fmt_brl=ao._fmt_brl_ptbr_celula,
+                divergencia_compare_pct=_div_cmp,
+            )
+        )
+    
+        _emp_sel_t = tuple(_min_state.empresas) if _min_state.empresas else ()
+        _nfs_canc = 0
+        if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame):
+            _nfs_canc = _count_nf_canceladas_periodo(
+                df_fiscal_pre,
+                empresas_sel=_emp_sel_t,
+                nf_d_ini=_nf_kpi_ini,
+                nf_d_fim=_nf_kpi_fim,
+                ok_nf_dates=ok_nf_dates,
+            )
+    
+        composicao_html = _build_composicao_base_tributavel_html(
+            valor_faturado=float(_stats_kpi.valor_liquido_nf_periodo_todas_situacoes),
+            nfs_emitidas=int(_stats_kpi.n_nf_periodo_todas_situacoes),
+            valor_cancelado=float(_stats_kpi.valor_cancelado),
+            nfs_canceladas=int(_nfs_canc),
+            valor_devolucoes=float(_stats_kpi.total_devolvido),
+            nfs_devolucoes=int(_stats_kpi.nfs_devolucao),
+            base_liquida=float(_stats_kpi.base_fiscal_liquida),
             fmt_brl=ao._fmt_brl_ptbr_celula,
-            divergencia_compare_pct=_div_cmp,
+            fmt_int=ao._fmt_int_ptbr,
         )
-    )
-
-    _emp_sel_t = tuple(_min_state.empresas) if _min_state.empresas else ()
-    _nfs_canc = 0
-    if use_fiscal_parquet and isinstance(df_fiscal_pre, pd.DataFrame):
-        _nfs_canc = _count_nf_canceladas_periodo(
-            df_fiscal_pre,
-            empresas_sel=_emp_sel_t,
-            nf_d_ini=_nf_kpi_ini,
-            nf_d_fim=_nf_kpi_fim,
-            ok_nf_dates=ok_nf_dates,
-        )
-
-    composicao_html = _build_composicao_base_tributavel_html(
-        valor_faturado=float(_stats_kpi.valor_liquido_nf_periodo_todas_situacoes),
-        nfs_emitidas=int(_stats_kpi.n_nf_periodo_todas_situacoes),
-        valor_cancelado=float(_stats_kpi.valor_cancelado),
-        nfs_canceladas=int(_nfs_canc),
-        valor_devolucoes=float(_stats_kpi.total_devolvido),
-        nfs_devolucoes=int(_stats_kpi.nfs_devolucao),
-        base_liquida=float(_stats_kpi.base_fiscal_liquida),
-        fmt_brl=ao._fmt_brl_ptbr_celula,
-        fmt_int=ao._fmt_int_ptbr,
-    )
-    ao._fdl_fat_min_vsp(size="sm")
-    st.html(COMPOSICAO_BASE_CSS + composicao_html)
-
-    lp_prefetched: dict[str, LucroPresumidoBreakdown] = {}
-    if use_fiscal_parquet and ok_nf_dates and isinstance(df_fiscal_pre, pd.DataFrame):
-        (nc, vc), (nd, vd), ni = _agregar_invalidas_por_tipo_no_periodo(
-            df_fiscal_pre,
-            empresas_sel=_emp_sel_t,
-            nf_d_ini=_nf_kpi_ini,
-            nf_d_fim=_nf_kpi_fim,
-            ok_nf_dates=ok_nf_dates,
-        )
-        if nc + nd + ni > 0:
-            with st.expander("Detalhamento de NFs inválidas", expanded=False):
-                st.markdown(
-                    f"- **Canceladas:** {ao._fmt_int_ptbr(nc)} NFs · **{ao._fmt_brl_ptbr_celula(vc)}**"
-                )
-                st.caption("Valores em valor líquido da NF (export Bling).")
-                st.markdown(
-                    f"- **Denegadas:** {ao._fmt_int_ptbr(nd)} NFs · **{ao._fmt_brl_ptbr_celula(vd)}** "
-                    "_(não afetam a base — nunca foram válidas fiscalmente)_"
-                )
-                st.markdown(
-                    f"- **Inutilizadas:** {ao._fmt_int_ptbr(ni)} NFs _(números pulados, sem valor fiscal)_"
-                )
-
-        lp_breakdowns_table: dict[str, dict[str, float]] = {}
-        lp_orgs_ordered: list[tuple[str, str]] = []
-        params_path = resolve_faturamento_params_path_for_ui(load_info)
-        if params_path is not None and isinstance(params_union, FaturamentoParamsV2):
-            sel_orgs = set(_org_ids_ag)
-            for e in params_union.empresas:
-                if e.regime_tributario != "lucro_presumido":
+        ao._fdl_fat_min_vsp(size="sm")
+        st.html(COMPOSICAO_BASE_CSS + composicao_html)
+    
+        lp_prefetched: dict[str, LucroPresumidoBreakdown] = {}
+        if use_fiscal_parquet and ok_nf_dates and isinstance(df_fiscal_pre, pd.DataFrame):
+            (nc, vc), (nd, vd), ni = _agregar_invalidas_por_tipo_no_periodo(
+                df_fiscal_pre,
+                empresas_sel=_emp_sel_t,
+                nf_d_ini=_nf_kpi_ini,
+                nf_d_fim=_nf_kpi_fim,
+                ok_nf_dates=ok_nf_dates,
+            )
+            if nc + nd + ni > 0:
+                with st.expander("Detalhamento de NFs inválidas", expanded=False):
+                    st.markdown(
+                        f"- **Canceladas:** {ao._fmt_int_ptbr(nc)} NFs · **{ao._fmt_brl_ptbr_celula(vc)}**"
+                    )
+                    st.caption("Valores em valor líquido da NF (export Bling).")
+                    st.markdown(
+                        f"- **Denegadas:** {ao._fmt_int_ptbr(nd)} NFs · **{ao._fmt_brl_ptbr_celula(vd)}** "
+                        "_(não afetam a base — nunca foram válidas fiscalmente)_"
+                    )
+                    st.markdown(
+                        f"- **Inutilizadas:** {ao._fmt_int_ptbr(ni)} NFs _(números pulados, sem valor fiscal)_"
+                    )
+    
+            lp_breakdowns_table: dict[str, dict[str, float]] = {}
+            lp_orgs_ordered: list[tuple[str, str]] = []
+            params_path = resolve_faturamento_params_path_for_ui(load_info)
+            if params_path is not None and isinstance(params_union, FaturamentoParamsV2):
+                sel_orgs = set(_org_ids_ag)
+                for e in params_union.empresas:
+                    if e.regime_tributario != "lucro_presumido":
+                        continue
+                    if sel_orgs and e.org_id not in sel_orgs:
+                        continue
+                    lp_orgs_ordered.append((e.org_id, e.empresa))
+                for lp_org_id, _lp_nome in lp_orgs_ordered:
+                    try:
+                        lp_params, icms_params = load_lucro_presumido_params_from_json(params_path, lp_org_id)
+                    except Exception as exc:
+                        _LOG_AP.warning(
+                            "LP load params falhou para %s: %s", lp_org_id, exc, exc_info=True
+                        )
+                        continue
+                    if lp_params is None or icms_params is None:
+                        continue
+                    try:
+                        bd = calcular_lucro_presumido(
+                            df_fiscal=df_fiscal_pre,
+                            df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
+                            org_id=lp_org_id,
+                            nf_d_ini=pd.Timestamp(_nf_kpi_ini),
+                            nf_d_fim=pd.Timestamp(_nf_kpi_fim),
+                            params=lp_params,
+                            icms_params=icms_params,
+                        )
+                    except Exception as exc:
+                        _LOG_AP.warning(
+                            "calcular_lucro_presumido falhou para %s: %s", lp_org_id, exc, exc_info=True
+                        )
+                        continue
+                    lp_prefetched[lp_org_id] = bd
+                    lp_breakdowns_table[lp_org_id] = {
+                        "imposto_total": float(bd.total_imposto),
+                        "aliquota_efetiva_pct": float(bd.aliquota_efetiva * 100.0),
+                    }
+    
+            trib_html = _build_tributacao_por_empresa_unificado_html(
+                simples_agregado,
+                lp_breakdowns=lp_breakdowns_table if lp_breakdowns_table else None,
+                fmt_brl=ao._fmt_brl_ptbr_celula,
+            )
+            if trib_html:
+                ao._fdl_fat_min_vsp(size="sm")
+                st.markdown(trib_html, unsafe_allow_html=True)
+    
+            for lp_org_id, lp_nome in lp_orgs_ordered:
+                bd_lp = lp_prefetched.get(lp_org_id)
+                if bd_lp is None or params_path is None:
                     continue
-                if sel_orgs and e.org_id not in sel_orgs:
-                    continue
-                lp_orgs_ordered.append((e.org_id, e.empresa))
-            for lp_org_id, _lp_nome in lp_orgs_ordered:
-                try:
-                    lp_params, icms_params = load_lucro_presumido_params_from_json(params_path, lp_org_id)
-                except Exception:
-                    continue
-                if lp_params is None or icms_params is None:
-                    continue
-                try:
-                    bd = calcular_lucro_presumido(
+                with st.expander(f"Detalhamento Lucro Presumido — {lp_nome}", expanded=False):
+                    render_lucro_presumido_card(
                         df_fiscal=df_fiscal_pre,
                         df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
                         org_id=lp_org_id,
+                        empresa_nome=lp_nome,
                         nf_d_ini=pd.Timestamp(_nf_kpi_ini),
                         nf_d_fim=pd.Timestamp(_nf_kpi_fim),
-                        params=lp_params,
-                        icms_params=icms_params,
+                        json_params_path=params_path,
+                        breakdown=bd_lp,
                     )
-                except Exception:
-                    continue
-                lp_prefetched[lp_org_id] = bd
-                lp_breakdowns_table[lp_org_id] = {
-                    "imposto_total": float(bd.total_imposto),
-                    "aliquota_efetiva_pct": float(bd.aliquota_efetiva * 100.0),
-                }
-
-        trib_html = _build_tributacao_por_empresa_unificado_html(
-            simples_agregado,
-            lp_breakdowns=lp_breakdowns_table if lp_breakdowns_table else None,
-            fmt_brl=ao._fmt_brl_ptbr_celula,
-        )
-        if trib_html:
-            ao._fdl_fat_min_vsp(size="sm")
-            st.markdown(trib_html, unsafe_allow_html=True)
-
-        for lp_org_id, lp_nome in lp_orgs_ordered:
-            bd_lp = lp_prefetched.get(lp_org_id)
-            if bd_lp is None or params_path is None:
-                continue
-            with st.expander(f"Detalhamento Lucro Presumido — {lp_nome}", expanded=False):
-                render_lucro_presumido_card(
-                    df_fiscal=df_fiscal_pre,
-                    df_devolucoes=df_devolucoes_pre if _df_dev_ok else None,
-                    org_id=lp_org_id,
-                    empresa_nome=lp_nome,
-                    nf_d_ini=pd.Timestamp(_nf_kpi_ini),
-                    nf_d_fim=pd.Timestamp(_nf_kpi_fim),
-                    json_params_path=params_path,
-                    breakdown=bd_lp,
+    
+            if ok_nf_dates and float(_stats_kpi.base_fiscal_liquida) > 1e-9:
+                _carga_tot_pct = float(_imp_num) / float(_stats_kpi.base_fiscal_liquida) * 100.0
+                ao._fdl_fat_min_vsp(size="sm")
+                st.markdown(
+                    _build_total_geral_apuracao_html(
+                        base_geral=float(_stats_kpi.base_fiscal_liquida),
+                        imp_geral=float(_imp_num),
+                        carga_geral_pct=_carga_tot_pct,
+                        fmt_brl=ao._fmt_brl_ptbr_celula,
+                    ),
+                    unsafe_allow_html=True,
                 )
-
-        if ok_nf_dates and float(_stats_kpi.base_fiscal_liquida) > 1e-9:
-            _carga_tot_pct = float(_imp_num) / float(_stats_kpi.base_fiscal_liquida) * 100.0
-            ao._fdl_fat_min_vsp(size="sm")
-            st.markdown(
-                _build_total_geral_apuracao_html(
-                    base_geral=float(_stats_kpi.base_fiscal_liquida),
-                    imp_geral=float(_imp_num),
-                    carga_geral_pct=_carga_tot_pct,
-                    fmt_brl=ao._fmt_brl_ptbr_celula,
-                ),
-                unsafe_allow_html=True,
-            )
-
-        if ao._fdl_rg_pace_debug_enabled():
-            rbt_dbg: dict[str, str] = {}
-            aliq_ef_dbg: dict[str, str] = {}
-            aliq_json_dbg: dict[str, float] = {}
-            divs: list[str] = []
-            for oid, row in simples_agregado.get("por_empresa", {}).items():
-                if not isinstance(row, dict) or row.get("regime") != "simples_nacional":
-                    continue
-                u = row.get("ultimo_mes")
-                if isinstance(u, ResultadoAliquotaEfetivaMes):
-                    rbt_dbg[oid] = f"{float(u.rbt12):.0f} [{int(u.meses_historico_disponiveis)}m]"
-                    if u.aliquota_efetiva_pct is not None:
-                        aliq_ef_dbg[oid] = f"{float(u.aliquota_efetiva_pct):.2f} [calc]"
-                    cfg = get_aliquota_imposto_por_empresa(params_union, oid)
-                    if cfg is not None and u.aliquota_efetiva_pct is not None:
-                        cfg_pct = float(cfg) * 100.0 if float(cfg) <= 1.0 else float(cfg)
-                        d = abs(float(u.aliquota_efetiva_pct) - cfg_pct)
-                        if d > 2.0:
-                            divs.append(f"{oid}: efetiva {u.aliquota_efetiva_pct:.2f}% vs JSON {cfg_pct:.2f}% (Δ {d:.2f} pp)")
-                jr = row.get("aliquota_referencia_json_pct")
-                if isinstance(jr, (int, float)):
-                    aliq_json_dbg[oid] = round(float(jr), 2)
-            cr = simples_agregado.get("competencia_referencia")
-            em_calc = list(simples_agregado.get("empresas_com_calculo_oficial") or [])
-            em_warm = list(simples_agregado.get("empresas_em_warmup") or [])
-            dbg = (
-                "🔍 Simples Nacional debug:\n"
-                f"   competencia_referencia: {cr!s}\n"
-                f"   empresas_calculadas: {em_calc!s}\n"
-                f"   empresas_warmup: {em_warm!s}\n"
-                f"   rbt12: {rbt_dbg!s}\n"
-                f"   aliquota_efetiva: {aliq_ef_dbg!s}\n"
-                f"   aliquota_referencia_json: {aliq_json_dbg!s}"
-            )
-            if divs:
-                dbg += "\n   divergencias_json: " + "; ".join(divs)
-            st.caption(dbg)
-
-    ao._fdl_fat_min_vsp(size="md")
-    ao._fdl_fat_divider_simple()
-    ao._fdl_fat_min_vsp(size="sm")
-
-    # Cada parâmetro independente — enriquecimento parcial é melhor que nenhum
-    _aliq_sn_kw: dict[str, Mapping[str, float]] | None = None
-    if isinstance(simples_agregado, dict):
-        _aliq_dict = simples_agregado.get("aliquotas_mensais_por_empresa")
-        if isinstance(_aliq_dict, dict) and _aliq_dict:
-            _aliq_sn_kw = _aliq_dict
-
-    _breakdowns_lp_kw: dict[str, LucroPresumidoBreakdown] | None = None
-    _org_ids_lp_kw: set[str] | None = None
-    if isinstance(lp_prefetched, dict) and lp_prefetched:
-        _breakdowns_lp_kw = lp_prefetched
-        _org_ids_lp_kw = set(lp_prefetched.keys())
-
-    ao._render_faturamento_dre_nf_table_section(
-        df_nf_pre=df_nf_pre,
-        df=df,
-        df_fiscal_pre=df_fiscal_pre,
-        load_info=load_info,
-        _min_state=_min_state,
-        _nf_kpi_ini=_nf_kpi_ini,
-        _nf_kpi_fim=_nf_kpi_fim,
-        ok_nf_dates=ok_nf_dates,
-        use_fiscal_kpi=use_fiscal_kpi,
-        use_nf_materializado=use_nf_materializado,
-        use_fiscal_parquet=use_fiscal_parquet,
-        _nf_panel_ads_ui=_nf_panel_ads_ui,
-        _df_fiscal_base=_df_fiscal_base,
-        _fiscal_base_stats=_fiscal_base_stats,
-        _kp_cards=_kp_cards,
-        org_id=org_id,
-        prefix_main="fdl_apu",
-        prefix_nf="fdl_apu_nf",
-        csv_file_name="apuracao_fiscal_nf.csv",
-        table_heading="### Tabela de NFs (visão fiscal)",
-        nf_table_ui_mode="fiscal",
-        aliquotas_mensais_sn=_aliq_sn_kw,
-        breakdowns_lp=_breakdowns_lp_kw,
-        org_ids_lp=_org_ids_lp_kw,
-    )
-
-    _df_devolucoes_periodo = ao._carregar_devolucoes_fiscais_para_painel(
-        load_info,
-        nf_d_ini=_nf_kpi_ini,
-        nf_d_fim=_nf_kpi_fim,
-        ok_nf_dates=ok_nf_dates,
-    )
-
-    ao._fdl_fat_min_vsp(size="sm")
-    ao._render_faturamento_dre_nf_table_section(
-        df_nf_pre=df_nf_pre,
-        df=df,
-        df_fiscal_pre=df_fiscal_pre,
-        load_info=load_info,
-        _min_state=_min_state,
-        _nf_kpi_ini=_nf_kpi_ini,
-        _nf_kpi_fim=_nf_kpi_fim,
-        ok_nf_dates=ok_nf_dates,
-        use_fiscal_kpi=use_fiscal_kpi,
-        use_nf_materializado=use_nf_materializado,
-        use_fiscal_parquet=use_fiscal_parquet,
-        _nf_panel_ads_ui=_nf_panel_ads_ui,
-        _df_fiscal_base=_df_fiscal_base,
-        _fiscal_base_stats=_fiscal_base_stats,
-        _kp_cards=_kp_cards,
-        org_id=org_id,
-        prefix_main="fdl_apu",
-        prefix_nf="fdl_apu_nf_devolucao",
-        csv_file_name="apuracao_fiscal_nf_devolucoes.csv",
-        table_heading="### Tabela de NFs de Devolução",
-        nf_table_ui_mode="devolucao",
-        df_source=_df_devolucoes_periodo,
-    )
+    
+            if ao._fdl_rg_pace_debug_enabled():
+                rbt_dbg: dict[str, str] = {}
+                aliq_ef_dbg: dict[str, str] = {}
+                aliq_json_dbg: dict[str, float] = {}
+                divs: list[str] = []
+                for oid, row in simples_agregado.get("por_empresa", {}).items():
+                    if not isinstance(row, dict) or row.get("regime") != "simples_nacional":
+                        continue
+                    u = row.get("ultimo_mes")
+                    if isinstance(u, ResultadoAliquotaEfetivaMes):
+                        rbt_dbg[oid] = f"{float(u.rbt12):.0f} [{int(u.meses_historico_disponiveis)}m]"
+                        if u.aliquota_efetiva_pct is not None:
+                            aliq_ef_dbg[oid] = f"{float(u.aliquota_efetiva_pct):.2f} [calc]"
+                        cfg = get_aliquota_imposto_por_empresa(params_union, oid)
+                        if cfg is not None and u.aliquota_efetiva_pct is not None:
+                            cfg_pct = float(cfg) * 100.0 if float(cfg) <= 1.0 else float(cfg)
+                            d = abs(float(u.aliquota_efetiva_pct) - cfg_pct)
+                            if d > 2.0:
+                                divs.append(f"{oid}: efetiva {u.aliquota_efetiva_pct:.2f}% vs JSON {cfg_pct:.2f}% (Δ {d:.2f} pp)")
+                    jr = row.get("aliquota_referencia_json_pct")
+                    if isinstance(jr, (int, float)):
+                        aliq_json_dbg[oid] = round(float(jr), 2)
+                cr = simples_agregado.get("competencia_referencia")
+                em_calc = list(simples_agregado.get("empresas_com_calculo_oficial") or [])
+                em_warm = list(simples_agregado.get("empresas_em_warmup") or [])
+                dbg = (
+                    "🔍 Simples Nacional debug:\n"
+                    f"   competencia_referencia: {cr!s}\n"
+                    f"   empresas_calculadas: {em_calc!s}\n"
+                    f"   empresas_warmup: {em_warm!s}\n"
+                    f"   rbt12: {rbt_dbg!s}\n"
+                    f"   aliquota_efetiva: {aliq_ef_dbg!s}\n"
+                    f"   aliquota_referencia_json: {aliq_json_dbg!s}"
+                )
+                if divs:
+                    dbg += "\n   divergencias_json: " + "; ".join(divs)
+                st.caption(dbg)
+    
+        ao._fdl_fat_min_vsp(size="md")
+        ao._fdl_fat_divider_simple()
+        ao._fdl_fat_min_vsp(size="sm")
+    
+        # Cada parâmetro independente — enriquecimento parcial é melhor que nenhum
+        _aliq_sn_kw: dict[str, Mapping[str, float]] | None = None
+        if isinstance(simples_agregado, dict):
+            _aliq_dict = simples_agregado.get("aliquotas_mensais_por_empresa")
+            if isinstance(_aliq_dict, dict) and _aliq_dict:
+                _aliq_sn_kw = _aliq_dict
+    
+        _breakdowns_lp_kw: dict[str, LucroPresumidoBreakdown] | None = None
+        _org_ids_lp_kw: set[str] | None = None
+        if isinstance(lp_prefetched, dict) and lp_prefetched:
+            _breakdowns_lp_kw = lp_prefetched
+            _org_ids_lp_kw = set(lp_prefetched.keys())
+    
+        ao._render_faturamento_dre_nf_table_section(
+            df_nf_pre=df_nf_pre,
+            df=df,
+            df_fiscal_pre=df_fiscal_pre,
+            load_info=load_info,
+            _min_state=_min_state,
+            _nf_kpi_ini=_nf_kpi_ini,
+            _nf_kpi_fim=_nf_kpi_fim,
+            ok_nf_dates=ok_nf_dates,
+            use_fiscal_kpi=use_fiscal_kpi,
+            use_nf_materializado=use_nf_materializado,
+            use_fiscal_parquet=use_fiscal_parquet,
+            _nf_panel_ads_ui=_nf_panel_ads_ui,
+            _df_fiscal_base=_df_fiscal_base,
+            _fiscal_base_stats=_fiscal_base_stats,
+            _kp_cards=_kp_cards,
+            org_id=org_id,
+            prefix_main="fdl_apu",
+            prefix_nf="fdl_apu_nf",
+            csv_file_name="apuracao_fiscal_nf.csv",
+            table_heading="### Tabela de NFs (visão fiscal)",
+            nf_table_ui_mode="fiscal",
+            aliquotas_mensais_sn=_aliq_sn_kw,
+            breakdowns_lp=_breakdowns_lp_kw,
+            org_ids_lp=_org_ids_lp_kw,
+        )
+    
+        _df_devolucoes_periodo = ao._carregar_devolucoes_fiscais_para_painel(
+            load_info,
+            nf_d_ini=_nf_kpi_ini,
+            nf_d_fim=_nf_kpi_fim,
+            ok_nf_dates=ok_nf_dates,
+        )
+    
+        ao._fdl_fat_min_vsp(size="sm")
+        ao._render_faturamento_dre_nf_table_section(
+            df_nf_pre=df_nf_pre,
+            df=df,
+            df_fiscal_pre=df_fiscal_pre,
+            load_info=load_info,
+            _min_state=_min_state,
+            _nf_kpi_ini=_nf_kpi_ini,
+            _nf_kpi_fim=_nf_kpi_fim,
+            ok_nf_dates=ok_nf_dates,
+            use_fiscal_kpi=use_fiscal_kpi,
+            use_nf_materializado=use_nf_materializado,
+            use_fiscal_parquet=use_fiscal_parquet,
+            _nf_panel_ads_ui=_nf_panel_ads_ui,
+            _df_fiscal_base=_df_fiscal_base,
+            _fiscal_base_stats=_fiscal_base_stats,
+            _kp_cards=_kp_cards,
+            org_id=org_id,
+            prefix_main="fdl_apu",
+            prefix_nf="fdl_apu_nf_devolucao",
+            csv_file_name="apuracao_fiscal_nf_devolucoes.csv",
+            table_heading="### Tabela de NFs de Devolução",
+            nf_table_ui_mode="devolucao",
+            df_source=_df_devolucoes_periodo,
+        )
+        if _DEBUG_BUFFER:
+            with st.expander("🔍 Diagnóstico (últimos warnings)", expanded=False):
+                for line in _DEBUG_BUFFER[-20:]:
+                    st.text(line)
+    except Exception:
+        _LOG_AP.exception("render_apuracao_fiscal_panel falhou")
+        st.error(
+            "Erro ao renderizar a Apuração Fiscal. "
+            "Tente recarregar a página ou ajustar os filtros. "
+            "Se o problema persistir, contate o suporte."
+        )
+        with st.expander("Detalhes técnicos (para suporte)", expanded=False):
+            st.code(traceback.format_exc(), language="python")
+        return

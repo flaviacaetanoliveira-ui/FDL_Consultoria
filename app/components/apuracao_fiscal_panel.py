@@ -14,6 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from app.components.lucro_presumido_card import render_lucro_presumido_card
+from app.components.saude_regime_panel import render_saude_regime_panel
 from processing.faturamento.lucro_presumido import LucroPresumidoBreakdown, calcular_lucro_presumido
 from processing.faturamento.lucro_presumido_loader import load_lucro_presumido_params_from_json
 from faturamento_dre_recorte import (
@@ -33,6 +34,7 @@ from processing.faturamento.params_regime import (
     load_faturamento_params_for_ui,
     resolve_faturamento_params_path_for_ui,
 )
+from processing.faturamento.saude_regime_sn import calcular_saude_regime_sn, org_ids_simples_nacional_do_params
 from processing.faturamento.simples_nacional import (
     ResultadoAliquotaEfetivaMes,
     ResultadoFaixaSimples,
@@ -2056,6 +2058,38 @@ def render_apuracao_fiscal_panel(
             if trib_html:
                 ao._fdl_fat_min_vsp(size="sm")
                 st.markdown(trib_html, unsafe_allow_html=True)
+
+            _cr_saude = simples_agregado.get("competencia_referencia") if isinstance(simples_agregado, dict) else None
+            if (
+                isinstance(params_union, FaturamentoParamsV2)
+                and isinstance(_cr_saude, date)
+                and _tem_alguma_empresa_simples_no_filtro(simples_agregado)
+                and isinstance(df_fiscal_pre, pd.DataFrame)
+                and not df_fiscal_pre.empty
+            ):
+                _sn_ids_panel = org_ids_simples_nacional_do_params(params_union, list(_org_ids_ag))
+                if _sn_ids_panel:
+                    try:
+                        _saudes_sn = calcular_saude_regime_sn(
+                            df_fiscal_pre,
+                            _sn_ids_panel,
+                            params_union,
+                            pd.Timestamp(_cr_saude),
+                            df_fiscal_recorte_periodo=_df_fiscal_base,
+                        )
+                        _lp_nomes_aviso: list[str] = []
+                        if _tem_alguma_empresa_lp_no_agregado(simples_agregado):
+                            for _oid_lp, _row_lp in simples_agregado.get("por_empresa", {}).items():
+                                if isinstance(_row_lp, dict) and _row_lp.get("regime") == "lucro_presumido":
+                                    _lp_nomes_aviso.append(str(_row_lp.get("empresa_nome", _oid_lp)))
+                        ao._fdl_fat_min_vsp(size="sm")
+                        render_saude_regime_panel(
+                            _saudes_sn,
+                            mostrar_lp_aviso=bool(_lp_nomes_aviso),
+                            nome_lp=", ".join(sorted(_lp_nomes_aviso)) if _lp_nomes_aviso else None,
+                        )
+                    except Exception as exc:
+                        _LOG_AP.warning("Saúde regime SN (painel): %s", exc, exc_info=True)
     
             for lp_org_id, lp_nome in lp_orgs_ordered:
                 bd_lp = lp_prefetched.get(lp_org_id)

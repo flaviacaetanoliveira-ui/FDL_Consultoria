@@ -1,0 +1,462 @@
+{
+  "schema_version_devolucoes": 3,
+  "pipeline_revision_devolucoes": "devolucoes-fiscais-v3",
+  "filtros_aplicados": {
+    "naturezas": [
+      "Entrada de Devolução",
+      "Entrada Devolução",
+      "Devolução de venda",
+      "Devolução de venda mercadoria adquirida recebida terceiros"
+    ],
+    "situacoes_validas": [
+      "Autorizada",
+      "Emitida DANFE"
+    ]
+  },
+  "cobertura": {
+    "por_empresa": {
+      "gama_home": {
+        "total_brutas": 141,
+        "devolucoes_no_arquivo": 141,
+        "fiscalmente_validas": 139,
+        "cobertura_mensal": [
+          {
+            "ano_mes": "2025-01",
+            "qtd_brutas": 4,
+            "qtd_devolucoes": 4,
+            "qtd_fiscais": 4
+          },
+          {
+            "ano_mes": "2025-02",
+            "qtd_brutas": 3,
+            "qtd_devolucoes": 3,
+            "qtd_fiscais": 3
+          },
+          {
+            "ano_mes": "2025-03",
+            "qtd_brutas": 9,
+            "qtd_devolucoes": 9,
+            "qtd_fiscais": 9
+          },
+          {
+            "ano_mes": "2025-04",
+            "qtd_brutas": 1,
+            "qtd_devolucoes": 1,
+            "qtd_fiscais": 1
+          },
+          {
+            "ano_mes": "2025-05",
+            "qtd_brutas": 11,
+            "qtd_devolucoes": 11,
+            "qtd_fiscais": 11
+          },
+          {
+            "ano_mes": "2025-06",
+            "qtd_brutas": 7,
+            "qtd_devolucoes": 7,
+            "qtd_fiscais": 7
+          },
+          {
+            "ano_mes": "2025-07",
+            "qtd_brutas": 10,
+            "qtd_devolucoes": 10,
+            "qtd_fiscais": 10
+          },
+          {
+            "ano_mes": "2025-08",
+            "qtd_brutas": 10,
+            "qtd_devolucoes": 10,
+            "qtd_fiscais": 10
+          },
+          {
+            "ano_mes": "2025-09",
+            "qtd_brutas": 7,
+            "qtd_devolucoes": 7,
+            "qtd_fiscais": 7
+          },
+          {
+            "ano_mes": "2025-10",
+            "qtd_brutas": 12,
+            "qtd_devolucoes": 12,
+            "qtd_fiscais": 12
+          },
+          {
+            "ano_mes": "2025-11",
+            "qtd_brutas": 8,
+            "qtd_devolucoes": 8,
+            "qtd_fiscais": 8
+          },
+          {
+            "ano_mes": "2025-12",
+            "qtd_brutas": 8,
+            "qtd_devolucoes": 8,
+            "qtd_fiscais": 7
+          },
+          {
+            "ano_mes": "2026-01",
+            "qtd_brutas": 16,
+            "qtd_devolucoes": 16,
+            "qtd_fiscais": 16
+          },
+          {
+            "ano_mes": "2026-02",
+            "qtd_brutas": 16,
+            "qtd_devolucoes": 16,
+            "qtd_fiscais": 16
+          },
+          {
+            "ano_mes": "2026-03",
+            "qtd_brutas": 11,
+            "qtd_devolucoes": 11,
+            "qtd_fiscais": 11
+          },
+          {
+            "ano_mes": "2026-04",
+            "qtd_brutas": 8,
+            "qtd_devolucoes": 8,
+            "qtd_fiscais": 7
+          }
+        ],
+        "excluidas_por_status": [
+          {
+            "situacao": "Cancelada",
+            "qtd": 2
+          }
+        ]
+      },
+      "mega_star": {
+        "total_brutas": 558,
+        "devolucoes_no_arquivo": 248,
+        "fiscalmente_validas": 246,
+        "cobertura_mensal": [
+          {
+            "ano_mes": "2025-01",
+            "qtd_brutas": 44,
+            "qtd_devolucoes": 15,
+            "qtd_fiscais": 15
+          },
+          {
+            "ano_mes": "2025-02",
+            "qtd_brutas": 36,
+            "qtd_devolucoes": 5,
+            "qtd_fiscais": 5
+          },
+          {
+            "ano_mes": "2025-03",
+            "qtd_brutas": 32,
+            "qtd_devolucoes": 9,
+            "qtd_fiscais": 9
+          },
+          {
+            "ano_mes": "2025-04",
+            "qtd_brutas": 26,
+            "qtd_devolucoes": 16,
+            "qtd_fiscais": 16
+          },
+          {
+            "ano_mes": "2025-05",
+            "qtd_brutas": 57,
+            "qtd_devolucoes": 19,
+            "qtd_fiscais": 19
+          },
+          {
+            "ano_mes": "2025-06",
+            "qtd_brutas": 38,
+            "qtd_devolucoes": 13,
+            "qtd_fiscais": 13
+          },
+          {
+            "ano_mes": "2025-07",
+            "qtd_brutas": 41,
+            "qtd_devolucoes": 16,
+            "qtd_fiscais": 16
+          },
+          {
+            "ano_mes": "2025-08",
+            "qtd_brutas": 41,
+            "qtd_devolucoes": 12,
+            "qtd_fiscais": 12
+          },
+          {
+            "ano_mes": "2025-09",
+            "qtd_brutas": 24,
+            "qtd_devolucoes": 14,
+            "qtd_fiscais": 14
+          },
+          {
+            "ano_mes": "2025-10",
+            "qtd_brutas": 26,
+            "qtd_devolucoes": 9,
+            "qtd_fiscais": 9
+          },
+          {
+            "ano_mes": "2025-11",
+            "qtd_brutas": 31,
+            "qtd_devolucoes": 12,
+            "qtd_fiscais": 12
+          },
+          {
+            "ano_mes": "2025-12",
+            "qtd_brutas": 25,
+            "qtd_devolucoes": 17,
+            "qtd_fiscais": 17
+          },
+          {
+            "ano_mes": "2026-01",
+            "qtd_brutas": 42,
+            "qtd_devolucoes": 27,
+            "qtd_fiscais": 27
+          },
+          {
+            "ano_mes": "2026-02",
+            "qtd_brutas": 36,
+            "qtd_devolucoes": 21,
+            "qtd_fiscais": 21
+          },
+          {
+            "ano_mes": "2026-03",
+            "qtd_brutas": 43,
+            "qtd_devolucoes": 27,
+            "qtd_fiscais": 26
+          },
+          {
+            "ano_mes": "2026-04",
+            "qtd_brutas": 16,
+            "qtd_devolucoes": 16,
+            "qtd_fiscais": 15
+          }
+        ],
+        "excluidas_por_status": [
+          {
+            "situacao": "Cancelada",
+            "qtd": 2
+          }
+        ]
+      },
+      "moveis_eap": {
+        "total_brutas": 911,
+        "devolucoes_no_arquivo": 384,
+        "fiscalmente_validas": 382,
+        "cobertura_mensal": [
+          {
+            "ano_mes": "2025-01",
+            "qtd_brutas": 36,
+            "qtd_devolucoes": 8,
+            "qtd_fiscais": 8
+          },
+          {
+            "ano_mes": "2025-02",
+            "qtd_brutas": 48,
+            "qtd_devolucoes": 12,
+            "qtd_fiscais": 11
+          },
+          {
+            "ano_mes": "2025-03",
+            "qtd_brutas": 34,
+            "qtd_devolucoes": 17,
+            "qtd_fiscais": 17
+          },
+          {
+            "ano_mes": "2025-04",
+            "qtd_brutas": 43,
+            "qtd_devolucoes": 28,
+            "qtd_fiscais": 28
+          },
+          {
+            "ano_mes": "2025-05",
+            "qtd_brutas": 54,
+            "qtd_devolucoes": 23,
+            "qtd_fiscais": 23
+          },
+          {
+            "ano_mes": "2025-06",
+            "qtd_brutas": 51,
+            "qtd_devolucoes": 22,
+            "qtd_fiscais": 22
+          },
+          {
+            "ano_mes": "2025-07",
+            "qtd_brutas": 54,
+            "qtd_devolucoes": 28,
+            "qtd_fiscais": 28
+          },
+          {
+            "ano_mes": "2025-08",
+            "qtd_brutas": 65,
+            "qtd_devolucoes": 19,
+            "qtd_fiscais": 19
+          },
+          {
+            "ano_mes": "2025-09",
+            "qtd_brutas": 61,
+            "qtd_devolucoes": 30,
+            "qtd_fiscais": 30
+          },
+          {
+            "ano_mes": "2025-10",
+            "qtd_brutas": 73,
+            "qtd_devolucoes": 35,
+            "qtd_fiscais": 35
+          },
+          {
+            "ano_mes": "2025-11",
+            "qtd_brutas": 70,
+            "qtd_devolucoes": 30,
+            "qtd_fiscais": 29
+          },
+          {
+            "ano_mes": "2025-12",
+            "qtd_brutas": 74,
+            "qtd_devolucoes": 32,
+            "qtd_fiscais": 32
+          },
+          {
+            "ano_mes": "2026-01",
+            "qtd_brutas": 63,
+            "qtd_devolucoes": 39,
+            "qtd_fiscais": 39
+          },
+          {
+            "ano_mes": "2026-02",
+            "qtd_brutas": 94,
+            "qtd_devolucoes": 28,
+            "qtd_fiscais": 28
+          },
+          {
+            "ano_mes": "2026-03",
+            "qtd_brutas": 50,
+            "qtd_devolucoes": 18,
+            "qtd_fiscais": 18
+          },
+          {
+            "ano_mes": "2026-04",
+            "qtd_brutas": 41,
+            "qtd_devolucoes": 15,
+            "qtd_fiscais": 15
+          }
+        ],
+        "excluidas_por_status": [
+          {
+            "situacao": "Cancelada",
+            "qtd": 2
+          }
+        ]
+      },
+      "mega_facil": {
+        "total_brutas": 4047,
+        "devolucoes_no_arquivo": 896,
+        "fiscalmente_validas": 892,
+        "cobertura_mensal": [
+          {
+            "ano_mes": "2025-01",
+            "qtd_brutas": 272,
+            "qtd_devolucoes": 33,
+            "qtd_fiscais": 33
+          },
+          {
+            "ano_mes": "2025-02",
+            "qtd_brutas": 185,
+            "qtd_devolucoes": 17,
+            "qtd_fiscais": 17
+          },
+          {
+            "ano_mes": "2025-03",
+            "qtd_brutas": 210,
+            "qtd_devolucoes": 25,
+            "qtd_fiscais": 25
+          },
+          {
+            "ano_mes": "2025-04",
+            "qtd_brutas": 203,
+            "qtd_devolucoes": 37,
+            "qtd_fiscais": 37
+          },
+          {
+            "ano_mes": "2025-05",
+            "qtd_brutas": 189,
+            "qtd_devolucoes": 53,
+            "qtd_fiscais": 53
+          },
+          {
+            "ano_mes": "2025-06",
+            "qtd_brutas": 261,
+            "qtd_devolucoes": 49,
+            "qtd_fiscais": 49
+          },
+          {
+            "ano_mes": "2025-07",
+            "qtd_brutas": 314,
+            "qtd_devolucoes": 55,
+            "qtd_fiscais": 54
+          },
+          {
+            "ano_mes": "2025-08",
+            "qtd_brutas": 191,
+            "qtd_devolucoes": 49,
+            "qtd_fiscais": 49
+          },
+          {
+            "ano_mes": "2025-09",
+            "qtd_brutas": 269,
+            "qtd_devolucoes": 65,
+            "qtd_fiscais": 65
+          },
+          {
+            "ano_mes": "2025-10",
+            "qtd_brutas": 289,
+            "qtd_devolucoes": 64,
+            "qtd_fiscais": 64
+          },
+          {
+            "ano_mes": "2025-11",
+            "qtd_brutas": 278,
+            "qtd_devolucoes": 61,
+            "qtd_fiscais": 60
+          },
+          {
+            "ano_mes": "2025-12",
+            "qtd_brutas": 227,
+            "qtd_devolucoes": 64,
+            "qtd_fiscais": 64
+          },
+          {
+            "ano_mes": "2026-01",
+            "qtd_brutas": 250,
+            "qtd_devolucoes": 68,
+            "qtd_fiscais": 68
+          },
+          {
+            "ano_mes": "2026-02",
+            "qtd_brutas": 298,
+            "qtd_devolucoes": 89,
+            "qtd_fiscais": 89
+          },
+          {
+            "ano_mes": "2026-03",
+            "qtd_brutas": 325,
+            "qtd_devolucoes": 75,
+            "qtd_fiscais": 75
+          },
+          {
+            "ano_mes": "2026-04",
+            "qtd_brutas": 286,
+            "qtd_devolucoes": 92,
+            "qtd_fiscais": 90
+          }
+        ],
+        "excluidas_por_status": [
+          {
+            "situacao": "Cancelada",
+            "qtd": 4
+          }
+        ]
+      }
+    }
+  },
+  "warnings": [],
+  "total_devolvido": 421034.29999999993,
+  "nfs_devolucao": 1575,
+  "base_fiscal_composicao": "emitidas - canceladas - devolucoes",
+  "dataset_faturamento_devolucoes_parquet": "dataset_faturamento_devolucoes.parquet",
+  "archived_at": "2026-04-29T01:36:10Z"
+}

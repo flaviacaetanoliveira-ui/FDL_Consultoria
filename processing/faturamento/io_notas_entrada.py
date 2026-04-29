@@ -16,6 +16,7 @@ from .io_notas_saida import (
     detectar_col_data_emissao,
     detectar_col_valor_total_liquido,
 )
+from .normalize import to_numeric_br
 
 
 def _norm_txt(s: pd.Series) -> pd.Series:
@@ -78,6 +79,99 @@ def _detect_col_nome_destinatario(columns: list[str]) -> str:
         if str(c).strip().casefold() == "nome":
             return c
     return ""
+
+
+def _df_col_as_series(df: pd.DataFrame, col: str) -> pd.Series:
+    if col not in df.columns:
+        raise KeyError(col)
+    obj = df[col]
+    if isinstance(obj, pd.DataFrame):
+        return obj.iloc[:, 0]
+    return obj
+
+
+def _safe_numeric(df: pd.DataFrame, col: str) -> pd.Series:
+    if not col or col not in df.columns:
+        return pd.Series(0.0, index=df.index, dtype="float64")
+    return pd.to_numeric(to_numeric_br(_df_col_as_series(df, col)), errors="coerce").fillna(0.0).astype("float64")
+
+
+def _norm_head(c: str) -> str:
+    return str(c).strip().casefold()
+
+
+def _detect_col_frete(columns: list[str]) -> str:
+    for c in columns:
+        if _norm_head(c) == "frete":
+            return c
+    return ""
+
+
+def _detect_col_outras_despesas(columns: list[str]) -> str:
+    for c in columns:
+        if _norm_head(c) == "outras despesas":
+            return c
+    for c in columns:
+        n = _norm_head(c)
+        if "outras" in n and "despes" in n:
+            return c
+    return ""
+
+
+def _detect_col_desconto_nota(columns: list[str]) -> str:
+    for c in columns:
+        n = _norm_head(c)
+        if n == "desconto":
+            return c
+    for c in columns:
+        n = _norm_head(c)
+        if "desconto" in n and "frete" not in n and "proporcional" not in n:
+            return c
+    return ""
+
+
+def series_valor_liquido_nota_entrada_bling(df: pd.DataFrame) -> pd.Series:
+    """
+    Valor por linha da NF de entrada alinhado ao total fiscal da nota no export Bling.
+
+    Quando existem colunas auxiliares típicas (**Frete**, **Outras despesas**, **Desconto**),
+    aplica::
+
+        Valor total + Frete + Outras despesas − Desconto
+
+    onde **Valor total** é a coluna homónima do CSV (subtotal de produtos), não o «Valor total líquido».
+
+    Se nenhuma coluna auxiliar existir, mantém o comportamento anterior: «Valor total líquido» se
+    existir, senão «Valor total».
+    """
+    if df.empty:
+        return pd.Series(dtype="float64")
+    cols = list(df.columns)
+    col_frete = _detect_col_frete(cols)
+    col_outras = _detect_col_outras_despesas(cols)
+    col_desc = _detect_col_desconto_nota(cols)
+    tem_aux = bool(col_frete or col_outras or col_desc)
+
+    col_vl_liq = detectar_col_valor_total_liquido(cols)
+    col_valor_total_exato = "Valor total" if "Valor total" in df.columns else ""
+
+    if tem_aux:
+        if col_valor_total_exato:
+            base = _safe_numeric(df, col_valor_total_exato)
+        elif col_vl_liq:
+            base = _safe_numeric(df, col_vl_liq)
+        else:
+            base = pd.Series(0.0, index=df.index, dtype="float64")
+        frete_v = _safe_numeric(df, col_frete) if col_frete else pd.Series(0.0, index=df.index)
+        outras_v = _safe_numeric(df, col_outras) if col_outras else pd.Series(0.0, index=df.index)
+        desc_v = _safe_numeric(df, col_desc) if col_desc else pd.Series(0.0, index=df.index)
+        return base + frete_v + outras_v - desc_v
+
+    if col_vl_liq:
+        return _safe_numeric(df, col_vl_liq)
+    if col_valor_total_exato:
+        return _safe_numeric(df, col_valor_total_exato)
+    return pd.Series(0.0, index=df.index, dtype="float64")
 
 
 def normalizar_cpf_cnpj_somente_digitos(v: object) -> str:

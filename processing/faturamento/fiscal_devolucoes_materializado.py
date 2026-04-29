@@ -32,6 +32,7 @@ from .io_notas_entrada import (
     aplicar_filtros_devolucao,
     load_notas_entrada_brutas_from_dir,
     normalizar_cpf_cnpj_somente_digitos,
+    series_valor_liquido_nota_entrada_bling,
 )
 from .join_notas import (
     _filtrar_notas_por_empresa,
@@ -130,12 +131,18 @@ def build_devolucoes_fiscal_dataframe_with_audit(params_path: Path) -> tuple[pd.
         raw = aplicar_filtros_devolucao(brutas)
         if raw.empty:
             continue
+        vl_entrada = series_valor_liquido_nota_entrada_bling(raw)
         try:
             prep = _prep_notas_dataframe(raw)
         except FaturamentoValidationError:
             continue
         if prep.empty:
             continue
+        # Substitui ``vl_liq`` por total alinhado ao Bling: Valor total + Frete + Outras despesas − Desconto
+        # quando colunas auxiliares existem (ver ``series_valor_liquido_nota_entrada_bling``).
+        _vl_adj = vl_entrada.reindex(prep.index)
+        prep = prep.copy()
+        prep["vl_liq"] = _vl_adj.fillna(prep["vl_liq"])
         prep = _filtrar_notas_por_empresa(prep, emp.org_id, emp.empresa)
         if prep.empty:
             continue

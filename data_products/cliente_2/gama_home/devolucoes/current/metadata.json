@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-28T00:47:58Z",
-  "source_signature": "8e5248d358d90b7dd3033fa44df078dd",
+  "generated_at": "2026-04-30T11:01:46Z",
+  "source_signature": "e066ef24217e06eb4f397a5bfbcf5e9a",
   "pipeline_revision": "phase1-v1",
   "devolucoes_contract_revision": "devolucoes-v1",
   "cliente": "cliente_2",
@@ -96,23 +96,23 @@
   "source_mode": "local_folder",
   "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home",
   "org_id": "gama_home",
-  "dataset_empresa": "Gama Home",
+  "dataset_empresa": "gama_home",
   "app_mirror_csv": "dataset_devolucoes_app.csv",
   "build_meta": {
     "pipeline_revision": "devolucoes-v1",
     "base_dir": "C:\\Users\\diieg\\OneDrive - FDL Consultoria\\Cursor\\Pedro\\Cliente_2\\Gama Home",
     "org_id": "gama_home",
-    "dataset_empresa": "Gama Home",
+    "dataset_empresa": "gama_home",
     "cliente_id": "cliente_2",
     "row_count_pre_filtro_devolucao": 27,
     "row_count_excluidas_cancel_comercial": 1,
     "row_count_candidatas": 26,
-    "row_count_vendas_total": 467,
-    "row_count_liberacoes": 904,
+    "row_count_vendas_total": 479,
+    "row_count_liberacoes": 917,
     "sales_from_lib_financial": 33,
     "classificador_operacional_revision": "operacional-2026-04-devolucao-fila"
   },
-  "row_count_vendas_total": 467,
-  "row_count_liberacoes": 904,
+  "row_count_vendas_total": 479,
+  "row_count_liberacoes": 917,
   "sales_from_lib_financial": 33
 }

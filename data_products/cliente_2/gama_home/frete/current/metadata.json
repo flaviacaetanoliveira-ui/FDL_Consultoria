@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-28T00:47:57Z",
-  "source_signature": "17781ab073a40cd5778e9f3b2f0a9398",
+  "generated_at": "2026-04-30T11:01:45Z",
+  "source_signature": "30c49dd183c6d180135626bbdcd37abe",
   "pipeline_revision": "phase1-v1",
   "cliente": "cliente_2",
   "empresa": "gama_home",
@@ -8,7 +8,7 @@
   "cliente_id": "cliente_2",
   "empresa_id": "gama_home",
   "cnpj": null,
-  "row_count": 467,
+  "row_count": 479,
   "columns": [
     "N.º venda",
     "data_venda",
@@ -96,7 +96,7 @@
     "vendas_arquivo": "Gama Home - Vendas ML 2026.xlsx",
     "frete_arquivo": "Gama Home - Frete por Anúncio 06032026.xlsx",
     "frete_tabular": true,
-    "linhas": 467,
+    "linhas": 479,
     "avisos": []
   },
   "app_mirror_csv": "dataset_frete_app.csv"
